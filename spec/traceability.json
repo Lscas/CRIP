@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.1",
+  "spec_version": "0.2.2",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -1242,6 +1242,48 @@
         "scripts/run_checks.py"
       ],
       "verification_report": "docs/VALIDATION_REPORT.md"
+    },
+    {
+      "requirement_id": "FR-REMOTE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/remote_access.py",
+        "scripts/remote_preview.py",
+        "deploy/cloudflare/worker.mjs"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_remote_access.py",
+        "tests/deploy/worker.test.mjs"
+      ],
+      "contract_tests": [
+        "tests/app/test_remote_access.py"
+      ],
+      "test_scope": "offline_remote_preview_not_cloud_deployment",
+      "implemented_product_paths": [
+        "app/remote_access.py",
+        "scripts/remote_preview.py",
+        "deploy/cloudflare/worker.mjs"
+      ],
+      "verification_report": "docs/DEPLOYMENT_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-DEPLOY-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/remote_access.py",
+        "scripts/remote_preview.py",
+        "deploy/cloudflare/worker.mjs"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_remote_access.py",
+        "tests/deploy/worker.test.mjs"
+      ],
+      "contract_tests": [
+        "tests/app/test_remote_access.py"
+      ],
+      "test_scope": "offline_remote_preview_not_cloud_deployment",
+      "implemented_product_paths": [],
+      "verification_report": null
     }
   ]
 }

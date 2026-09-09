@@ -1,3 +1,8 @@
+# 当前开发状态：v0.2.2 / cloudflare-preview
+FR-REMOTE-001保护和部署代码已实现；FR-DEPLOY-001实际公网发布未完成，缺Cloudflare授权和外网DNS。本轮默认mock，不读取用户.env、不调用付费API。
+先读docs/CLOUDFLARE_DEPLOY.md，定向检查 `python scripts/run_checks.py --area remote`。部署连接恢复后按脚本验证401/200，不能把配置生成等同于上线。密钥仅用户本机配置；保留现有DEV-002业务下一任务。
+
+## 上一切片状态
 # 当前开发状态：v0.2.1 / prototype-bootstrap
 目标不变：全项目、全专业、四表、证据、人工审核。当前仅交付首个本地开发切片，不是完整商业产品。
 

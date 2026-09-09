@@ -1,0 +1,37 @@
+{
+  "change_id": "CR-0004",
+  "spec_version": "0.2.2",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REMOTE-001",
+    "FR-DEPLOY-001",
+    "NFR-SECURITY-001",
+    "PRD-PROTOTYPE-001"
+  ],
+  "summary": "增加Cloudflare受保护预览的代码、白名单构建、启动脚本与测试；实际公网部署仍受账户与网络阻断。",
+  "decision_refs": [
+    "用户授权开始部署并搭建Cloudflare页面",
+    "docs/adr/0005-cloudflare-protected-preview.md"
+  ],
+  "affected_paths": [
+    "app/*",
+    "web/index.html",
+    "deploy/*",
+    "scripts/*",
+    "spec/*",
+    "prompts/manifest.json",
+    ".github/workflows/*",
+    "AGENTS.md"
+  ],
+  "tests": [
+    "tests/app/test_remote_access.py",
+    "tests/deploy/worker.test.mjs"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "本轮用户明确授权远程测试部署；不授权采购云主机或自动开启模型计费。",
+  "known_limitations": [
+    "无Cloudflare账号授权及外网DNS，未发布公网URL",
+    "Windows/cloudflared/Wrangler实际平台流程未验证",
+    "远程仅mock，生产安全与施工准确率未验证"
+  ]
+}

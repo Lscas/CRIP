@@ -19,6 +19,7 @@ from app.uploads import Uploads
 from app.gateway import Gateway
 from app.runner import Runner
 from app.exporter import collect,as_json,as_xlsx
+from app.remote_access import PreviewAccess
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -45,22 +46,38 @@ def create_app(settings:Settings|None=None)->FastAPI:
             yield
         finally:
             runner.close();gateway.close();lock.release()
-    app=FastAPI(title='CIRP 开发原型',version=VERSION,lifespan=lifespan)
+    app=FastAPI(title='CIRP 开发原型',version=VERSION,lifespan=lifespan,
+                docs_url=None if s.remote_enabled else '/docs',
+                redoc_url=None if s.remote_enabled else '/redoc',
+                openapi_url=None if s.remote_enabled else '/openapi.json')
+    access=PreviewAccess(s)
     app.state.db=db;app.state.runner=runner;app.state.gateway=gateway;app.state.uploads=uploads;app.state.settings=s
-    app.add_middleware(TrustedHostMiddleware,allowed_hosts=['127.0.0.1','localhost','testserver','[::1]'])
+    app.add_middleware(TrustedHostMiddleware,allowed_hosts=list(s.allowed_hosts))
     @app.middleware('http')
     async def guard(request,call_next):
-        # 原型只支持loopback。自定义header使跨源表单不能触发上传/付费请求。
+        if s.remote_enabled and not access.authorized(request):
+            return access.reject()
+        # 远程仍要求同源写入；未知Origin或缺少客户端标记不能改变数据。
+        if s.remote_enabled:
+            length=request.headers.get('content-length')
+            if length:
+                try:
+                    if int(length) < 0 or int(length) > s.chunk_bytes + 65536:
+                        return JSONResponse({'detail':'预览单次请求体超过上限'},413)
+                except ValueError:
+                    return JSONResponse({'detail':'无效Content-Length'},400)
         if request.url.path.startswith('/api/') and request.method not in ('GET','HEAD','OPTIONS'):
             if request.headers.get('x-cirp-client')!='browser':return JSONResponse({'detail':'缺少本地客户端标记'},403)
             origin=request.headers.get('origin')
-            if origin and urlsplit(origin).netloc!=request.url.netloc:
+            public_origins={f'https://{host}' for host in s.allowed_hosts} if s.remote_enabled else set()
+            if origin and urlsplit(origin).netloc!=request.url.netloc and origin not in public_origins:
                 return JSONResponse({'detail':'禁止跨站修改请求'},403)
         response=await call_next(request)
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
         response.headers['X-Frame-Options']='DENY'
         response.headers['Cache-Control']='no-store'
+        response.headers['X-Robots-Tag']='noindex, nofollow'
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
         return response
     @app.exception_handler(DomainError)

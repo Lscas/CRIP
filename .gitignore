@@ -23,3 +23,7 @@ reports/local/
 *.egg-info/
 .cache/
 playwright-report/
+.wrangler/
+.dev.vars
+.dev.vars.*
+dist/

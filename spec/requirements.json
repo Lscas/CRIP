@@ -1,6 +1,6 @@
 {
   "product": "Construction Intelligence Review Platform",
-  "spec_version": "0.2.1",
+  "spec_version": "0.2.2",
   "updated_at": "2026-09-08",
   "requirements": [
     {
@@ -1140,6 +1140,34 @@
       "status": "implemented",
       "decision_source": "D-17：本地原型对应代码/离线测试已实现；不代表真实模型质量",
       "spec_section": "docs/PRODUCT_SPEC.md"
+    },
+    {
+      "id": "FR-REMOTE-001",
+      "title": "受保护的单用户远程测试入口",
+      "statement": "实现远程鉴权、静态部署白名单、同源代理和默认mock启动脚本。",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "所有API/页面无凭据返回401；无保护配置拒绝启动。",
+        "Pages不上传用户数据/密钥，源站秘钥不发给浏览器。",
+        "本地模拟端到端及Worker负例测试通过；不据此声称公网完成。"
+      ],
+      "decision_source": "用户本轮授权Cloudflare远程测试",
+      "spec_section": "docs/CLOUDFLARE_DEPLOY.md"
+    },
+    {
+      "id": "FR-DEPLOY-001",
+      "title": "Cloudflare实际发布与公网验收",
+      "statement": "在用户授权账户或Quick Tunnel运行环境创建真实可访问入口，通过未登录401和已登录200验收后记录实际URL。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "真实部署响应返回URL，不拼接网址冒充部署。",
+        "验证公网身份保护与mock状态，显示源站依赖和功能边界。",
+        "没有Cloudflare授权或外网时如实报告阻断。"
+      ],
+      "decision_source": "用户本轮授权Cloudflare远程测试",
+      "spec_section": "docs/CLOUDFLARE_DEPLOY.md"
     }
   ],
   "artifact_kind": "prototype_source",

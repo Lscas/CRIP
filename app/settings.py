@@ -1,7 +1,8 @@
 """环境配置；密钥不进入 API 响应、仓库或模型提示。"""
 from __future__ import annotations
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,7 +19,7 @@ class Settings:
     data_dir: Path
     provider: str = 'mock'
     api_base_url: str = 'https://api.deepseek.com'
-    api_key: str = ''
+    api_key: str = field(default='', repr=False)
     cheap_model: str = 'deepseek-v4-flash'
     live_enabled: bool = False
     prices_confirmed: bool = False
@@ -31,6 +32,23 @@ class Settings:
     parser_timeout: int = 120
     deadline_seconds: int = 86400
     start_worker: bool = True
+
+    remote_enabled: bool = False
+    preview_user: str = 'engineer'
+    preview_password: str = field(default='', repr=False)
+    origin_token: str = field(default='', repr=False)
+    allowed_hosts: tuple[str, ...] = ('127.0.0.1', 'localhost', 'testserver', '[::1]')
+
+    def __post_init__(self):
+        if self.remote_enabled:
+            if len(self.preview_password) < 24 or not self.preview_user or ':' in self.preview_user:
+                raise ValueError('远程预览必须配置独立账号和至少24字符的随机密码。')
+            if self.origin_token and len(self.origin_token) < 24:
+                raise ValueError('源站密钥必须至少24字符。')
+            if not self.allowed_hosts or any(not re.fullmatch(r'[A-Za-z0-9.\[\]:-]+', host) for host in self.allowed_hosts):
+                raise ValueError('远程预览必须使用明确Host名单，不能使用通配符。')
+            if self.live_enabled or self.provider != 'mock':
+                raise ValueError('此远程预览版本只允许mock；真实API开通另行确认和验证。')
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -45,6 +63,11 @@ class Settings:
             prices_confirmed=flag('CIRP_PRICES_CONFIRMED'),
             input_rate=Decimal(os.getenv('CIRP_INPUT_CNY_PER_MILLION', '0')),
             output_rate=Decimal(os.getenv('CIRP_OUTPUT_CNY_PER_MILLION', '0')),
+            remote_enabled=flag('CIRP_REMOTE_ENABLED'),
+            preview_user=os.getenv('CIRP_PREVIEW_USER', 'engineer'),
+            preview_password=os.getenv('CIRP_PREVIEW_PASSWORD', ''),
+            origin_token=os.getenv('CIRP_ORIGIN_TOKEN', ''),
+            allowed_hosts=tuple(x.strip() for x in os.getenv('CIRP_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,[::1]').split(',') if x.strip()),
         )
 
     def live_errors(self) -> list[str]:
@@ -69,7 +92,7 @@ class Settings:
             'live_ready': not self.live_errors(), 'live_blockers': self.live_errors(),
             'budget_cny': '300.00', 'deadline_hours': 24, 'max_active_projects': 1,
             'upload_capacity_bytes': self.project_bytes, 'upload_chunk_bytes': self.chunk_bytes,
-            'local_single_user': True, 'thinking': 'disabled',
+            'local_single_user': True, 'remote_preview': self.remote_enabled, 'thinking': 'disabled',
             'capabilities': {'txt': '文本与行号', 'pdf': '文字层与坐标；图形未审',
                              'docx': '正文与表格；图片与修订未审', 'images': '已接收，视觉未接入',
                              'dwg': '已接收，CAD转换未接入', 'geometric_takeoff': False},

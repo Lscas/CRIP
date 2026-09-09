@@ -1,0 +1,13 @@
+{
+  "mode": "real_loopback_http",
+  "cloudflare_deployed": false,
+  "unauthenticated_http": 401,
+  "authenticated_http": 200,
+  "provider": "mock",
+  "project_create_http": 201,
+  "run_status": "PARTIAL",
+  "records": 5,
+  "llm_calls": 0,
+  "xlsx_http": 200,
+  "process_stopped": true
+}

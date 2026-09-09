@@ -1,0 +1,23 @@
+{
+  "version": "0.2.2",
+  "cloudflare_connection_found": false,
+  "cloudflare_credentials_available": false,
+  "runtime_cloudflared_available": false,
+  "external_connectivity": "DNS resolution failure in execution environment",
+  "public_url": null,
+  "cloud_resources_created": 0,
+  "deployment_status": "BLOCKED_ACCOUNT_AND_NETWORK",
+  "python_tests": {
+    "tests": 188,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "worker_tests": {
+    "tests": 11,
+    "failed": 0
+  },
+  "real_model_api_calls": 0,
+  "live_cloudflare_cli_flow_verified": false,
+  "windows_verified": false
+}

@@ -1,8 +1,13 @@
-# CIRP · 施工文件审查原型 v0.2.1
+# CIRP · 施工文件审查原型 v0.2.2
 这是**可运行的本地开发原型**，不是仅有规格的压缩包，也不是完整施工分析产品。
 上传 → 文件清单／基础文字解析 → 单次联合抽取 → 四类候选 → 查看来源 → 人工审核 → JSON/XLSX导出。
 
 **默认零费用mock模式**仅识别 `examples/demo` 的明确合成标记。普通真实文件在mock模式下会解析、标记未分析，不生成虚假的演示材料。真实API适配器已经编写，但本轮没有密钥、没有付费调用、没有验证施工准确率。完整图纸、OCR、DWG、Takeoff等仍未接入，运行结果明确为PARTIAL。
+
+## Cloudflare远程测试
+本版提供受保护的部署脚本，但本轮没有取得公网网址，原因是执行环境无Cloudflare登录凭据且外网DNS失败。
+Windows先安装cloudflared后运行 `./start-remote.ps1`；需要Pages时本机完成 `npx --yes wrangler@4 login`，运行 `./start-remote.ps1 -Pages`。详见[部署步骤与边界](docs/CLOUDFLARE_DEPLOY.md)和[本轮实际验证](docs/DEPLOYMENT_VALIDATION.md)。
+脚本只在公网401/200验证后显示实际网址；随机密码在启动终端生成。默认mock；源站保留在本机，关闭电脑后不可继续远程分析。
 
 ## 1. 启动（Windows PowerShell）
 需要Python 3.11+；本轮在Linux/Python 3.13.5执行测试，Windows尚未实机验证。
@@ -12,7 +17,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-app.txt
 .\.venv\Scripts\python.exe -m app
 ```
-浏览器打开 `http://127.0.0.1:8000`。不要求Node、GPU、PostgreSQL或外部账户。请勿把当前单用户原型暴露到公网。
+浏览器打开 `http://127.0.0.1:8000`。不要求Node、GPU、PostgreSQL或外部账户。不要无保护暴露公网；远程测试使用新增的start-remote脚本。
 
 macOS/Linux：
 ```bash
