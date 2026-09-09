@@ -1,0 +1,12 @@
+{
+  "health": 200,
+  "health_body": {
+    "status": "ok"
+  },
+  "anonymous": 401,
+  "authenticated": 200,
+  "provider": "mock",
+  "live_ready": false,
+  "limit_bytes": 104857600,
+  "demo_download": 200
+}

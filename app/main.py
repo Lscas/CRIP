@@ -55,6 +55,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
     app.add_middleware(TrustedHostMiddleware,allowed_hosts=list(s.allowed_hosts))
     @app.middleware('http')
     async def guard(request,call_next):
+        # 唯一公开端点，仅暴露进程存活，不返回业务数据或版本/密钥。
+        if s.render_free_preview and request.url.path == '/_health' and request.method in ('GET', 'HEAD'):
+            if request.url.hostname not in s.allowed_hosts:
+                return JSONResponse({'detail':'Invalid host'},400)
+            if request.method == 'HEAD':
+                return Response(status_code=200,headers={'Cache-Control':'no-store','X-Robots-Tag':'noindex'})
+            return JSONResponse({'status':'ok'},headers={'Cache-Control':'no-store','X-Robots-Tag':'noindex'})
         if s.remote_enabled and not access.authorized(request):
             return access.reject()
         # 远程仍要求同源写入；未知Origin或缺少客户端标记不能改变数据。
@@ -87,6 +94,11 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def health():return {'app_version':VERSION,'spec_version':VERSION,'schema_version':'0.2.0','provider':s.provider}
     @app.get('/api/settings')
     def settings_view():return s.public()
+    @app.get('/api/demo-files/{name}')
+    def demo_file(name:str):
+        if name not in ('01_original.txt','02_revision.txt'):
+            raise DomainError('示例不存在',404)
+        return FileResponse(ROOT/'examples/demo'/name,filename=name,media_type='text/plain; charset=utf-8')
     @app.get('/api/projects')
     def projects():return db.all('SELECT * FROM projects ORDER BY created_at DESC')
     @app.post('/api/projects',status_code=201)

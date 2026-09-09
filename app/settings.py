@@ -33,6 +33,7 @@ class Settings:
     deadline_seconds: int = 86400
     start_worker: bool = True
 
+    render_free_preview: bool = False
     remote_enabled: bool = False
     preview_user: str = 'engineer'
     preview_password: str = field(default='', repr=False)
@@ -40,6 +41,8 @@ class Settings:
     allowed_hosts: tuple[str, ...] = ('127.0.0.1', 'localhost', 'testserver', '[::1]')
 
     def __post_init__(self):
+        if self.render_free_preview and (not self.remote_enabled or self.origin_token or self.project_bytes > 100 * 1024 * 1024):
+            raise ValueError('Render免费测试必须鉴权、隔离源站密钥并采用测试上传限额。')
         if self.remote_enabled:
             if len(self.preview_password) < 24 or not self.preview_user or ':' in self.preview_user:
                 raise ValueError('远程预览必须配置独立账号和至少24字符的随机密码。')
@@ -92,7 +95,9 @@ class Settings:
             'live_ready': not self.live_errors(), 'live_blockers': self.live_errors(),
             'budget_cny': '300.00', 'deadline_hours': 24, 'max_active_projects': 1,
             'upload_capacity_bytes': self.project_bytes, 'upload_chunk_bytes': self.chunk_bytes,
-            'local_single_user': True, 'remote_preview': self.remote_enabled, 'thinking': 'disabled',
+            'local_single_user': not self.remote_enabled, 'remote_preview': self.remote_enabled, 'thinking': 'disabled',
+            'render_free_preview': self.render_free_preview,
+            'storage_warning': ('云端免费测试：仅模拟分析；休眠、重启或部署后数据会丢失。每项目限100MiB，只上传测试副本，结果请及时导出；正式资料与实际运行保留在本机。' if self.render_free_preview else ''),
             'capabilities': {'txt': '文本与行号', 'pdf': '文字层与坐标；图形未审',
                              'docx': '正文与表格；图片与修订未审', 'images': '已接收，视觉未接入',
                              'dwg': '已接收，CAD转换未接入', 'geometric_takeoff': False},

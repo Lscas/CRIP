@@ -18,7 +18,7 @@ class Uploads:
         with self.db.connect(True) as c:
             if not c.execute('SELECT id FROM projects WHERE id=?',(project_id,)).fetchone(): raise DomainError('项目不存在',404)
             total=c.execute("SELECT COALESCE(SUM(size),0) FROM uploads WHERE project_id=? AND state NOT IN ('DUPLICATE','ABORTED')",(project_id,)).fetchone()[0]
-            if size<0 or total+size>self.settings.project_bytes: raise DomainError('超出当前10GB接收容量配置',413)
+            if size<0 or total+size>self.settings.project_bytes: raise DomainError(f'超出当前项目接收容量配置（{self.settings.project_bytes:,} bytes）',413)
             c.execute('INSERT INTO uploads(id,project_id,name,size,created_at) VALUES(?,?,?,?,?)',(upload_id,project_id,name,size,now()))
         (self.tmp/upload_id).touch()
         return self.get(upload_id)

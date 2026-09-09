@@ -1,0 +1,20 @@
+{
+  "version": "0.2.3",
+  "source_baseline": "v0.2.2-cloudflare-preview",
+  "code_ready": true,
+  "platform_deployed": false,
+  "public_url": null,
+  "cloud_resources_created": 0,
+  "real_model_calls": 0,
+  "python": "3.13.5",
+  "blockers": [
+    "Render账户连接未授权",
+    "未在可访问GitHub仓库中找到CIRP部署源"
+  ],
+  "checks": {
+    "python_tests": 217,
+    "worker_tests": 11,
+    "new_render_tests": 29,
+    "failures": 0
+  }
+}

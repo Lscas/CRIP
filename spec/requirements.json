@@ -1,6 +1,6 @@
 {
   "product": "Construction Intelligence Review Platform",
-  "spec_version": "0.2.2",
+  "spec_version": "0.2.3",
   "updated_at": "2026-09-08",
   "requirements": [
     {
@@ -1148,7 +1148,7 @@
       "priority": "P0",
       "status": "implemented",
       "acceptance_criteria": [
-        "所有API/页面无凭据返回401；无保护配置拒绝启动。",
+        "所有页面和业务API无凭据返回401；无保护配置拒绝启动；Render免费profile仅/_health GET/HEAD公开无业务信息的存活结果。",
         "Pages不上传用户数据/密钥，源站秘钥不发给浏览器。",
         "本地模拟端到端及Worker负例测试通过；不据此声称公网完成。"
       ],
@@ -1168,6 +1168,34 @@
       ],
       "decision_source": "用户本轮授权Cloudflare远程测试",
       "spec_section": "docs/CLOUDFLARE_DEPLOY.md"
+    },
+    {
+      "id": "FR-RENDER-001",
+      "title": "免费Render测试适配",
+      "statement": "一个明确free的测试Web Service；独立临时数据、强制mock、鉴权、公开最小存活检查和易失性提示；本机设置不变。",
+      "status": "implemented",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "平台配置无收费数据库/磁盘，关闭自动部署。",
+        "不加载本机.env或API Key，测试上传限额可见。",
+        "业务API与页面401/200，health无敏感信息，样例流程通过。"
+      ],
+      "decision_source": "D-19：用户授权免费测试且实际运行留本机",
+      "spec_section": "docs/RENDER_FREE_DEPLOY.md"
+    },
+    {
+      "id": "FR-RENDER-LIVE-001",
+      "title": "Render真实发布验收",
+      "statement": "在已连接的用户Render及源码仓库中创建Free测试服务；使用平台实际返回URL验收，禁止用配置生成替代上线。",
+      "status": "planned",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "确认实际计划free和工作区计费配额。",
+        "验证公网health=200、页面未登录401及登录200。",
+        "没有平台授权时如实保留未部署状态。"
+      ],
+      "decision_source": "D-19：用户授权免费测试且实际运行留本机",
+      "spec_section": "docs/RENDER_FREE_DEPLOY.md"
     }
   ],
   "artifact_kind": "prototype_source",

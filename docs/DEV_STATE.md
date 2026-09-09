@@ -1,14 +1,6 @@
-# 当前开发状态：v0.2.2 / cloudflare-preview
-FR-REMOTE-001保护和部署代码已实现；FR-DEPLOY-001实际公网发布未完成，缺Cloudflare授权和外网DNS。本轮默认mock，不读取用户.env、不调用付费API。
-先读docs/CLOUDFLARE_DEPLOY.md，定向检查 `python scripts/run_checks.py --area remote`。部署连接恢复后按脚本验证401/200，不能把配置生成等同于上线。密钥仅用户本机配置；保留现有DEV-002业务下一任务。
-
-## 上一切片状态
-# 当前开发状态：v0.2.1 / prototype-bootstrap
-目标不变：全项目、全专业、四表、证据、人工审核。当前仅交付首个本地开发切片，不是完整商业产品。
-
-已实现：FastAPI本地网页；SQLite持久化；4MiB分片续传和SHA-256去重；单活跃运行；TXT/DOCX正文/PDF文字和定位基础解析；来源与未处理状态；仅合成标记的零费用mock；文本DeepSeek适配器（仅MockTransport测试）；300CNY原子预算；暂停、日期比较基础规则；人工审核与JSON/XLSX导出。
-未实现：真实API连通/施工精度验证、OCR/视觉/DWG、复杂版面关系、产品选项完整映射、几何Takeoff、完整跨专业冲突、生产认证/对象存储/数据库/任务队列、10GB与24h压测。当前运行最终显示PARTIAL。
-
-默认不读 `.env` 或 `.local`，不付费。运行：`python -m app`。定向：`python scripts/run_checks.py --area api|gateway|parsers`；全量用 `--area all`。
-下一任务：`python scripts/context_pack.py DEV-002`，完善已有Schema的互斥产品映射；不重新发明架构。DEV-003为PDF来源viewer；DEV-004为有用户授权后的API探针。
-约束：按内部修订日期，不按上传；选项不双计；设计净量；QA不补外部正文；模型不能审批自己。大多数端到端产品需求仍planned；个别已实现代码不代表整个产品完成。精确结果见VALIDATION_REPORT。
+# 当前开发状态：v0.2.3 / render-free-preview
+目标：免费云端只作测试，本机保留正式资料、真实API与实际运行。选择Render独立测试，无需本机一直在线。
+新增：render.yaml显式free/单服务/手动部署；app/render_preview.py独立配置、mock、精确Host、PORT；无敏感信息健康检查；网页易失性警示/样例下载。云端测试100MiB/项目，不改变本机10GB目标。默认不读.env、不调用付费API。
+状态：部署配置及测试已实现；实际云端发布未完成，Render未连接、连接中未找到CIRP源码仓库。FR-RENDER-LIVE-001 remains planned。不能拼接网址称已上线。
+读取docs/RENDER_FREE_DEPLOY.md；定向`python scripts/run_checks.py --area render`；全量`--area all`。发布前用平台验收401/200/health/mock和Free费用边界。
+业务下一任务继续DEV-002，使用context_pack，不重读整个仓库。OCR/视觉/DWG/Takeoff等未实现能力仍PARTIAL。代码回滚基线v0.2.2-cloudflare-preview。

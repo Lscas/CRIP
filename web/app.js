@@ -133,5 +133,6 @@ for(const fmt of ['json','xlsx'])$('export-'+fmt).onclick=()=>{if(state.run)loca
 (async()=>{state.settings=await api('/settings');$('mode').textContent=state.settings.mode;$('version').textContent='v'+state.settings.version;
  $('mode-notice').textContent=state.settings.provider==='mock'?'当前为零费用模拟模式，只识别明确的演示样例。真实文件只验证上传与解析；不会生成假材料来冒充模型分析。':
   (state.settings.live_ready?'真实API已启用；点击分析会产生费用。简单任务使用Flash非思考，所有结果须人工审核。':'真实API尚未就绪：'+state.settings.live_blockers.join('；'));
+ if(state.settings.storage_warning){$('environment-warning').textContent=state.settings.storage_warning;$('environment-warning').hidden=false;}
  await projects();setInterval(()=>{if(state.run)refreshRun().catch(()=>{});},2500);
 })().catch(e=>toast(e.message));

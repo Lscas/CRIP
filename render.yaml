@@ -1,0 +1,21 @@
+# 独立免费测试服务；不要与任何已有生产服务同名。仅mock，无数据库/磁盘/cron资源。
+services:
+  - type: web
+    name: cirp-free-preview
+    runtime: python
+    plan: free
+    region: oregon
+    branch: feature/render-free-preview
+    autoDeployTrigger: 'off'
+    buildCommand: python -m pip install -r requirements-app.txt
+    startCommand: python -m app.render_preview
+    healthCheckPath: /_health
+    envVars:
+      - key: PYTHON_VERSION
+        value: '3.13.5'
+      - key: PYTHONUNBUFFERED
+        value: '1'
+      - key: WEB_CONCURRENCY
+        value: '1'
+      - key: CIRP_PREVIEW_PASSWORD
+        generateValue: true

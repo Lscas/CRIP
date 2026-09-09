@@ -1,3 +1,22 @@
+# CIRP v0.2.3：免费云端测试，本机实际运行
+新增Render免费测试适配。**没有创建远端服务器，没有可用公网网址。** Render账户和源码仓库授权尚未完成。
+
+- [Render部署说明](docs/RENDER_FREE_DEPLOY.md)：一个Free Web Service，网页＋后端都在云端；账户授权后用`render.yaml`发布。
+- [实际验证记录](docs/RENDER_VALIDATION.md)：离线检查不代表平台已经上线。
+- 本机继续`python -m app`，保留自己的数据与真实API配置。不要求Oracle，不购买服务器。
+- 云端仅mock；休眠/重启会丢数据；网页提供两个合成示例下载和导出。上传工程初值100MiB/项目只适用于免费测试。
+- 真实DeepSeek分析仍在本机；云端不载入API Key，以免易失预算账本重置累计费用。
+- 免费计算实例之外，平台仍有带宽/构建配额；严格免费需检查账户付款方式和用量。配置关闭自动部署，不创建付费数据库/磁盘。
+
+```bash
+python -m pip install -r requirements-dev.txt
+python scripts/run_checks.py --area render
+python scripts/run_checks.py --area all
+```
+
+## 原有本地与Cloudflare能力说明
+以下是继承的v0.2.1启动说明及v0.2.2功能；不要将其历史验证结果解释为本轮全部验证：
+
 # CIRP · 施工文件审查原型 v0.2.2
 这是**可运行的本地开发原型**，不是仅有规格的压缩包，也不是完整施工分析产品。
 上传 → 文件清单／基础文字解析 → 单次联合抽取 → 四类候选 → 查看来源 → 人工审核 → JSON/XLSX导出。

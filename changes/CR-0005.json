@@ -1,0 +1,35 @@
+{
+  "change_id": "CR-0005",
+  "spec_version": "0.2.3",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-RENDER-001",
+    "FR-RENDER-LIVE-001",
+    "FR-REMOTE-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "按用户免费测试/本机实际运行的决定增加Render隔离适配；不声称已发布。",
+  "decision_refs": [
+    "docs/DECISIONS.md#d-19免费云端测试本机实际运行",
+    "用户本轮要求使用Render或Cloudflare免费额度"
+  ],
+  "affected_paths": [
+    "app/*",
+    "web/*",
+    "render.yaml",
+    "scripts/*",
+    "spec/*",
+    "prompts/manifest.json",
+    "AGENTS.md"
+  ],
+  "tests": [
+    "tests/app/test_render_preview.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户授权使用Render/Cloudflare免费测试；正式运行留本机。本轮不创建收费或公开代码资源。",
+  "known_limitations": [
+    "Render连接未授权，源码仓库未确定，未真实发布",
+    "平台构建/资源容量/公网行为尚未实测",
+    "云端仅mock，易失数据，不能作持久化生产使用"
+  ]
+}

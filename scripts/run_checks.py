@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse,subprocess,sys,shutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-AREAS={'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
+AREAS={'render':['tests/app/test_render_preview.py'],'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
        'parsers':['tests/app/test_parsers.py'],'governance':['tests/test_governance.py','tests/test_devtools.py'],'all':['tests']}
 def main()->int:
     p=argparse.ArgumentParser();p.add_argument('--area',choices=AREAS,default='all');args=p.parse_args()

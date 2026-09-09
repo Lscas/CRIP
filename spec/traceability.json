@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.2",
+  "spec_version": "0.2.3",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -1282,6 +1282,40 @@
         "tests/app/test_remote_access.py"
       ],
       "test_scope": "offline_remote_preview_not_cloud_deployment",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-RENDER-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/render_preview.py",
+        "render.yaml"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_render_preview.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "product_test",
+      "implemented_product_paths": [
+        "app/render_preview.py",
+        "render.yaml",
+        "app/main.py",
+        "app/settings.py",
+        "web/app.js"
+      ],
+      "verification_report": "docs/RENDER_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-RENDER-LIVE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/render_preview.py",
+        "render.yaml"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
       "implemented_product_paths": [],
       "verification_report": null
     }
