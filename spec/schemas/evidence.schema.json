@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/evidence.schema.json",
+  "title": "源证据与稳定定位",
+  "type": "object",
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "pattern": "^EV-"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "component_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "internal_revision_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "revision_label": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "locator": {
+      "type": "object",
+      "properties": {
+        "page_number": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "sheet": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "paragraph": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coordinate_system": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "text_line_start": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "text_line_end": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "native_element_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "page_number",
+        "sheet",
+        "section",
+        "paragraph",
+        "bbox",
+        "coordinate_system",
+        "text_line_start",
+        "text_line_end",
+        "native_element_id"
+      ],
+      "additionalProperties": false
+    },
+    "raw_text": {
+      "type": "string"
+    },
+    "image_crop_uri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "extraction_method": {
+      "enum": [
+        "TEXT_LAYER",
+        "OCR",
+        "CAD_OBJECT",
+        "VISION",
+        "DOCX",
+        "TXT"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "evidence_id",
+    "tenant_id",
+    "project_id",
+    "input_snapshot_id",
+    "document_id",
+    "component_id",
+    "file_sha256",
+    "internal_revision_date",
+    "revision_label",
+    "locator",
+    "raw_text",
+    "image_crop_uri",
+    "extraction_method",
+    "confidence"
+  ],
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "properties": {
+        "raw_text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "image_crop_uri": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  ]
+}

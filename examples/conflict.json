@@ -1,0 +1,32 @@
+{
+  "candidate_key": "CF-1",
+  "subject": "示例设备垫性能",
+  "comparison_key": "PAD-1|performance",
+  "conflict_type": "DESIGN_PROPERTY",
+  "claims": [
+    {
+      "evidence_id": "EV-1",
+      "normalized_value": "X",
+      "internal_revision_date": "2026-01-01",
+      "revision_label": "1",
+      "scope_key": "PAD-1|performance",
+      "approval_text": null
+    },
+    {
+      "evidence_id": "EV-2",
+      "normalized_value": "Y",
+      "internal_revision_date": "2026-02-01",
+      "revision_label": "2",
+      "scope_key": "PAD-1|performance",
+      "approval_text": null
+    }
+  ],
+  "resolution_status": "LATEST_APPLIED",
+  "selected_evidence_id": "EV-2",
+  "reason": "内部修订日期较新，保留旧值与差异。",
+  "affected_material_keys": [
+    "MAT-1"
+  ],
+  "affected_inspection_keys": [],
+  "severity_candidate": "UNRATED"
+}

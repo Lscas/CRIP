@@ -1,0 +1,597 @@
+{
+  "product": "Construction Intelligence Review Platform",
+  "spec_version": "0.1.0",
+  "updated_at": "2026-09-08",
+  "requirements": [
+    {
+      "id": "PRD-USER-001",
+      "title": "主要用户",
+      "statement": "系统首要面向商业新建项目工程师。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "项目创建和 UI 文案明确 Engineer 为主要角色。"
+      ]
+    },
+    {
+      "id": "PRD-FLOW-001",
+      "title": "自动项目级分析",
+      "statement": "用户一次性批量上传资料后，系统无需用户逐项提问即可自动生成结果。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "用户可通过一次 Analyze Project 操作启动完整流水线。"
+      ]
+    },
+    {
+      "id": "PRD-SCOPE-001",
+      "title": "全专业输入",
+      "statement": "系统允许所有施工专业资料进入同一项目。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "文档可被标记为任意专业或 Unknown；不得因未配置专业而丢弃。"
+      ]
+    },
+    {
+      "id": "FR-INGEST-001",
+      "title": "支持输入格式",
+      "statement": "首版支持 PDF、DOCX、TXT、常见图片和 DWG。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每种格式均有成功、部分成功、失败三态处理。"
+      ]
+    },
+    {
+      "id": "FR-INGEST-002",
+      "title": "10GB 项目容量",
+      "statement": "单项目目标支持总上传量 10 GB。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "上传采用分片和可恢复机制；处理不依赖单请求常驻。"
+      ]
+    },
+    {
+      "id": "FR-INGEST-003",
+      "title": "文件 Manifest",
+      "statement": "系统为每个文件保存哈希、类型、大小、上传状态和处理状态。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "重复哈希可被识别；所有文件均出现在 Coverage Report。"
+      ]
+    },
+    {
+      "id": "FR-INGEST-004",
+      "title": "失败隔离",
+      "statement": "单文件失败不得导致整个项目分析终止。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "失败文件被列出，其他文件继续处理。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-001",
+      "title": "PDF 结构提取",
+      "statement": "提取 PDF 文字、页码、Bounding Box、图片、表格和版面信息。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Evidence 可定位到页和 bbox。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-002",
+      "title": "OCR fallback",
+      "statement": "对扫描或低文本密度页面使用 OCR/vision fallback。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "OCR 结果保存方法和 confidence。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-003",
+      "title": "DOCX 结构",
+      "statement": "保留 DOCX 标题、段落、列表、表格和图片关系。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "输出 Canonical fragments 具有结构 metadata。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-004",
+      "title": "TXT 解析",
+      "statement": "TXT 保留原始内容、编码和行号。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Evidence 可定位到行范围。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-005",
+      "title": "图片理解",
+      "statement": "常见图片支持 OCR、方向和局部视觉分析。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "文本和 bbox 可用于 Evidence。"
+      ]
+    },
+    {
+      "id": "FR-PARSE-006",
+      "title": "DWG API 转换",
+      "statement": "DWG 通过受支持 CAD API 转换并标记解析等级。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每个 DWG 标记 RENDER_ONLY 或 OBJECT_METADATA。"
+      ]
+    },
+    {
+      "id": "FR-DATA-001",
+      "title": "统一文档模型",
+      "statement": "所有输入转化为 Canonical Document Model。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Document、Fragment、Evidence 字段通过 Schema/DB validation。"
+      ]
+    },
+    {
+      "id": "FR-CLASS-001",
+      "title": "自动文档分类",
+      "statement": "自动识别文档类型、专业、CSI、系统、设备、区域和 Revision。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "用户可查看并修正分类。"
+      ]
+    },
+    {
+      "id": "FR-REVISION-001",
+      "title": "同文档 Revision 链",
+      "statement": "同一文档的新 Revision 可以 supersede 旧 Revision。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "关系明确时检索默认排除 superseded 版本。"
+      ]
+    },
+    {
+      "id": "FR-REVISION-002",
+      "title": "范围化修改",
+      "statement": "RFI、ASI、Addendum 仅修改明确涉及范围。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "系统保存 affected entities/sheets/sections；不得全局覆盖。"
+      ]
+    },
+    {
+      "id": "FR-REVISION-003",
+      "title": "Submittal 不自动覆盖设计",
+      "statement": "较新的 Submittal 不因日期自动覆盖设计要求。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "不一致产生 deviation/conflict。"
+      ]
+    },
+    {
+      "id": "FR-REQ-001",
+      "title": "原子 Requirement",
+      "statement": "每段文档可提取原子、结构化、可追踪 Requirement。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "CONFIRMED Requirement 至少有一个 Evidence ID。"
+      ]
+    },
+    {
+      "id": "FR-ROUTE-001",
+      "title": "CSI/Topic 路由",
+      "statement": "Requirement 按 CSI、专业、系统、设备和区域路由。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "同一 Requirement 可有多标签。"
+      ]
+    },
+    {
+      "id": "FR-MATERIAL-001",
+      "title": "永久材料清单",
+      "statement": "输出永久材料及设计、Manufacturer、Product、Model 等字段。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "未指定字段返回 null/NOT_SPECIFIED，不得猜测。"
+      ]
+    },
+    {
+      "id": "FR-MATERIAL-002",
+      "title": "临时材料清单",
+      "statement": "输出临时材料名称和状态。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "首版不要求临时材料品牌型号。"
+      ]
+    },
+    {
+      "id": "FR-MATERIAL-003",
+      "title": "明确与推导分层",
+      "statement": "区分 CONFIRMED、INFERRED_TO_VERIFY 和 CONDITIONAL。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "UI 和 Export 保留状态，不合并为普通材料。"
+      ]
+    },
+    {
+      "id": "FR-MATERIAL-004",
+      "title": "Assembly 候选",
+      "statement": "识别施工 Assembly 并生成受控配套材料候选。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Concrete equipment pad 可产生 formwork/rebar/anchor/grout 等可审核候选；不得编造规格。"
+      ]
+    },
+    {
+      "id": "FR-MATERIAL-005",
+      "title": "按 CSI 组织",
+      "statement": "Material Register 主要按 CSI Division/Section 组织。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "支持按专业、系统、设备、区域筛选。"
+      ]
+    },
+    {
+      "id": "FR-TAKEOFF-001",
+      "title": "数量来源",
+      "statement": "数量可来自文档、Schedule、Vector PDF、CAD 或人工。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每个数量保存 source、method、scale、unit 和 formula。"
+      ]
+    },
+    {
+      "id": "FR-TAKEOFF-002",
+      "title": "人工核验",
+      "statement": "所有自动数量初始为待人工核验。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "未审核数量在 Export 中有状态。"
+      ]
+    },
+    {
+      "id": "FR-TAKEOFF-003",
+      "title": "不确定时停止",
+      "statement": "无法确认 Scale/单位/范围时输出 TO_BE_VERIFIED。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "不得输出伪精确数值。"
+      ]
+    },
+    {
+      "id": "FR-INSPECTION-001",
+      "title": "完整 QA/QC 类型",
+      "statement": "提取 Inspection、Testing、Reports、Startup、Commissioning、Training 和 Closeout 要求。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "覆盖 Product Spec 列出的全部类型。"
+      ]
+    },
+    {
+      "id": "FR-INSPECTION-002",
+      "title": "仅上传文件作为项目依据",
+      "statement": "项目 QA/QC 要求必须来自上传资料。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "外部知识不得生成 CONFIRMED 项。"
+      ]
+    },
+    {
+      "id": "FR-INSPECTION-003",
+      "title": "结构化字段",
+      "statement": "每项包含 timing、frequency、criteria、standard、party、report 和 source。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "输出通过 inspection schema。"
+      ]
+    },
+    {
+      "id": "FR-CONFLICT-001",
+      "title": "跨设计文件冲突",
+      "statement": "检测 Drawing/Spec/RFI/Addendum/Submittal/Revision 间冲突。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "支持尺寸、材料、数量、性能、责任和引用冲突。"
+      ]
+    },
+    {
+      "id": "FR-CONFLICT-002",
+      "title": "不自动裁决",
+      "statement": "系统只报告冲突，不自动决定正确设计。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "用户必须看到双方证据和 unresolved 状态。"
+      ]
+    },
+    {
+      "id": "FR-CONFLICT-003",
+      "title": "影响关联",
+      "statement": "冲突关联受影响材料、QA/QC 和 Missing 项。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Conflict 输出包含 affected IDs。"
+      ]
+    },
+    {
+      "id": "FR-MISSING-001",
+      "title": "独立缺失信息清单",
+      "statement": "缺失设计、属性、频率、附件、Revision 和解析内容单独列出。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "不把 Missing 混成普通 Conflict。"
+      ]
+    },
+    {
+      "id": "FR-EVIDENCE-001",
+      "title": "可点击证据",
+      "statement": "正式输出可定位至原文件、页、Sheet、Section、Cell 或 bbox。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Evidence Viewer 打开正确来源。"
+      ]
+    },
+    {
+      "id": "FR-COVERAGE-001",
+      "title": "覆盖审计",
+      "statement": "显示每个文件、页面/Sheet 和 Fragment 的处理状态。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Coverage Report 总数与任务记录一致。"
+      ]
+    },
+    {
+      "id": "FR-REVIEW-001",
+      "title": "逐项人工审核",
+      "statement": "所有输出初始待审核，用户可 Accept/Edit/Reject。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "审核保存原值、新值、用户、时间和原因。"
+      ]
+    },
+    {
+      "id": "FR-REVIEW-002",
+      "title": "审核历史",
+      "statement": "审核记录不可静默覆盖。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每次修改创建 audit event。"
+      ]
+    },
+    {
+      "id": "FR-EXPORT-001",
+      "title": "多格式导出",
+      "statement": "支持 XLSX、CSV、JSON 和 PDF 报告。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Export 保留状态和 Evidence reference。"
+      ]
+    },
+    {
+      "id": "FR-UI-001",
+      "title": "项目 Dashboard",
+      "statement": "展示 Coverage、材料、QA/QC、冲突、缺失和审核进度。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Dashboard 数据来自 Registers，不由模型另行编造。"
+      ]
+    },
+    {
+      "id": "FR-API-001",
+      "title": "Provider abstraction",
+      "statement": "所有模型调用通过 ModelGateway。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "业务模块不得直接依赖供应商 SDK。"
+      ]
+    },
+    {
+      "id": "FR-API-002",
+      "title": "结构化输出",
+      "statement": "模型输出必须使用版本化 JSON Schema 并验证。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "无效输出重试或进入失败队列。"
+      ]
+    },
+    {
+      "id": "FR-API-003",
+      "title": "分级模型路由",
+      "statement": "分类/抽取使用低成本模型，复杂推理使用高能力模型。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "路由和成本可配置且被记录。"
+      ]
+    },
+    {
+      "id": "FR-API-004",
+      "title": "有限数据发送",
+      "statement": "不把 10GB 项目整体发送给单次模型请求。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每次调用记录 Evidence IDs 和输入范围。"
+      ]
+    },
+    {
+      "id": "FR-API-005",
+      "title": "批量处理",
+      "statement": "非实时大批任务可走 Batch/低成本处理。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "任务状态可查询、重试和归档。"
+      ]
+    },
+    {
+      "id": "FR-PROMPT-001",
+      "title": "Prompt Git 版本化",
+      "statement": "生产 Prompt 必须进入仓库并带版本。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "Analysis Run 可追溯到 prompt version。"
+      ]
+    },
+    {
+      "id": "FR-MODEL-001",
+      "title": "模型调用可追溯",
+      "statement": "记录 provider、model、token、cost、latency、retry。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "每个 Analysis Run 可导出调用摘要。"
+      ]
+    },
+    {
+      "id": "NFR-SECURITY-001",
+      "title": "项目隔离与加密",
+      "statement": "传输和静态数据加密，项目权限隔离。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "跨项目访问测试必须失败。"
+      ]
+    },
+    {
+      "id": "NFR-SECURITY-002",
+      "title": "Prompt injection 防护",
+      "statement": "文档内容不得成为系统指令或执行未授权工具。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "安全测试覆盖恶意文档指令。"
+      ]
+    },
+    {
+      "id": "NFR-SECURITY-003",
+      "title": "审计日志",
+      "statement": "上传、分析、审核、导出和删除均记录审计事件。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "事件包含 actor、time、object、action。"
+      ]
+    },
+    {
+      "id": "NFR-RELIABILITY-001",
+      "title": "任务幂等可恢复",
+      "statement": "处理任务支持重试、恢复和幂等。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "同一 job retry 不产生无控重复输出。"
+      ]
+    },
+    {
+      "id": "NFR-OBS-001",
+      "title": "可观测性",
+      "statement": "记录解析、模型、成本、错误、审核和质量指标。",
+      "priority": "P1",
+      "status": "planned",
+      "acceptance_criteria": [
+        "可按项目和任务查询。"
+      ]
+    },
+    {
+      "id": "QLT-EVAL-001",
+      "title": "Gold Dataset",
+      "statement": "建立项目隔离的 Gold 测试集。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "至少 3 个独立项目，开发集与测试集不重叠。"
+      ]
+    },
+    {
+      "id": "QLT-EVAL-002",
+      "title": "回归 Gate",
+      "statement": "模型、Prompt、Parser、Retrieval、Schema 或规则变化运行回归。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "低于门槛的 PR 默认失败。"
+      ]
+    },
+    {
+      "id": "DEV-SPEC-001",
+      "title": "规格代码同 PR",
+      "statement": "行为变化必须在同一 PR 更新规格、代码和测试。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "PR template 和 CI 检查。"
+      ]
+    },
+    {
+      "id": "DEV-SPEC-002",
+      "title": "Requirement ID",
+      "statement": "每项需求有不可复用唯一 ID。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "检查脚本拒绝重复 ID。"
+      ]
+    },
+    {
+      "id": "DEV-SPEC-003",
+      "title": "Traceability",
+      "statement": "Requirement 映射到模块和测试。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "P0 requirement 必须出现在 traceability。"
+      ]
+    },
+    {
+      "id": "DEV-SPEC-004",
+      "title": "版本绑定",
+      "statement": "App、Spec、Schema 和 Prompt bundle 版本可查询。",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "UI 或 health endpoint 显示版本。"
+      ]
+    }
+  ]
+}

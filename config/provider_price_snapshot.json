@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "verified_at": "2026-09-08",
+  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "currency": "CNY",
+  "unit": "per_1m_tokens",
+  "confirmed_for_user_endpoint": false,
+  "reservation_basis": "peak_time_cache_miss",
+  "models": {
+    "deepseek-v4-flash": {
+      "input_miss": "3.00",
+      "input_hit": "0.10",
+      "output": "9.00"
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "input_miss": "3.00",
+      "input_hit": "0.10",
+      "output": "9.00"
+    },
+    "deepseek-v4-pro": {
+      "input_miss": "9.00",
+      "input_hit": "0.30",
+      "output": "27.00"
+    }
+  },
+  "external_service_prices": {
+    "ocr": null,
+    "cad_conversion": null,
+    "attributable_compute": null
+  },
+  "note": "不是报价保证，用户中转API计费需重新核实；推理tokens若已含completion总数，不重复相加。"
+}

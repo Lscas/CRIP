@@ -1,0 +1,39 @@
+{
+  "candidate_key": "QA-1",
+  "requirement_status": "CONFIRMED",
+  "evidence_ids": [
+    "EV-3"
+  ],
+  "inference_rule_id": null,
+  "condition": null,
+  "entity_ids": [
+    "PAD-1"
+  ],
+  "csi_sections": [
+    "03"
+  ],
+  "location": "示例位置",
+  "field_evidence": {
+    "frequency": [
+      "EV-3"
+    ],
+    "submission_trigger": [
+      "EV-3"
+    ]
+  },
+  "qa_type": "TEST_REPORT",
+  "activity": "示例施工",
+  "requirement": "提交示例报告",
+  "timing": null,
+  "frequency": "每次施工",
+  "acceptance_criteria": null,
+  "standard_reference": null,
+  "standard_body_available": false,
+  "report_name": "示例报告",
+  "submission_trigger": "施工结束",
+  "submission_offset_days": null,
+  "related_requirement_keys": [],
+  "performer_as_stated": null,
+  "witness_as_stated": null,
+  "support_note": "合成数据。"
+}

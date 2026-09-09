@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+node_modules/
+.next/
+data/
+uploads/
+secrets/
+*.key
+*.pem
+reports/local/

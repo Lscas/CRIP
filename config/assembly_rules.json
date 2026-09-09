@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "rules": [
+    {
+      "id": "ASM-CONCRETE-PAD-001",
+      "status": "candidate_rule_requires_project_review",
+      "trigger": "项目文件明确存在现浇设备混凝土垫/基础",
+      "items": [
+        {
+          "name": "模板系统",
+          "kind": "TEMPORARY",
+          "status": "INFERRED_TO_VERIFY"
+        },
+        {
+          "name": "钢筋",
+          "kind": "PERMANENT",
+          "status": "INFERRED_TO_VERIFY",
+          "properties": null
+        },
+        {
+          "name": "锚固件",
+          "kind": "PERMANENT",
+          "status": "CONDITIONAL",
+          "condition": "设备或结构设计要求锚固"
+        },
+        {
+          "name": "灌浆材料",
+          "kind": "PERMANENT",
+          "status": "CONDITIONAL",
+          "condition": "存在底板灌浆层要求"
+        },
+        {
+          "name": "养护材料",
+          "kind": "TEMPORARY",
+          "status": "INFERRED_TO_VERIFY"
+        }
+      ],
+      "forbidden": [
+        "infer bar size/spacing",
+        "assign mandatory plywood method",
+        "generate QA obligations from general rule"
+      ],
+      "qa_requirements": []
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "candidate_key": "MI-1",
+  "subject": "设备垫设计净量",
+  "missing_field_or_document": "尺寸详图",
+  "blocking_reason": "无法计算设计体积",
+  "blocks_current_task": true,
+  "reason_code": "NOT_LOCATED",
+  "related_evidence_ids": [
+    "EV-2"
+  ],
+  "affected_output_keys": [
+    "MAT-1"
+  ],
+  "search_state": "SEARCHED_NOT_FOUND",
+  "recommended_action": "核查已上传详图或补充依据。"
+}

@@ -1,0 +1,20 @@
+{
+  "tenant_id": "T1",
+  "project_id": "P1",
+  "input_snapshot_id": "SN1",
+  "input_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "crop_hashes": [],
+  "parser_version": "0.2.0",
+  "prompt_version": "0.2.0",
+  "provider": "mock",
+  "model_id": "mock",
+  "model_snapshot": "mock-v1",
+  "schema_version": "0.2.0",
+  "retrieval_version": "0.2.0",
+  "assembly_rule_version": "0.2.0",
+  "revision_policy_version": "0.2.0",
+  "routing_version": "0.2.0",
+  "parameters": {
+    "thinking": "disabled"
+  }
+}

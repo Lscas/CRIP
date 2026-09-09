@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "default_paid_delegation": false,
+  "roles": {
+    "deterministic": [
+      "format",
+      "lint",
+      "schema validation",
+      "test execution",
+      "generated docs"
+    ],
+    "cheap": [
+      "bounded boilerplate",
+      "rename within files",
+      "fixture authoring",
+      "doc wording clarification"
+    ],
+    "review": [
+      "architecture",
+      "schema breaking change",
+      "revision/budget/security policy"
+    ]
+  },
+  "task_card_required_fields": [
+    "requirement_ids",
+    "allowed_paths",
+    "context_files",
+    "acceptance_tests",
+    "max_input_tokens",
+    "max_output_tokens",
+    "approval_ref"
+  ],
+  "prohibited": [
+    "self approve",
+    "lower acceptance to pass",
+    "silent high-model escalation",
+    "send whole repo every turn",
+    "commit secrets"
+  ]
+}

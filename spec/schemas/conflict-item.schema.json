@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/conflict-item.schema.json",
+  "title": "版本差异和未解冲突候选",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "comparison_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "conflict_type": {
+      "enum": [
+        "DESIGN_PROPERTY",
+        "PRODUCT_DEVIATION",
+        "QUANTITY",
+        "CROSS_REFERENCE",
+        "REVISION_AMBIGUITY"
+      ]
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "pattern": "^EV-"
+          },
+          "normalized_value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "internal_revision_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "revision_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "scope_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approval_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        },
+        "required": [
+          "evidence_id",
+          "normalized_value",
+          "internal_revision_date",
+          "revision_label",
+          "scope_key",
+          "approval_text"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 2
+    },
+    "resolution_status": {
+      "enum": [
+        "LATEST_APPLIED",
+        "UNRESOLVED"
+      ]
+    },
+    "selected_evidence_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "affected_material_keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "affected_inspection_keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "severity_candidate": {
+      "enum": [
+        "UNRATED",
+        "LOW",
+        "MEDIUM",
+        "HIGH"
+      ]
+    }
+  },
+  "required": [
+    "candidate_key",
+    "subject",
+    "comparison_key",
+    "conflict_type",
+    "claims",
+    "resolution_status",
+    "selected_evidence_id",
+    "reason",
+    "affected_material_keys",
+    "affected_inspection_keys",
+    "severity_candidate"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "resolution_status": {
+            "const": "LATEST_APPLIED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "selected_evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "resolution_status": {
+            "const": "UNRESOLVED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "selected_evidence_id": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

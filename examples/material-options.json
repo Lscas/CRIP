@@ -1,0 +1,107 @@
+{
+  "candidate_key": "MAT-1",
+  "requirement_status": "CONFIRMED",
+  "evidence_ids": [
+    "EV-2"
+  ],
+  "inference_rule_id": null,
+  "condition": null,
+  "entity_ids": [
+    "PAD-1"
+  ],
+  "csi_sections": [
+    "03"
+  ],
+  "location": "示例位置",
+  "field_evidence": {
+    "name": [
+      "EV-2"
+    ]
+  },
+  "name": "示例设备选型",
+  "material_kind": "PERMANENT",
+  "design_properties": [
+    {
+      "name": "性能",
+      "value": "Y",
+      "unit": null,
+      "evidence_ids": [
+        "EV-2"
+      ]
+    }
+  ],
+  "option_relation": "ONE_OF",
+  "options": [
+    {
+      "option_id": "A",
+      "manufacturer": "示例厂家A",
+      "product": "示例产品",
+      "model_number": "A-01",
+      "role": "ALLOWED",
+      "approval_text": null,
+      "evidence_ids": [
+        "EV-2"
+      ],
+      "field_evidence": {
+        "manufacturer": [
+          "EV-2"
+        ],
+        "product": [
+          "EV-2"
+        ],
+        "model_number": [
+          "EV-2"
+        ]
+      }
+    },
+    {
+      "option_id": "B",
+      "manufacturer": "示例厂家B",
+      "product": "示例产品",
+      "model_number": "B-01",
+      "role": "ALLOWED",
+      "approval_text": null,
+      "evidence_ids": [
+        "EV-2"
+      ],
+      "field_evidence": {
+        "manufacturer": [
+          "EV-2"
+        ],
+        "product": [
+          "EV-2"
+        ],
+        "model_number": [
+          "EV-2"
+        ]
+      }
+    },
+    {
+      "option_id": "C",
+      "manufacturer": "示例厂家C",
+      "product": "示例产品",
+      "model_number": "C-01",
+      "role": "ALLOWED",
+      "approval_text": null,
+      "evidence_ids": [
+        "EV-2"
+      ],
+      "field_evidence": {
+        "manufacturer": [
+          "EV-2"
+        ],
+        "product": [
+          "EV-2"
+        ],
+        "model_number": [
+          "EV-2"
+        ]
+      }
+    }
+  ],
+  "selected_option_ids": [],
+  "quantity": null,
+  "parent_entity_id": null,
+  "included_in_parent": false,
+  "support_note": "合成样例，仅测试契约，不代表工程设计。"
+}

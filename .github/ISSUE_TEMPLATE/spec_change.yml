@@ -1,0 +1,16 @@
+name: 规格变更
+description: 在实现前记录业务规则变更
+title: "[Spec Change] "
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: 需求ID、原行为、新行为、影响范围
+    validations:
+      required: true
+  - type: textarea
+    id: approval
+    attributes:
+      label: 需要负责人批准的决定与验收
+    validations:
+      required: true

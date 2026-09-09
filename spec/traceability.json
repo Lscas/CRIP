@@ -1,0 +1,1182 @@
+{
+  "spec_version": "0.2.0",
+  "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
+  "entries": [
+    {
+      "requirement_id": "PRD-USER-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/user"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "PRD-FLOW-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/flow"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "PRD-SCOPE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/scope"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INGEST-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INGEST-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INGEST-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INGEST-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-005",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PARSE-006",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/parse"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-DATA-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/data"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CLASS-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/class"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVISION-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/revision"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVISION-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/revision"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVISION-003",
+      "implementation_status": "superseded",
+      "planned_product_modules": [
+        "app/revision"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REQ-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/req"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-ROUTE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/route"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MATERIAL-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/material"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MATERIAL-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/material"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MATERIAL-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/material"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MATERIAL-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/material"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MATERIAL-005",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/material"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TAKEOFF-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/takeoff"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TAKEOFF-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/takeoff"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TAKEOFF-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/takeoff"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INSPECTION-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/inspection"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INSPECTION-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/inspection"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INSPECTION-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/inspection"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CONFLICT-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/conflict"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CONFLICT-002",
+      "implementation_status": "superseded",
+      "planned_product_modules": [
+        "app/conflict"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CONFLICT-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/conflict"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MISSING-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/missing"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-EVIDENCE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/evidence"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-COVERAGE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/coverage"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVIEW-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/review"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVIEW-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/review"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-EXPORT-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/export"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-UI-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/ui"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-API-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/api"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-API-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/api"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-API-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/api"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-API-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/api"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-API-005",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/api"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-PROMPT-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/prompt"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-MODEL-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/model"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "NFR-SECURITY-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/security"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "NFR-SECURITY-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/security"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "NFR-SECURITY-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/security"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "NFR-RELIABILITY-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/reliability"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "NFR-OBS-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/obs"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "QLT-EVAL-001",
+      "implementation_status": "deferred",
+      "planned_product_modules": [
+        "app/eval"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "QLT-EVAL-002",
+      "implementation_status": "deferred",
+      "planned_product_modules": [
+        "app/eval"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-SPEC-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/spec"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-SPEC-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/spec"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-SPEC-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/spec"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-SPEC-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/spec"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVISION-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/revision"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "PRD-PROTOTYPE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/prototype"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "PRD-RESP-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/resp"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-OPTIONS-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/options"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INSTANCE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/instance"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-FIELD-EVIDENCE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/field"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-SCHEMA-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/schema"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-COVERAGE-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/coverage"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CONTEXT-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/context"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-ROUTE-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/route"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-ROUTE-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/route"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-ROUTE-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/route"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TOKEN-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/token"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TOKEN-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/token"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TOKEN-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/token"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-VISION-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/vision"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-CAPABILITY-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/capability"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-BUDGET-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/budget"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-BUDGET-002",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/budget"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-BUDGET-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/budget"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-BUDGET-004",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/budget"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-DEADLINE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/deadline"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_policies.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-REVIEW-003",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/review"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_contracts.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-ASSEMBLY-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/assembly"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-INPUT-STATUS-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/input"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "FR-TESTING-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/testing"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [],
+      "test_scope": "not_implemented",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-APPROVAL-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/approval"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-LOWCOST-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/lowcost"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-TRACE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/trace"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-CHANGE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/change"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    },
+    {
+      "requirement_id": "DEV-CHECK-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "app/check"
+      ],
+      "planned_product_tests": [],
+      "contract_tests": [
+        "tests/test_governance.py"
+      ],
+      "test_scope": "offline_contract_only",
+      "implemented_product_paths": [],
+      "verification_report": null
+    }
+  ]
+}

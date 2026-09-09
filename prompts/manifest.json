@@ -1,0 +1,69 @@
+{
+  "bundle_version": "0.2.0",
+  "prompts": [
+    {
+      "id": "document-classification",
+      "version": "0.2.0",
+      "path": "prompts/document-classification/system.md",
+      "schema": "spec/schemas/classification.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "joint-extraction",
+      "version": "0.2.0",
+      "path": "prompts/joint-extraction/system.md",
+      "schema": "spec/schemas/extraction-result.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "material-analysis",
+      "version": "0.2.0",
+      "path": "prompts/material-analysis/system.md",
+      "schema": "spec/schemas/material-item.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "inspection-analysis",
+      "version": "0.2.0",
+      "path": "prompts/inspection-analysis/system.md",
+      "schema": "spec/schemas/inspection-item.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "conflict-analysis",
+      "version": "0.2.0",
+      "path": "prompts/conflict-analysis/system.md",
+      "schema": "spec/schemas/conflict-item.schema.json",
+      "role": "reasoning",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "missing-analysis",
+      "version": "0.2.0",
+      "path": "prompts/missing-analysis/system.md",
+      "schema": "spec/schemas/missing-information-item.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "evidence-verification",
+      "version": "0.2.0",
+      "path": "prompts/evidence-verification/system.md",
+      "schema": "spec/schemas/verification.schema.json",
+      "role": "cheap",
+      "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "drawing-crop",
+      "version": "0.2.0",
+      "path": "prompts/drawing-crop/system.md",
+      "schema": "spec/schemas/extraction-result.schema.json",
+      "role": "vision",
+      "status": "draft_text_present_not_live_evaluated"
+    }
+  ]
+}

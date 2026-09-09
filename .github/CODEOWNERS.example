@@ -1,0 +1,5 @@
+# 在实际仓库用负责人账号替换示例，再配置要求Code Owner审查。
+# * @YOUR_REAL_OWNER
+# /spec/ @YOUR_REAL_OWNER
+# /config/ @YOUR_REAL_OWNER
+# /.github/ @YOUR_REAL_OWNER

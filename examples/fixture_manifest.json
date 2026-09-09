@@ -1,0 +1,38 @@
+{
+  "synthetic": true,
+  "not_construction_ground_truth": true,
+  "cases": [
+    {
+      "file": "examples/material.json",
+      "schema": "material-item"
+    },
+    {
+      "file": "examples/material-options.json",
+      "schema": "material-item"
+    },
+    {
+      "file": "examples/material-quantity.json",
+      "schema": "material-item"
+    },
+    {
+      "file": "examples/inspection.json",
+      "schema": "inspection-item"
+    },
+    {
+      "file": "examples/conflict.json",
+      "schema": "conflict-item"
+    },
+    {
+      "file": "examples/missing.json",
+      "schema": "missing-information-item"
+    },
+    {
+      "file": "examples/record-envelope.json",
+      "schema": "record-envelope"
+    },
+    {
+      "file": "examples/extraction-empty.json",
+      "schema": "extraction-result"
+    }
+  ]
+}

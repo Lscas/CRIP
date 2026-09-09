@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/inspection-item.schema.json",
+  "title": "模型检查测试报告候选",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement_status": {
+      "enum": [
+        "CONFIRMED",
+        "INFERRED_TO_VERIFY",
+        "CONDITIONAL",
+        "NOT_SPECIFIED",
+        "CONFLICT"
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "inference_rule_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "condition": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "entity_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "csi_sections": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "field_evidence": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+        },
+        "minItems": 1,
+        "uniqueItems": true
+      }
+    },
+    "qa_type": {
+      "enum": [
+        "PREPARATORY_INSPECTION",
+        "INITIAL_INSPECTION",
+        "FOLLOWUP_INSPECTION",
+        "HOLD_POINT",
+        "WITNESS_POINT",
+        "SPECIAL_INSPECTION",
+        "FIELD_TEST",
+        "LAB_TEST",
+        "MANUFACTURER_INSPECTION",
+        "STARTUP",
+        "COMMISSIONING",
+        "TRAINING",
+        "CERTIFICATE",
+        "TEST_REPORT",
+        "DAILY_FIELD_REPORT",
+        "OM_MANUAL",
+        "WARRANTY",
+        "AS_BUILT",
+        "CLOSEOUT_SUBMITTAL"
+      ]
+    },
+    "activity": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timing": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "frequency": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "acceptance_criteria": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "standard_reference": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "standard_body_available": {
+      "type": "boolean"
+    },
+    "report_name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "submission_trigger": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "submission_offset_days": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "related_requirement_keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "performer_as_stated": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "witness_as_stated": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "support_note": {
+      "type": "string",
+      "maxLength": 400
+    }
+  },
+  "required": [
+    "candidate_key",
+    "requirement_status",
+    "evidence_ids",
+    "inference_rule_id",
+    "condition",
+    "entity_ids",
+    "csi_sections",
+    "location",
+    "field_evidence",
+    "qa_type",
+    "activity",
+    "requirement",
+    "timing",
+    "frequency",
+    "acceptance_criteria",
+    "standard_reference",
+    "standard_body_available",
+    "report_name",
+    "submission_trigger",
+    "submission_offset_days",
+    "related_requirement_keys",
+    "performer_as_stated",
+    "witness_as_stated",
+    "support_note"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "CONFIRMED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "inference_rule_id": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "INFERRED_TO_VERIFY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inference_rule_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "CONDITIONAL"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          },
+          {
+            "properties": {
+              "inference_rule_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

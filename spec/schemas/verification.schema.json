@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/verification.schema.json",
+  "title": "候选证据核验",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result": {
+      "enum": [
+        "SUPPORTED",
+        "UNSUPPORTED",
+        "NEEDS_CONTEXT",
+        "CONTRADICTED"
+      ]
+    },
+    "supporting_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "contradicting_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 400
+    }
+  },
+  "required": [
+    "candidate_key",
+    "result",
+    "supporting_evidence_ids",
+    "contradicting_evidence_ids",
+    "issues",
+    "reason"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,40 @@
+{
+  "candidate_key": "MAT-1",
+  "requirement_status": "CONFIRMED",
+  "evidence_ids": [
+    "EV-2"
+  ],
+  "inference_rule_id": null,
+  "condition": null,
+  "entity_ids": [
+    "PAD-1"
+  ],
+  "csi_sections": [
+    "03"
+  ],
+  "location": "示例位置",
+  "field_evidence": {
+    "name": [
+      "EV-2"
+    ]
+  },
+  "name": "示例设备混凝土垫",
+  "material_kind": "PERMANENT",
+  "design_properties": [
+    {
+      "name": "性能",
+      "value": "Y",
+      "unit": null,
+      "evidence_ids": [
+        "EV-2"
+      ]
+    }
+  ],
+  "option_relation": "NONE",
+  "options": [],
+  "selected_option_ids": [],
+  "quantity": null,
+  "parent_entity_id": null,
+  "included_in_parent": false,
+  "support_note": "合成样例，仅测试契约，不代表工程设计。"
+}

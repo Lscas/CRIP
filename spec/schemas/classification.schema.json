@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/classification.schema.json",
+  "title": "文件片段分类候选",
+  "type": "object",
+  "properties": {
+    "document_type": {
+      "enum": [
+        "DRAWING",
+        "SPEC",
+        "RFI_QUESTION",
+        "RFI_RESPONSE",
+        "SUBMITTAL",
+        "SHOP_DRAWING",
+        "ADDENDUM",
+        "REPORT",
+        "OTHER",
+        "UNKNOWN"
+      ]
+    },
+    "disciplines": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "csi_sections": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "sheet_or_section": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "internal_revision_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "revision_label": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "needs_review": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "document_type",
+    "disciplines",
+    "csi_sections",
+    "sheet_or_section",
+    "internal_revision_date",
+    "revision_label",
+    "evidence_ids",
+    "needs_review"
+  ],
+  "additionalProperties": false
+}

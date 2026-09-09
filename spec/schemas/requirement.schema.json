@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/requirement.schema.json",
+  "title": "原子要求候选",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "enum": [
+        "MATERIAL",
+        "INSPECTION",
+        "TEST",
+        "REPORT",
+        "OTHER_REQUIREMENT"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object": {
+      "type": "string",
+      "minLength": 1
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/property"
+      },
+      "minItems": 0
+    },
+    "condition": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "exception": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "parent_requirement_key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "option_group_key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "option_relation": {
+      "enum": [
+        "NONE",
+        "ONE_OF",
+        "MULTI_OF"
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "context_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "needs_context": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "candidate_key",
+    "category",
+    "subject",
+    "action",
+    "object",
+    "properties",
+    "condition",
+    "exception",
+    "parent_requirement_key",
+    "option_group_key",
+    "option_relation",
+    "evidence_ids",
+    "context_evidence_ids",
+    "needs_context"
+  ],
+  "additionalProperties": false
+}

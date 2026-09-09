@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/record-envelope.schema.json",
+  "title": "服务端生成的记录外层",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/meta"
+    },
+    "kind": {
+      "enum": [
+        "MATERIAL",
+        "INSPECTION",
+        "CONFLICT",
+        "MISSING"
+      ]
+    },
+    "candidate": {
+      "type": "object"
+    },
+    "review": {
+      "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/review"
+    },
+    "quantity_review": {
+      "enum": [
+        "NOT_APPLICABLE",
+        "PENDING",
+        "VERIFIED",
+        "REJECTED"
+      ]
+    }
+  },
+  "required": [
+    "meta",
+    "kind",
+    "candidate",
+    "review",
+    "quantity_review"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "MATERIAL"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "$ref": "https://cirp.invalid/schemas/0.2.0/material-item.schema.json"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "INSPECTION"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "$ref": "https://cirp.invalid/schemas/0.2.0/inspection-item.schema.json"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CONFLICT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "$ref": "https://cirp.invalid/schemas/0.2.0/conflict-item.schema.json"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "MISSING"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "$ref": "https://cirp.invalid/schemas/0.2.0/missing-information-item.schema.json"
+          }
+        }
+      }
+    }
+  ]
+}

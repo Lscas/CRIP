@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/change-record.schema.json",
+  "title": "PR变更清单，不代替Git平台人类审批",
+  "type": "object",
+  "properties": {
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec_version": {
+      "const": "0.2.0"
+    },
+    "change_type": {
+      "enum": [
+        "spec_only",
+        "implementation",
+        "bugfix"
+      ]
+    },
+    "requirement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "affected_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "product_implementation_changed": {
+      "type": "boolean"
+    },
+    "approval_evidence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "change_id",
+    "spec_version",
+    "change_type",
+    "requirement_ids",
+    "summary",
+    "decision_refs",
+    "affected_paths",
+    "tests",
+    "product_implementation_changed",
+    "approval_evidence",
+    "known_limitations"
+  ],
+  "additionalProperties": false
+}

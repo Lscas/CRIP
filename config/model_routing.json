@@ -1,0 +1,76 @@
+{
+  "version": "0.2.0",
+  "policy": "cheapest_sufficient",
+  "live_api_enabled": false,
+  "provider": "deepseek",
+  "api_style": "chat_completions",
+  "base_url_env": "CIRP_API_BASE_URL",
+  "roles": {
+    "programmatic": {
+      "model": null,
+      "thinking": "disabled",
+      "network": false
+    },
+    "cheap": {
+      "model_env": "CIRP_CHEAP_MODEL",
+      "default_model": "deepseek-v4-flash",
+      "thinking": "disabled",
+      "max_input_tokens": 6000,
+      "max_output_tokens": 2000
+    },
+    "reasoning": {
+      "model_env": "CIRP_REASONING_MODEL",
+      "default_model": "deepseek-v4-flash",
+      "thinking": "enabled",
+      "reasoning_effort": "low",
+      "max_input_tokens": 12000,
+      "max_output_tokens": 4096
+    },
+    "vision": {
+      "model_env": "CIRP_VISION_MODEL",
+      "default_model": "deepseek-v4-flash-vision-exp",
+      "capability_probe_required": true,
+      "thinking": "disabled",
+      "max_images": 2,
+      "max_output_tokens": 2000
+    },
+    "high": {
+      "model_env": "CIRP_HIGH_MODEL",
+      "default_model": null,
+      "enabled": false,
+      "requires_owner_approval": true,
+      "max_output_tokens": 4096
+    }
+  },
+  "max_local_repair_calls": 1,
+  "max_reasoning_calls_per_task": 1,
+  "max_total_model_calls_per_logical_task": 3,
+  "programmatic_tasks": [
+    "hash",
+    "mime",
+    "unit_conversion",
+    "schema_validation",
+    "exact_identifier",
+    "quantity_sum",
+    "export",
+    "dedup_exact"
+  ],
+  "cheap_tasks": [
+    "classify",
+    "extract_joint",
+    "normalize_ambiguous",
+    "local_verify"
+  ],
+  "reasoning_tasks": [
+    "cross_document_reconcile",
+    "ambiguous_relationship"
+  ],
+  "missing_evidence_action": "NEEDS_REVIEW",
+  "overflow_action": "SPLIT_SEMANTIC_UNIT",
+  "workers": {
+    "max_active_projects": 1,
+    "max_text_requests": 4,
+    "max_vision_requests": 1
+  },
+  "note": "参数为可调初值，不是已测吞吐；字段改变走受控PR。"
+}

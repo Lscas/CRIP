@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/material-item.schema.json",
+  "title": "模型材料候选，不含服务端元数据或审核",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement_status": {
+      "enum": [
+        "CONFIRMED",
+        "INFERRED_TO_VERIFY",
+        "CONDITIONAL",
+        "NOT_SPECIFIED",
+        "CONFLICT"
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "inference_rule_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "condition": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "entity_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "csi_sections": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "field_evidence": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+        },
+        "minItems": 1,
+        "uniqueItems": true
+      }
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "material_kind": {
+      "enum": [
+        "PERMANENT",
+        "TEMPORARY"
+      ]
+    },
+    "design_properties": {
+      "type": "array",
+      "items": {
+        "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/property"
+      },
+      "minItems": 0
+    },
+    "option_relation": {
+      "enum": [
+        "NONE",
+        "ONE_OF",
+        "MULTI_OF"
+      ]
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/option"
+      },
+      "minItems": 0
+    },
+    "selected_option_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "quantity": {
+      "anyOf": [
+        {
+          "$ref": "https://cirp.invalid/schemas/0.2.0/common.schema.json#/$defs/quantity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parent_entity_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "included_in_parent": {
+      "type": "boolean"
+    },
+    "support_note": {
+      "type": "string",
+      "maxLength": 400
+    }
+  },
+  "required": [
+    "candidate_key",
+    "requirement_status",
+    "evidence_ids",
+    "inference_rule_id",
+    "condition",
+    "entity_ids",
+    "csi_sections",
+    "location",
+    "field_evidence",
+    "name",
+    "material_kind",
+    "design_properties",
+    "option_relation",
+    "options",
+    "selected_option_ids",
+    "quantity",
+    "parent_entity_id",
+    "included_in_parent",
+    "support_note"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "CONFIRMED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "inference_rule_id": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "INFERRED_TO_VERIFY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inference_rule_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirement_status": {
+            "const": "CONDITIONAL"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          },
+          {
+            "properties": {
+              "inference_rule_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "option_relation": {
+            "const": "ONE_OF"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "minItems": 2
+          },
+          "selected_option_ids": {
+            "maxItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "option_relation": {
+            "const": "NONE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "maxItems": 1
+          },
+          "selected_option_ids": {
+            "maxItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "material_kind": {
+            "const": "TEMPORARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "quantity": {
+            "type": "null"
+          },
+          "options": {
+            "maxItems": 0
+          },
+          "selected_option_ids": {
+            "maxItems": 0
+          },
+          "option_relation": {
+            "const": "NONE"
+          }
+        }
+      }
+    }
+  ]
+}

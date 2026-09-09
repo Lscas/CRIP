@@ -1,0 +1,22 @@
+{
+  "spec_version": "0.2.0",
+  "task_date": "2026-09-08",
+  "requirements": 90,
+  "schemas": 12,
+  "task_prompts": 8,
+  "test_cases": 106,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "paid_api_calls": 0,
+  "application_implemented": false,
+  "remote_git_modified": false,
+  "python": "3.13.5",
+  "dependencies": {
+    "jsonschema": "4.26.0",
+    "referencing": "0.37.0",
+    "pytest": "9.0.2",
+    "PyYAML": "6.0.3"
+  },
+  "scope": "offline_synthetic_contracts_only"
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/missing-information-item.schema.json",
+  "title": "仅阻断性缺失候选",
+  "type": "object",
+  "properties": {
+    "candidate_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "missing_field_or_document": {
+      "type": "string",
+      "minLength": 1
+    },
+    "blocking_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "blocks_current_task": {
+      "const": true
+    },
+    "reason_code": {
+      "enum": [
+        "NOT_UPLOADED",
+        "PARSE_FAILED",
+        "NOT_LOCATED",
+        "REVISION_UNCLEAR",
+        "SCALE_UNKNOWN"
+      ]
+    },
+    "related_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "affected_output_keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "search_state": {
+      "enum": [
+        "NOT_SEARCHED",
+        "SEARCHED_NOT_FOUND",
+        "PARSE_UNAVAILABLE",
+        "AMBIGUOUS"
+      ]
+    },
+    "recommended_action": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "candidate_key",
+    "subject",
+    "missing_field_or_document",
+    "blocking_reason",
+    "blocks_current_task",
+    "reason_code",
+    "related_evidence_ids",
+    "affected_output_keys",
+    "search_state",
+    "recommended_action"
+  ],
+  "additionalProperties": false
+}

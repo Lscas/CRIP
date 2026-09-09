@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "currency": "CNY",
+  "per_project_limit": "300.00",
+  "target_deadline_hours": 24,
+  "input_capacity_target_bytes": 10000000000,
+  "input_capacity_type": "target_not_completion_guarantee",
+  "count_across_runs": true,
+  "reserve_before_send": true,
+  "peak_cache_miss_for_reservation": true,
+  "safety_multiplier": "1.10",
+  "unknown_charge_policy": "KEEP_RESERVED_UNTIL_RECONCILED",
+  "on_limit": "PAUSE_WITH_COVERAGE",
+  "warn_remaining_fraction": "0.20",
+  "no_automatic_limit_increase": true,
+  "direct_costs": [
+    "llm",
+    "vision",
+    "ocr",
+    "cad_conversion",
+    "attributable_compute"
+  ],
+  "shared_fixed_infrastructure": "单独展示分摊，非推算为零；投入前由实际部署账单配置",
+  "stage_budgets_enforced": false
+}

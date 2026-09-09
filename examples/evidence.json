@@ -1,0 +1,95 @@
+[
+  {
+    "evidence_id": "EV-1",
+    "tenant_id": "T1",
+    "project_id": "P1",
+    "input_snapshot_id": "SN1",
+    "document_id": "DOC-1",
+    "component_id": "S-001",
+    "file_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "internal_revision_date": "2026-01-01",
+    "revision_label": "1",
+    "locator": {
+      "page_number": 1,
+      "sheet": "S-001",
+      "section": null,
+      "paragraph": null,
+      "bbox": [
+        1,
+        2,
+        30,
+        40
+      ],
+      "coordinate_system": "pdf-points-top-left",
+      "text_line_start": null,
+      "text_line_end": null,
+      "native_element_id": null
+    },
+    "raw_text": "示例旧图：设备混凝土垫性能X。",
+    "image_crop_uri": null,
+    "extraction_method": "TEXT_LAYER",
+    "confidence": null
+  },
+  {
+    "evidence_id": "EV-2",
+    "tenant_id": "T1",
+    "project_id": "P1",
+    "input_snapshot_id": "SN1",
+    "document_id": "DOC-2",
+    "component_id": "S-001",
+    "file_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "internal_revision_date": "2026-02-01",
+    "revision_label": "2",
+    "locator": {
+      "page_number": 1,
+      "sheet": "S-001",
+      "section": null,
+      "paragraph": null,
+      "bbox": [
+        1,
+        2,
+        30,
+        40
+      ],
+      "coordinate_system": "pdf-points-top-left",
+      "text_line_start": null,
+      "text_line_end": null,
+      "native_element_id": null
+    },
+    "raw_text": "示例新图：设备混凝土垫性能Y。",
+    "image_crop_uri": null,
+    "extraction_method": "TEXT_LAYER",
+    "confidence": null
+  },
+  {
+    "evidence_id": "EV-3",
+    "tenant_id": "T1",
+    "project_id": "P1",
+    "input_snapshot_id": "SN1",
+    "document_id": "DOC-3",
+    "component_id": "S-001",
+    "file_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "internal_revision_date": "2026-02-01",
+    "revision_label": "3",
+    "locator": {
+      "page_number": 1,
+      "sheet": "S-001",
+      "section": null,
+      "paragraph": null,
+      "bbox": [
+        1,
+        2,
+        30,
+        40
+      ],
+      "coordinate_system": "pdf-points-top-left",
+      "text_line_start": null,
+      "text_line_end": null,
+      "native_element_id": null
+    },
+    "raw_text": "示例检查要求：每次施工后提交报告。",
+    "image_crop_uri": null,
+    "extraction_method": "TEXT_LAYER",
+    "confidence": null
+  }
+]

@@ -1,0 +1,555 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/common.schema.json",
+  "title": "公共类型",
+  "$defs": {
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "evidence_ids_required": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "property": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit",
+        "evidence_ids"
+      ],
+      "additionalProperties": false
+    },
+    "quantity": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "basis": {
+          "const": "DESIGN_NET"
+        },
+        "method": {
+          "enum": [
+            "EXPLICIT_DOCUMENT",
+            "SCHEDULE_EXTRACTION",
+            "CAD_OBJECT_COUNT",
+            "VECTOR_TAKEOFF",
+            "CAD_MEASUREMENT",
+            "IMAGE_CALIBRATED"
+          ]
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entity_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "formula": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "operands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "name",
+              "value",
+              "unit",
+              "evidence_ids"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "calibration": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "view_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ratio": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "paper_unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "design_unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "verified": {
+                  "const": true
+                },
+                "evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "view_id",
+                "ratio",
+                "paper_unit",
+                "design_unit",
+                "verified",
+                "evidence_ids"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "basis",
+        "method",
+        "scope_key",
+        "entity_ids",
+        "evidence_ids",
+        "formula",
+        "operands",
+        "calibration"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "enum": [
+                  "VECTOR_TAKEOFF",
+                  "CAD_MEASUREMENT",
+                  "IMAGE_CALIBRATED"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "formula": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operands": {
+                "minItems": 1
+              },
+              "calibration": {
+                "type": "object",
+                "properties": {
+                  "view_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "paper_unit": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "design_unit": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "verified": {
+                    "const": true
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                },
+                "required": [
+                  "view_id",
+                  "ratio",
+                  "paper_unit",
+                  "design_unit",
+                  "verified",
+                  "evidence_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "option": {
+      "type": "object",
+      "properties": {
+        "option_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manufacturer": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "product": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "model_number": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "ALLOWED",
+            "BASIS_OF_DESIGN",
+            "SUBMITTED",
+            "DOCUMENT_SELECTED",
+            "NOT_STATED"
+          ]
+        },
+        "approval_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "field_evidence": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^EV-[A-Za-z0-9_.:-]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      },
+      "required": [
+        "option_id",
+        "manufacturer",
+        "product",
+        "model_number",
+        "role",
+        "approval_text",
+        "evidence_ids",
+        "field_evidence"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "analysis_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "app_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "spec_version": {
+          "const": "0.2.0"
+        },
+        "schema_version": {
+          "const": "0.2.0"
+        },
+        "parser_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "model_snapshot": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "routing_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retrieval_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assembly_rule_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision_policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "record_id",
+        "tenant_id",
+        "project_id",
+        "analysis_run_id",
+        "input_snapshot_id",
+        "created_at",
+        "app_version",
+        "spec_version",
+        "schema_version",
+        "parser_version",
+        "prompt_version",
+        "provider",
+        "model_id",
+        "model_snapshot",
+        "routing_version",
+        "retrieval_version",
+        "assembly_rule_version",
+        "revision_policy_version",
+        "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "PENDING",
+            "ACCEPTED",
+            "EDITED",
+            "REJECTED"
+          ]
+        },
+        "event_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "actor_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "status",
+        "event_id",
+        "actor_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "ACCEPTED",
+                  "EDITED",
+                  "REJECTED"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "actor_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "event_id": {
+                "type": "null"
+              },
+              "actor_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
