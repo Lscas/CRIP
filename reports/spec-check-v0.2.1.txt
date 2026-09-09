@@ -1,0 +1,3 @@
+[PASS] 规格结构、Schema定义、Prompt正文、生成表、追踪与政策初值
+[INFO] requirements= 90 schemas= 12
+[INFO] 当前为本地原型第一切片；本检查不是施工准确率或远端审批证明。

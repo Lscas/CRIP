@@ -21,3 +21,14 @@ LLM不得为通过测试降低验收值；不得把planned测试路径当已通�
 复制新基线到独立分支或新仓库；保留旧包或Git旧Tag。不要求覆盖原v0.1文件夹。先运行离线检查，再提交。若已有仓库，创建spec/v0.2.0-review分支，不直接覆盖main；任何现有代码迁移需另做差异审查。
 
 `CODEOWNERS.example`需要真实账号替换，不能由本包伪造。CI不自动调用真实模型，不向fork PR暴露密钥。本包没有修改任何远端仓库或分支设置。
+
+## v0.2.1 本地开发包
+源码ZIP不带.git。另附的bundle保留本轮沙箱内新建的仓库历史；没有连接或修改用户远端。
+```bash
+git clone --branch feature/bootstrap-prototype /path/to/cirp_bootstrap_v0.2.1.bundle cirp
+cd cirp
+git log --oneline -3
+```
+后续任务在此分支另开feature分支。真实远端、CODEOWNERS身份、受保护main和CI必须在用户实际仓库配置，本包不声称已经启用。
+
+源码ZIP方式可先git init并提交基线；使用bundle方式已具有spec-v0.2.0与原型分支，请勿在其中重复git init覆盖历史。

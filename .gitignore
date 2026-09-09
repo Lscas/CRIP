@@ -14,3 +14,12 @@ secrets/
 *.key
 *.pem
 reports/local/
+
+.local/
+.local-*/
+*.sqlite*
+*.db
+*.log
+*.egg-info/
+.cache/
+playwright-report/

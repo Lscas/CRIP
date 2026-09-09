@@ -1,4 +1,4 @@
-jsonschema>=4.22,<5
-referencing>=0.35,<1
+-r requirements-app.txt
 pytest>=8,<10
 PyYAML>=6,<7
+reportlab>=4,<5

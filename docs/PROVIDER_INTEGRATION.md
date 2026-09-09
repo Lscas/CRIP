@@ -1,34 +1,26 @@
-# DeepSeek与用户API接入契约
-**规格版本：** 0.2.0
+# DeepSeek文本适配器与真实接入门禁
+**规格版本：** 0.2.1
+当前 `app/gateway.py` 已实现OpenAI风格chat/completions HTTP接口；使用用户指定base URL，不包含秘密。只使用文本Flash，不直接输入PDF/图片，不自动升级。
 
-首选别名deepseek-v4-flash。L1使用非思考；L2同模型low思考；vision-exp只是已被官方文档列出的视觉候选，并未通过用户接口验证。[S1][S2] 低成本角色不意味着必须另训小模型。
-
-## 接入前检查
-确认用户提供的base URL、model ID、是否中转、每百万token价格、缓存命中价格、输出/推理计费口径、图像支持、OCR/CAD服务价格。只把Key写本地环境/Secret，不贴到文档/Git。
-
-价格快照中的confirmed_for_user_endpoint=false，必须由实际接口信息确认后才能启用paid。若服务是第三方中转，官方能力和价格不能直接套用。没有外部OCR/CAD服务价格时，相应付费任务暂停，不能估0元。
-
-## Chat Completions最小请求（设计示例，未执行）
-```json
-{
-  "model": "deepseek-v4-flash",
-  "thinking": {"type": "disabled"},
-  "messages": [
-    {"role": "system", "content": "只依据证据返回json，不输出思维链。"},
-    {"role": "user", "content": "任务Schema和必要证据由服务端提供。"}
-  ],
-  "response_format": {"type": "json_object"},
-  "max_tokens": 2000,
-  "stream": false
-}
+## 手动配置
+在本机复制.env.example为.env，按实际接口填写：
+```text
+CIRP_PROVIDER=deepseek
+CIRP_LIVE_API_ENABLED=true
+CIRP_API_BASE_URL=https://api.deepseek.com
+CIRP_API_KEY=<只在本机填写>
+CIRP_CHEAP_MODEL=deepseek-v4-flash
+CIRP_PRICES_CONFIRMED=true
+CIRP_INPUT_CNY_PER_MILLION=<实际接口输入最高适用单价>
+CIRP_OUTPUT_CNY_PER_MILLION=<实际接口输出最高适用单价>
 ```
-这是HTTP JSON字段；若使用SDK，其扩展字段位置由adapter映射，不把上述JSON直接当任意SDK参数。思考模式默认开启，需显式关闭；JSON模式还需Schema和语义校验，空内容/截断不视为成功。[S1][S3]
+不要把示意占位符直接启用。API_BASE_URL为包含可选/v1的基础路径，程序追加/chat/completions。HTTPS且无URL用户名/密码/query/fragment；中转API需明确同意请求格式和usage。价格未确认、Key为空或开关关闭时，启动真实分析会暂停而非偷偷切换服务。
 
-## 能力探针结果
-TEXT、JSON、THINKING_OFF、USAGE、VISION分别记录SUPPORTED/UNSUPPORTED/UNKNOWN，probe时间和供应商返回。测试只用合成文字/图片，小额度预留。文件解析由产品完成；不要发送PDF二进制给文本消息。Responses当前并非完整兼容所有内置文件工具，不依赖provider file_search。[S6]
+`python scripts/doctor.py`仅离线检查，不调用供应商。用户启动真实分析代表该次请求可能计费；先用小授权样例核实接口，不先上传整个10GB项目。应用没有已完成的自动能力探针或对账UI。
 
-## usage标准化
-标准字段input_tokens、input_cached_tokens、output_tokens_total、reasoning_tokens_included、image_tokens_included、request_id、model_returned、finish_reason。总输出如已含推理不再重复收费。HTTP超时的charge_status=UNKNOWN，保持reservation；之后根据供应商账单或确定未计费证据核销。
+## 实际请求和保护
+thinking=disabled，response_format=json_object，max_tokens<=2000。无高级模型路由；同片段最大3次显式重跑请求，未知账单未清时不重试。空/错JSON、截断、无证据、跨快照引用不发布；生成了思考内容则暂停以确认兼容性。真实请求可能计费，即使响应不合格。
 
-## 禁用路径
-不默认开启联网搜索，项目要求只基于上传文件；不默认发送邮件、生成采购订单、运行Shell或写CAD。没有视觉能力不能退回纯文本Flash声称完成视觉分析。当前包无实际API adapter，后续实现必须遵守这些合同。
+发送前原子预留，usage按确认上限费率核销，不重复加reasoning_tokens。输入按UTF8字节保守估计并限量，非精确分词器；超限片段标待细分。缓存是版本化应用缓存，缓存命中零HTTP；供应商折扣不预先假定。
+
+本轮HTTP测试全部MockTransport。没有真实Key、没有真实API成功声明、没有准确率/吞吐保证。图像/DWG先记录未处理，视觉接口单独接入任务，不能把图片交给文本模型冒充已读。

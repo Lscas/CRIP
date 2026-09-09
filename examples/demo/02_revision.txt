@@ -1,0 +1,7 @@
+[CIRP_SYNTHETIC_V1]
+合成工程演示，不可用于真实工程。最新内容依据本文件内部修订日期，与上传先后无关。
+Sheet: S-501
+Revision: 2
+Revision Date: 2026-08-01
+Section: 03 30 00
+DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=5000 psi

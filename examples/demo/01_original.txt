@@ -1,0 +1,10 @@
+[CIRP_SYNTHETIC_V1]
+合成工程演示，不可用于真实工程。下列DEMO行只是确定性模拟协议。
+Sheet: S-501
+Revision: 1
+Revision Date: 2026-06-01
+Section: 03 30 00
+DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=4000 psi
+DEMO_MATERIAL|PAD-01|Formwork system|-|material_kind=TEMPORARY
+DEMO_TEST|PAD-01|Pre-pour inspection|-|qa_type=PREPARATORY_INSPECTION|timing=Before placement
+DEMO_REPORT|PAD-01|Concrete test report|-|frequency=Each placement

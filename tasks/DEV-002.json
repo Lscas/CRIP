@@ -1,0 +1,47 @@
+{
+  "status": "READY",
+  "max_input_tokens": 4096,
+  "max_output_tokens": 1200,
+  "max_context_chars": 14000,
+  "paid_calls_allowed": false,
+  "approval_ref": "用户已批准全项目原型开发；本任务只实现既定行为，不改变范围或政策",
+  "notes": [
+    "token为任务输入建议，不是Codex硬配额。上下文超限拆任务，不能删除关键条件。",
+    "只读相关函数与失败摘要；提交前完整测试。"
+  ],
+  "task_id": "DEV-002",
+  "title": "将联合抽取中的互斥产品组映射到材料候选",
+  "requirement_ids": [
+    "FR-OPTIONS-001",
+    "FR-MATERIAL-003",
+    "FR-FIELD-EVIDENCE-001"
+  ],
+  "allowed_paths": [
+    "app/assemble.py",
+    "app/gateway.py",
+    "tests/app/test_options_mapping.py",
+    "tests/app/test_api.py",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "docs/REQUIREMENTS.md",
+    "changes/CR-0004.json"
+  ],
+  "context_files": [
+    "docs/DEV_STATE.md",
+    "docs/DATA_CONTRACTS.md"
+  ],
+  "source_hints": [
+    "app/assemble.py:envelopes",
+    "spec/schemas/material-item.schema.json",
+    "spec/schemas/extraction-result.schema.json",
+    "tests/app/test_api.py"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_options_mapping.py tests/app/test_api.py -q",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "low",
+  "objective": "保留每个原子要求和字段证据；多个明确互斥产品转为ONE_OF；没有选择证据时selected为null；不能重复计数；超出当前Schema能力先提出问题，不能自己改选型规则。"
+}

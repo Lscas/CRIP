@@ -10,3 +10,6 @@
 - S7 Git分支保护：https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches 。审查/状态检查需要实际仓库设置，本包不会自动启用。
 
 本包没有复用外部源代码；路由、预算、数据结构及测试为项目设计。其他工具栈仅作为实现候选，不在本轮声称已完成版本兼容或商业许可审查。
+
+## 开发阶段补充核实：2026-09-08
+Codex AGENTS与项目配置采用官方说明：https://developers.openai.com/codex/guides/agents-md 、https://developers.openai.com/codex/config-reference 。low仅对支持的模型/客户端有效，项目配置可能受信任和管理员设置限制；本包不固定账户模型，不设置项目级profiles/provider/auth。

@@ -1,5 +1,5 @@
 # 数据契约与校验层次
-**规格版本：** 0.2.0
+**规格版本：** 0.2.1
 
 ## 模型与服务端分层
 `material-item`、`inspection-item`、`conflict-item`、`missing-information-item`是模型业务候选。候选不得出现actor、review_status、analysis_run_id、model_id或任意extra字段。服务端在验证后构造record-envelope，附meta、review和quantity_review。
@@ -39,3 +39,7 @@ wrap_candidate一律初始化PENDING。已审核记录需要review_event和actor
 
 ## 用例
 examples内全部为合成数据，不能用作工程答案或真实施工正确率测试。`tests/`覆盖允许与拒绝案例，`reports/`记录本轮运行；外部API、解析、Web和真实数据库仍未实现。
+
+
+## v0.2.1 实现说明
+本地原型已开始实现，历史v0.2.0“应用未实现”说明仅指前一交付。当前功能边界见IMPLEMENTATION_STATUS；contracts仍是离线参考，实际预算持久化在app/db.py。尚未接入功能不得因契约通过标为完成。

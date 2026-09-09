@@ -14,7 +14,7 @@ def check(root: Path = ROOT) -> list[str]:
     errors=[]
     def load(p):
         return json.loads((root/p).read_text(encoding='utf-8'))
-    version=(root/'VERSION').read_text().strip()
+    version=(root/'VERSION').read_text(encoding="utf-8").strip()
     req=load('spec/requirements.json');trace=load('spec/traceability.json')
     if req['spec_version']!=version or trace['spec_version']!=version:errors.append('版本不一致')
     spec=(root/'docs/PRODUCT_SPEC.md').read_text(encoding='utf-8')
@@ -67,4 +67,4 @@ if __name__=='__main__':
     req=json.loads((ROOT/'spec/requirements.json').read_text(encoding='utf-8'))
     print('[PASS] 规格结构、Schema定义、Prompt正文、生成表、追踪与政策初值')
     print('[INFO] requirements=',len(req['requirements']),'schemas=',len(list((ROOT/'spec/schemas').glob('*.json'))))
-    print('[INFO] 应用未实现；本检查不是施工准确率或远端审批证明。')
+    print('[INFO] 当前为本地原型第一切片；本检查不是施工准确率或远端审批证明。')

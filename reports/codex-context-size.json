@@ -1,0 +1,22 @@
+{
+  "DEV-002": {
+    "characters": 4568,
+    "actual_tokens": null,
+    "note": "字符量可复现；未使用Codex计费分词器测量token。"
+  },
+  "DEV-001": {
+    "characters": 3600,
+    "actual_tokens": null,
+    "note": "字符量可复现；未使用Codex计费分词器测量token。"
+  },
+  "DEV-004": {
+    "characters": 3234,
+    "actual_tokens": null,
+    "note": "字符量可复现；未使用Codex计费分词器测量token。"
+  },
+  "DEV-003": {
+    "characters": 2147,
+    "actual_tokens": null,
+    "note": "字符量可复现；未使用Codex计费分词器测量token。"
+  }
+}

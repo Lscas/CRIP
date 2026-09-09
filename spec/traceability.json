@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.0",
+  "spec_version": "0.2.1",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -44,11 +44,16 @@
       "planned_product_modules": [
         "app/ingest"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-INGEST-002",
@@ -92,11 +97,16 @@
       "planned_product_modules": [
         "app/parse"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-PARSE-002",
@@ -256,13 +266,18 @@
       "planned_product_modules": [
         "app/material"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-MATERIAL-002",
@@ -368,13 +383,18 @@
       "planned_product_modules": [
         "app/inspection"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-INSPECTION-002",
@@ -410,13 +430,18 @@
       "planned_product_modules": [
         "app/conflict"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-CONFLICT-002",
@@ -492,13 +517,18 @@
       "planned_product_modules": [
         "app/review"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-REVIEW-002",
@@ -520,11 +550,16 @@
       "planned_product_modules": [
         "app/export"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-UI-001",
@@ -532,23 +567,32 @@
       "planned_product_modules": [
         "app/ui"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py"
+      ],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/main.py"
+      ],
+      "verification_report": null,
+      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
     },
     {
       "requirement_id": "FR-API-001",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/api"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "app/gateway.py"
+      ],
+      "verification_report": "docs/VALIDATION_REPORT.md"
     },
     {
       "requirement_id": "FR-API-002",
@@ -896,17 +940,21 @@
     },
     {
       "requirement_id": "FR-ROUTE-003",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/route"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py"
+      ],
       "contract_tests": [
         "tests/test_policies.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "app/gateway.py"
+      ],
+      "verification_report": "docs/VALIDATION_REPORT.md"
     },
     {
       "requirement_id": "FR-ROUTE-004",
@@ -1004,17 +1052,22 @@
     },
     {
       "requirement_id": "FR-BUDGET-002",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/budget"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py"
+      ],
       "contract_tests": [
         "tests/test_policies.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "app/db.py",
+        "migrations/001_initial.sql"
+      ],
+      "verification_report": "docs/VALIDATION_REPORT.md"
     },
     {
       "requirement_id": "FR-BUDGET-003",
@@ -1124,17 +1177,23 @@
     },
     {
       "requirement_id": "DEV-LOWCOST-001",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/lowcost"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/test_devtools.py"
+      ],
       "contract_tests": [
         "tests/test_governance.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "AGENTS.md",
+        ".codex/config.toml",
+        "scripts/context_pack.py"
+      ],
+      "verification_report": "docs/VALIDATION_REPORT.md"
     },
     {
       "requirement_id": "DEV-TRACE-001",
@@ -1166,17 +1225,23 @@
     },
     {
       "requirement_id": "DEV-CHECK-001",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/check"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/test_governance.py",
+        "tests/test_devtools.py"
+      ],
       "contract_tests": [
         "tests/test_governance.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "scripts/check_spec_sync.py",
+        "scripts/run_checks.py"
+      ],
+      "verification_report": "docs/VALIDATION_REPORT.md"
     }
   ]
 }

@@ -1,0 +1,35 @@
+{
+  "status": "BLOCKED_USER_API",
+  "max_input_tokens": 4096,
+  "max_output_tokens": 1200,
+  "max_context_chars": 14000,
+  "paid_calls_allowed": false,
+  "approval_ref": "用户已批准全项目原型开发；本任务只实现既定行为，不改变范围或政策",
+  "notes": [
+    "token为任务输入建议，不是Codex硬配额。上下文超限拆任务，不能删除关键条件。",
+    "只读相关函数与失败摘要；提交前完整测试。"
+  ],
+  "task_id": "DEV-004",
+  "title": "用户API小规模能力探针与对账方案",
+  "requirement_ids": [
+    "FR-CAPABILITY-001",
+    "FR-API-002",
+    "FR-BUDGET-003"
+  ],
+  "allowed_paths": [
+    "app/gateway.py",
+    "app/settings.py",
+    "tests/app/test_gateway_budget.py",
+    "docs/PROVIDER_INTEGRATION.md",
+    "changes/**"
+  ],
+  "context_files": [
+    "docs/DEV_STATE.md",
+    "docs/PROVIDER_INTEGRATION.md"
+  ],
+  "acceptance_tests": [
+    "python scripts/run_checks.py --area gateway"
+  ],
+  "model_level": "review",
+  "objective": "先离线测试接口契约。真实探针只有用户配置密钥、确认实际价格和允许本次费用后才可执行；本任务卡不构成付费授权。"
+}

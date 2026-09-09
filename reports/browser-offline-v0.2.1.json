@@ -1,0 +1,19 @@
+{
+  "mode": "offline DOM + TestClient bridge, no network",
+  "counts": {
+    "MATERIAL": 2,
+    "INSPECTION": 2,
+    "CONFLICT": 1,
+    "MISSING": 0
+  },
+  "review": "ACCEPTED",
+  "evidence": "original text and locator visible",
+  "mobile_scroll_width": 390,
+  "js_errors": [],
+  "not_tested": [
+    "real localhost browser HTTP",
+    "real model API",
+    "10GB scale",
+    "construction accuracy"
+  ]
+}

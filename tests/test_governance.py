@@ -12,8 +12,13 @@ def test_all_legacy_ids_preserved():
     old={r['id'] for r in load_json('baseline/requirements.v0.1.0.json')['requirements']};new={r['id'] for r in load_json('spec/requirements.json')['requirements']};assert old<=new
 
 def test_no_false_implementation_claims():
-    assert not any(r['status']=='implemented' for r in load_json('spec/requirements.json')['requirements'])
-    assert load_json('spec/requirements.json')['application_status']=='not_implemented'
+    req=load_json('spec/requirements.json')
+    assert req['application_status']=='prototype_bootstrap'
+    assert next(r for r in req['requirements'] if r['id']=='PRD-SCOPE-001')['status']=='planned'
+    for entry in load_json('spec/traceability.json')['entries']:
+        if entry['implementation_status']=='implemented':
+            assert entry['verification_report'] and entry['planned_product_tests']
+            assert all((ROOT/p).exists() for p in entry['implemented_product_paths'])
 
 def test_prompts_are_real_text_files():
     for p in load_json('prompts/manifest.json')['prompts']:

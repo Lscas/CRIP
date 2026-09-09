@@ -1,6 +1,6 @@
 # 完整需求表（自动生成）
 
-规格版本：0.2.0
+规格版本：0.2.1
 
 权威来源：`spec/requirements.json`。修改JSON后重新生成，不手改此表。所有产品业务功能仍未实现；superseded保留历史语义，不作为现行规则。
 
@@ -352,7 +352,7 @@ Material Register 主要按 CSI Division/Section 组织。
 
 ## FR-API-001 · Provider abstraction
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 所有模型调用通过 ModelGateway。
 
@@ -516,7 +516,8 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 目标交付包括上传、启动分析、结果、来源查看、人工审核和导出的网页原型。
 
-- 本次交付是规格与离线契约参考，不声称网页已经实现。
+- 上传、启动、进度、四类候选、来源、人工审核和导出在网页内可用。
+- 每种未实现格式和能力明确显示PARTIAL；真实API与工程准确率未测时不得宣称通过。
 
 ## PRD-RESP-001 · 不判断采购责任
 
@@ -591,7 +592,7 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 ## FR-ROUTE-003 · Flash非思考默认
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 cheap角色使用deepseek-v4-flash且thinking disabled，输出短JSON。
 
@@ -663,7 +664,7 @@ cheap角色使用deepseek-v4-flash且thinking disabled，输出短JSON。
 
 ## FR-BUDGET-002 · 先预留再调用
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 任务发出前原子预留最坏费用，完成后核销；未知账单不提前释放。
 
@@ -742,7 +743,7 @@ cheap角色使用deepseek-v4-flash且thinking disabled，输出短JSON。
 
 ## DEV-LOWCOST-001 · 开发代理同样分级
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 重复字段改名、模板和小测试可交给低价开发模型；架构与审批交人工或更强审查。
 
@@ -769,7 +770,7 @@ PR含可解析变更清单，涉及行为的配置/Prompt/代码变化必须关�
 
 ## DEV-CHECK-001 · 可运行离线校验
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 离线脚本执行Schema定义检查、正负例、Prompt存在性、版本和Traceability。
 

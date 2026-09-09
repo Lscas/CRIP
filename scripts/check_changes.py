@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from contracts.runtime_rules import validate_schema
 
-WATCHED=('app/','web/','contracts/','prompts/','config/','spec/','.github/','AGENTS.md')
+WATCHED=('app/','web/','contracts/','prompts/','config/','spec/','.github/','.codex/','migrations/','tasks/','scripts/','requirements-','AGENTS.md')
 def check_diff(paths: list[str], records: list[dict], known_ids: set[str]) -> list[str]:
     errors=[]
     relevant=[p for p in paths if p.startswith(WATCHED)]

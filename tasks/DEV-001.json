@@ -1,0 +1,41 @@
+{
+  "status": "DONE",
+  "max_input_tokens": 4096,
+  "max_output_tokens": 1200,
+  "max_context_chars": 14000,
+  "paid_calls_allowed": false,
+  "approval_ref": "用户已批准全项目原型开发；本任务只实现既定行为，不改变范围或政策",
+  "notes": [
+    "token为任务输入建议，不是Codex硬配额。上下文超限拆任务，不能删除关键条件。",
+    "只读相关函数与失败摘要；提交前完整测试。"
+  ],
+  "task_id": "DEV-001",
+  "title": "本地上传/任务/模拟分析/审核导出骨架",
+  "requirement_ids": [
+    "FR-INGEST-003",
+    "FR-API-001",
+    "FR-ROUTE-003",
+    "FR-BUDGET-002",
+    "FR-REVIEW-001",
+    "FR-EXPORT-001"
+  ],
+  "allowed_paths": [
+    "app/**",
+    "web/**",
+    "migrations/**",
+    "tests/app/**",
+    "docs/**",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "changes/**"
+  ],
+  "context_files": [
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "review",
+  "objective": "已经交付本地第一切片，真实API未接通测试、完整图纸尚未实现。"
+}
