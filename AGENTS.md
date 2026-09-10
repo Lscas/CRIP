@@ -1,5 +1,5 @@
 # CIRP：开发代理最小上下文入口
-规格／应用版本：0.2.3。默认中文，工作在任务分支，不自行改业务决定。
+规格／应用版本：0.2.4。默认中文，工作在任务分支，不自行改业务决定。
 
 ## 每轮工作
 1. 读本文件和 `docs/DEV_STATE.md`，运行 `git status --short`。
@@ -19,3 +19,5 @@
 ## 变更权限
 允许实现已批准需求和同步说明。改变范围、300CNY预算、日期优先、数据外传或验收须先提案，由用户批准。用户要求只读时停止写入。不得删测试、降验收、自批开放问题、复用历史需求ID或直接推main。
 检查：`python scripts/check_spec_sync.py`、`python scripts/run_checks.py --area all`；提交后 `python scripts/check_changes.py --base spec-v0.2.0`（基准随实际PR更新）。
+
+本机部署入口：start-local.cmd / start-local.sh，默认模拟；--live才加载用户配置。只允许loopback监听。远程预览默认仍为mock，不自动公开正式资料。

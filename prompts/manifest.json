@@ -1,5 +1,5 @@
 {
-  "bundle_version": "0.2.3",
+  "bundle_version": "0.2.4",
   "prompts": [
     {
       "id": "document-classification",

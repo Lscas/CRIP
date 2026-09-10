@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0006",
+  "spec_version": "0.2.4",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-LOCAL-001",
+    "DEV-LOWCOST-001"
+  ],
+  "summary": "按用户授权提供无需远端账户的本机运行入口，费用与安全边界不变。",
+  "decision_refs": [
+    "docs/DECISIONS.md#d-20所有应用服务可运行本机"
+  ],
+  "affected_paths": [
+    "app/local_entry.py",
+    "scripts/*",
+    "start-local*",
+    "start-online-test.cmd",
+    "spec/*",
+    "prompts/manifest.json",
+    "AGENTS.md"
+  ],
+  "tests": [
+    "tests/app/test_local_entry.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户：继续部署，所有服务可以运行在本机。",
+  "known_limitations": [
+    "不能直接控制用户Windows电脑",
+    "没有真实API/OCR/CAD调用",
+    "没有公网发布；依赖软件包源在当前环境未返回可用FastAPI版本"
+  ]
+}

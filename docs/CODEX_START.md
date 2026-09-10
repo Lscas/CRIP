@@ -34,3 +34,6 @@ python scripts/run_checks.py --area all
 - Codex指令文件：https://developers.openai.com/codex/guides/agents-md
 - Codex配置：https://developers.openai.com/codex/config-reference
 项目配置不放provider/auth/profiles，避免与用户级设置冲突；不降低沙箱、审批或密钥保护。
+
+## v0.2.4 本机部署
+本机运行不需要GitHub/Render授权。启动器是`scripts/local_deploy.py`，应用入口是`app/local_entry.py`，定向测试`python scripts/run_checks.py --area local`。不要为修一个启动参数重新生成整个产品。默认mock且不读.env；维护部署功能不等于获得调用用户API的权限。

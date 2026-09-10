@@ -1,0 +1,36 @@
+{
+  "test_type": "real loopback HTTP, synthetic fixture, local_entry",
+  "network_model_calls": 0,
+  "health": {
+    "app_version": "0.2.4",
+    "spec_version": "0.2.4",
+    "schema_version": "0.2.0",
+    "provider": "mock"
+  },
+  "counts": {
+    "CONFLICT": 1,
+    "INSPECTION": 2,
+    "MATERIAL": 2
+  },
+  "run_status": "PARTIAL",
+  "evidence": "PASS",
+  "review": "PASS",
+  "json_export": "PASS",
+  "xlsx_export": "PASS",
+  "cross_origin_status": 403,
+  "cost": {
+    "limit_cny": "300.000000",
+    "spent_cny": "0.000000",
+    "reserved_cny": "0.000000",
+    "available_cny": "300.000000",
+    "frozen": false,
+    "calls": 0,
+    "unknown_calls": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "other_external_services": "未接入；没有产生付费OCR/CAD任务",
+    "local_compute_cost": "用户电脑成本未计量，不是零成本保证"
+  },
+  "restart_persistence": "PASS: project, documents, records and review retained",
+  "result": "PASS"
+}

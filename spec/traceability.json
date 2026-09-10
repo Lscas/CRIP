@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.3",
+  "spec_version": "0.2.4",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -1318,6 +1318,27 @@
       "test_scope": "not_implemented",
       "implemented_product_paths": [],
       "verification_report": null
+    },
+    {
+      "requirement_id": "FR-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/local_entry.py",
+        "scripts/local_deploy.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_local_entry.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "product_test",
+      "implemented_product_paths": [
+        "app/local_entry.py",
+        "scripts/local_deploy.py",
+        "start-local.cmd",
+        "start-local.sh",
+        "start-online-test.cmd"
+      ],
+      "verification_report": "docs/LOCAL_VALIDATION.md"
     }
   ]
 }
