@@ -1,7 +1,7 @@
 {
   "product": "Construction Intelligence Review Platform",
-  "spec_version": "0.2.4",
-  "updated_at": "2026-09-08",
+  "spec_version": "0.2.5",
+  "updated_at": "2026-09-10",
   "requirements": [
     {
       "id": "PRD-USER-001",
@@ -1211,6 +1211,23 @@
       ],
       "decision_source": "D-20：用户授权继续部署，所有服务可以在本机运行",
       "spec_section": "docs/LOCAL_DEPLOY.md"
+    },
+    {
+      "id": "FR-UI-002",
+      "title": "中英文界面切换，不改变业务行为",
+      "statement": "网页支持zh-CN与en显示切换，保存当前浏览器偏好；仅翻译界面自有文字，不改变业务数据、请求、分析、审核、预算或导出。",
+      "priority": "P1",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "默认中文，页头、项目弹窗和审核抽屉提供中文/English选择器；刷新可从本地偏好恢复。",
+        "切换无需刷新或网络调用；存储不可用时仍可在内存中切换。",
+        "不清空未保存项目名称、候选JSON、审核说明、筛选、上传选择，不改变项目/运行/筛选状态。",
+        "原始文件、项目名称、材料型号、证据、模型输出、数字/单位和原始技术JSON不翻译。",
+        "API路径/载荷/状态码、请求头、算法、预算和JSON/XLSX导出字段及正文保持不变；状态码可显示本地化标签但原始值不变。",
+        "中文和英文在窄屏正常布局，不用翻译API、不引入新前端框架或运行时依赖。"
+      ],
+      "decision_source": "用户授权：app have the option to switch from chinese display to english but dont change any function of the app.",
+      "spec_section": "docs/UI_LANGUAGE.md"
     }
   ],
   "artifact_kind": "prototype_source",

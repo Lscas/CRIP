@@ -1,0 +1,39 @@
+{
+  "mode": "No-network Chromium DOM + FastAPI TestClient bridge; storage test double",
+  "checks": [
+    "Chinese default even with an English browser locale",
+    "Header switch updates static UI, notices, title and document lang without API calls",
+    "Stored preference restored in a fresh DOM using a storage test double",
+    "New-project form draft and submitted project name are not translated or reset",
+    "Language can change during a held upload without losing file selection, progress or controls",
+    "Run selection, PARTIAL status, candidates, numbers, cost and button enablement are unchanged",
+    "JSON contents (excluding export timestamp) and XLSX workbook parts are identical across languages",
+    "Search text and filter behavior stay unchanged",
+    "Open editor JSON and note survive switching; review request and canonical status remain unchanged",
+    "Evidence wording, revision date, locator and original file bytes are preserved",
+    "Export endpoints and unchanged button handlers verified in both languages",
+    "Chinese and English layouts fit 390px, 760px and 1024px without page overflow",
+    "No JavaScript page errors and no external network attempts"
+  ],
+  "counts": {
+    "MATERIAL": 2,
+    "INSPECTION": 2,
+    "CONFLICT": 1,
+    "MISSING": 0
+  },
+  "js_errors": [],
+  "unexpected_external_requests": [],
+  "model_calls": 0,
+  "locale_api_calls": 0,
+  "note": "Language changes are presentation-only. Export notices, schema keys, original documents, model contents and technical diagnostic JSON remain original.",
+  "not_tested": [
+    "native browser localStorage persistence",
+    "browser download navigation",
+    "HTTP-origin CSP execution",
+    "Windows installation",
+    "real public/local HTTP browser route",
+    "live provider",
+    "construction accuracy",
+    "10GB throughput"
+  ]
+}

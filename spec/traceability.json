@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.4",
+  "spec_version": "0.2.5",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -1339,6 +1339,30 @@
         "start-online-test.cmd"
       ],
       "verification_report": "docs/LOCAL_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-UI-002",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "web/i18n.js",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs",
+        "scripts/browser_i18n_smoke.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "product_test",
+      "implemented_product_paths": [
+        "web/i18n.js",
+        "web/index.html",
+        "web/app.js",
+        "web/style.css",
+        "scripts/build_cloudflare.py"
+      ],
+      "verification_report": "docs/UI_LANGUAGE_VALIDATION.md"
     }
   ]
 }

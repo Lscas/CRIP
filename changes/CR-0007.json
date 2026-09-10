@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0007",
+  "spec_version": "0.2.5",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-UI-002"
+  ],
+  "summary": "增加中英文显示切换，业务逻辑、数据和导出保持不变。",
+  "decision_refs": [
+    "docs/DECISIONS.md#d-21中英文显示切换业务不变"
+  ],
+  "affected_paths": [
+    "web/*",
+    "scripts/browser_smoke.py",
+    "scripts/browser_i18n_smoke.py",
+    "scripts/build_cloudflare.py",
+    "scripts/run_checks.py",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "prompts/manifest.json",
+    "AGENTS.md",
+    ".github/workflows/spec-governance.yml",
+    "spec/schemas/common.schema.json",
+    "spec/schemas/change-record.schema.json"
+  ],
+  "tests": [
+    "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs",
+    "scripts/browser_i18n_smoke.py",
+    "tests/app/test_remote_access.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户：lets make sure the app have the option to switch from chinese display to english but dont change any function of the app.",
+  "known_limitations": [
+    "仅显示语言；模型输出、原文、技术JSON和导出不翻译",
+    "用户Windows实机与真实浏览器HTTP未验证",
+    "浏览器URL被策略阻止，采用无网络DOM/存储测试替身验证",
+    "未在用户电脑或远端部署"
+  ]
+}

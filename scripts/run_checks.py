@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse,subprocess,sys,shutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-AREAS={'local':['tests/app/test_local_entry.py'],'render':['tests/app/test_render_preview.py'],'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
+AREAS={'ui':['tests/web/test_display_contract.py'],'local':['tests/app/test_local_entry.py'],'render':['tests/app/test_render_preview.py'],'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
        'parsers':['tests/app/test_parsers.py'],'governance':['tests/test_governance.py','tests/test_devtools.py'],'all':['tests']}
 def main()->int:
     p=argparse.ArgumentParser();p.add_argument('--area',choices=AREAS,default='all');args=p.parse_args()
     commands=[[sys.executable,'-m','pytest',*AREAS[args.area],'-q','--tb=short']]
     if args.area in ('governance','all'):commands.append([sys.executable,'scripts/check_spec_sync.py'])
-    if args.area=='all' and shutil.which('node'):commands.append(['node','--check','web/app.js'])
+    if args.area in ('ui','all') and shutil.which('node'):
+        commands.extend([['node','--check','web/i18n.js'],['node','--check','web/app.js'],['node','--test','tests/web/i18n.test.mjs']])
     if args.area in ('remote','all') and shutil.which('node'):commands.append(['node','--test','tests/deploy/worker.test.mjs'])
     out=ROOT/'reports/local';out.mkdir(parents=True,exist_ok=True);failed=False
     for index,command in enumerate(commands):

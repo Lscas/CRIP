@@ -1,0 +1,454 @@
+/* Display-only localization. No network calls and no model or project-data changes. */
+(function (global) {
+  'use strict';
+  const STORAGE_KEY = 'cirp.ui.language.v1';
+  const supported = ['zh-CN', 'en'];
+  const catalog = {
+  "zh-CN": {
+    "page.title": "CIRP · 工程文件审查",
+    "workspace.label": "工程测试工作区",
+    "project.current": "当前项目",
+    "project.select": "选择项目",
+    "project.new": "＋ 新建项目",
+    "nav.overview": "项目总览",
+    "nav.files": "文件与覆盖",
+    "nav.review": "审查工作台",
+    "sidebar.prototype": "API-first · 单用户原型",
+    "sidebar.originals": "项目原文保留",
+    "sidebar.traceable": "每一项结果可追溯",
+    "service.connecting": "正在连接服务…",
+    "project.breadcrumb": "项目 / ",
+    "project.none": "尚未选择项目",
+    "mode.loading": "正在读取配置",
+    "language.label": "界面语言",
+    "hero.title": "把项目文件，变成可审核的清单。",
+    "hero.subtitle": "上传资料，查看材料、检查要求、设计差异与缺失信息。",
+    "hero.review": "工程师审核",
+    "hero.required": "必须",
+    "connecting": "正在连接…",
+    "stat.material": "永久 / 临时材料",
+    "stat.materialNote": "材料清单",
+    "stat.inspection": "检查 / 测试 / 报告",
+    "stat.inspectionNote": "质量要求",
+    "stat.conflict": "设计冲突与差异",
+    "stat.conflictNote": "保留新旧证据",
+    "stat.missing": "阻断与未处理项",
+    "stat.missingNote": "不隐藏未知内容",
+    "files.title": "01 / 项目资料",
+    "files.description": "文字解析已接入；图片与 DWG 会保留，但当前未进行视觉或 CAD 分析。",
+    "files.zero": "0 个文件",
+    "files.total": "{count} 个不同内容文件",
+    "files.drop": "拖入文件，或选择项目资料",
+    "files.formats": "PDF · DOCX · TXT · 图片 · DWG　/　分片上传，内容哈希去重",
+    "files.choose": "选择文件",
+    "files.folder": "选择文件夹",
+    "files.name": "文件",
+    "files.size": "大小",
+    "files.state": "上传状态",
+    "files.checksum": "内容校验",
+    "files.duplicate": "相同内容，复用来源",
+    "files.hash": "SHA-256 已记录",
+    "files.chunk": "分片 {offset} / {size}",
+    "upload.complete": "本批文件上传完成。",
+    "run.title": "02 / 分析运行",
+    "run.description": "单项目预算 ¥300 · 24 小时目标 · 默认最低成本文本路径",
+    "run.start": "开始分析",
+    "run.pause": "暂停",
+    "run.resume": "恢复",
+    "run.none": "尚无运行",
+    "run.select": "选择分析运行",
+    "run.notStarted": "未开始",
+    "run.ready": "上传完成后，启动项目分析。",
+    "run.coverageInitial": "覆盖：尚未开始",
+    "run.costInitial": "API费用：¥0 / ¥300",
+    "run.details": "能力边界、失败与覆盖详情",
+    "run.detailInitial": "当前尚无分析记录。",
+    "run.coverage": "文件 {processed}/{total} · 片段 {done}/{fragments} · {review} 待审核",
+    "run.cost": "已记API费 ¥{spent} · 预留 ¥{reserved} / ¥300",
+    "run.message": "{stage}：{message}",
+    "review.title": "03 / 审查工作台",
+    "review.description": "点击结果查看候选详情和来源；接受、编辑或拒绝都会记录历史。",
+    "export.json": "导出 JSON",
+    "export.xlsx": "导出 Excel",
+    "tab.material": "材料",
+    "tab.inspection": "检查 / 报告",
+    "tab.conflict": "冲突 / 差异",
+    "tab.missing": "缺失 / 未处理",
+    "filter.placeholder": "筛选当前结果…",
+    "filter.label": "筛选结果",
+    "results.content": "内容",
+    "results.sourceStatus": "来源状态",
+    "results.review": "人工审核",
+    "results.evidence": "证据",
+    "results.empty": "这里显示分析后的候选结果",
+    "results.emptyNote": "模拟模式使用合成示例。任意真实文件不会生成虚构的演示材料。",
+    "demo.one": "下载示例一",
+    "demo.two": "下载示例二",
+    "footer": "设计净量 · 内部修订日期优先 · 不判断供货责任 · 原型结果不代替工程审查",
+    "drawer.close": "关闭 ×",
+    "drawer.title": "记录详情",
+    "project.title": "新建项目",
+    "project.description": "商业新建 · 全专业资料入口",
+    "project.placeholder": "例如：Commercial Building A",
+    "project.nameLabel": "项目名称",
+    "project.cancel": "取消",
+    "project.create": "创建项目",
+    "kind.MATERIAL": "材料",
+    "kind.INSPECTION": "检查 / 测试 / 报告",
+    "kind.CONFLICT": "冲突 / 版本差异",
+    "kind.MISSING": "缺失 / 未处理",
+    "record.note": "全部候选须人工核验。编辑使用受校验的JSON，不允许修改证据身份或元数据。",
+    "record.json": "候选JSON",
+    "record.reviewNote": "修改/审核说明",
+    "record.reviewNoteLabel": "审核说明",
+    "record.accept": "接受",
+    "record.edit": "保存修改",
+    "record.reject": "拒绝",
+    "record.source": "查看来源 {id}",
+    "record.history": "读取审核历史",
+    "evidence.title": "原始证据",
+    "evidence.revision": "内部修订日期：{date}",
+    "evidence.unknownDate": "未可靠识别",
+    "evidence.open": "打开 / 下载原文件",
+    "evidence.note": "当前展示原文与定位坐标；PDF图面高亮查看器尚未接入。",
+    "notice.mock": "当前为零费用模拟模式，只识别明确的演示样例。真实文件只验证上传与解析；不会生成假材料来冒充模型分析。",
+    "notice.live": "真实API已启用；点击分析会产生费用。简单任务使用Flash非思考，所有结果须人工审核。",
+    "notice.blocked": "真实API尚未就绪：{reasons}"
+  },
+  "en": {
+    "page.title": "CIRP · Construction Document Review",
+    "workspace.label": "Engineering test workspace",
+    "project.current": "Current project",
+    "project.select": "Select a project",
+    "project.new": "＋ New project",
+    "nav.overview": "Overview",
+    "nav.files": "Files & coverage",
+    "nav.review": "Review workspace",
+    "sidebar.prototype": "API-first · Single-user prototype",
+    "sidebar.originals": "Original documents preserved",
+    "sidebar.traceable": "Every result is traceable",
+    "service.connecting": "Connecting to service…",
+    "project.breadcrumb": "Project / ",
+    "project.none": "No project selected",
+    "mode.loading": "Loading settings",
+    "language.label": "Display language",
+    "hero.title": "Turn project files into reviewable registers.",
+    "hero.subtitle": "Upload files to review materials, inspection requirements, design differences and missing information.",
+    "hero.review": "Engineer review",
+    "hero.required": "REQUIRED",
+    "connecting": "Connecting…",
+    "stat.material": "Permanent / temporary materials",
+    "stat.materialNote": "Material register",
+    "stat.inspection": "Inspection / testing / reports",
+    "stat.inspectionNote": "Quality requirements",
+    "stat.conflict": "Design conflicts & differences",
+    "stat.conflictNote": "Current and previous evidence",
+    "stat.missing": "Blockers & unprocessed items",
+    "stat.missingNote": "Unknowns remain visible",
+    "files.title": "01 / Project files",
+    "files.description": "Text extraction is available. Images and DWG files are retained, but visual and CAD analysis are not yet available.",
+    "files.zero": "0 files",
+    "files.total": "{count} unique-content files",
+    "files.drop": "Drop files here, or select project documents",
+    "files.formats": "PDF · DOCX · TXT · Images · DWG / Chunked uploads and content-hash deduplication",
+    "files.choose": "Select files",
+    "files.folder": "Select folder",
+    "files.name": "File",
+    "files.size": "Size",
+    "files.state": "Upload status",
+    "files.checksum": "Content verification",
+    "files.duplicate": "Identical content; source reused",
+    "files.hash": "SHA-256 recorded",
+    "files.chunk": "Chunks: {offset} / {size}",
+    "upload.complete": "This upload batch is complete.",
+    "run.title": "02 / Analysis run",
+    "run.description": "¥300 per-project budget · 24-hour target · Lowest-cost text route by default",
+    "run.start": "Start analysis",
+    "run.pause": "Pause",
+    "run.resume": "Resume",
+    "run.none": "No runs yet",
+    "run.select": "Select an analysis run",
+    "run.notStarted": "Not started",
+    "run.ready": "Start project analysis after uploading the files.",
+    "run.coverageInitial": "Coverage: not started",
+    "run.costInitial": "API cost: ¥0 / ¥300",
+    "run.details": "Capabilities, failures & coverage details",
+    "run.detailInitial": "No analysis records yet.",
+    "run.coverage": "Files {processed}/{total} · Fragments {done}/{fragments} · {review} need review",
+    "run.cost": "Recorded API cost ¥{spent} · Reserved ¥{reserved} / ¥300",
+    "run.message": "{stage}: {message}",
+    "review.title": "03 / Review workspace",
+    "review.description": "Open a result to review its details and sources. Accepting, editing or rejecting is recorded in the audit history.",
+    "export.json": "Export JSON",
+    "export.xlsx": "Export Excel",
+    "tab.material": "Materials",
+    "tab.inspection": "Inspections / reports",
+    "tab.conflict": "Conflicts / differences",
+    "tab.missing": "Missing / unprocessed",
+    "filter.placeholder": "Filter current results…",
+    "filter.label": "Filter results",
+    "results.content": "Content",
+    "results.sourceStatus": "Source status",
+    "results.review": "Human review",
+    "results.evidence": "Evidence",
+    "results.empty": "Analysis candidates will appear here",
+    "results.emptyNote": "Mock mode uses synthetic examples. Real files will not produce fabricated demo materials.",
+    "demo.one": "Download example 1",
+    "demo.two": "Download example 2",
+    "footer": "Design net quantities · Internal revision dates take priority · No supply-responsibility decisions · Prototype results do not replace engineering review",
+    "drawer.close": "Close ×",
+    "drawer.title": "Record details",
+    "project.title": "New project",
+    "project.description": "Commercial ground-up · All-discipline document intake",
+    "project.placeholder": "e.g. Commercial Building A",
+    "project.nameLabel": "Project name",
+    "project.cancel": "Cancel",
+    "project.create": "Create project",
+    "kind.MATERIAL": "Materials",
+    "kind.INSPECTION": "Inspection / testing / reports",
+    "kind.CONFLICT": "Conflicts / revision differences",
+    "kind.MISSING": "Missing / unprocessed",
+    "record.note": "Every candidate requires human verification. Edit validated JSON only; evidence identities and metadata cannot be changed.",
+    "record.json": "Candidate JSON",
+    "record.reviewNote": "Edit / review note",
+    "record.reviewNoteLabel": "Review note",
+    "record.accept": "Accept",
+    "record.edit": "Save changes",
+    "record.reject": "Reject",
+    "record.source": "View source {id}",
+    "record.history": "Load review history",
+    "evidence.title": "Original evidence",
+    "evidence.revision": "Internal revision date: {date}",
+    "evidence.unknownDate": "Not reliably identified",
+    "evidence.open": "Open / download original file",
+    "evidence.note": "Original text and locator coordinates are shown. The PDF drawing-highlighting viewer is not yet available.",
+    "notice.mock": "Zero-cost mock mode: only explicit demo examples are recognized. Real files are uploaded and parsed only; no fabricated materials are presented as model analysis.",
+    "notice.live": "Live API enabled. Starting analysis incurs charges. Simple tasks use Flash with thinking disabled; every result requires human review.",
+    "notice.blocked": "Live API is not ready: {reasons}"
+  }
+};
+  const statusCatalog = {
+  "zh-CN": {
+    "UPLOADING": "上传中",
+    "COMPLETE": "已上传",
+    "DUPLICATE": "重复文件",
+    "ABORTED": "已取消上传",
+    "QUEUED": "排队中",
+    "RUNNING": "运行中",
+    "PARTIAL": "部分完成",
+    "COMPLETED": "已完成",
+    "PAUSED": "已暂停",
+    "PAUSED_PROVIDER": "接口暂停",
+    "PAUSED_BUDGET": "预算暂停",
+    "PAUSED_DEADLINE": "时限暂停",
+    "INTERRUPTED": "已中断",
+    "FAILED": "失败",
+    "CANCELLED": "已取消",
+    "PENDING": "待审核",
+    "ACCEPTED": "已接受",
+    "EDITED": "已修改",
+    "REJECTED": "已拒绝",
+    "CONFIRMED": "文件明确要求",
+    "INFERRED_TO_VERIFY": "推导待核验",
+    "CONDITIONAL": "条件项",
+    "NOT_SPECIFIED": "未指定",
+    "NOT_APPLICABLE": "不适用",
+    "CONFLICT": "冲突",
+    "MISSING_INFORMATION": "缺失信息",
+    "LATEST_APPLIED": "已采用新版",
+    "UNRESOLVED": "未解决",
+    "RESOLVED": "已解决",
+    "NEEDS_REVIEW": "需审核",
+    "VERIFIED": "已核验",
+    "UNPROCESSED": "未处理",
+    "BLOCKING": "阻断"
+  },
+  "en": {
+    "UPLOADING": "Uploading",
+    "COMPLETE": "Uploaded",
+    "DUPLICATE": "Duplicate",
+    "ABORTED": "Upload aborted",
+    "QUEUED": "Queued",
+    "RUNNING": "Running",
+    "PARTIAL": "Partial",
+    "COMPLETED": "Completed",
+    "PAUSED": "Paused",
+    "PAUSED_PROVIDER": "Provider paused",
+    "PAUSED_BUDGET": "Budget paused",
+    "PAUSED_DEADLINE": "Time-limit pause",
+    "INTERRUPTED": "Interrupted",
+    "FAILED": "Failed",
+    "CANCELLED": "Cancelled",
+    "PENDING": "Pending review",
+    "ACCEPTED": "Accepted",
+    "EDITED": "Edited",
+    "REJECTED": "Rejected",
+    "CONFIRMED": "Document-supported",
+    "INFERRED_TO_VERIFY": "Inferred; verify",
+    "CONDITIONAL": "Conditional",
+    "NOT_SPECIFIED": "Not specified",
+    "NOT_APPLICABLE": "Not applicable",
+    "CONFLICT": "Conflict",
+    "MISSING_INFORMATION": "Missing information",
+    "LATEST_APPLIED": "Latest revision applied",
+    "UNRESOLVED": "Unresolved",
+    "RESOLVED": "Resolved",
+    "NEEDS_REVIEW": "Needs review",
+    "VERIFIED": "Verified",
+    "UNPROCESSED": "Unprocessed",
+    "BLOCKING": "Blocking"
+  }
+};
+  const systemEnglish = {
+  "模拟模式：仅演示样例": "Mock mode: demo examples only",
+  "真实API模式": "Live API mode",
+  "云端免费测试：仅模拟分析；休眠、重启或部署后数据会丢失。每项目限100MiB，只上传测试副本，结果请及时导出；正式资料与实际运行保留在本机。": "Free cloud preview: mock analysis only. Data is lost after sleep, restart or deployment. Limit: 100 MiB per project. Upload test copies and export results promptly; keep production files and operation on your local computer.",
+  "等待处理": "Waiting for processing",
+  "解析文件": "Parsing files",
+  "一次读取，联合提取材料与检查要求": "Read once; jointly extract materials and inspection requirements",
+  "生成可审核记录与设计差异": "Generating reviewable records and design differences",
+  "本轮基线任务已结束": "Baseline tasks for this run have finished",
+  "仅完成当前文字处理能力；视觉/CAD/几何数量、复杂选项与跨专业关联尚未完成。模拟模式仅验证流程，不代表真实施工分析。": "Only the current text-processing capabilities have run. Visual/CAD/geometric quantities, complex options and cross-discipline relationships are not yet implemented. Mock mode validates the workflow, not real construction analysis.",
+  "仅完成当前文字处理能力；视觉/CAD/几何数量、复杂选项与跨专业关联尚未完成。真实API结果尚需人工核验。": "Only the current text-processing capabilities have run. Visual/CAD/geometric quantities, complex options and cross-discipline relationships are not yet implemented. Live API results still require human verification.",
+  "恢复未完成任务": "Resuming unfinished tasks",
+  "已请求停止；在途请求仍需结算": "Stop requested; in-flight requests still require cost reconciliation",
+  "服务曾中断；已完成片段保留，付费请求需对账": "Service was interrupted. Completed fragments are retained; paid requests need reconciliation",
+  "到达24小时目标，停止新增任务；未完成范围保留": "24-hour target reached. No new tasks will start; unfinished scope remains recorded",
+  "服务停止，未完成任务保留": "Service stopped; unfinished tasks are retained",
+  "CIRP_PROVIDER 未设为 deepseek": "CIRP_PROVIDER is not set to deepseek",
+  "付费 API 开关未开启": "Live API switch is disabled",
+  "未配置 API 密钥": "API key is not configured",
+  "未确认实际 API 单价": "Actual API prices have not been confirmed",
+  "输入单价须为有限正数": "Input price must be a finite positive number",
+  "输出单价须为有限正数": "Output price must be a finite positive number",
+  "API 地址须为无凭证和查询参数的 HTTPS 基址": "API base URL must use HTTPS without credentials or query parameters",
+  "简单任务输出上限须为1至2000": "Simple-task output limit must be between 1 and 2000",
+  "项目名不能为空": "Project name cannot be blank",
+  "未找到记录": "Record not found",
+  "项目不存在": "Project not found",
+  "示例不存在": "Example not found",
+  "预览单次请求体超过上限": "Preview request body exceeds the limit",
+  "无效Content-Length": "Invalid Content-Length",
+  "缺少本地客户端标记": "Missing local-client header",
+  "禁止跨站修改请求": "Cross-site changes are not allowed",
+  "单次请求超过分片上限": "Request exceeds the upload chunk limit",
+  "只可取消未完成上传": "Only unfinished uploads can be aborted",
+  "记录已变化，请刷新后审核": "This record has changed. Refresh before reviewing",
+  "修改需要完整候选和修改说明": "Edits require the complete candidate and an edit note",
+  "不可改变候选身份": "Candidate identity cannot be changed",
+  "只有EDITED允许修改内容": "Only EDITED actions may change content",
+  "该条没有可审核的数量": "This record has no quantity to review",
+  "请先暂停或等待分析结束，再导出一致快照": "Pause or finish analysis before exporting a consistent snapshot",
+  "Provider未支持": "Provider is not supported",
+  "当前仅允许一个活跃项目分析": "Only one active project analysis is allowed",
+  "没有已完成上传的文件": "No fully uploaded files",
+  "任务不存在": "Run not found",
+  "当前任务不可恢复；已结束任务需新建分析": "This run cannot be resumed. Start a new analysis for finished runs",
+  "已到原运行24小时时限，需明确新建运行；项目预算不重置": "The original 24-hour run limit was reached. Explicitly start a new run; the project budget is not reset",
+  "已有活跃任务": "An active run already exists",
+  "有待对账API请求，先核对账单；不会自动再次付费": "An API request awaits reconciliation. Check billing first; it will not be charged again automatically",
+  "当前没有活跃任务": "There is no active run",
+  "未知操作": "Unknown action",
+  "无效文件名": "Invalid file name",
+  "分片为空或过大": "Upload chunk is empty or too large",
+  "上传任务不存在": "Upload not found",
+  "上传任务已关闭": "Upload is closed",
+  "重复分片内容不同": "Repeated chunk contains different content",
+  "分片位置或总长度不一致": "Chunk offset or total length does not match",
+  "文件尚未上传完整": "File upload is incomplete",
+  "非法对象路径": "Invalid object path",
+  "非法金额": "Invalid amount",
+  "预留金额必须为正": "Reserved amount must be positive",
+  "任务已停止或到达时限，禁止新增收费请求": "Run stopped or time limit reached; new paid requests are blocked",
+  "项目累计预算不足，停止新增付费调用": "Insufficient remaining project budget; new paid calls are blocked",
+  "结算记录不存在": "Billing record not found",
+  "不一致的重复结算": "Conflicting duplicate billing settlement",
+  "模型引用了本请求未提供的证据": "The model cited evidence not supplied with this request",
+  "属性缺少字段级证据": "A property is missing field-level evidence",
+  "模型输出重复的要求编号": "The model returned duplicate requirement identifiers",
+  "父要求引用不完整": "Parent-requirement references are incomplete",
+  "存在待对账请求；避免自动重复收费": "A request awaits reconciliation; automatic duplicate charges are blocked",
+  "该片段已达到累计调用上限": "The cumulative call limit for this fragment has been reached",
+  "片段加Schema超出简单任务输入预算；需细分，未调用API": "Fragment plus schema exceeds the simple-task input budget. Split the task; no API call was made",
+  "API请求未完成；费用保持预留，暂停且不自动重试。": "API request did not complete. Costs remain reserved; processing is paused without automatic retry.",
+  "响应缺少usage；保持预留并暂停，需核对账单。": "Response has no usage data. Reservation is retained and processing paused; reconcile the bill.",
+  "供应商未遵守非思考设置；本次费用已记录，需确认接口兼容性。": "Provider did not honor the thinking-disabled setting. The cost is recorded; check interface compatibility.",
+  "模型结果未通过契约；已记录本次费用，不自动重复请求。": "Model output failed contract validation. The cost is recorded; the request is not automatically repeated.",
+  "审核记录已保存": "Review saved",
+  "先创建或选择项目": "Create or select a project first",
+  "已有上传正在进行": "An upload is already in progress",
+  "续传文件内容已变化，请重新选择文件上传。": "The resumed file contents changed. Select the file again to upload.",
+  "上传失败；重新选择原文件可续传。": "Upload failed. Select the original file again to resume."
+};
+  const bindings = new WeakMap();
+  let language = 'zh-CN';
+  try { const saved = global.localStorage.getItem(STORAGE_KEY); if (supported.includes(saved)) language = saved; } catch (_) { /* Storage may be blocked; keep an in-memory preference. */ }
+
+  function t(key, params = {}) {
+    const template = Object.prototype.hasOwnProperty.call(catalog[language], key) ? catalog[language][key] : String(key);
+    return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, name) => Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match);
+  }
+  function status(code) {
+    const label = Object.prototype.hasOwnProperty.call(statusCatalog[language], code) ? statusCatalog[language][code] : null;
+    return label ? `${label} (${code})` : String(code ?? '');
+  }
+  function message(value) {
+    const text = String(value ?? '');
+    if (language === 'zh-CN') return text;
+    if (Object.prototype.hasOwnProperty.call(systemEnglish, text)) return systemEnglish[text];
+    const capacity = /^超出当前项目接收容量配置（([\d,]+) bytes）$/.exec(text);
+    if (capacity) return `Project upload capacity exceeded (${capacity[1]} bytes)`;
+    const request = /^请求失败 (\d{3})$/.exec(text);
+    if (request) return `Request failed (${request[1]})`;
+    const prefixes = [['内部处理错误：', 'Internal processing error: '], ['修改不符合数据/来源契约：', 'Edit failed data/evidence validation: ']];
+    for (const [zh, en] of prefixes) if (text.startsWith(zh)) return en + text.slice(zh.length);
+    // Known validation lists only; unknown text stays intact rather than being guessed.
+    const parts = text.split('；');
+    if (parts.length > 1 && parts.every(part => Object.prototype.hasOwnProperty.call(systemEnglish, part))) return parts.map(part => systemEnglish[part]).join('; ');
+    return text;
+  }
+  function bindText(node, keyOrRender, params = {}) {
+    const render = typeof keyOrRender === 'function' ? keyOrRender : () => t(keyOrRender, params);
+    node.setAttribute('data-i18n-bound', '');
+    bindings.set(node, render);
+    node.textContent = render();
+    return node;
+  }
+  function bindMessage(node, value) { return bindText(node, () => message(value)); }
+  function bindStatus(node, code) { node.dataset.code = code ?? ''; return bindText(node, () => status(code)); }
+  function applyElement(node) {
+    const key = node.getAttribute('data-i18n');
+    if (key) node.textContent = t(key);
+    for (const attribute of ['placeholder', 'aria-label', 'title']) {
+      const attributeKey = node.getAttribute('data-i18n-' + attribute);
+      if (attributeKey) node.setAttribute(attribute, t(attributeKey));
+    }
+  }
+  function render() {
+    const doc = global.document;
+    if (!doc) return;
+    doc.documentElement.lang = language;
+    doc.querySelectorAll('[data-i18n], [data-i18n-placeholder], [data-i18n-aria-label], [data-i18n-title]').forEach(applyElement);
+    // Only live DOM nodes are visited; removed polling rows are not retained.
+    doc.querySelectorAll('[data-i18n-bound]').forEach(node => {
+      const renderText = bindings.get(node);
+      if (renderText) node.textContent = renderText();
+    });
+    doc.querySelectorAll('[data-ui-language]').forEach(select => { select.value = language; });
+  }
+  function setLanguage(value) {
+    if (!supported.includes(value)) return false;
+    language = value;
+    try { global.localStorage.setItem(STORAGE_KEY, value); } catch (_) { /* Do not block the application when storage is unavailable. */ }
+    render();
+    return true;
+  }
+  function init() {
+    global.document.querySelectorAll('[data-ui-language]').forEach(select => {
+      select.addEventListener('change', () => setLanguage(select.value));
+    });
+    render();
+  }
+  global.CIRPI18n = Object.freeze({ t, status, message, bindText, bindMessage, bindStatus, applyElement, init, setLanguage,
+    get language() { return language; }, STORAGE_KEY });
+})(globalThis);

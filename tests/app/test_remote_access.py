@@ -90,7 +90,7 @@ def test_tunnel_url_validation():
 def test_pages_build_contains_only_allowlist(tmp_path):
     folder=build(tmp_path/'assets')
     names={str(x.relative_to(folder)) for x in folder.rglob('*') if x.is_file()}
-    assert names=={'index.html','assets/app.js','assets/style.css','_worker.js','_routes.json','robots.txt'}
+    assert names=={'index.html','assets/app.js','assets/i18n.js','assets/style.css','_worker.js','_routes.json','robots.txt'}
     assert 'exclude' in (folder/'_routes.json').read_text()
     with pytest.raises(ValueError): build(folder)
 

@@ -13,7 +13,7 @@ def build(destination: Path) -> Path:
     if any(destination.iterdir()):
         raise ValueError('输出目录非空；为避免发布旧数据，请使用新目录。')
     (destination / 'assets').mkdir()
-    for name in ['style.css', 'app.js']:
+    for name in ['style.css', 'i18n.js', 'app.js']:
         shutil.copyfile(ROOT / 'web' / name, destination / 'assets' / name)
     shutil.copyfile(ROOT / 'web/index.html', destination / 'index.html')
     shutil.copyfile(ROOT / 'deploy/cloudflare/worker.mjs', destination / '_worker.js')

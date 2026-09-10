@@ -51,6 +51,7 @@ def main():
                         return new Response(result.text,{status:result.status,headers:result.headers});
                     };
                 }''')
+                page.evaluate((ROOT/'web/i18n.js').read_text(encoding="utf-8"))
                 page.evaluate((ROOT/'web/app.js').read_text(encoding="utf-8"))
                 page.locator('#new-project').click()
                 page.locator('#project-input').fill('商业新建 · 合成演示项目')
@@ -59,7 +60,7 @@ def main():
                 page.locator('#file-input').set_input_files([str(ROOT/'examples/demo/01_original.txt'),str(ROOT/'examples/demo/02_revision.txt')])
                 page.wait_for_function("document.querySelector('#file-total').textContent.includes('2 个')")
                 page.locator('#start').click()
-                page.wait_for_function("document.querySelector('#run-state').textContent==='PARTIAL'")
+                page.wait_for_function("document.querySelector('#run-state').dataset.code==='PARTIAL'")
                 counts={kind:int(page.locator('#count-'+kind).inner_text()) for kind in ['MATERIAL','INSPECTION','CONFLICT','MISSING']}
                 assert counts=={'MATERIAL':2,'INSPECTION':2,'CONFLICT':1,'MISSING':0},counts
                 page.locator('#results-body tr td:first-child button').first.click()

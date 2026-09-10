@@ -1,0 +1,42 @@
+{
+  "version": "0.2.5",
+  "base": "v0.2.4-local",
+  "pytest": {
+    "tests": 244,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 12.53
+  },
+  "node_i18n": {
+    "passed": 23,
+    "failed": 0
+  },
+  "node_worker": {
+    "passed": 11,
+    "failed": 0
+  },
+  "browser_checks": 13,
+  "model_calls": 0,
+  "unchanged_business_paths": [
+    "app",
+    "contracts",
+    "config",
+    "migrations",
+    "requirements-app.txt",
+    ".env.example"
+  ],
+  "prompt_bodies_unchanged": true,
+  "schema_delta": "Added 0.2.5 to release-metadata allowlists only",
+  "browser_mode": "No-network Chromium DOM + FastAPI TestClient bridge; storage test double",
+  "not_tested": [
+    "native browser localStorage persistence",
+    "browser download navigation",
+    "HTTP-origin CSP execution",
+    "Windows installation",
+    "real public/local HTTP browser route",
+    "live provider",
+    "construction accuracy",
+    "10GB throughput"
+  ]
+}
