@@ -3,12 +3,12 @@ from __future__ import annotations
 import codecs
 import re
 import zipfile
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import date
 from pathlib import Path
 from defusedxml import ElementTree as ET
 
-PARSER_VERSION='text-baseline-1'
+PARSER_VERSION='text-anchors-2'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
 IMAGE_SUFFIXES={'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
@@ -20,6 +20,7 @@ class Fragment:
     method: str
     internal_revision_date: str | None = None
     revision_label: str | None = None
+    text_map: list[dict] = field(default_factory=list)
 
 def locator(**kwargs):
     return dict(page_number=None,sheet=None,section=None,paragraph=None,bbox=None,
@@ -140,4 +141,8 @@ def parse_file(path: Path, original_name: str) -> dict:
 def pdf_fragment(words, page, rev):
     text=' '.join(w['text'] for w in words)
     bbox=[min(w['x0'] for w in words),min(w['top'] for w in words),max(w['x1'] for w in words),max(w['bottom'] for w in words)]
-    return Fragment(text,locator(page_number=page,bbox=bbox,coordinate_system='pdf-points-top-left'), 'TEXT_LAYER',*rev)
+    mapping=[]; offset=0
+    for w in words:
+        mapping.append({'start':offset,'end':offset+len(w['text']),'bbox':[w['x0'],w['top'],w['x1'],w['bottom']]})
+        offset += len(w['text'])+1
+    return Fragment(text,locator(page_number=page,bbox=bbox,coordinate_system='pdf-points-top-left'), 'TEXT_LAYER',*rev,text_map=mapping)

@@ -1,0 +1,15 @@
+PASS /opt/pyvenv/bin/python -m pytest tests -q --tb=short
+........................................................................ [ 93%]
+...................                                                      [100%]
+PASS /opt/pyvenv/bin/python scripts/check_spec_sync.py
+[INFO] requirements= 100 schemas= 14
+[INFO] 当前为本地原型第一切片；本检查不是施工准确率或远端审批证明。
+PASS node --check web/i18n.js
+PASS node --check web/app.js
+PASS node --test tests/web/i18n.test.mjs
+# todo 0
+# duration_ms 174.883526
+PASS node --test tests/deploy/worker.test.mjs
+# todo 0
+# duration_ms 144.173175
+完整日志：reports/local/；默认测试没有真实模型调用。

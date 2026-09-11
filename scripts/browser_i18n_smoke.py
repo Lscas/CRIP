@@ -221,6 +221,35 @@ def main():
                 passed('Search text and filter behavior stay unchanged')
 
                 page.locator('#results-body tr td:first-child button').first.click()
+                panel=page.locator('.verification-panel')
+                assert panel.is_visible()
+                assert panel.get_by_role('button',name='Recheck meaning (uses project budget)',exact=True).is_disabled()
+                assert 'Verification incomplete' in panel.inner_text()
+                quotes=panel.locator('blockquote').all_text_contents()
+                assert quotes and all(any(q in e['raw_text'] for e in json_before['evidence']) for q in quotes)
+                passed('Mock shows exact field-level citations but never claims semantic verification passed')
+                language('zh-CN','#drawer-language')
+                assert panel.locator('blockquote').all_text_contents()==quotes
+                page.screenshot(path=str(output/'citations-zh.png'),full_page=True)
+                language('en','#drawer-language')
+                assert panel.locator('blockquote').all_text_contents()==quotes
+                page.screenshot(path=str(output/'citations-en.png'),full_page=True)
+                page.set_viewport_size({'width':390,'height':844})
+                assert page.evaluate('document.documentElement.scrollWidth')<=390
+                page.screenshot(path=str(output/'citations-mobile.png'),full_page=True)
+                page.set_viewport_size({'width':1440,'height':1000})
+                passed('Field verification and verbatim citations survive display-language changes and mobile layout')
+                quote=panel.locator('blockquote').first.inner_text()
+                panel.locator('.evidence-button').first.click()
+                page.wait_for_selector('#drawer-body mark')
+                assert page.locator('#drawer-body mark').inner_text()==quote
+                language('zh-CN','#drawer-language')
+                assert page.locator('#drawer-body mark').inner_text()==quote
+                page.screenshot(path=str(output/'source-highlight.png'),full_page=True)
+                language('en','#drawer-language')
+                passed('Clicking an exact citation highlights the same original Unicode text without translation')
+                page.locator('#close-drawer').click()
+                page.locator('#results-body tr td:first-child button').first.click()
                 area = page.locator('#drawer-body textarea')
                 original_candidate = area.input_value()
                 edited_draft = original_candidate + '\n'

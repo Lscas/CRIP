@@ -125,6 +125,77 @@ class Gateway:
         return ModelResult(data,attempt,False,'deepseek')
 
 
+    def verify_claims(self, run: dict, fields: list[dict], evidence: dict, job_id=None) -> ModelResult:
+        """Low-cost independent verification. All HTTP remains in this gateway.
+
+        Uses the same persistent CNY budget, no automatic paid retries or model upgrades.
+        """
+        from app.verification import VerificationService
+        if self.s.provider == 'mock':
+            raise ProviderPaused('模拟模式不执行语义核验', 409)
+        if self.s.live_errors():
+            raise ProviderPaused('；'.join(self.s.live_errors()), 409)
+        prompt = (ROOT / 'prompts/claim-verification/system.md').read_text(encoding='utf-8')
+        content = {'fields': [{k: f[k] for k in ('path', 'claim', 'label', 'evidence_ids', 'context')} for f in fields],
+                   'evidence': [{'evidence_id': eid, 'text': e['raw_text'], 'revision_date': e.get('internal_revision_date'),
+                                 'locator': e['locator']} for eid, e in sorted(evidence.items())]}
+        limit = min(1400, self.s.output_limit)
+        payload = {'model': self.s.cheap_model, 'thinking': {'type': 'disabled'}, 'max_tokens': limit,
+                   'stream': False, 'response_format': {'type': 'json_object'},
+                   'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': dumps(content)}]}
+        upper = sum(len(m['content'].encode('utf-8')) for m in payload['messages']) + 256
+        if upper > self.s.input_limit:
+            raise InvalidModelOutput('核验证据超过单次输入限额，不能截掉上下文后标记通过')
+        cache_id = hashlib.sha256(dumps(['verify-v1',run['project_id'],run['snapshot_id'],self.s.api_base_url,
+                    self.s.cheap_model, payload, [e.get('file_sha256') for _,e in sorted(evidence.items())]]).encode()).hexdigest()
+        cached = self.db.cached(cache_id, run['project_id'])
+        if cached is not None:
+            from copy import deepcopy
+            VerificationService.apply_model(deepcopy(fields), cached, evidence, None)
+            original_call=self.db.one('SELECT id FROM model_calls WHERE project_id=? AND task_key=? AND actual_units IS NOT NULL ORDER BY created_at DESC LIMIT 1',(run['project_id'],'verify:'+cache_id),False)
+            return ModelResult(cached, original_call['id'] if original_call else None, True, 'deepseek')
+        task = 'verify:' + cache_id
+        recent = self.db.all('SELECT actual_units FROM model_calls WHERE run_id=? AND task_key=?', (run['id'], task))
+        if any(r['actual_units'] is None for r in recent):
+            raise ProviderPaused('核验请求待对账，不重复付费', 409)
+        if len(recent) >= 3:
+            raise ProviderPaused('该核验任务达到累计调用上限', 409)
+        if self.db.one('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (run['project_id'],), False):
+            raise ProviderPaused('项目有未对账调用，暂停核验', 409)
+        amount = quote_tokens(upper, limit, self.s.input_rate, self.s.output_rate)
+        attempt = self.db.reserve(run['project_id'], run['id'], task, amount, self.s.cheap_model,
+                                  hashlib.sha256(dumps(payload).encode()).hexdigest(), self.s.input_rate,
+                                  self.s.output_rate, verification_job_id=job_id)
+        try:
+            response = self.client.post(self.s.api_base_url + '/chat/completions', json=payload,
+                                        headers={'Authorization': 'Bearer ' + self.s.api_key})
+            response.raise_for_status(); body = response.json()
+        except Exception as exc:
+            self.db.unknown(attempt, '核验调用未完成对账：' + type(exc).__name__)
+            raise ProviderPaused('核验API异常，保持费用预留，不自动重试', 409) from exc
+        usage = body.get('usage')
+        if not isinstance(usage, dict) or any(type(usage.get(k)) is not int or usage[k] < 0 for k in ('prompt_tokens','completion_tokens')):
+            self.db.unknown(attempt, '核验响应缺少可信usage')
+            raise ProviderPaused('核验响应缺少usage，费用保持预留', 409)
+        actual = quote_tokens(usage['prompt_tokens'], usage['completion_tokens'], self.s.input_rate, self.s.output_rate, safety=Decimal('1'))
+        self.db.settle(attempt, actual, usage, body.get('id'), None)
+        choice = (body.get('choices') or [{}])[0]; message = choice.get('message', {})
+        if message.get('reasoning_content') or (usage.get('completion_tokens_details') or {}).get('reasoning_tokens', 0):
+            raise ProviderPaused('核验接口未遵守非思考配置，已记账并暂停', 409)
+        try:
+            if choice.get('finish_reason') != 'stop': raise ValueError('核验输出截断')
+            text = message['content']
+            if not isinstance(text, str) or len(text) > 50000: raise ValueError('核验响应过长')
+            data = json.loads(text)
+            from copy import deepcopy
+            VerificationService.apply_model(deepcopy(fields), data, evidence, attempt)
+        except Exception as exc:
+            raise InvalidModelOutput('核验响应未通过格式、范围或逐字引用检查，已记账') from exc
+        self.db.execute('UPDATE model_calls SET response=? WHERE id=?', (dumps(data), attempt))
+        self.db.cache_put(cache_id, run['project_id'], data)
+        return ModelResult(data, attempt, False, 'deepseek')
+
+
 def mock_extract(evidence: dict) -> dict:
     """仅识别明确的合成演示标记。不能冒充真实施工语义分析。"""
     text=evidence['raw_text']; eid=evidence['evidence_id']; rows=[]

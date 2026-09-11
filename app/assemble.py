@@ -29,7 +29,7 @@ def base(atom: dict, evidence: dict):
             'evidence_ids':atom['evidence_ids'],'inference_rule_id':None,'condition':condition,
             'entity_ids':[atom['subject']],'csi_sections':list(dict.fromkeys(sections)),
             'location':None,'field_evidence':{},
-            'support_note':'文本抽取候选；待工程师逐项核验，尚未做独立语义证据验证。'}
+            'support_note':'文本抽取候选；待工程师审核，原文支持性见独立核验状态。'}
 
 def material(atom: dict,evidence: dict):
     c=base(atom,evidence)
@@ -53,6 +53,8 @@ def inspection(atom: dict,evidence: dict):
     if qa not in allowed:
         qa='TEST_REPORT' if atom['category']=='REPORT' else 'FIELD_TEST' if atom['category']=='TEST' else 'INITIAL_INSPECTION'
         c['support_note']+=' 检查子类型为初步归类，须核验。'
+    c['field_evidence']['requirement']=atom['evidence_ids']
+    c['field_evidence']['activity']=atom['evidence_ids']
     c.update(qa_type=qa,activity=atom['subject'],requirement=atom['action']+' '+atom['object'],
              timing=None,frequency=None,acceptance_criteria=None,standard_reference=None,
              standard_body_available=False,report_name=atom['object'] if atom['category']=='REPORT' else None,
@@ -121,7 +123,7 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
         rid='REC-'+key(run['id'],kind,candidate['candidate_key'])
         meta={'record_id':rid,'tenant_id':'local','project_id':run['project_id'],'analysis_run_id':run['id'],
               'input_snapshot_id':run['snapshot_id'],'created_at':now(),'app_version':VERSION,'spec_version':VERSION,
-              'schema_version':SCHEMA_VERSION,'parser_version':'text-baseline-1','prompt_version':'0.2.0',
+              'schema_version':SCHEMA_VERSION,'parser_version':'text-anchors-2','prompt_version':'0.2.0',
               'provider':run['provider'],'model_id':'mock-no-network' if run['provider']=='mock' else run.get('model','deepseek-v4-flash'),
               'model_snapshot':None,'routing_version':'0.2.0','retrieval_version':'exact-only-v1',
               'assembly_rule_version':'disabled-v1','revision_policy_version':'0.2.0','request_id':None}

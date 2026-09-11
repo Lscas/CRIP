@@ -64,7 +64,7 @@ function renderRecords(){
   const name=el('td');const btn=el('button',c.name||c.requirement||c.subject,'link');btn.onclick=()=>showRecord(row);name.append(btn);
   const detail=c.design_properties?.map(x=>x.name+': '+x.value).join(' · ')||c.reason||c.blocking_reason||c.activity||'';
   name.append(el('small',detail));
-  const status=el('td');status.append(I.bindStatus(el('span',null,'badge'),c.requirement_status||c.resolution_status||c.reason_code));
+  const status=el('td');status.append(I.bindStatus(el('span',null,'badge'),c.requirement_status||c.resolution_status||c.reason_code));status.append(elT('small','verify.status.'+(row.verification?.status||'NOT_CHECKED'),{},'verification-summary'));
   const review=el('td');review.append(I.bindStatus(el('span',null,'badge '+(r.review.status==='PENDING'?'warn':'')),r.review.status));
   const evidence=el('td');sourceIds(c).forEach(eid=>{const b=el('button',eid.slice(0,14)+'…','link evidence-button');b.onclick=error(()=>showEvidence(eid));evidence.append(b);});
   tr.append(name,status,review,evidence);$('results-body').append(tr);
@@ -73,7 +73,7 @@ function renderRecords(){
 function showRecord(row){
  const r=row.record,c=r.candidate;$('drawer').hidden=false;I.bindText($('drawer-title'),labels[r.kind]);const body=$('drawer-body');body.replaceChildren();
  body.append(el('p',c.name||c.requirement||c.subject));
- body.append(elT('p','record.note',{},'muted'));
+ body.append(elT('p','record.note',{},'muted'));body.append(verificationPanel(row));
  const area=el('textarea');area.value=JSON.stringify(c,null,2);area.setAttribute('data-i18n-aria-label','record.json');I.applyElement(area);body.append(area);
  const note=el('input');note.setAttribute('data-i18n-placeholder','record.reviewNote');note.setAttribute('data-i18n-aria-label','record.reviewNoteLabel');I.applyElement(note);body.append(note);
  const actions=el('div',null,'row');
@@ -83,14 +83,55 @@ function showRecord(row){
  sourceIds(c).forEach(id=>{const b=elT('button','record.source',{id},'link evidence-button');b.onclick=error(()=>showEvidence(id));body.append(b);});
  const history=elT('button','record.history',{},'outline');history.onclick=error(async()=>{const data=await api(`/records/${r.meta.record_id}/history`);body.append(el('pre',JSON.stringify(data,null,2)));});body.append(history);
 }
-async function showEvidence(id){
- const data=await api(`/analysis-runs/${state.run}/evidence/${encodeURIComponent(id)}`);const e=data.evidence;
+async function showEvidence(id,range=null,runId=state.run){
+ const data=await api(`/analysis-runs/${runId}/evidence/${encodeURIComponent(id)}`);const e=data.evidence;
  $('drawer').hidden=false;I.bindText($('drawer-title'),'evidence.title');const body=$('drawer-body');body.replaceChildren();
  body.append(el('h3',data.file_name),I.bindText(el('p',null,'muted'),()=>I.t('evidence.revision',{date:e.internal_revision_date||I.t('evidence.unknownDate')})));
- body.append(el('pre',JSON.stringify(e.locator,null,2)),el('pre',e.raw_text));
+ body.append(el('pre',JSON.stringify(e.locator,null,2)));
+ const original=el('pre');
+ if(range&&Number.isInteger(range.start)&&Number.isInteger(range.end)&&range.start>=0&&range.end<=Array.from(e.raw_text).length){
+  const chars=Array.from(e.raw_text);original.append(document.createTextNode(chars.slice(0,range.start).join('')),el('mark',chars.slice(range.start,range.end).join('')),document.createTextNode(chars.slice(range.end).join('')));
+ }else original.textContent=e.raw_text;body.append(original);
  const a=elT('a','evidence.open',{},'button outline');a.href='/api/documents/'+e.document_id+'/file';a.target='_blank';a.rel='noopener';body.append(a);
  body.append(elT('p','evidence.note',{},'muted'));
 }
+function verificationPanel(row){
+ const root=el('section',null,'verification-panel');root.dataset.verificationPanel='true';
+ const report=row.verification||{status:'NOT_CHECKED',fields:[]};
+ root.append(elT('h3','verify.title'),elT('span','verify.status.'+report.status,{},'badge warn'),elT('p','verify.disclaimer',{},'muted'));
+ const toolbar=el('div',null,'row');
+ const check=elT('button','verify.check',{},'outline');
+ check.onclick=error(async()=>{await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:false});await refreshRun();const fresh=state.records.find(x=>x.record.meta.record_id===row.record.meta.record_id);if(fresh)showRecord(fresh);});
+ const semantic=elT('button','verify.semantic',{},'outline');semantic.disabled=!state.settings?.live_ready;
+ semantic.onclick=error(async()=>{const job=await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:true});root.append(elT('p','verify.queued',{id:job.id}));semantic.disabled=true;});
+ toolbar.append(check,semantic);root.append(toolbar);
+ if(report.processing_basis){const detail=el('details');detail.append(elT('summary','verify.processingBasis'),el('pre',JSON.stringify(report.processing_basis,null,2)));root.append(detail);}
+ const priority=f=>/^\/(name|requirement|subject|activity)$/.test(f.path)?0:(f.path.startsWith('/design_properties/')?1:2);
+ const visibleFields=[...(report.fields||[])].sort((a,b)=>priority(a)-priority(b));
+ for(const field of visibleFields){
+  const card=el('article',null,'verification-field');
+  card.append(el('strong',field.label===field.path?field.path:field.label+' · '+field.path),el('p',field.claim),elT('span','verify.status.'+field.status,{},'badge'),elT('small','verify.method',{method:field.method}));
+  for(const issue of field.issues||[])card.append(el('p',issue,'muted'));
+  for(const q of field.citations||[]){
+   const b=el('button',q.citation_id.slice(0,17)+'… · '+q.file_name,'link evidence-button');
+   b.onclick=error(()=>showCitation(row.record.meta.record_id,q.citation_id));
+   card.append(b,elT('small','verify.role.'+q.role),el('blockquote',q.quote));
+  }
+  if(!field.citations?.length)card.append(elT('p','verify.noQuote',{},'muted'));
+  root.append(card);
+ }
+ return root;
+}
+async function showCitation(recordId,citationId){
+ const result=await api(`/records/${recordId}/citations/${citationId}`);const q=result.citation;
+ await showEvidence(q.evidence_id,{start:q.start,end:q.end},result.run_id);
+ const body=$('drawer-body');body.append(elT('p','verify.location',{id:q.citation_id,hash:q.file_sha256}));
+ if(q.locator.page_number&&q.file_name.toLowerCase().endsWith('.pdf')){
+  const b=elT('button','verify.preview',{},'outline');
+  b.onclick=error(async()=>{b.disabled=true;const image=el('img',null,'citation-preview');image.alt=I.t('verify.previewAlt');image.src=`/api/records/${recordId}/citations/${citationId}/preview`;image.onerror=()=>{image.remove();body.append(elT('p','verify.previewFailed',{},'muted'));b.disabled=false;};body.append(image);});body.append(b);
+ }
+}
+
 async function uploadFiles(files){
  if(!state.project){toast('先创建或选择项目');return;}
  if(state.uploading){toast('已有上传正在进行');return;}

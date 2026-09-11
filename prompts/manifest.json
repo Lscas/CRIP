@@ -1,5 +1,5 @@
 {
-  "bundle_version": "0.2.5",
+  "bundle_version": "0.2.6",
   "prompts": [
     {
       "id": "document-classification",
@@ -64,6 +64,14 @@
       "schema": "spec/schemas/extraction-result.schema.json",
       "role": "vision",
       "status": "draft_text_present_not_live_evaluated"
+    },
+    {
+      "id": "claim-verification",
+      "version": "1.0",
+      "path": "prompts/claim-verification/system.md",
+      "schema": "spec/schemas/claim-check-batch.schema.json",
+      "role": "cheap",
+      "status": "implemented_mocktransport_tested_not_live_evaluated"
     }
   ]
 }

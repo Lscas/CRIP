@@ -1,5 +1,4 @@
-# 当前开发状态：v0.2.5 / ui-language
-已增加中文与English界面切换：页头、弹窗和抽屉可操作，偏好保存在浏览器，动态系统提示随语言切换；原始业务数据、API和导出不变。
-本轮只改前端显示、Cloudflare静态资源白名单、测试与规格，未调用模型、未连接用户电脑、未部署远端。验证报告：docs/UI_LANGUAGE_VALIDATION.md。
-继续使用start-local.cmd/start-local.sh。升级保留.local、.env；无需数据库迁移。业务下一任务仍DEV-002，不把显示改动当作选项映射功能完成。
-定向：python scripts/run_checks.py --area ui；完整回归：--area all。默认不读整个仓库。
+# 当前开发状态：v0.2.6 / evidence-verification
+新增字段引用与独立核验，不改变原文、业务批准状态或预算。见docs/EVIDENCE_VERIFICATION.md与docs/EVIDENCE_VALIDATION.md。
+定向：python scripts/run_checks.py --area evidence；全套：--area all。新表自动幂等创建，不删除.local/.env。GET不发送模型请求。
+真实API未调用，mock只展示原文定位且保留待语义核验。全项目无漏项、原生CAD、OCR、准确率未验证。原DEV-002产品选项映射仍待开发，不以本轮字段核验冒充其实现。

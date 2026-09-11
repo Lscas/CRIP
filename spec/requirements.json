@@ -1,6 +1,6 @@
 {
   "product": "Construction Intelligence Review Platform",
-  "spec_version": "0.2.5",
+  "spec_version": "0.2.6",
   "updated_at": "2026-09-10",
   "requirements": [
     {
@@ -1228,6 +1228,63 @@
       ],
       "decision_source": "用户授权：app have the option to switch from chinese display to english but dont change any function of the app.",
       "spec_section": "docs/UI_LANGUAGE.md"
+    },
+    {
+      "id": "FR-CITATION-001",
+      "title": "逐字段原文定位",
+      "statement": "材料属性、检查要求、设计差异字段绑定原文字符范围和稳定证据；引用正文由程序切片取得。",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "文本引用精确匹配且唯一；空、伪造或重复难以定位的引文不通过。",
+        "PDF新解析保留词级字符范围与坐标；点击可显示受限尺寸的原图区域。",
+        "普通文字匹配不代表语义支持；非原句依据单独显示。"
+      ],
+      "decision_source": "用户确认更新上轮证据核验方案；采用成本优先默认A。",
+      "spec_section": "docs/EVIDENCE_VERIFICATION.md"
+    },
+    {
+      "id": "FR-VERIFY-001",
+      "title": "独立低成本语义核验",
+      "statement": "新增独立核验状态，与项目要求状态和人工批准状态分离。",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "程序校验引用范围、文本片段及数值风险；小模型按每批最多4个字段复核含义。",
+        "语义核验显式使用现有便宜模型、非思考模式，计入原项目300CNY预算。",
+        "无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。",
+        "不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。"
+      ],
+      "decision_source": "用户确认更新上轮证据核验方案；采用成本优先默认A。",
+      "spec_section": "docs/EVIDENCE_VERIFICATION.md"
+    },
+    {
+      "id": "FR-VERIFY-002",
+      "title": "人工修改后失效与重验",
+      "statement": "核验绑定候选内容、上下文、证据快照；人工修改不继承不再适用的核验结果。",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "修改字段后重建免费引用检查，语义结果失效；未变字段在语义上下文与证据也未变时复用。",
+        "付费重验需显式入队，进程中断、过期任务和内容变化不会静默重复收费。",
+        "旧记录可查看，旧预算及审核历史不删除；新增表为幂等可加迁移。"
+      ],
+      "decision_source": "用户确认更新上轮证据核验方案；采用成本优先默认A。",
+      "spec_section": "docs/EVIDENCE_VERIFICATION.md"
+    },
+    {
+      "id": "FR-EXPORT-002",
+      "title": "核验与原句随导出保留",
+      "statement": "JSON和Excel增加逐字段核验、原句、源文件指纹、Revision和位置。",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "导出读取已保存结果，不调用模型。",
+        "Excel字段核验表链接到原句引用表及证据表，原文不作为公式执行。",
+        "切换显示语言不改变原文或导出内容；不默认打包全部原件。"
+      ],
+      "decision_source": "用户确认更新上轮证据核验方案；采用成本优先默认A。",
+      "spec_section": "docs/EVIDENCE_VERIFICATION.md"
     }
   ],
   "artifact_kind": "prototype_source",

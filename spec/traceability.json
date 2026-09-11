@@ -1,5 +1,5 @@
 {
-  "spec_version": "0.2.5",
+  "spec_version": "0.2.6",
   "note": "contract_tests不证明产品实现；planned paths仅计划，不检查存在性，不得当作测试通过。",
   "entries": [
     {
@@ -1363,6 +1363,94 @@
         "scripts/build_cloudflare.py"
       ],
       "verification_report": "docs/UI_LANGUAGE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-CITATION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/verification.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "test_scope": "offline_program_contracts_and_mock_provider_not_engineering_accuracy",
+      "implemented_product_paths": [
+        "app/verification.py",
+        "app/gateway.py",
+        "app/main.py",
+        "app/exporter.py",
+        "web/app.js"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-VERIFY-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/verification.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "test_scope": "offline_program_contracts_and_mock_provider_not_engineering_accuracy",
+      "implemented_product_paths": [
+        "app/verification.py",
+        "app/gateway.py",
+        "app/main.py",
+        "app/exporter.py",
+        "web/app.js"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-VERIFY-002",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/verification.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "test_scope": "offline_program_contracts_and_mock_provider_not_engineering_accuracy",
+      "implemented_product_paths": [
+        "app/verification.py",
+        "app/gateway.py",
+        "app/main.py",
+        "app/exporter.py",
+        "web/app.js"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-EXPORT-002",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/verification.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_verification.py"
+      ],
+      "test_scope": "offline_program_contracts_and_mock_provider_not_engineering_accuracy",
+      "implemented_product_paths": [
+        "app/verification.py",
+        "app/gateway.py",
+        "app/main.py",
+        "app/exporter.py",
+        "web/app.js"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

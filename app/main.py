@@ -25,6 +25,10 @@ from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_sc
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
 class ProjectInput(Input):name:str=Field(min_length=1,max_length=150)
 class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Field(ge=0)
+class VerificationInput(Input):
+    expected_version:int=Field(ge=0)
+    semantic:bool=False
+
 class ReviewInput(Input):
     action:Literal['ACCEPTED','EDITED','REJECTED']
     expected_version:int=Field(ge=0)
@@ -149,13 +153,74 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def records_get(rid:str,kind:Literal['MATERIAL','INSPECTION','CONFLICT','MISSING']|None=None):
         runner.get(rid)
         rows=db.all('SELECT * FROM records WHERE run_id=?'+(' AND kind=?' if kind else '')+' ORDER BY kind,id',(rid,kind) if kind else (rid,))
-        return [{'record':json.loads(r['envelope']),'review_version':r['review_version']} for r in rows]
+        return [{'record':json.loads(r['envelope']),'review_version':r['review_version'],'verification':runner.verifier.get(r['id'])} for r in rows]
     @app.get('/api/analysis-runs/{rid}/evidence/{eid}')
     def evidence_get(rid:str,eid:str):
         runner.get(rid)
         row=db.one('SELECT payload,status,error FROM evidence WHERE id=? AND run_id=?',(rid+':'+eid,rid))
         e=json.loads(row['payload']);doc=db.one('SELECT name FROM documents WHERE id=?',(e['document_id'],))
         return {'evidence':e,'file_name':doc['name'],'status':row['status'],'error':row['error']}
+    @app.get('/api/records/{record_id}/verification')
+    def verification_get(record_id:str):
+        return runner.verifier.get(record_id)
+
+    @app.post('/api/records/{record_id}/verification')
+    def verification_refresh(record_id:str,data:VerificationInput):
+        row=db.one('SELECT * FROM records WHERE id=?',(record_id,))
+        if row['review_version']!=data.expected_version:raise DomainError('记录已变化，请刷新后核验',409)
+        run=runner.get(row['run_id'])
+        if run['status'] in ('RUNNING','QUEUED'):raise DomainError('分析正在运行，核验会自动进行',409)
+        if data.semantic:
+            return JSONResponse(runner.verifier.enqueue(record_id,data.expected_version),status_code=202)
+        return runner.verifier.refresh(record_id)
+
+    @app.get('/api/records/{record_id}/verification-history')
+    def verification_history(record_id:str):
+        db.one('SELECT id FROM records WHERE id=?',(record_id,))
+        return [{'id':r['id'],'created_at':r['created_at'],'report':json.loads(r['payload'])}
+                for r in db.all('SELECT * FROM verification_events WHERE record_id=? ORDER BY created_at',(record_id,))]
+
+    @app.get('/api/verification-jobs/{job_id}')
+    def verification_job_get(job_id:str):
+        return db.one('SELECT * FROM verification_jobs WHERE id=?',(job_id,))
+
+    def verified_citation(record_id,citation_id):
+        report=runner.verifier.get(record_id)
+        if report['status'] in ('STALE','NOT_CHECKED'):raise DomainError('引用已失效或尚未核验，请重新检查',409)
+        item=next((q for f in report['fields'] for q in f['citations'] if q['citation_id']==citation_id),None)
+        if item is None:raise DomainError('引用不存在',404)
+        return report,item
+
+    @app.get('/api/records/{record_id}/citations/{citation_id}')
+    def citation_get(record_id:str,citation_id:str):
+        report,item=verified_citation(record_id,citation_id)
+        return {'citation':item,'run_id':report['source_run_id']}
+
+    @app.get('/api/records/{record_id}/citations/{citation_id}/preview')
+    def citation_preview(record_id:str,citation_id:str):
+        import hashlib,io
+        report,q=verified_citation(record_id,citation_id)
+        doc=db.one('SELECT * FROM documents WHERE id=?',(q['document_id'],))
+        if Path(doc['name']).suffix.lower()!='.pdf' or not q['locator'].get('page_number'):
+            raise DomainError('该来源没有PDF图面预览，使用原句定位',422)
+        if doc['size']>50*1024*1024:raise DomainError('图面预览暂限50MiB；原文定位及原件下载仍可用',422)
+        path=uploads.object_path(doc)
+        h=hashlib.sha256()
+        with path.open('rb') as source:
+            for chunk in iter(lambda:source.read(1024*1024),b''):h.update(chunk)
+        if h.hexdigest()!=q['file_sha256']:raise DomainError('原始文件指纹发生变化，不能显示为原引用',409)
+        try:
+            import pdfplumber
+            with pdfplumber.open(path) as pdf:
+                page=pdf.pages[q['locator']['page_number']-1]
+                image=page.to_image(resolution=max(12,min(120,1600*72/max(page.width,page.height))))
+                boxes=q['word_boxes'] or ([q['locator']['bbox']] if q['locator'].get('bbox') else [])
+                for box in boxes:image.draw_rect(box,fill=(255,210,0,65),stroke=(230,155,0,180),stroke_width=1)
+                out=io.BytesIO();image.save(out,format='PNG')
+        except Exception as exc:
+            raise DomainError('PDF图面预览不可用：'+type(exc).__name__,422) from exc
+        return Response(out.getvalue(),media_type='image/png')
+
     @app.get('/api/records/{record_id}/history')
     def review_history(record_id:str):
         db.one('SELECT id FROM records WHERE id=?',(record_id,))
@@ -189,12 +254,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
             c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
                       (event,record_id,'local-engineer',data.action,dumps(before),dumps(after),data.note,now()))
             c.execute('UPDATE records SET envelope=?,review_version=review_version+1 WHERE id=?',(dumps(after),record_id))
-        return {'record':after,'review_version':data.expected_version+1}
+        if data.action=='EDITED':runner.verifier.refresh(record_id)
+        return {'record':after,'review_version':data.expected_version+1,'verification':runner.verifier.get(record_id)}
     @app.get('/api/analysis-runs/{rid}/exports/{fmt}')
     def export(rid:str,fmt:Literal['json','xlsx'],reviewed_only:bool=False):
         run=runner.get(rid)
         if run['status'] in ('RUNNING','QUEUED'):raise DomainError('请先暂停或等待分析结束，再导出一致快照',409)
-        data=collect(db,run,reviewed_only)
+        data=collect(db,run,reviewed_only,verifier=runner.verifier)
         raw=as_json(data) if fmt=='json' else as_xlsx(data)
         media='application/json' if fmt=='json' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         return Response(raw,media_type=media,headers={'Content-Disposition':f'attachment; filename="cirp-{rid}.{fmt}"'})

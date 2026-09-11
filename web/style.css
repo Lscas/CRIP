@@ -10,3 +10,6 @@ html[lang="en"] .review-stamp{letter-spacing:1px}
 
 .local-language{margin:0 0 16px;justify-content:flex-start}.local-language select{width:auto;margin:0}.drawer .local-language{max-width:calc(100% - 90px)}
 @media(max-width:760px){.table-wrap table{min-width:640px}.table-wrap{overscroll-behavior-x:contain}.badge{overflow-wrap:normal;word-break:normal}}
+
+/* Evidence review panel: source text never enters HTML interpolation. */
+.verification-panel{margin:1rem 0;padding:1rem;border:1px solid #ccd4db;border-radius:10px}.verification-field{padding:.85rem 0;border-top:1px solid #e0e5ea}.verification-field strong,.verification-field small{display:block;overflow-wrap:anywhere}.verification-field blockquote{white-space:pre-wrap;overflow-wrap:anywhere;margin:.5rem 0;padding:.6rem .8rem;border-left:3px solid #70889d;background:#f3f6f8;font-size:.86rem}.verification-panel .row{flex-wrap:wrap}.citation-preview{max-width:100%;height:auto;border:1px solid #ccd4db}.verification-summary{display:block;margin-top:.35rem}mark{background:#ffe585;color:#14283c}

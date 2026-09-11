@@ -1,0 +1,214 @@
+TAP version 13
+# Subtest: missing configuration is closed
+ok 1 - missing configuration is closed
+  ---
+  duration_ms: 113.719837
+  type: 'test'
+  ...
+# Subtest: all paths require password
+ok 2 - all paths require password
+  ---
+  duration_ms: 7.755744
+  type: 'test'
+  ...
+# Subtest: bad base64 is rejected
+ok 3 - bad base64 is rejected
+  ---
+  duration_ms: 1.205883
+  type: 'test'
+  ...
+# Subtest: assets protected and no cache
+ok 4 - assets protected and no cache
+  ---
+  duration_ms: 1.742326
+  type: 'test'
+  ...
+# Subtest: unknown paths not exposed
+ok 5 - unknown paths not exposed
+  ---
+  duration_ms: 0.900691
+  type: 'test'
+  ...
+# Subtest: same origin write protection
+ok 6 - same origin write protection
+  ---
+  duration_ms: 3.108332
+  type: 'test'
+  ...
+# Subtest: proxy strips browser credentials and uses fixed origin
+ok 7 - proxy strips browser credentials and uses fixed origin
+  ---
+  duration_ms: 1.428817
+  type: 'test'
+  ...
+# Subtest: no redirect forwarding
+ok 8 - no redirect forwarding
+  ---
+  duration_ms: 0.900301
+  type: 'test'
+  ...
+# Subtest: offline origin is explicit
+ok 9 - offline origin is explicit
+  ---
+  duration_ms: 2.77506
+  type: 'test'
+  ...
+# Subtest: oversize rejected
+ok 10 - oversize rejected
+  ---
+  duration_ms: 45.171244
+  type: 'test'
+  ...
+# Subtest: unsafe origin configuration rejected
+ok 11 - unsafe origin configuration rejected
+  ---
+  duration_ms: 3.636673
+  type: 'test'
+  ...
+# Subtest: default language is Chinese, regardless of browser language
+ok 12 - default language is Chinese, regardless of browser language
+  ---
+  duration_ms: 4.946436
+  type: 'test'
+  ...
+# Subtest: stored English is restored at initialization
+ok 13 - stored English is restored at initialization
+  ---
+  duration_ms: 1.407759
+  type: 'test'
+  ...
+# Subtest: unsupported persisted value falls back to Chinese
+ok 14 - unsupported persisted value falls back to Chinese
+  ---
+  duration_ms: 2.585776
+  type: 'test'
+  ...
+# Subtest: missing storage never prevents switching
+ok 15 - missing storage never prevents switching
+  ---
+  duration_ms: 1.999855
+  type: 'test'
+  ...
+# Subtest: switch only writes a namespaced display preference
+ok 16 - switch only writes a namespaced display preference
+  ---
+  duration_ms: 4.808439
+  type: 'test'
+  ...
+# Subtest: unsupported selection does not write or change display
+ok 17 - unsupported selection does not write or change display
+  ---
+  duration_ms: 1.331023
+  type: 'test'
+  ...
+# Subtest: header, editor and dialog selectors stay synchronized
+ok 18 - header, editor and dialog selectors stay synchronized
+  ---
+  duration_ms: 45.740389
+  type: 'test'
+  ...
+# Subtest: placeholder and aria-label change, input value stays intact
+ok 19 - placeholder and aria-label change, input value stays intact
+  ---
+  duration_ms: 1.241196
+  type: 'test'
+  ...
+# Subtest: parameters retain exact numeric values, currency and scale
+ok 20 - parameters retain exact numeric values, currency and scale
+  ---
+  duration_ms: 5.564707
+  type: 'test'
+  ...
+# Subtest: parameter replacement treats HTML as literal text
+ok 21 - parameter replacement treats HTML as literal text
+  ---
+  duration_ms: 2.170058
+  type: 'test'
+  ...
+# Subtest: raw document text is never auto-translated
+ok 22 - raw document text is never auto-translated
+  ---
+  duration_ms: 1.72183
+  type: 'test'
+  ...
+# Subtest: enum labels change without changing canonical codes
+ok 23 - enum labels change without changing canonical codes
+  ---
+  duration_ms: 2.515859
+  type: 'test'
+  ...
+# Subtest: unknown statuses and inherited property names remain literal
+ok 24 - unknown statuses and inherited property names remain literal
+  ---
+  duration_ms: 1.115767
+  type: 'test'
+  ...
+# Subtest: binding replacement retains the latest value across switches
+ok 25 - binding replacement retains the latest value across switches
+  ---
+  duration_ms: 1.332983
+  type: 'test'
+  ...
+# Subtest: detached bindings are safely discarded
+ok 26 - detached bindings are safely discarded
+  ---
+  duration_ms: 1.207148
+  type: 'test'
+  ...
+# Subtest: known system notices translate and restore
+ok 27 - known system notices translate and restore
+  ---
+  duration_ms: 1.224805
+  type: 'test'
+  ...
+# Subtest: unknown errors and quoted original data remain unchanged
+ok 28 - unknown errors and quoted original data remain unchanged
+  ---
+  duration_ms: 1.359838
+  type: 'test'
+  ...
+# Subtest: known backend validation lists are translated
+ok 29 - known backend validation lists are translated
+  ---
+  duration_ms: 1.632607
+  type: 'test'
+  ...
+# Subtest: dynamic capacity and class-name diagnostics preserve values
+ok 30 - dynamic capacity and class-name diagnostics preserve values
+  ---
+  duration_ms: 1.168734
+  type: 'test'
+  ...
+# Subtest: all static HTML translation keys exist in both languages
+ok 31 - all static HTML translation keys exist in both languages
+  ---
+  duration_ms: 0.816856
+  type: 'test'
+  ...
+# Subtest: catalog keys and placeholders match across languages
+ok 32 - catalog keys and placeholders match across languages
+  ---
+  duration_ms: 1.286308
+  type: 'test'
+  ...
+# Subtest: localization script has no network, HTML injection, reload or translation API
+ok 33 - localization script has no network, HTML injection, reload or translation API
+  ---
+  duration_ms: 0.434501
+  type: 'test'
+  ...
+# Subtest: removed polling rows are not strongly retained by the localization registry
+ok 34 - removed polling rows are not strongly retained by the localization registry
+  ---
+  duration_ms: 0.235108
+  type: 'test'
+  ...
+1..34
+# tests 34
+# suites 0
+# pass 34
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 305.910016

@@ -14,6 +14,7 @@ from app.uploads import Uploads
 from app.gateway import Gateway,ProviderPaused,InvalidModelOutput
 from app.assemble import envelopes,missing,key
 from contracts.runtime_rules import validate_schema
+from app.verification import VerificationService
 
 ACTIVE=('QUEUED','RUNNING')
 
@@ -21,6 +22,7 @@ class Runner:
     def __init__(self,db:Database,settings:Settings,uploads:Uploads,gateway:Gateway):
         self.db=db;self.s=settings;self.uploads=uploads;self.gateway=gateway
         self.stop_event=threading.Event();self.thread=None
+        self.verifier=VerificationService(db,settings,gateway)
         self.parse_dir=settings.data_dir/'parsed';self.parse_dir.mkdir(exist_ok=True)
 
     def create(self,project_id):
@@ -29,6 +31,7 @@ class Runner:
         if self.s.provider=='deepseek' and self.s.live_errors():raise DomainError('；'.join(self.s.live_errors()),409)
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前仅允许一个活跃项目分析',409)
+            if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，结束后再分析',409)
             docs=[dict(d) for d in c.execute('SELECT id,sha256 FROM documents WHERE project_id=? ORDER BY id',(project_id,))]
             if not docs:raise DomainError('没有已完成上传的文件',409)
             rid=uid('RUN'); snapshot='SN-'+hashlib.sha256(dumps(docs).encode()).hexdigest()[:32]
@@ -52,6 +55,7 @@ class Runner:
                 if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED'):raise DomainError('当前任务不可恢复；已结束任务需新建分析',409)
                 if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行；项目预算不重置',409)
                 if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('已有活跃任务',409)
+                if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，请结束后再恢复分析',409)
                 if c.execute('SELECT id FROM model_calls WHERE run_id=? AND actual_units IS NULL',(rid,)).fetchone():raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
                 c.execute('UPDATE runs SET status=?,stop_requested=0,message=? WHERE id=?',('QUEUED','恢复未完成任务',rid))
             elif action in ('pause','cancel'):
@@ -63,6 +67,7 @@ class Runner:
 
     def start(self):
         self.db.execute("UPDATE runs SET status='INTERRUPTED',message='服务曾中断；已完成片段保留，付费请求需对账' WHERE status='RUNNING'")
+        self.db.execute("UPDATE verification_jobs SET state='INTERRUPTED',message='服务中断；不自动重复付费' WHERE state='RUNNING'")
         self.thread=threading.Thread(target=self.loop,name='cirp-worker',daemon=True);self.thread.start()
 
     def close(self):
@@ -74,6 +79,9 @@ class Runner:
         while not self.stop_event.wait(.25):
             row=self.db.one("SELECT id FROM runs WHERE status='QUEUED' ORDER BY created_at LIMIT 1",required=False)
             if row:self.process(row['id'])
+            else:
+                job=self.db.one("SELECT id FROM verification_jobs WHERE state='QUEUED' ORDER BY created_at LIMIT 1",required=False)
+                if job:self.verifier.process_job(job['id'])
 
     def checkpoint(self,rid):
         r=self.get(rid)
@@ -110,6 +118,10 @@ class Runner:
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('生成可审核记录与设计差异',rid))
             self.publish(run)
+            self.db.execute('UPDATE runs SET stage=? WHERE id=?',('逐字段核验原文支持性',rid))
+            for item in self.db.all('SELECT id FROM records WHERE run_id=?',(rid,)):
+                if not self.checkpoint(rid):return
+                self.verifier.refresh(item['id'],allow_model=run['provider']=='deepseek')
             self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
                 ('PARTIAL','本轮基线任务已结束',
                  '仅完成当前文字处理能力；视觉/CAD/几何数量、复杂选项与跨专业关联尚未完成。'
@@ -148,7 +160,8 @@ class Runner:
                     'document_id':did,'component_id':f'{did}:page:{f["locator"].get("page_number") or 1}',
                     'file_sha256':doc['sha256'],'internal_revision_date':f['internal_revision_date'],
                     'revision_label':f['revision_label'],'locator':f['locator'],'raw_text':f['text'],
-                    'image_crop_uri':None,'extraction_method':f['method'],'confidence':None}
+                    'image_crop_uri':None,'extraction_method':f['method'],'confidence':None,
+                    'text_map':f.get('text_map',[]),'parser_version':result.get('parser_version','text-baseline-1')}
                 validate_schema('evidence',ev)
                 # 同快照重跑保持EV逻辑标识；数据库主键按运行隔离。
                 storage_id=run['id']+':'+eid
@@ -170,6 +183,7 @@ class Runner:
             logical=record['candidate']['candidate_key']
             self.db.execute('INSERT OR IGNORE INTO records(id,run_id,project_id,kind,envelope,logical_key) VALUES(?,?,?,?,?,?)',
                             (record['meta']['record_id'],run['id'],run['project_id'],record['kind'],dumps(record),logical))
+            self.verifier.refresh(record['meta']['record_id'])
 
     def update_coverage(self,rid):
         run=self.get(rid)

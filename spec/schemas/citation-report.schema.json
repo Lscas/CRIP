@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/citation-report.schema.json",
+  "title": "服务端核验记录，不由模型生成",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": "1.0"
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checked_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "SUPPORTED",
+        "PARTIAL",
+        "PENDING",
+        "NON_DOCUMENT",
+        "CONTRADICTED",
+        "UNSUPPORTED"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "claim": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "basis": {
+            "enum": [
+              "DIRECT",
+              "INFERRED",
+              "CALCULATED",
+              "SEARCH_RECORD",
+              "CLASSIFICATION",
+              "REVISION_POLICY"
+            ]
+          },
+          "context": {
+            "type": "object"
+          },
+          "check_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "SUPPORTED",
+              "UNSUPPORTED",
+              "CONTRADICTED",
+              "NEEDS_CONTEXT",
+              "NEEDS_SEMANTIC",
+              "NON_DOCUMENT"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "citation_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidence_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "file_name": {
+                  "type": "string"
+                },
+                "file_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "fragment_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "revision_label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "internal_revision_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "locator": {
+                  "type": "object"
+                },
+                "word_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "role": {
+                  "enum": [
+                    "SUPPORT",
+                    "CONTRADICT",
+                    "CONTEXT"
+                  ]
+                },
+                "granularity": {
+                  "enum": [
+                    "SENTENCE_OR_LINE",
+                    "FRAGMENT_CONTEXT"
+                  ]
+                },
+                "text_basis": {
+                  "const": "PARSER_TEXT"
+                }
+              },
+              "required": [
+                "citation_id",
+                "evidence_id",
+                "document_id",
+                "file_name",
+                "file_sha256",
+                "fragment_sha256",
+                "revision_label",
+                "internal_revision_date",
+                "start",
+                "end",
+                "quote",
+                "locator",
+                "word_boxes",
+                "role",
+                "granularity",
+                "text_basis"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "claim",
+          "label",
+          "evidence_ids",
+          "basis",
+          "context",
+          "check_key",
+          "status",
+          "method",
+          "citations",
+          "issues",
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "coverage_note": {
+      "type": "string"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "processing_basis": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "verifier_identity": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "type": "string"
+        },
+        "endpoint_sha256": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model_id",
+        "prompt_sha256",
+        "endpoint_sha256",
+        "policy_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "policy_version",
+    "record_id",
+    "candidate_hash",
+    "evidence_fingerprint",
+    "checked_at",
+    "status",
+    "counts",
+    "fields",
+    "coverage_note",
+    "limitations",
+    "source_run_id",
+    "processing_basis",
+    "verifier_identity"
+  ],
+  "additionalProperties": false
+}

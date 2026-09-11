@@ -41,6 +41,7 @@ class Database:
         with self.connect() as c:
             c.execute('PRAGMA journal_mode=WAL')
             c.executescript((ROOT / 'migrations/001_initial.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/002_verification.sql').read_text(encoding="utf-8"))
 
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:
@@ -93,14 +94,25 @@ class Database:
                 'local_compute_cost': '用户电脑成本未计量，不是零成本保证'}
 
     def reserve(self, project_id: str, run_id: str, task_key: str, amount: Decimal,
-                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal) -> str:
+                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal, verification_job_id: str | None = None) -> str:
         n = units(amount)
         if n <= 0: raise DomainError('预留金额必须为正')
         aid = uid('CALL')
         with self.connect(True) as c:
             run = c.execute('SELECT * FROM runs WHERE id=? AND project_id=?', (run_id,project_id)).fetchone()
-            if not run or run['status'] != 'RUNNING' or run['stop_requested'] or time.time() >= run['deadline_epoch']:
+            if verification_job_id:
+                job = c.execute('SELECT * FROM verification_jobs WHERE id=? AND run_id=?', (verification_job_id, run_id)).fetchone()
+                record = c.execute('SELECT envelope,review_version FROM records WHERE id=?', (job['record_id'],)).fetchone() if job else None
+                import hashlib
+                candidate_hash = hashlib.sha256(dumps(json.loads(record['envelope'])['candidate']).encode()).hexdigest() if record else None
+                if not run or not job or job['state'] != 'RUNNING' or job['candidate_hash'] != candidate_hash or job['review_version'] != record['review_version'] or time.time() >= run['deadline_epoch']:
+                    raise BudgetError('核验任务已失效或到达时限，禁止新增收费请求', 409)
+                if c.execute("SELECT id FROM runs WHERE status IN ('RUNNING','QUEUED')").fetchone():
+                    raise BudgetError('已有活跃分析，禁止并发核验收费', 409)
+            elif not run or run['status'] != 'RUNNING' or run['stop_requested'] or time.time() >= run['deadline_epoch']:
                 raise BudgetError('任务已停止或到达时限，禁止新增收费请求', 409)
+            if verification_job_id and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone():
+                raise BudgetError('项目存在未对账请求，禁止新增付费调用', 409)
             a = c.execute('SELECT * FROM budget_accounts WHERE project_id=?', (project_id,)).fetchone()
             outstanding = c.execute('SELECT COALESCE(SUM(reserved_units),0) FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone()[0]
             if a['frozen'] or a['spent_units']+outstanding+n>a['limit_units']:

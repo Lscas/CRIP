@@ -1,0 +1,39 @@
+{
+  "change_id": "CR-0008",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-CITATION-001",
+    "FR-VERIFY-001",
+    "FR-VERIFY-002",
+    "FR-EXPORT-002"
+  ],
+  "summary": "增加字段级原句追踪、独立低成本证据核验与导出证据。",
+  "decision_refs": [
+    "docs/DECISIONS.md#d-22-原文引用与核验"
+  ],
+  "affected_paths": [
+    "app/*",
+    "web/*",
+    "migrations/002_verification.sql",
+    "scripts/run_checks.py",
+    "scripts/browser_i18n_smoke.py",
+    "spec/*",
+    "spec/schemas/*",
+    "prompts/*",
+    "prompts/claim-verification/*",
+    "AGENTS.md"
+  ],
+  "tests": [
+    "tests/app/test_verification.py",
+    "scripts/browser_i18n_smoke.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户在上轮方案后回复：更新。采用已说明的成本优先默认A，不打包原件、不调整预算。",
+  "known_limitations": [
+    "只核验关联证据，不证明全项目完整或现场正确",
+    "真实API未调用；模拟模式无语义通过",
+    "Windows与真实项目质量未验证",
+    "OCR/DWG/几何Takeoff仍未实现"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/claim-check-batch.schema.json",
+  "title": "模型字段核验返回契约",
+  "type": "object",
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "SUPPORTED",
+              "UNSUPPORTED",
+              "NEEDS_CONTEXT",
+              "CONTRADICTED"
+            ]
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidence_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "enum": [
+                    "SUPPORT",
+                    "CONTRADICT",
+                    "CONTEXT"
+                  ]
+                }
+              },
+              "required": [
+                "evidence_id",
+                "quote",
+                "role"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 8
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "citations",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 4
+    }
+  },
+  "required": [
+    "checks"
+  ],
+  "additionalProperties": false
+}

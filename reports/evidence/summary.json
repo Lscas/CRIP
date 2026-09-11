@@ -1,0 +1,23 @@
+{
+  "version": "0.2.6",
+  "base": "v0.2.5-ui-language",
+  "tests": 307,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "seconds": 54.323,
+  "node_tests": 34,
+  "browser_checks": 16,
+  "live_provider_calls": 0,
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+  "python": "3.13.5",
+  "mode": "synthetic offline fixtures and no-network Chromium DOM bridge",
+  "not_validated": [
+    "Windows installation",
+    "live provider semantic quality and billing",
+    "full-project recall",
+    "10GB load",
+    "24-hour full-project completion",
+    "OCR/CAD understanding"
+  ]
+}

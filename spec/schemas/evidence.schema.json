@@ -161,6 +161,40 @@
       ],
       "minimum": 0,
       "maximum": 1
+    },
+    "text_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "bbox"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "parser_version": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "required": [

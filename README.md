@@ -1,3 +1,20 @@
+# CIRP v0.2.6：原文引用与独立核验
+
+新增逐字段原句、低成本语义核验、编辑失效复验及Excel/JSON证据导出。默认mock只定位原句，不伪造核验通过。真实API模式沿用原有用户配置、便宜模型和300CNY预算。
+
+启动：解压完整项目后双击`start-local.cmd`。保留旧`.local/`和`.env`；先停止并备份旧服务数据再更新代码，新增表会幂等创建，不重置任何预算。
+
+打开结果可查看“原文引用与独立核验”；旧记录点击“不调用模型”的引用检查后可生成报告。只有显式配置真实API或点击付费重验才发送模型请求。
+
+- [功能与边界](docs/EVIDENCE_VERIFICATION.md)
+- [本轮验证记录](docs/EVIDENCE_VALIDATION.md)
+- 定向：`python scripts/run_checks.py --area evidence`
+- 全套：`python scripts/run_checks.py --area all`
+
+完整图纸/OCR/DWG/Takeoff和全项目无漏项仍未完成；本轮未接入实际模型或进行施工准确率评测。
+
+## 以下为历史版本说明，当前交付以上文为准
+
 # CIRP v0.2.5：中文 / English 界面
 页头“界面语言 / Display language”选择中文或English，即时切换。新建项目和审核抽屉也有选择器；当前浏览器保存偏好。
 **只改显示，不改分析、上传、审核、预算、导出或项目数据。** 原始文件、材料名称、型号、证据、编辑JSON和导出保持原文，不用LLM翻译。
