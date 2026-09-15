@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 248,
+  "file_count_excluding_manifest": 249,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -32,8 +32,8 @@
     },
     {
       "path": ".github/workflows/spec-governance.yml",
-      "bytes": 956,
-      "sha256": "ec9c04e162575ae3f75f8832e79c7c99ee547996a8da7f9b56bfaf29d13ad19e"
+      "bytes": 744,
+      "sha256": "31e285ccbb3287abf7fdc130e3d4c979f647ef87afe5d9c7a9bf3c2581bcd78a"
     },
     {
       "path": ".gitignore",
@@ -52,8 +52,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5338,
-      "sha256": "d442e4be41da561d250873914e396d9d630b9d0c0bea0c9a81254fb69e6fe738"
+      "bytes": 5403,
+      "sha256": "056fb505895a449324e9e419b48968d8b787572fd4e0e194671cfb9f9f33528d"
     },
     {
       "path": "VERSION",
@@ -251,6 +251,11 @@
       "sha256": "03e0ae89e4418e6515b91384e210d29df82c9a9d04513a857a56ba345a76044d"
     },
     {
+      "path": "changes/CR-0017.json",
+      "bytes": 1280,
+      "sha256": "c4a512ec52f757dce03e971b2a92c2299602e6d853292210bbc3da20fef64a9a"
+    },
+    {
       "path": "config/assembly_rules.json",
       "bytes": 1239,
       "sha256": "60011fb0cd460307099ddba8327ebf2858908e061d9d41668f8a8bf6b52ba8a6"
@@ -332,8 +337,8 @@
     },
     {
       "path": "docs/DEV_STATE.md",
-      "bytes": 7807,
-      "sha256": "8b7428cabb4996c404624686d19eec7cf654a1c589eee1dd747769844ca26e7d"
+      "bytes": 8254,
+      "sha256": "75f69ad29b5215d0d6fb51a858488e53bd453356868845b6bc38164782e7d1b1"
     },
     {
       "path": "docs/EVIDENCE_VALIDATION.md",
@@ -937,8 +942,8 @@
     },
     {
       "path": "scripts/run_checks.py",
-      "bytes": 2250,
-      "sha256": "2aca3a5b2c3bf621706bf9e17ca42cc365ef1206238d179d0ef6d777a23c8831"
+      "bytes": 2669,
+      "sha256": "77feaf50cecca76c9e1965a038bc3bd8fae5bbab78838db7ba9787ce701f67b5"
     },
     {
       "path": "scripts/validate_readable_export.py",
@@ -1027,8 +1032,8 @@
     },
     {
       "path": "spec/traceability.json",
-      "bytes": 48381,
-      "sha256": "e060f5feb1dcd830d54fbbce2003a73b3c3358aeba200e1ffe21eef6da74de3d"
+      "bytes": 48426,
+      "sha256": "244d20fda07c72181cffc97dd47c87393823e6c3a69d3887806db03c025c6dd3"
     },
     {
       "path": "start-deepseek-live.ps1",
@@ -1197,8 +1202,8 @@
     },
     {
       "path": "tests/test_devtools.py",
-      "bytes": 1445,
-      "sha256": "c1f62b1ba67907280bf24509471f5073584b3ff10cef074feac34e88c49626e0"
+      "bytes": 2006,
+      "sha256": "6a2db5c744c105da08212f0b7f3efbb7da32c7870f9c2b825fc264a20344978e"
     },
     {
       "path": "tests/test_governance.py",

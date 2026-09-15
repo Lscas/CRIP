@@ -1367,7 +1367,8 @@
       "test_scope": "local_prototype_offline",
       "implemented_product_paths": [
         "scripts/check_spec_sync.py",
-        "scripts/run_checks.py"
+        "scripts/run_checks.py",
+        ".github/workflows/spec-governance.yml"
       ],
       "verification_report": "docs/VALIDATION_REPORT.md"
     },

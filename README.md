@@ -56,12 +56,9 @@ Install the pinned application and development dependencies in an isolated envir
 
 ```bash
 python scripts/run_checks.py --area all
-python scripts/build_bundle_manifest.py --check
-node --check web/i18n.js
-node --check web/app.js
-node --test tests/web/i18n.test.mjs
-node --test tests/deploy/worker.test.mjs
 ```
+
+This single entry point runs the Python suite, specification and bundle-manifest checks, and the web and deployment JavaScript checks. It exits with an error instead of silently skipping JavaScript validation when Node.js is unavailable.
 
 The publication recovery was validated from a clean local environment with:
 
