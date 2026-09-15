@@ -34,3 +34,9 @@ python scripts/local_deploy.py --use-current-env --check
 最后一个`--use-current-env`仅适用于已具备兼容依赖的开发环境。用户正常使用`start-local.cmd`在项目`.venv`内安装，不修改全局Python。
 
 记录：`reports/pytest-v0.2.4.xml`、`reports/worker-v0.2.4.txt`、`reports/local-http-v0.2.4.json`、`reports/local-launcher-v0.2.4.json`。这些均为合成数据和测试元数据。原项目文件、密钥、实际数据库和虚拟环境不进入源码ZIP或Git Bundle。
+
+## v0.2.6 customer-configured model entry
+
+`start-custom-model.ps1` opens a loopback-only setup page for an OpenAI-compatible text endpoint and model name. Remote endpoints require HTTPS, an API key, and positive user-confirmed CNY rates. A local model is recognized only from a loopback URL, may use HTTP without a key, and may use zero rates; its in-flight call keeps the existing idempotency reservation and settles to zero actual API cost. The custom provider identity includes a short hash of the base URL and model, preventing an old run from resuming under a different endpoint or model. If explicitly selected, a custom key is stored with Windows DPAPI under that endpoint/model identity; non-secret endpoint, model, and rates are entered on each launch.
+
+The generic route calls `/chat/completions`, requests JSON output, requires response usage data, and sends parsed text only. It does not send page images, add vendor-specific reasoning controls, discover installed models, support non-loopback LAN endpoints, or prove model quality. Offline tests use synthetic keys, loopback forms, and `httpx.MockTransport`; no provider or local inference call was made.

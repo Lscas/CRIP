@@ -591,6 +591,20 @@
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
+      "id": "FR-API-006",
+      "title": "Customer-configurable OpenAI-compatible model",
+      "statement": "A local customer can start CIRP with a customer-selected OpenAI-compatible text API or a loopback local model without changing application code.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.",
+        "The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.",
+        "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer."
+      ],
+      "decision_source": "User request on 2026-09-14 to let customers configure their own API or choose a local model.",
+      "spec_section": "docs/LOCAL_VALIDATION.md"
+    },
+    {
       "id": "FR-PROMPT-001",
       "title": "Prompt Git 版本化",
       "statement": "生产 Prompt 必须进入仓库并带版本。",

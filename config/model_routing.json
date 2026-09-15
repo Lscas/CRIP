@@ -15,6 +15,14 @@
       "cheap_model": "gemini-3.6-flash",
       "reasoning_effort": "minimal",
       "requires_explicit_user_selection": true
+    },
+    "custom": {
+      "api_style": "openai_compatible_chat_completions",
+      "base_url": "customer_configured_https_or_loopback",
+      "cheap_model": "customer_configured",
+      "thinking": "provider_default",
+      "vision": false,
+      "requires_explicit_user_selection": true
     }
   },
   "roles": {

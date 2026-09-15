@@ -46,9 +46,12 @@ Live-provider launchers are available for local, explicitly authorized use:
 ```powershell
 .\start-deepseek-live.ps1
 .\start-gemini-live.ps1
+.\start-custom-model.ps1
 ```
 
 Review the on-screen data-transfer and cost notice before starting a live analysis. A browser tab or successful startup message does not prove that a document analysis completed; check run status, coverage, records, and the cost ledger.
+
+The custom launcher opens a local setup page. Enter an OpenAI-compatible base URL ending before `/chat/completions` (for example, `http://127.0.0.1:11434/v1` for Ollama), the model name, and token rates. Loopback local models may use HTTP with no key and zero rates. Remote APIs require HTTPS, a key, and positive rates. This generic route requires JSON-mode chat completions with usage data and sends parsed text only; provider-specific SDKs, page-image vision, non-loopback LAN models, and automatic model discovery are not included.
 
 ## Validate the source
 

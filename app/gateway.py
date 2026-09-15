@@ -430,8 +430,9 @@ class Gateway:
     def _request_json(self, attempt: str, payload: dict, purpose: str) -> dict:
         response = None
         try:
+            headers={'Authorization': 'Bearer ' + self.s.api_key} if self.s.api_key else {}
             response = self.client.post(self.s.api_base_url + '/chat/completions', json=payload,
-                                        headers={'Authorization': 'Bearer ' + self.s.api_key})
+                                        headers=headers)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             diagnostic, request_id = self._http_diagnostic(exc.response)
@@ -628,7 +629,7 @@ class Gateway:
                       'provider':self.s.api_base_url,'model_id':self.s.cheap_model,'model_snapshot':None,
                       'schema_version':'0.2.0','retrieval_version':'none-v1','assembly_rule_version':'disabled-v1',
                       'revision_policy_version':'0.2.0','routing_version':'0.2.0',
-                      'parameters':{**({'thinking':'disabled'} if self.s.provider=='deepseek' else {'reasoning_effort':'minimal'}),
+                      'parameters':{**self.s.inference_parameters(),
                                     'max_tokens':limit,'result_normalizer':'extraction-contract-v2'},
                       **({'manual_requeue_generation':generation} if generation else {})})
         cached=self.db.cached(key,run['project_id'])
@@ -638,7 +639,8 @@ class Gateway:
         amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
         self._wait_for_request_slot()
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.cheap_model,
-                                hashlib.sha256(dumps(payload).encode()).hexdigest(),self.s.input_rate,self.s.output_rate)
+                                hashlib.sha256(dumps(payload).encode()).hexdigest(),self.s.input_rate,self.s.output_rate,
+                                allow_zero=self.s.is_local_model())
         body=self._request_json(attempt,payload,'提取')
         try:
             usage=self.billed_usage(body)
@@ -802,7 +804,8 @@ class Gateway:
         self._wait_for_request_slot()
         attempt = self.db.reserve(run['project_id'], run['id'], task, amount, self.s.cheap_model,
                                   hashlib.sha256(dumps(payload).encode()).hexdigest(), self.s.input_rate,
-                                  self.s.output_rate, verification_job_id=job_id)
+                                  self.s.output_rate, verification_job_id=job_id,
+                                  allow_zero=self.s.is_local_model())
         body = self._request_json(attempt, payload, '核验')
         try:
             usage = self.billed_usage(body)

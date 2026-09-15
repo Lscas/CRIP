@@ -397,6 +397,16 @@ Material Register 主要按 CSI Division/Section 组织。
 - 单项目多个有限并发任务。
 - 每次调用记入项目累计预算。
 
+## FR-API-006 · Customer-configurable OpenAI-compatible model
+
+优先级：P0；状态：implemented
+
+A local customer can start CIRP with a customer-selected OpenAI-compatible text API or a loopback local model without changing application code.
+
+- Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.
+- The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.
+- The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.
+
 ## FR-PROMPT-001 · Prompt Git 版本化
 
 优先级：P0；状态：planned

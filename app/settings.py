@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import math
+import ipaddress
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +21,12 @@ GEMINI_MODEL = 'gemini-3.6-flash'
 
 def flag(name: str, default: str = 'false') -> bool:
     return os.getenv(name, default).strip().lower() in {'1', 'true', 'yes'}
+
+def custom_provider(provider: str) -> bool:
+    return bool(re.fullmatch(r'custom-[0-9a-f]{16}',provider))
+
+def live_provider(provider: str) -> bool:
+    return provider in LIVE_PROVIDERS or custom_provider(provider)
 
 @dataclass(frozen=True)
 class Settings:
@@ -70,8 +77,8 @@ class Settings:
     def from_env(cls) -> 'Settings':
         load_dotenv(ROOT / '.env', override=False)
         provider = os.getenv('CIRP_PROVIDER', 'mock').strip().lower()
-        default_base_url = GEMINI_BASE_URL if provider == 'gemini' else DEEPSEEK_BASE_URL
-        default_model = GEMINI_MODEL if provider == 'gemini' else DEEPSEEK_MODEL
+        default_base_url = GEMINI_BASE_URL if provider == 'gemini' else DEEPSEEK_BASE_URL if provider == 'deepseek' else ''
+        default_model = GEMINI_MODEL if provider == 'gemini' else DEEPSEEK_MODEL if provider == 'deepseek' else ''
         return cls(
             data_dir=Path(os.getenv('CIRP_DATA_DIR', str(ROOT / '.local'))).resolve(),
             provider=provider,
@@ -95,17 +102,29 @@ class Settings:
             allowed_hosts=tuple(x.strip() for x in os.getenv('CIRP_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,[::1]').split(',') if x.strip()),
         )
 
+    def is_local_model(self) -> bool:
+        if not custom_provider(self.provider): return False
+        hostname=urlsplit(self.api_base_url).hostname
+        if not hostname: return False
+        if hostname.lower()=='localhost': return True
+        try:return ipaddress.ip_address(hostname).is_loopback
+        except ValueError:return False
+
     def live_errors(self) -> list[str]:
         errors = []
-        if self.provider not in LIVE_PROVIDERS: errors.append('CIRP_PROVIDER must be deepseek or gemini')
+        if not live_provider(self.provider): errors.append('CIRP_PROVIDER must be deepseek, gemini, or a valid custom profile')
         if not self.live_enabled: errors.append('Live API switch is disabled')
-        if not self.api_key: errors.append('API key is not configured')
+        if not self.api_key and not self.is_local_model(): errors.append('API key is not configured')
         if not self.prices_confirmed: errors.append('Actual API prices have not been confirmed')
         for name, rate in [('Input', self.input_rate), ('Output', self.output_rate)]:
-            if not rate.is_finite() or rate <= 0: errors.append(f'{name} price must be a finite positive number')
+            if not rate.is_finite() or rate < 0 or (not self.is_local_model() and rate == 0):
+                errors.append(f'{name} price must be a finite non-negative number and positive for remote APIs')
         u = urlsplit(self.api_base_url)
-        if u.scheme != 'https' or not u.hostname or u.query or u.fragment or u.username:
-            errors.append('API base URL must use HTTPS without credentials or query parameters')
+        if (not u.hostname or u.query or u.fragment or u.username is not None or u.password is not None
+                or (u.scheme != 'https' and not (self.is_local_model() and u.scheme == 'http'))):
+            errors.append('API base URL must use HTTPS, except HTTP is allowed for a loopback local model; credentials and query parameters are forbidden')
+        if not isinstance(self.cheap_model,str) or not re.fullmatch(r'[\x21-\x7e]{1,160}',self.cheap_model):
+            errors.append('Model name must be 1-160 printable ASCII characters without spaces')
         if self.provider == 'gemini':
             if self.api_base_url != GEMINI_BASE_URL:
                 errors.append('The Gemini key may be sent only to the official Google OpenAI-compatible endpoint')
@@ -131,10 +150,13 @@ class Settings:
     def inference_parameters(self) -> dict:
         if self.provider == 'gemini':
             return {'reasoning_effort': 'minimal'}
-        return {'thinking': {'type': 'disabled'}}
+        if self.provider == 'deepseek':
+            return {'thinking': {'type': 'disabled'}}
+        return {}
 
     def inference_mode(self) -> str:
-        return 'minimal' if self.provider == 'gemini' else 'disabled'
+        return ('minimal' if self.provider == 'gemini' else
+                'provider default' if custom_provider(self.provider) else 'disabled')
 
     def public(self) -> dict:
         from app.cad import cad_available, dwg_converter
@@ -143,7 +165,8 @@ class Settings:
         vision_ready=(self.provider=='deepseek' and self.vision_enabled and not self.live_errors())
         return {
             'version': VERSION, 'provider': self.provider,
-            'mode': 'Mock mode: demo examples only' if self.provider == 'mock' else 'Live API mode',
+            'mode': ('Mock mode: demo examples only' if self.provider == 'mock' else
+                     'Local model mode' if self.is_local_model() else 'Live API mode'),
             'model': self.cheap_model if self.provider != 'mock' else 'mock-no-network',
             'live_ready': not self.live_errors(), 'live_blockers': self.live_errors(),
             'budget_cny': '300.00', 'deadline_hours': 24, 'max_active_projects': 1,

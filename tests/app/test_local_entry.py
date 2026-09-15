@@ -65,6 +65,26 @@ def test_live_accepts_official_gemini_configuration(tmp_path,monkeypatch):
     assert result.provider=='gemini' and result.public()['thinking']=='minimal'
 
 
+def test_live_accepts_loopback_openai_compatible_model_without_key_or_price(tmp_path,monkeypatch):
+    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,prices_confirmed=True,
+               api_base_url='http://127.0.0.1:11434/v1',cheap_model='qwen3:8b',
+               input_rate=Decimal('0'),output_rate=Decimal('0'))
+    monkeypatch.setattr(Settings,'from_env',lambda:s)
+    result=local_settings(live=True)
+    assert result.live_errors()==[] and result.is_local_model()
+    assert result.public()['mode']=='Local model mode' and result.inference_parameters()=={}
+
+
+@pytest.mark.parametrize('base_url',[
+    'http://remote.example/v1','http://127.0.0.1.example/v1','http://2130706433/v1',
+])
+def test_custom_remote_endpoint_cannot_use_insecure_or_ambiguous_loopback_url(tmp_path,base_url):
+    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,prices_confirmed=True,
+               api_base_url=base_url,cheap_model='model',api_key='synthetic-valid-key',
+               input_rate=Decimal('1'),output_rate=Decimal('2'))
+    assert s.live_errors()
+
+
 def test_gemini_env_selects_official_defaults_without_dotenv(monkeypatch):
     monkeypatch.setattr('app.settings.load_dotenv',lambda *a,**kw:None)
     for name in ('CIRP_API_BASE_URL','CIRP_CHEAP_MODEL','CIRP_DATA_DIR',
@@ -104,6 +124,13 @@ def test_deepseek_launcher_uses_official_v4_flash_without_key_arguments():
     assert 'scripts\\deepseek_local_setup.py" --setup-port $SetupPort --app-port $Port' in source
     assert 'Windows DPAPI current-user encryption' in source
     assert 'Read-Host' not in source and '--api-key' not in source.lower() and 'Out-File' not in source
+
+
+def test_custom_launcher_uses_loopback_setup_page_without_key_arguments():
+    source=Path('start-custom-model.ps1').read_text(encoding='utf-8')
+    assert 'gemini_local_setup.py" --provider custom' in source
+    assert 'saved only when Windows DPAPI storage is selected' in source
+    assert 'Read-Host' not in source and '--api-key' not in source.lower()
 
 
 def test_dependency_children_do_not_inherit_secrets(monkeypatch,tmp_path):

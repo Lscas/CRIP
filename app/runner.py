@@ -10,7 +10,7 @@ import time
 from copy import deepcopy
 from pathlib import Path
 from app.db import Database,DomainError,BudgetError,dumps,now,uid
-from app.settings import LIVE_PROVIDERS,Settings,ROOT
+from app.settings import Settings,ROOT,live_provider
 from app.security import environment_without_secrets
 from app.uploads import Uploads
 from app.gateway import Gateway,ProviderPaused,InvalidModelOutput
@@ -31,7 +31,7 @@ class Runner:
 
     def create(self,project_id):
         self.db.one('SELECT * FROM projects WHERE id=?',(project_id,))
-        if self.s.provider not in ('mock',*LIVE_PROVIDERS):raise DomainError('Provider未支持',409)
+        if self.s.provider!='mock' and not live_provider(self.s.provider):raise DomainError('Provider未支持',409)
         if self.s.provider!='mock' and self.s.live_errors():raise DomainError('；'.join(self.s.live_errors()),409)
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前仅允许一个活跃项目分析',409)

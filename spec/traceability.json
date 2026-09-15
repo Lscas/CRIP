@@ -722,6 +722,31 @@
       "verification_report": null
     },
     {
+      "requirement_id": "FR-API-006",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/api",
+        "app/local"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_gemini_local_setup.py",
+        "tests/app/test_local_entry.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "offline_mock_transport_and_loopback_setup",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/runner.py",
+        "config/model_routing.json",
+        "scripts/gemini_local_setup.py",
+        "start-custom-model.ps1"
+      ],
+      "verification_report": "docs/LOCAL_VALIDATION.md"
+    },
+    {
       "requirement_id": "FR-PROMPT-001",
       "implementation_status": "planned",
       "planned_product_modules": [

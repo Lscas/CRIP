@@ -442,6 +442,23 @@ def test_gemini_payload_uses_minimal_reasoning_and_bills_hidden_output(context,t
     assert cost['output_tokens']==50 and cost['spent_cny']=='0.000200'
 
 
+def test_loopback_openai_compatible_model_uses_no_key_or_provider_specific_payload(context,tmp_path):
+    db,run,ev=context;provider='custom-0123456789abcdef';run={**run,'provider':provider};requests=[]
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200,json=body(ev))
+    local=Settings(tmp_path,provider=provider,live_enabled=True,prices_confirmed=True,
+                   api_base_url='http://127.0.0.1:11434/v1',cheap_model='qwen3:8b',
+                   input_rate=Decimal('0'),output_rate=Decimal('0'),start_worker=False)
+    value=Gateway(local,db,httpx.Client(transport=httpx.MockTransport(handler))).extract(run,ev)
+    payload=json.loads(requests[0].content)
+    assert value.mode==provider and 'authorization' not in requests[0].headers
+    assert 'thinking' not in payload and 'reasoning_effort' not in payload
+    assert db.cost(run['project_id'])['spent_cny']=='0.000000'
+    assert db.one('SELECT state,actual_units FROM model_calls WHERE run_id=?',(run['id'],))=={
+        'state':'SETTLED','actual_units':0}
+
+
 def test_live_calls_observe_configured_minimum_start_interval(context,tmp_path):
     db,run,ev=context;starts=[]
     def handler(request):

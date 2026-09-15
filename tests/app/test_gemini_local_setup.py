@@ -49,6 +49,26 @@ def test_deepseek_v4_flash_profile_uses_official_endpoint_and_conservative_rates
     assert "authorize the stated text/image transfer" in rendered
 
 
+def test_custom_profile_accepts_loopback_without_key_and_rejects_insecure_remote():
+    fields={"base_url":["http://127.0.0.1:11434/v1"],"model":["qwen3:8b"],
+            "input_rate":["0"],"output_rate":["0"]}
+    profile=setup.custom_profile(fields,"")
+    env=setup.live_child_env("",profile)
+    assert profile.local and env["CIRP_PROVIDER"].startswith("custom-")
+    assert env["CIRP_API_BASE_URL"]=="http://127.0.0.1:11434/v1"
+    assert env["CIRP_CHEAP_MODEL"]=="qwen3:8b" and env["CIRP_API_KEY"]==""
+    remote=setup.custom_profile({**fields,"base_url":["https://api.example/v1"],
+                                 "input_rate":["1"],"output_rate":["2"]},"synthetic-valid-key")
+    assert not remote.local and remote.provider != profile.provider
+    with pytest.raises(ValueError,match="HTTPS"):
+        setup.custom_profile({**fields,"base_url":["http://remote.example/v1"],
+                              "input_rate":["1"],"output_rate":["2"]},"synthetic-valid-key")
+    rendered=setup.page("synthetic-csrf",profile=setup.CUSTOM_PROFILE).decode("utf-8")
+    assert "OpenAI-compatible text endpoint" in rendered and "name=base_url" in rendered
+    assert "optional for a loopback local model" in rendered and "name=remember" in rendered
+    assert "for this endpoint/model" in rendered
+
+
 def test_deepseek_powershell_launcher_discloses_visual_data_transfer_before_key_prompt():
     source = (setup.ROOT / "start-deepseek-live.ps1").read_text(encoding="utf-8")
     disclosure = "eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API"
@@ -132,6 +152,51 @@ def test_loopback_http_rejects_bad_csrf_then_starts_once(monkeypatch, tmp_path, 
         assert "synthetic-valid-key" not in command
         assert kwargs["env"]["CIRP_API_KEY"] == "synthetic-valid-key"
         assert kwargs["env"]["CIRP_PROVIDER"] == profile.provider
+    finally:
+        server.server_close()
+
+
+def test_custom_loopback_form_starts_without_api_key(monkeypatch,tmp_path):
+    calls=[]
+    def popen(command,**kwargs):
+        captured={**kwargs,"env":dict(kwargs["env"])}
+        calls.append((command,captured))
+        return FakeChild()
+    monkeypatch.setattr(setup.subprocess,"Popen",popen)
+    server=setup.SetupServer(("127.0.0.1",0),8010,setup.CUSTOM_PROFILE,data_dir=tmp_path)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    try:
+        fields={"csrf":server.csrf_token,"approved":"yes","remember":"yes","api_key":"",
+                "base_url":"http://127.0.0.1:11434/v1","model":"qwen3:8b",
+                "input_rate":"0","output_rate":"0"}
+        with post(server,fields) as response:assert response.status==202
+        thread.join(timeout=2)
+        assert len(calls)==1 and calls[0][1]["env"]["CIRP_API_KEY"]==""
+        assert calls[0][1]["env"]["CIRP_PROVIDER"].startswith("custom-")
+    finally:
+        server.server_close()
+
+
+def test_custom_remote_saved_key_is_scoped_to_endpoint_and_model(monkeypatch,tmp_path):
+    calls=[];loaded=[];stored=[]
+    def popen(command,**kwargs):
+        calls.append((command,{**kwargs,"env":dict(kwargs["env"])}));return FakeChild()
+    monkeypatch.setattr(setup.subprocess,"Popen",popen)
+    monkeypatch.setattr(setup,"load_api_key",lambda data_dir,provider:loaded.append(provider) or "synthetic-valid-key")
+    monkeypatch.setattr(setup,"enable_remember",lambda data_dir,provider:stored.append(provider))
+    monkeypatch.setattr(setup,"save_api_key",lambda data_dir,provider,key:stored.append(provider))
+    server=setup.SetupServer(("127.0.0.1",0),8010,setup.CUSTOM_PROFILE,data_dir=tmp_path)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    try:
+        fields={"csrf":server.csrf_token,"approved":"yes","remember":"yes","api_key":"",
+                "base_url":"https://api.example/v1","model":"customer-model",
+                "input_rate":"1","output_rate":"2"}
+        with post(server,fields) as response:assert response.status==202
+        thread.join(timeout=2)
+        assert len(loaded)==len(calls)==1 and loaded[0].startswith("custom-")
+        assert stored==[loaded[0],loaded[0]]
+        assert calls[0][1]["env"]["CIRP_API_KEY"]=="synthetic-valid-key"
+        assert "synthetic-valid-key" not in calls[0][0]
     finally:
         server.server_close()
 

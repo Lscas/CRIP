@@ -128,9 +128,12 @@ class Database:
                 'local_compute_cost': 'Local computer cost is not measured; this is not a zero-cost guarantee'}
 
     def reserve(self, project_id: str, run_id: str, task_key: str, amount: Decimal,
-                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal, verification_job_id: str | None = None) -> str:
+                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal,
+                verification_job_id: str | None = None, *, allow_zero: bool = False) -> str:
         n = units(amount)
-        if n <= 0: raise DomainError('预留金额必须为正')
+        if n == 0:
+            if not allow_zero: raise DomainError('预留金额必须为正')
+            n = 1  # SQLite schema requires a positive in-flight idempotency reservation.
         aid = uid('CALL')
         with self.connect(True) as c:
             run = c.execute('SELECT * FROM runs WHERE id=? AND project_id=?', (run_id,project_id)).fetchone()
@@ -154,9 +157,10 @@ class Database:
             if verification_job_id and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone():
                 raise BudgetError('项目存在未对账请求，禁止新增付费调用', 409)
             a = c.execute('SELECT * FROM budget_accounts WHERE project_id=?', (project_id,)).fetchone()
-            outstanding = c.execute('SELECT COALESCE(SUM(reserved_units),0) FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone()[0]
-            if outstanding:
+            pending = c.execute('SELECT 1 FROM model_calls WHERE project_id=? AND actual_units IS NULL LIMIT 1', (project_id,)).fetchone()
+            if pending:
                 raise BudgetError('项目存在未对账请求，禁止新增付费调用',409)
+            outstanding = 0
             if a['frozen'] or a['spent_units']+outstanding+n>a['limit_units']:
                 raise BudgetError('项目累计预算不足，停止新增付费调用', 409)
             c.execute('''INSERT INTO model_calls(id,project_id,run_id,task_key,model,state,reserved_units,
