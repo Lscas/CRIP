@@ -12,6 +12,7 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -51,7 +52,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='cirp-i18n-') as tmp:
         app = create_app(Settings(Path(tmp), start_worker=False, allowed_hosts=('cirp.test', 'testserver')))
         with TestClient(app, headers={'X-CIRP-Client': 'browser'}) as client, sync_playwright() as p:
-            executable = shutil.which('chromium') or shutil.which('google-chrome')
+            candidates = (shutil.which('chromium'), shutil.which('google-chrome'), shutil.which('chrome'),
+                          r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                          r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
+            executable = next((str(Path(x)) for x in candidates if x and Path(x).is_file()), None)
             browser = p.chromium.launch(**({'executable_path': executable} if executable else {}))
             context = browser.new_context(viewport={'width': 1440, 'height': 1000}, locale='en-US', accept_downloads=True)
             context.add_init_script('''
@@ -120,8 +124,15 @@ def main():
                 return page
             page = boot()
 
+            def wait_until(predicate, message, timeout=5):
+                deadline=time.monotonic()+timeout
+                while time.monotonic()<deadline:
+                    if predicate():return
+                    page.wait_for_timeout(50)
+                raise AssertionError(message)
+
             def wait_loaded():
-                page.wait_for_function("document.querySelector('#version').textContent.startsWith('v0.2.')")
+                wait_until(lambda:(page.locator('#version').text_content() or '').startswith('v0.2.'),'version did not load')
                 page.wait_for_timeout(100)
                 if not args.offline_dom: page.evaluate('window.__cirpTestState=state')
                 page.evaluate('window.__testIntervals.forEach(clearInterval)')
@@ -165,7 +176,7 @@ def main():
                 assert page.locator('#close-project').inner_text() == '取消'
                 language('en', '#dialog-language')
                 page.locator('#project-form button[type=submit]').click()
-                page.wait_for_function("document.querySelector('#project-name').textContent.includes('Office A')")
+                wait_until(lambda:'Office A' in (page.locator('#project-name').text_content() or ''),'project name did not render')
                 pid = page.evaluate('__cirpTestState.project')
                 assert client.get(f'/api/projects/{pid}').json()['name'] == project_name
                 passed('New-project form draft and submitted project name are not translated or reset')
@@ -181,12 +192,12 @@ def main():
                     };
                 }''')
                 page.locator('#file-input').set_input_files([str(ROOT/'examples/demo/01_original.txt'), str(ROOT/'examples/demo/02_revision.txt')])
-                page.wait_for_function('window.__chunkHeld===true')
+                wait_until(lambda:page.evaluate('Boolean(window.__chunkHeld)'),'upload chunk was not held')
                 language('zh-CN')
                 assert page.evaluate('__cirpTestState.uploading') is True
                 assert page.locator('#start').is_disabled()
                 page.evaluate('window.__releaseChunk()')
-                page.wait_for_function("!__cirpTestState.uploading && document.querySelector('#file-total').textContent.includes('2 个')")
+                wait_until(lambda:not page.evaluate('Boolean(__cirpTestState.uploading)') and '2 个' in (page.locator('#file-total').text_content() or ''),'upload did not complete')
                 assert page.locator('#files-body tr').count() == 2
                 language('en')
                 assert page.locator('#file-total').inner_text() == '2 unique-content files'
@@ -194,7 +205,7 @@ def main():
                 passed('Language can change during a held upload without losing file selection, progress or controls')
 
                 page.locator('#start').click()
-                page.wait_for_function("document.querySelector('#run-state').dataset.code==='PARTIAL'")
+                wait_until(lambda:page.locator('#run-state').get_attribute('data-code')=='PARTIAL','run did not reach PARTIAL')
                 rid = page.evaluate('__cirpTestState.run')
                 counts = {kind: int(page.locator('#count-'+kind).inner_text()) for kind in ('MATERIAL', 'INSPECTION', 'CONFLICT', 'MISSING')}
                 assert counts == {'MATERIAL': 2, 'INSPECTION': 2, 'CONFLICT': 1, 'MISSING': 0}, counts
@@ -263,7 +274,7 @@ def main():
                 language('en', '#drawer-language')
                 assert area.input_value() == edited_draft
                 page.locator('#drawer-body').get_by_role('button', name='Accept', exact=True).click()
-                page.wait_for_function("document.querySelector('#results-body').textContent.includes('Accepted (ACCEPTED)')")
+                wait_until(lambda:'Accepted (ACCEPTED)' in (page.locator('#results-body').text_content() or ''),'review status did not render')
                 review_requests = [r for r in requests if r['method']=='POST' and r['path'].endswith('/review')]
                 review_body = json.loads(review_requests[-1]['body'])
                 assert review_body['action'] == 'ACCEPTED' and review_body['note'] == note
@@ -273,7 +284,7 @@ def main():
                 passed('Open editor JSON and note survive switching; review request and canonical status remain unchanged')
 
                 page.locator('#results-body .evidence-button').first.click()
-                page.wait_for_function("document.querySelector('#drawer-title').textContent==='原始证据'")
+                wait_until(lambda:page.locator('#drawer-title').text_content()=='原始证据','evidence drawer did not open')
                 raw_evidence = page.locator('#drawer-body pre').last.inner_text()
                 locator = page.locator('#drawer-body pre').first.inner_text()
                 language('en', '#drawer-language')

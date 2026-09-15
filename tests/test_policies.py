@@ -39,7 +39,8 @@ def test_unknown_task_no_autonomous_call():
     assert route_task('send_purchase_order').role=='NEEDS_REVIEW'
 
 def test_output_cap():
-    with pytest.raises(ValueError):make_chat_payload(route_task('classify'),'json','x',max_tokens=3000)
+    assert make_chat_payload(route_task('extract_joint'),'json','x',max_tokens=8000)['max_tokens']==8000
+    with pytest.raises(ValueError):make_chat_payload(route_task('classify'),'json','x',max_tokens=8001)
 
 def test_budget_formula_total_output_not_double_count():
     assert quote_tokens(10_000_000,1_000_000,Decimal(3),Decimal(9),safety=Decimal(1))==Decimal(39)

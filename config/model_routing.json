@@ -5,6 +5,18 @@
   "provider": "deepseek",
   "api_style": "chat_completions",
   "base_url_env": "CIRP_API_BASE_URL",
+  "approved_live_adapters": {
+    "deepseek": {
+      "cheap_model": "deepseek-v4-flash",
+      "thinking": "disabled"
+    },
+    "gemini": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "cheap_model": "gemini-3.6-flash",
+      "reasoning_effort": "minimal",
+      "requires_explicit_user_selection": true
+    }
+  },
   "roles": {
     "programmatic": {
       "model": null,
@@ -16,7 +28,7 @@
       "default_model": "deepseek-v4-flash",
       "thinking": "disabled",
       "max_input_tokens": 6000,
-      "max_output_tokens": 2000
+      "max_output_tokens": 8000
     },
     "reasoning": {
       "model_env": "CIRP_REASONING_MODEL",

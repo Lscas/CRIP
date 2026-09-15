@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import create_app
 from app.settings import Settings
-from scripts.remote_preview import child_environment, tunnel_url
+from scripts.remote_preview import (child_environment, cloudflare_credentials,
+                                    remove_secrets_from_self, tunnel_environment, tunnel_url,
+                                    wrangler)
 from scripts.build_cloudflare import build
 from .conftest import run_demo
 
@@ -72,7 +74,7 @@ def test_remote_demo_workflow(tmp_path):
     with TestClient(create_app(settings(tmp_path)),headers={'X-CIRP-Client':'browser','Authorization':'Basic '+base64.b64encode(('engineer:'+PASSWORD).encode()).decode()}) as c:
         project=c.post('/api/projects',json={'name':'remote mock'}).json()
         rid=run_demo(c,project['id'])
-        assert len(c.get(f'/api/analysis-runs/{rid}/records').json())==5
+        assert len(c.get(f'/api/analysis-runs/{rid}/records').json())==4
         assert c.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
 
 def test_launcher_forces_mock(monkeypatch):
@@ -82,6 +84,54 @@ def test_launcher_forces_mock(monkeypatch):
     assert 'example.trycloudflare.com' in env['CIRP_ALLOWED_HOSTS']
     assert 'preview-data' in env['CIRP_DATA_DIR']
 
+
+def test_remote_origin_and_tunnel_children_exclude_all_inherited_secrets():
+    source = {
+        'PATH': 'synthetic-path', 'NORMAL_SETTING': 'kept',
+        'CIRP_API_KEY': 'drop-api', 'AWS_ACCESS_KEY_ID': 'drop-aws',
+        'DB_PASSWORD': 'drop-password', 'SSH_PRIVATE_KEY': 'drop-private',
+        'SERVICE_CREDENTIAL': 'drop-credential', 'UNRELATED_TOKEN': 'drop-token',
+    }
+    origin = child_environment('example.trycloudflare.com', PASSWORD, ORIGIN, source)
+    tunnel = tunnel_environment(source)
+    assert origin['NORMAL_SETTING'] == 'kept' and tunnel['NORMAL_SETTING'] == 'kept'
+    assert origin['CIRP_PREVIEW_PASSWORD'] == PASSWORD and origin['CIRP_ORIGIN_TOKEN'] == ORIGIN
+    assert all(not value.startswith('drop-') for value in origin.values())
+    assert all(not value.startswith('drop-') for value in tunnel.values())
+
+
+def test_remote_preview_strips_own_environment_but_retains_scoped_cf_auth_mapping():
+    source = {
+        'PATH': 'synthetic-path', 'NORMAL_SETTING': 'kept',
+        'CLOUDFLARE_API_TOKEN': 'cf-token-only-for-test',
+        'CLOUDFLARE_ACCOUNT_ID': 'a' * 32,
+        'AWS_ACCESS_KEY_ID': 'drop-aws', 'DATABASE_PASSWORD': 'drop-password',
+    }
+    target = dict(source)
+    auth = remove_secrets_from_self(source, target)
+    assert auth == {'CLOUDFLARE_API_TOKEN': 'cf-token-only-for-test',
+                    'CLOUDFLARE_ACCOUNT_ID': 'a' * 32}
+    assert target == {'PATH': 'synthetic-path', 'NORMAL_SETTING': 'kept',
+                      'CLOUDFLARE_ACCOUNT_ID': 'a' * 32}
+
+
+def test_wrangler_receives_only_explicit_cloudflare_auth(monkeypatch, tmp_path):
+    import scripts.remote_preview as remote
+    seen = {}
+    def fake_run(*args, **kwargs):
+        seen['env'] = kwargs['env']
+        return type('Result', (), {'stdout': '', 'stderr': '', 'returncode': 0})()
+    monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'drop-aws')
+    monkeypatch.setenv('DATABASE_PASSWORD', 'drop-password')
+    monkeypatch.setenv('UNRELATED_TOKEN', 'drop-token')
+    monkeypatch.setattr(remote.subprocess, 'run', fake_run)
+    auth = cloudflare_credentials({'CLOUDFLARE_API_TOKEN': 'cf-token-only-for-test',
+                                   'CLOUDFLARE_ACCOUNT_ID': 'a' * 32})
+    assert wrangler('npx', ['whoami'], tmp_path / 'wrangler.log', credentials=auth) == ''
+    assert seen['env']['CLOUDFLARE_API_TOKEN'] == 'cf-token-only-for-test'
+    assert seen['env']['CLOUDFLARE_ACCOUNT_ID'] == 'a' * 32
+    assert all(not value.startswith('drop-') for value in seen['env'].values())
+
 def test_tunnel_url_validation():
     assert tunnel_url('Your tunnel https://one-two.trycloudflare.com |')=='https://one-two.trycloudflare.com'
     assert tunnel_url('https://one.trycloudflare.com.attacker.example') is None
@@ -89,7 +139,7 @@ def test_tunnel_url_validation():
 
 def test_pages_build_contains_only_allowlist(tmp_path):
     folder=build(tmp_path/'assets')
-    names={str(x.relative_to(folder)) for x in folder.rglob('*') if x.is_file()}
+    names={x.relative_to(folder).as_posix() for x in folder.rglob('*') if x.is_file()}
     assert names=={'index.html','assets/app.js','assets/i18n.js','assets/style.css','_worker.js','_routes.json','robots.txt'}
     assert 'exclude' in (folder/'_routes.json').read_text()
     with pytest.raises(ValueError): build(folder)
@@ -123,19 +173,19 @@ def test_fail_closed_noninteractive_without_credentials_stops(monkeypatch):
 def test_pages_sequence_and_no_secrets_in_assets(tmp_path, monkeypatch):
     import scripts.remote_preview as remote
     calls=[]
-    def fake(command,args,log,secret_input=None):
-        calls.append((args,secret_input))
+    def fake(command,args,log,secret_input=None,credentials=None):
+        calls.append((args,secret_input,credentials))
         return 'Published: https://abc.cirp-preview-test.pages.dev\n'
     monkeypatch.setattr(remote,'wrangler',fake)
-    monkeypatch.setattr(remote,'configure_fail_closed',lambda project:calls.append((['fail-closed'],None)))
+    monkeypatch.setattr(remote,'configure_fail_closed',lambda project,credentials=None:calls.append((['fail-closed'],None,credentials)))
     result=remote.publish_pages('npx',tmp_path,'https://test.trycloudflare.com',PASSWORD,ORIGIN)
     assert result=='https://abc.cirp-preview-test.pages.dev'
-    kinds=[args[0:3] for args,_ in calls]
+    kinds=[args[0:3] for args,_,_ in calls]
     assert kinds[3]==['fail-closed'] and kinds[4]==['pages','secret','bulk']
     assert calls[4][1]['ORIGIN_TOKEN']==ORIGIN
     for path in (tmp_path/'pages-assets').rglob('*'):
         if path.is_file():
-            text=path.read_text()
+            text=path.read_text(encoding='utf-8')
             assert PASSWORD not in text and ORIGIN not in text
 
 

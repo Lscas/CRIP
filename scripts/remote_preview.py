@@ -18,7 +18,52 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from app.security import environment_without_secrets
 from scripts.build_cloudflare import build
+
+
+def cloudflare_credentials(source: dict[str, str] | None = None) -> dict[str, str]:
+    """Return the narrow Cloudflare auth set needed by publishing children.
+
+    This deliberately does not return an arbitrary parent environment.  The
+    API-token form is preferred, while the legacy global-key form needs its
+    matching email.  Account ID is retained because Wrangler/API calls may use
+    it to select the intended account.
+    """
+    parent = os.environ if source is None else source
+    names = ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL',
+             'CLOUDFLARE_ACCOUNT_ID')
+    return {name: parent[name] for name in names if parent.get(name)}
+
+
+def publishing_environment(credentials: dict[str, str] | None = None,
+                           source: dict[str, str] | None = None) -> dict[str, str]:
+    """Build a sanitized child environment and explicitly restore CF auth only."""
+    env = environment_without_secrets(source)
+    env.update(cloudflare_credentials(credentials or {}))
+    return env
+
+
+def remove_secrets_from_self(source: dict[str, str] | None = None,
+                             target: dict[str, str] | None = None) -> dict[str, str]:
+    """Strip inherited secrets from this preview process after saving scoped auth.
+
+    A direct invocation need not go through local_deploy, so the entry point
+    also removes secrets from its own environment.  Cloudflare credentials are
+    returned to the caller as an in-memory mapping and are passed only to the
+    corresponding publishing child/API request.
+    """
+    parent = dict(os.environ if source is None else source)
+    credentials = cloudflare_credentials(parent)
+    target = os.environ if target is None else target
+    target.clear()
+    target.update(environment_without_secrets(parent))
+    return credentials
+
+
+def tunnel_environment(source: dict[str, str] | None = None) -> dict[str, str]:
+    """Quick Tunnel does not require the application's or shell's secrets."""
+    return environment_without_secrets(source)
 
 
 def find_cloudflared() -> str | None:
@@ -43,8 +88,10 @@ def tunnel_url(text: str) -> str | None:
     return match.group(0) if match else None
 
 
-def child_environment(hostname: str, password: str, origin_token: str) -> dict[str, str]:
-    env = os.environ.copy()
+def child_environment(hostname: str, password: str, origin_token: str,
+                      source: dict[str, str] | None = None) -> dict[str, str]:
+    """Environment for the mock origin; only generated preview values are added."""
+    env = environment_without_secrets(source)
     env.update({
         'PYTHONUNBUFFERED': '1', 'PYTHONIOENCODING': 'utf-8',
         'CIRP_REMOTE_ENABLED': 'true', 'CIRP_PREVIEW_USER': 'engineer',
@@ -72,11 +119,13 @@ def verify_endpoint(base: str, password: str, timeout: float = 12) -> dict:
                 'provider': body['provider'], 'remote_preview': True}
 
 
-def wrangler(npx: str, args: list[str], log: Path, secret_input: dict | None = None) -> str:
+def wrangler(npx: str, args: list[str], log: Path, secret_input: dict | None = None,
+             credentials: dict[str, str] | None = None) -> str:
     # 凭据只经stdin传递，不出现在命令行或版本库。
     result = subprocess.run([npx, '--yes', 'wrangler@4', *args], cwd=ROOT,
         input=json.dumps(secret_input) if secret_input is not None else None,
-        capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300)
+        capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300,
+        env=publishing_environment(credentials))
     text = result.stdout + result.stderr
     if secret_input:
         for value in secret_input.values():
@@ -88,11 +137,12 @@ def wrangler(npx: str, args: list[str], log: Path, secret_input: dict | None = N
     return text
 
 
-def configure_fail_closed(project: str):
+def configure_fail_closed(project: str, credentials: dict[str, str] | None = None):
     """OAuth CLI用户在控制台确认；环境Token用户只修改本次新建项目。"""
     import httpx
-    token = os.getenv('CLOUDFLARE_API_TOKEN', '')
-    account = os.getenv('CLOUDFLARE_ACCOUNT_ID', '')
+    credentials = cloudflare_credentials() if credentials is None else cloudflare_credentials(credentials)
+    token = credentials.get('CLOUDFLARE_API_TOKEN', '')
+    account = credentials.get('CLOUDFLARE_ACCOUNT_ID', '')
     if token and account:
         if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
             raise RuntimeError('CLOUDFLARE_ACCOUNT_ID格式无效。')
@@ -126,21 +176,23 @@ def wait_verify(base: str, password: str) -> dict:
     raise RuntimeError('公网HTTP验证未通过（' + str(last) + '）；未确认上线。')
 
 
-def publish_pages(npx: str, run_dir: Path, origin: str, password: str, origin_token: str) -> str:
+def publish_pages(npx: str, run_dir: Path, origin: str, password: str, origin_token: str,
+                  credentials: dict[str, str] | None = None) -> str:
     project = 'cirp-preview-' + secrets.token_hex(4)
     assets = build(run_dir / 'pages-assets')
     log = run_dir / 'wrangler.log'
-    wrangler(npx, ['whoami'], log)
-    wrangler(npx, ['pages', 'project', 'create', project, '--production-branch', 'main'], log)
+    wrangler(npx, ['whoami'], log, credentials=credentials)
+    wrangler(npx, ['pages', 'project', 'create', project, '--production-branch', 'main'], log,
+             credentials=credentials)
     (run_dir / 'pages-project.json').write_text(json.dumps({'project': project}), encoding='utf-8')
     deploy_args = ['pages', 'deploy', str(assets), '--project-name', project, '--branch', 'main', '--commit-dirty=true']
     # 首次是锁定部署；缺少secrets时Worker返回503，不公开数据。
-    wrangler(npx, deploy_args, log)
-    configure_fail_closed(project)
+    wrangler(npx, deploy_args, log, credentials=credentials)
+    configure_fail_closed(project, credentials)
     wrangler(npx, ['pages', 'secret', 'bulk', '--project-name', project], log,
              {'PREVIEW_USER': 'engineer', 'PREVIEW_PASSWORD': password,
-              'ORIGIN_TOKEN': origin_token, 'ORIGIN_URL': origin})
-    output = wrangler(npx, deploy_args, log)
+              'ORIGIN_TOKEN': origin_token, 'ORIGIN_URL': origin}, credentials)
+    output = wrangler(npx, deploy_args, log, credentials=credentials)
     urls = re.findall(r'https://[a-z0-9.-]+\.pages\.dev(?=[\s/|]|$)', output)
     if not urls:
         raise RuntimeError('没有从Wrangler响应中读到实际部署URL；不拼接或猜测网址。查看部署日志。')
@@ -158,6 +210,10 @@ def stop(process: subprocess.Popen | None):
 
 
 def main() -> int:
+    # Capture the tiny Cloudflare publishing set before removing every secret
+    # inherited from the user's shell.  The mapping never becomes this
+    # process's environment and is handed only to Wrangler/the CF API path.
+    credentials = remove_secrets_from_self()
     p = argparse.ArgumentParser(description='受保护的Cloudflare远程测试。Ctrl+C停止本次源站和隧道。')
     p.add_argument('--pages', action='store_true', help='同时创建新的独立Pages项目；需本机Wrangler已登录')
     p.add_argument('--port', type=int, default=8000)
@@ -190,7 +246,8 @@ def main() -> int:
     server_log = (run_dir / 'server.log').open('w', encoding='utf-8')
     try:
         tunnel = subprocess.Popen([cloudflared, 'tunnel', '--no-autoupdate', '--protocol', 'http2',
-            '--url', f'http://127.0.0.1:{args.port}'], stdout=tunnel_log, stderr=subprocess.STDOUT)
+            '--url', f'http://127.0.0.1:{args.port}'], stdout=tunnel_log, stderr=subprocess.STDOUT,
+            env=tunnel_environment())
         end = time.monotonic() + 65; origin = None
         while time.monotonic() < end:
             origin = tunnel_url((run_dir / 'tunnel.log').read_text(encoding='utf-8', errors='replace'))
@@ -212,7 +269,7 @@ def main() -> int:
                 if time.monotonic() >= end: raise RuntimeError('本地鉴权验收失败，未发布。')
                 time.sleep(.5)
         wait_verify(origin, password)
-        address = publish_pages(npx, run_dir, origin, password, origin_token) if args.pages else origin
+        address = publish_pages(npx, run_dir, origin, password, origin_token, credentials) if args.pages else origin
         checks = wait_verify(address, password)
         (run_dir / 'verified-deployment.json').write_text(json.dumps({
             'url': address, 'origin_url': origin, 'type': 'pages-with-tunnel' if args.pages else 'quick-tunnel',

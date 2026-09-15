@@ -24,6 +24,12 @@ def test_prompts_are_real_text_files():
     for p in load_json('prompts/manifest.json')['prompts']:
         assert len((ROOT/p['path']).read_text(encoding='utf-8'))>50;assert (ROOT/p['schema']).is_file()
 
+def test_reviewer_facing_model_text_is_requested_in_english():
+    for path in ('prompts/common.md','prompts/joint-extraction/system.md','prompts/drawing-crop/system.md',
+                 'prompts/claim-verification/system.md','prompts/evidence-verification/system.md'):
+        text=(ROOT/path).read_text(encoding='utf-8')
+        assert 'English' in text or '英文' in text
+
 def test_paid_api_disabled():
     assert not load_json('config/model_routing.json')['live_api_enabled'];assert not load_json('config/provider_price_snapshot.json')['confirmed_for_user_endpoint']
 

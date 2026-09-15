@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import hmac
 import logging
+from decimal import Decimal
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
-from fastapi import FastAPI,Request
+from fastapi import FastAPI,Request,Query
 from fastapi.responses import FileResponse,JSONResponse,Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -18,7 +19,8 @@ from app.db import Database,DomainError,dumps,now,uid
 from app.uploads import Uploads
 from app.gateway import Gateway
 from app.runner import Runner
-from app.exporter import collect,as_json,as_xlsx
+from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
+                          reviewer_record_is_visible)
 from app.remote_access import PreviewAccess
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
@@ -28,6 +30,12 @@ class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Fi
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
     semantic:bool=False
+
+class ReconcileCallInput(Input):
+    resolution:Literal['NOT_BILLED','BILLED']
+    actual_cny:Decimal=Field(default=Decimal('0'),ge=0,le=100000)
+    confirmation:Literal['PROVIDER_BILLING_CHECKED']
+    note:str=Field(default='',max_length=1000)
 
 class ReviewInput(Input):
     action:Literal['ACCEPTED','EDITED','REJECTED']
@@ -149,11 +157,91 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def run_control(rid:str,action:Literal['pause','resume','cancel']):return runner.control(rid,action)
     @app.get('/api/analysis-runs/{rid}/cost')
     def run_cost(rid:str):return db.cost(runner.get(rid)['project_id'])
+    @app.get('/api/analysis-runs/{rid}/takeoffs')
+    def run_takeoffs(rid:str):
+        runner.get(rid)
+        rows=db.all('''SELECT r.document_id,r.summary,d.name FROM document_results r
+                       JOIN documents d ON d.id=r.document_id WHERE r.run_id=? ORDER BY d.name''',(rid,))
+        out=[]
+        for row in rows:
+            summary=json.loads(row['summary'])
+            out.append({'document_id':row['document_id'],'file_name':row['name'],
+                        'cad_level':summary.get('cad_level'),
+                        'takeoffs':summary.get('takeoffs',[]),
+                        'geometry_summaries':summary.get('geometry_summaries',[])})
+        return out
+    @app.get('/api/analysis-runs/{rid}/documents/{did}/pages/{page}/image')
+    def run_page_image(rid:str,did:str,page:int):
+        run=runner.get(rid)
+        if did not in run['document_ids']:raise DomainError('文件不属于该分析运行',404)
+        doc=db.one('SELECT * FROM documents WHERE id=?',(did,))
+        suffix=Path(doc['name']).suffix.lower()
+        if suffix not in ('.pdf','.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'):
+            raise DomainError('该文件没有页面图像',422)
+        if doc['size']>250*1024*1024:raise DomainError('页面预览暂限250MiB原文件',422)
+        try:
+            from app.visual_pipeline import render_visual_png
+            data,_,_,_=render_visual_png(uploads.object_path(doc),doc['name'],page)
+        except Exception as exc:
+            raise DomainError('页面图像不可用：'+type(exc).__name__,422) from exc
+        return Response(data,media_type='image/png')
+    @app.get('/api/projects/{pid}/unresolved-model-calls')
+    def unresolved_model_calls(pid:str):return db.unresolved_calls(pid)
+    @app.get('/api/projects/{pid}/call-reconciliation-events')
+    def call_reconciliation_events(pid:str):return db.reconciliation_events(pid)
+    @app.post('/api/model-calls/{call_id}/reconcile')
+    def reconcile_model_call(call_id:str,data:ReconcileCallInput):
+        return db.reconcile_call(call_id,data.resolution,data.actual_cny,data.note)
     @app.get('/api/analysis-runs/{rid}/records')
     def records_get(rid:str,kind:Literal['MATERIAL','INSPECTION','CONFLICT','MISSING']|None=None):
         runner.get(rid)
         rows=db.all('SELECT * FROM records WHERE run_id=?'+(' AND kind=?' if kind else '')+' ORDER BY kind,id',(rid,kind) if kind else (rid,))
         return [{'record':json.loads(r['envelope']),'review_version':r['review_version'],'verification':runner.verifier.get(r['id'])} for r in rows]
+    @app.get('/api/analysis-runs/{rid}/record-summaries')
+    def record_summaries_get(rid:str,kind:Literal['MATERIAL','INSPECTION']|None=None,
+                             offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
+        """Bounded reviewer list containing only tangible items and executable QA work."""
+        runner.get(rid)
+        rows=db.all('''SELECT r.id,r.envelope,r.review_version,
+                               json_extract(vr.payload,'$.status') AS verification_status,
+                               json_extract(vr.payload,'$.checked_at') AS verification_checked_at,
+                               COALESCE(json_array_length(json_extract(vr.payload,'$.fields')),0) AS verification_field_count,
+                               (SELECT json_extract(field.value,'$.status')
+                                  FROM json_each(json_extract(vr.payload,'$.fields')) AS field
+                                 WHERE json_extract(field.value,'$.path')='/name' LIMIT 1) AS name_verification_status
+                        FROM records r LEFT JOIN verification_reports vr ON vr.record_id=r.id
+                        WHERE r.run_id=? AND r.kind IN ('MATERIAL','INSPECTION')
+                        ORDER BY r.kind,r.id''',(rid,))
+        visible=[];counts={'MATERIAL':0,'INSPECTION':0}
+        for row in rows:
+            record=json.loads(row['envelope'])
+            report={'fields':[{'path':'/name','status':row['name_verification_status']}]} if row['name_verification_status'] else {}
+            if reviewer_record_is_visible(record,report):
+                visible.append((row,record));counts[record['kind']]+=1
+        selected=[pair for pair in visible if kind is None or pair[1]['kind']==kind]
+        total=len(selected);items=[]
+        keys=('name','requirement','subject','activity','reason','blocking_reason','requirement_status',
+              'evidence_ids','design_properties','qa_type','csi_sections','performer_as_stated','witness_as_stated',
+              'timing','frequency','acceptance_criteria','standard_reference','report_name','quantity',
+              'material_kind','location','condition')
+        for row,record in selected[offset:offset+limit]:
+            candidate=record['candidate']
+            report={'fields':[{'path':'/name','status':row['name_verification_status']}]} if row['name_verification_status'] else {}
+            display=reviewer_record_display(record,report)
+            items.append({'record':{'kind':record['kind'],'meta':record['meta'],'review':record['review'],
+                                    'candidate':{key:candidate.get(key) for key in keys},'display':display},
+                          'review_version':row['review_version'],
+                          'verification':{'record_id':row['id'],'status':row['verification_status'] or 'NOT_CHECKED',
+                                          'checked_at':row['verification_checked_at'],
+                                          'field_count':row['verification_field_count']}})
+        return {'items':items,'pagination':{'offset':offset,'limit':limit,'total':total,
+                                             'next_offset':offset+len(items) if offset+len(items)<total else None},
+                'counts':counts}
+    @app.get('/api/records/{record_id}')
+    def record_get(record_id:str):
+        row=db.one('SELECT envelope,review_version FROM records WHERE id=?',(record_id,))
+        return {'record':json.loads(row['envelope']),'review_version':row['review_version'],
+                'verification':runner.verifier.get(record_id)}
     @app.get('/api/analysis-runs/{rid}/evidence/{eid}')
     def evidence_get(rid:str,eid:str):
         runner.get(rid)
@@ -213,8 +301,17 @@ def create_app(settings:Settings|None=None)->FastAPI:
             import pdfplumber
             with pdfplumber.open(path) as pdf:
                 page=pdf.pages[q['locator']['page_number']-1]
-                image=page.to_image(resolution=max(12,min(120,1600*72/max(page.width,page.height))))
+                from app.visual_pipeline import PDF_CROP_COORDINATE_SYSTEM, pdf_cropbox_dimensions
+                width,height=pdf_cropbox_dimensions(page)
+                # The preview is intentionally limited to CropBox, just like OCR
+                # and vision rendering. Existing absolute PDF locators remain
+                # supported; new CropBox-local locators are translated back only
+                # for pdfplumber's drawing API.
+                image=page.to_image(resolution=max(12,min(120,1600*72/max(width,height))),force_mediabox=False)
                 boxes=q['word_boxes'] or ([q['locator']['bbox']] if q['locator'].get('bbox') else [])
+                if q['locator'].get('coordinate_system')==PDF_CROP_COORDINATE_SYSTEM:
+                    crop_x,crop_top,_,_=page.cropbox
+                    boxes=[[box[0]+crop_x,box[1]+crop_top,box[2]+crop_x,box[3]+crop_top] for box in boxes]
                 for box in boxes:image.draw_rect(box,fill=(255,210,0,65),stroke=(230,155,0,180),stroke_width=1)
                 out=io.BytesIO();image.save(out,format='PNG')
         except Exception as exc:

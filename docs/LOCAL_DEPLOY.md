@@ -36,7 +36,7 @@
 .\start-local.cmd --live
 ```
 
-`--live` 只开启本机入口。配置不完整则拒绝启动，不打印密钥；启动本身不向模型发送请求，点击分析后才可能发生费用。默认廉价非思考模式、短输出和每项目累计300CNY预算不变。没有配置或授权的密钥不会被自动寻找。
+`--live` 只开启本机入口。配置不完整则拒绝启动，不打印密钥；启动本身不向模型发送请求，点击分析后才可能发生费用。DeepSeek使用非思考，Gemini 3.6 Flash使用最低minimal推理；短输出和每项目累计300CNY预算不变。当前选择DeepSeek V4 Flash：Windows优先运行`start-deepseek-live.ps1`；首次运行由仅限127.0.0.1的页面输入并确认预算。选择保存后，Key只写入`.local/credentials/`下的Windows DPAPI当前用户密文，后续自动启动；不写明文`.env`、网址、命令行或日志。运行`scripts/deepseek_local_setup.py --replace-key`可更换，`--forget-key`可删除。Gemini对应入口仍为`start-gemini-live.ps1`和`scripts/gemini_local_setup.py`。
 
 ## 数据和更新
 默认数据在当前工程 `.local/`：原文件、SQLite数据库、审核、预算、任务进度。不要靠删除SQLite重置费用。升级前正常停止服务，备份整个数据目录，不只复制数据库主文件；解压新代码不能覆盖或删除 `.local` 和用户自己的 `.env`。

@@ -6,21 +6,24 @@ from decimal import Decimal
 import io
 import json
 import sqlite3
+import threading
 import time
 
 import httpx
 import pytest
 from openpyxl import load_workbook
+from PIL import Image
 
 from app.db import Database, DomainError, BudgetError, dumps
 from app.gateway import Gateway, InvalidModelOutput, ProviderPaused
 from app.verification import (VerificationService, citation, exact_quote, anchors, digest, fields_for, summarize, statement_span)
 from app.settings import Settings, ROOT
+from contracts.runtime_rules import validate_schema
 from .conftest import run_demo, upload
 
 
 def evidence(text='The valve body shall be 316 stainless steel.'):
-    e=json.loads((ROOT/'examples/evidence.json').read_text())[0]
+    e=json.loads((ROOT/'examples/evidence.json').read_text(encoding='utf-8'))[0]
     e.update(raw_text=text, file_name='Spec.txt', text_map=[], internal_revision_date='2026-08-01', revision_label='2')
     return e
 
@@ -79,6 +82,39 @@ def test_pdf_text_map_coordinates():
     q=exact_quote(e,'316')
     assert q['word_boxes']==[[40,20,56,30]] and q['locator']['bbox']==[40,20,56,30]
     assert q['locator']['page_number']==2
+
+
+def test_vision_context_is_not_an_original_sentence_or_semantic_support():
+    e=evidence('Visual observation: DOOR D-1 appears near the north wall.')
+    e.update(extraction_method='VISION',content_basis='MODEL_VISION_OUTPUT',
+             locator={**e['locator'],'page_number':3,'bbox':[0,0,612,792],
+                      'coordinate_system':'pdf-cropbox-points-top-left'})
+    q=anchors('DOOR D-1',e)[0]
+    assert q['text_basis']=='MODEL_VISION_OUTPUT'
+    assert q['role']=='CONTEXT' and q['granularity']=='PAGE_VISUAL_CONTEXT'
+    assert (q['start'],q['end'],q['word_boxes'])==(0,len(e['raw_text']),[])
+    f=field(e);f['citations']=[q]
+    validate_schema('citation-report',{'version':'1.0','policy_version':'test','record_id':'REC-test',
+        'candidate_hash':'x','evidence_fingerprint':'x','checked_at':'now','status':'PENDING','counts':{},
+        'fields':[f],'coverage_note':'x','limitations':[],'source_run_id':'RUN-test',
+        'processing_basis':None,'verifier_identity':{'provider':'mock','model_id':'mock','prompt_sha256':'x','endpoint_sha256':'x','policy_version':'test'}})
+    with pytest.raises(DomainError):
+        exact_quote(e,e['raw_text'])
+    semantic=field(e)
+    with pytest.raises(InvalidModelOutput):
+        VerificationService.apply_model([semantic],result(semantic,e),{e['evidence_id']:e},'CALL-test')
+
+
+def test_vision_context_schema_rejects_support_role():
+    e=evidence('Visual observation: symbol.')
+    e.update(extraction_method='VISION',content_basis='MODEL_VISION_OUTPUT')
+    q=anchors('',e)[0];q['role']='SUPPORT'
+    f=field(e);f['citations']=[q]
+    report={'version':'1.0','policy_version':'test','record_id':'REC-test','candidate_hash':'x',
+        'evidence_fingerprint':'x','checked_at':'now','status':'PENDING','counts':{},'fields':[f],
+        'coverage_note':'x','limitations':[],'source_run_id':'RUN-test','processing_basis':None,
+        'verifier_identity':{'provider':'mock','model_id':'mock','prompt_sha256':'x','endpoint_sha256':'x','policy_version':'test'}}
+    with pytest.raises(Exception):validate_schema('citation-report',report)
 
 
 def test_literal_mismatch_is_never_self_verified():
@@ -197,14 +233,21 @@ def test_mock_semantic_button_cannot_trigger_paid_call(client,demo):
     assert client.post(uri,json={'expected_version':0}).status_code==200
 
 
-def test_export_contains_field_citations_internal_links(client,demo):
+def test_export_places_readable_evidence_with_each_item(client,demo):
     rid,_=demo
     data=client.get(f'/api/analysis-runs/{rid}/exports/json').json()
-    assert data['verifications'] and all('file_name' in e for e in data['evidence'])
+    assert data['export_version']=='0.2.6-readable-en-2'
+    assert all(item['evidence'] for key in ('materials_and_equipment','inspections_and_tests')
+               for item in data[key])
+    assert 'conflicts' not in data and 'missing_information' not in data
+    assert 'citation_catalog' not in data and 'verifications' not in data
+    assert not any(key.endswith('_id') or key.endswith('_ids')
+                   for key in data for _ in [None])
     wb=load_workbook(io.BytesIO(client.get(f'/api/analysis-runs/{rid}/exports/xlsx').content))
-    assert {'字段核验','原句引用','证据'}<=set(wb.sheetnames)
-    assert wb['原句引用'].max_row>1 and wb['字段核验'].max_row>1
-    assert any(row[7].hyperlink for row in wb['字段核验'].iter_rows(min_row=2))
+    assert {'Evidence','Field Verification','Citations','PDF Geometry Audit'}.isdisjoint(wb.sheetnames)
+    material=wb['Materials & Equipment']
+    assert material.cell(4,14).value=='Evidence Source' and material.cell(4,15).value=='Evidence Text'
+    assert material.cell(5,14).value and material.cell(5,15).value
     for ws in wb:
         for row in ws:
             assert all(c.data_type!='f' for c in row)
@@ -214,7 +257,8 @@ def test_rejected_item_not_in_reviewed_only_export(client,demo):
     rid,rows=demo;row=rows[0];id_=row['record']['meta']['record_id']
     client.post(f'/api/records/{id_}/review',json={'action':'REJECTED','expected_version':0})
     data=client.get(f'/api/analysis-runs/{rid}/exports/json?reviewed_only=true').json()
-    assert id_ not in data['verifications']
+    assert all(not data[key] for key in ('materials_and_equipment','inspections_and_tests','quantity_takeoffs'))
+    assert id_ not in json.dumps(data,ensure_ascii=False)
 
 
 def test_additive_migration_keeps_legacy_budget(tmp_path):
@@ -225,6 +269,8 @@ def test_additive_migration_keeps_legacy_budget(tmp_path):
     db=Database(path)
     assert db.cost('P')['spent_cny']=='1.000000'
     assert db.one('SELECT version FROM schema_migrations WHERE version=2')['version']==2
+    assert db.one('SELECT version FROM schema_migrations WHERE version=3')['version']==3
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='call_reconciliation_events'")
     assert Database(path).cost('P')['spent_cny']=='1.000000'
 
 
@@ -232,7 +278,7 @@ def test_additive_migration_keeps_legacy_budget(tmp_path):
 def live_context(client,project,tmp_path):
     upload(client,project['id'],'spec.txt',b'The valve body shall be 316 stainless steel.')
     run=client.app.state.runner.create(project['id']);db=client.app.state.db
-    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=client.app.state.runner.get(run['id'])
+    db.execute("UPDATE runs SET status='RUNNING',provider='deepseek' WHERE id=?",(run['id'],));run=client.app.state.runner.get(run['id'])
     ev=evidence();ev.update(project_id=project['id'],input_snapshot_id=run['snapshot_id'])
     s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'),start_worker=False)
     return db,run,ev,s
@@ -247,6 +293,36 @@ def test_verifier_non_thinking_budget_and_cache(live_context):
     assert len(calls)==1 and calls[0]['thinking']=={'type':'disabled'}
     assert calls[0]['model']==s.cheap_model and calls[0]['max_tokens']==1400
     assert db.cost(run['project_id'])['spent_cny']=='0.000220'
+
+
+def test_verifier_crash_after_atomic_commit_recovers_without_second_http(live_context,monkeypatch):
+    db,run,e,s=live_context;f=field(e);requests=[]
+    g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json=body(result(f,e))))[1])))
+    committed=db.finalize_model_call
+    def commit_then_crash(*args,**kwargs):
+        committed(*args,**kwargs)
+        raise SystemExit('synthetic crash after verification commit')
+    monkeypatch.setattr(db,'finalize_model_call',commit_then_crash)
+    with pytest.raises(SystemExit,match='verification commit'):
+        g.verify_claims(run,[f],{e['evidence_id']:e})
+    monkeypatch.setattr(db,'finalize_model_call',committed)
+
+    recovered=g.verify_claims(run,[f],{e['evidence_id']:e})
+    assert recovered.cached and recovered.request_id and recovered.data==result(f,e)
+    assert len(requests)==1 and db.cost(run['project_id'])['calls']==1
+
+
+def test_gemini_verifier_uses_minimal_and_accounts_total_output(live_context):
+    db,run,e,s=live_context;run={**run,'provider':'gemini'};f=field(e);calls=[]
+    s=replace(s,provider='gemini',api_base_url='https://generativelanguage.googleapis.com/v1beta/openai',
+              cheap_model='gemini-3.6-flash')
+    response=body(result(f,e));response['usage']['total_tokens']=175
+    def handler(r):calls.append(json.loads(r.content));return httpx.Response(200,json=response)
+    g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(handler)))
+    value=g.verify_claims(run,[f],{e['evidence_id']:e})
+    assert value.mode=='gemini' and calls[0]['reasoning_effort']=='minimal' and 'thinking' not in calls[0]
+    assert db.cost(run['project_id'])['output_tokens']==75
 
 
 @pytest.mark.parametrize('case',['budget','disabled','oversized'])
@@ -278,22 +354,46 @@ def test_verifier_failure_never_repeats_silently(live_context,case):
     if case in ('timeout','usage'):
         with pytest.raises(ProviderPaused):g.verify_claims(run,[f],{e['evidence_id']:e})
         assert len(requests)==1 and db.cost(run['project_id'])['unknown_calls']==1
-    else:assert Decimal(db.cost(run['project_id'])['spent_cny'])>0
+    else:
+        with pytest.raises((ProviderPaused,InvalidModelOutput)):
+            g.verify_claims(run,[f],{e['evidence_id']:e})
+        row=db.one('SELECT state,response,error FROM model_calls WHERE run_id=?',(run['id'],))
+        assert len(requests)==1 and Decimal(db.cost(run['project_id'])['spent_cny'])>0
+        assert row['state']=='SETTLED_ERROR' and row['response'] is None and row['error']
 
 
-def test_missing_search_basis_does_not_invent_sentence(client,project):
+def test_verifier_http_status_uses_shared_safe_diagnostic(live_context):
+    db,run,e,s=live_context;f=field(e);requests=[]
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(429,headers={'Retry-After':'7','x-request-id':'verify-request-1'},
+                              json={'error':{'status':'RESOURCE_EXHAUSTED','message':'private upstream text'}})
+    g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(ProviderPaused,match='HTTP 429') as caught:
+        g.verify_claims(run,[f],{e['evidence_id']:e})
+    assert 'Retry-After=7' in str(caught.value) and len(requests)==1
+    row=db.one('SELECT state,error,provider_request_id FROM model_calls WHERE run_id=?',(run['id'],))
+    diagnostic=json.loads(row['error'])
+    assert diagnostic=={'kind':'HTTP_STATUS','status':429,'class':'RATE_LIMIT_OR_QUOTA',
+                        'provider_code':'RESOURCE_EXHAUSTED','retry_after':'7',
+                        'provider_request_id':'verify-request-1'}
+    assert row['state']=='UNKNOWN' and row['provider_request_id']=='verify-request-1'
+    assert 'private upstream text' not in row['error']
+
+
+def test_unsupported_source_does_not_create_reviewer_item(client,project):
     upload(client,project['id'],'drawing.dwg',b'Unsupported synthetic DWG')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id'];client.app.state.runner.process(rid)
-    row=client.get(f'/api/analysis-runs/{rid}/records').json()[0]
-    assert row['verification']['status']=='NON_DOCUMENT'
-    assert all(f['basis']=='SEARCH_RECORD' and not f['citations'] for f in row['verification']['fields'])
+    assert client.get(f'/api/analysis-runs/{rid}/records').json()==[]
+    run=client.get(f'/api/analysis-runs/{rid}').json()
+    assert run['coverage']['files_partial_or_failed']==1
 
 
 def test_citation_xss_preserved_as_text_and_not_generated_html():
     e=evidence('<script>alert(1)</script>\nValve body is 316.')
     q=exact_quote(e,'<script>alert(1)</script>')
     assert q['quote']=='<script>alert(1)</script>'
-    source=(ROOT/'web/app.js').read_text()
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
     assert 'innerHTML' not in source and 'document.createTextNode' in source
 
 
@@ -324,6 +424,72 @@ def test_persistent_job_can_verify_finished_run_without_changing_review(client,d
     current=json.loads(db.one('SELECT envelope FROM records WHERE id=?',(record_id,))['envelope'])
     assert current['review']==row['record']['review']
     assert db.one('SELECT status FROM runs WHERE id=?',(rid,))['status']=='PARTIAL'
+
+
+def test_reconciled_verification_job_requires_new_explicit_job_generation(client,demo):
+    db,service,row,rid=prepare_semantic_job(client,demo);requests=[]
+    original_client=service.gateway.client
+
+    def handler(request):
+        requests.append(request)
+        if len(requests)==1:
+            raise httpx.ReadTimeout('synthetic verification uncertainty')
+        payload=json.loads(request.content);content=json.loads(payload['messages'][1]['content'])
+        checks=[]
+        for item in content['fields']:
+            evidence=next(value for value in content['evidence'] if value['evidence_id'] in item['evidence_ids'])
+            checks.append({'path':item['path'],'status':'NEEDS_CONTEXT',
+                           'citations':[{'evidence_id':evidence['evidence_id'],'quote':evidence['text'],'role':'CONTEXT'}],
+                           'reason':'Synthetic demo protocol is not design evidence.'})
+        return httpx.Response(200,json=body({'checks':checks}))
+
+    service.gateway.client=httpx.Client(transport=httpx.MockTransport(handler))
+    record_id=row['record']['meta']['record_id']
+    first_job=service.enqueue(record_id,0);service.process_job(first_job['id'])
+    assert db.one('SELECT state FROM verification_jobs WHERE id=?',(first_job['id'],))['state']=='PAUSED_PROVIDER'
+    call=db.one("SELECT id,state,task_key FROM model_calls WHERE run_id=?",(rid,))
+    assert call['state']=='UNKNOWN' and call['task_key'].startswith('verify:')
+    db.reconcile_call(call['id'],'NOT_BILLED',Decimal('0'),'offline provider ledger check')
+
+    second_job=service.enqueue(record_id,0)
+    assert second_job['id']!=first_job['id']
+    service.process_job(second_job['id'])
+    assert db.one('SELECT state FROM verification_jobs WHERE id=?',(second_job['id'],))['state']=='DONE'
+    calls=db.all("SELECT id,state,task_key FROM model_calls WHERE run_id=? ORDER BY created_at,id",(rid,))
+    assert len(requests)==2 and len(calls)==2
+    assert calls[0]['id']==call['id'] and calls[0]['state']=='RECONCILED_ZERO'
+    assert calls[1]['task_key']==call['task_key']+':manual-requeue:1' and calls[1]['state']=='SETTLED'
+    events=db.reconciliation_events(row['record']['meta']['project_id'])
+    recovery=next(event for event in events if event['payload'].get('event_type')=='RECOVERY_GENERATION_AUTHORIZED')
+    assert recovery['payload']['trigger']=='VERIFICATION_ENQUEUE'
+    assert recovery['payload']['context_id']==second_job['id']
+    service.gateway.client.close();original_client.close()
+
+
+def test_verification_family_stops_after_three_explicit_reconciled_jobs(client,demo):
+    db,service,row,rid=prepare_semantic_job(client,demo);requests=[]
+    original_client=service.gateway.client
+
+    def handler(request):
+        requests.append(request)
+        raise httpx.ReadTimeout('synthetic repeated verification uncertainty')
+
+    service.gateway.client=httpx.Client(transport=httpx.MockTransport(handler))
+    record_id=row['record']['meta']['record_id']
+    for _ in range(3):
+        job=service.enqueue(record_id,0);service.process_job(job['id'])
+        assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='PAUSED_PROVIDER'
+        unknown=db.one("SELECT id FROM model_calls WHERE run_id=? AND actual_units IS NULL",(rid,))
+        db.reconcile_call(unknown['id'],'NOT_BILLED',Decimal('0'),'offline provider ledger check')
+    blocked=service.enqueue(record_id,0);service.process_job(blocked['id'])
+    blocked_row=db.one('SELECT state,message FROM verification_jobs WHERE id=?',(blocked['id'],))
+    assert blocked_row['state']=='PAUSED_PROVIDER' and '三次累计调用上限' in blocked_row['message']
+    calls=db.all("SELECT task_key,state FROM model_calls WHERE run_id=? ORDER BY created_at,id",(rid,))
+    family=calls[0]['task_key']
+    assert len(requests)==3 and [call['task_key'] for call in calls]==[
+        family,family+':manual-requeue:1',family+':manual-requeue:2']
+    assert all(call['state']=='RECONCILED_ZERO' for call in calls)
+    service.gateway.client.close();original_client.close()
 
 
 def test_new_analysis_blocked_while_verification_queued(client,demo):
@@ -358,6 +524,23 @@ def test_job_budget_exhaustion_retains_citations(client,demo):
     assert db.cost(row['record']['meta']['project_id'])['calls']==0
 
 
+def test_close_during_verification_throttle_prevents_reserve_and_http(client,demo):
+    db,service,row,rid=prepare_semantic_job(client,demo);record_id=row['record']['meta']['record_id']
+    service.s=replace(service.s,min_request_interval_seconds=.3)
+    requests=[]
+    service.gateway.s=service.s;service.gateway._last_request_started=time.monotonic()
+    service.gateway.client=httpx.Client(transport=httpx.MockTransport(lambda request: requests.append(request)))
+    job=service.enqueue(record_id,0)
+    worker=threading.Thread(target=service.process_job,args=(job['id'],));worker.start()
+    deadline=time.time()+2
+    while time.time()<deadline and db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']!='RUNNING':
+        time.sleep(.005)
+    client.app.state.runner.close();worker.join(timeout=2)
+    assert not worker.is_alive() and requests==[]
+    assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='INTERRUPTED'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls WHERE run_id=?',(rid,))['n']==0
+
+
 def test_pdf_preview_matches_source_and_blocks_modified_file(client,project,tmp_path):
     from reportlab.pdfgen import canvas
     from app.parsers import parse_file
@@ -375,6 +558,32 @@ def test_pdf_preview_matches_source_and_blocks_modified_file(client,project,tmp_
     doc=client.app.state.db.one('SELECT * FROM documents WHERE id=?',(q['document_id'],))
     client.app.state.uploads.object_path(doc).write_bytes(b'changed-file')
     assert client.get(url).status_code==409
+
+
+def test_pdf_citation_preview_draws_cropbox_local_locator_in_visible_position(client,project,tmp_path):
+    """A non-zero PDF CropBox must not shift a local evidence rectangle twice."""
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'cropped-source.pdf';drawing=canvas.Canvas(str(path),pagesize=(600,800))
+    drawing.setCropBox([100,100,500,600])
+    drawing.drawString(150,400,'DEMO_MATERIAL|PAD-01|Concrete|-|strength=5000 psi')
+    drawing.save()
+    upload(client,project['id'],'cropped-source.pdf',path.read_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    client.app.state.runner.process(rid)
+    row=client.get(f'/api/analysis-runs/{rid}/records?kind=MATERIAL').json()[0]
+    citation=next(q for field in row['verification']['fields'] for q in field['citations'])
+    assert citation['locator']['coordinate_system']=='pdf-cropbox-points-top-left'
+    box=citation['word_boxes'][0]
+    response=client.get(f'/api/records/{row["record"]["meta"]["record_id"]}/citations/{citation["citation_id"]}/preview')
+    assert response.status_code==200
+    preview=Image.open(io.BytesIO(response.content)).convert('RGB')
+    scale=preview.width / 400
+    # The word begins 50 CropBox points from the left, so an erroneous second
+    # CropBox subtraction would put it off-canvas. The correct location is tinted.
+    x=round((box[0]+1)*scale);y=round((box[1]+1)*scale)
+    nearby=[preview.getpixel((px,py)) for px in range(max(0,x-2),min(preview.width,x+3))
+            for py in range(max(0,y-2),min(preview.height,y+3))]
+    assert any(red>150 and green>80 and blue<180 for red,green,blue in nearby)
 
 
 def test_inferred_items_cite_trigger_not_fabricated_design(client,demo):

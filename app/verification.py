@@ -1,7 +1,8 @@
 """Server-owned field citations and evidence checks. No network on reads or review edits.
 
-Citations are slices of immutable parser text, not quotations re-written by the model.
-A literal match is NOT semantic support. Generated labels/inferences remain distinct.
+Parser/OCR citations are slices of immutable extracted text, not quotations re-written by a model.
+Vision output is retained separately as a whole-page review cue: it is never an original-document
+quotation and cannot be used as semantic support. A literal match is NOT semantic support.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from app.gateway import InvalidModelOutput, ProviderPaused
 from app.settings import ROOT
 from contracts.runtime_rules import EvidenceScope, evidence_references, validate_schema
 
-POLICY = 'evidence-check-1'
+POLICY = 'evidence-check-2'
 MAX_BATCH_FIELDS = 4
 
 
@@ -49,12 +50,22 @@ def citation(evidence: dict, start: int, end: int, *, role='CONTEXT', granularit
     text = evidence['raw_text']
     if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(text):
         raise DomainError('引用文字范围无效')
+    is_vision = (evidence.get('content_basis') == 'MODEL_VISION_OUTPUT'
+                 or evidence.get('extraction_method') == 'VISION')
+    # Do not let a span inside generated visual narration look like an original sentence.
+    # The only permitted vision citation is a page-level context pointer plus the retained
+    # output, with human review of the source image required.
+    if is_vision:
+        start, end = 0, len(text)
+        role, granularity, text_basis = 'CONTEXT', 'PAGE_VISUAL_CONTEXT', 'MODEL_VISION_OUTPUT'
+    else:
+        text_basis = 'PARSER_TEXT'
     loc = deepcopy(evidence['locator'])
-    if loc.get('text_line_start') is not None:
+    if not is_vision and loc.get('text_line_start') is not None:
         base = loc['text_line_start']
         loc['text_line_start'] = base + text[:start].count('\n')
         loc['text_line_end'] = base + text[:end].count('\n')
-    boxes = [w['bbox'] for w in evidence.get('text_map', []) if w['end'] > start and w['start'] < end]
+    boxes = [] if is_vision else [w['bbox'] for w in evidence.get('text_map', []) if w['end'] > start and w['start'] < end]
     if boxes:
         loc['bbox'] = [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]
     return {
@@ -65,12 +76,14 @@ def citation(evidence: dict, start: int, end: int, *, role='CONTEXT', granularit
         'revision_label': evidence.get('revision_label'), 'internal_revision_date': evidence.get('internal_revision_date'),
         'start': start, 'end': end, 'quote': text[start:end], 'locator': loc,
         'word_boxes': boxes, 'role': role, 'granularity': granularity,
-        'text_basis': 'PARSER_TEXT',
+        'text_basis': text_basis,
     }
 
 
 def exact_quote(evidence: dict, quote: str, role='SUPPORT') -> dict:
     """Reject invented, modified, and ambiguous quotations. Never fuzzy-match a quote."""
+    if evidence.get('content_basis') == 'MODEL_VISION_OUTPUT' or evidence.get('extraction_method') == 'VISION':
+        raise DomainError('视觉模型输出不是原始文件原句，不能作为语义支持引用')
     if not isinstance(quote, str) or not quote.strip():
         raise DomainError('原句不能为空')
     text = evidence['raw_text']
@@ -87,6 +100,8 @@ def anchors(claim: str, evidence: dict) -> list[dict]:
     text = evidence['raw_text']
     if not text:
         return []
+    if evidence.get('content_basis') == 'MODEL_VISION_OUTPUT' or evidence.get('extraction_method') == 'VISION':
+        return [citation(evidence, 0, len(text), role='CONTEXT', granularity='PAGE_VISUAL_CONTEXT')]
     hits = list(re.finditer(re.escape(claim), text, re.I)) if claim else []
     spans = list(dict.fromkeys(statement_span(text, m.start(), m.end()) for m in hits))
     if not spans:
@@ -162,7 +177,7 @@ def fields_for(record: dict) -> list[dict]:
 
 
 def fingerprint(evs: dict) -> str:
-    return digest({eid: {k: ev.get(k) for k in ('raw_text', 'file_sha256', 'internal_revision_date', 'revision_label', 'locator', 'text_map')}
+    return digest({eid: {k: ev.get(k) for k in ('raw_text', 'content_basis', 'extraction_method', 'file_sha256', 'internal_revision_date', 'revision_label', 'locator', 'text_map')}
                    for eid, ev in sorted(evs.items())})
 
 
@@ -189,15 +204,32 @@ class VerificationService:
     def __init__(self, db: Database, settings, gateway):
         self.db = db; self.s = settings; self.gateway = gateway
 
+    def _evidence_bundle(self, run_id: str, project_id: str, refs: set[str], connection=None) -> dict:
+        """Load only evidence referenced by one record, using the evidence PK."""
+        result = {}
+        storage_ids = [run_id + ':' + evidence_id for evidence_id in sorted(refs)]
+        for offset in range(0, len(storage_ids), 400):
+            batch = storage_ids[offset:offset + 400]
+            placeholders = ','.join('?' for _ in batch)
+            query = f'''SELECT e.payload,d.name AS file_name
+                        FROM evidence e JOIN documents d
+                          ON d.id=e.document_id AND d.project_id=?
+                        WHERE e.run_id=? AND e.id IN ({placeholders})'''
+            params = (project_id, run_id, *batch)
+            rows = ([dict(row) for row in connection.execute(query, params).fetchall()]
+                    if connection is not None else self.db.all(query, params))
+            for row in rows:
+                evidence = json.loads(row['payload'])
+                if evidence['evidence_id'] in refs:
+                    evidence['file_name'] = row['file_name']
+                    result[evidence['evidence_id']] = evidence
+        return result
+
     def load(self, record_id: str):
         row = self.db.one('SELECT * FROM records WHERE id=?', (record_id,))
-        record = json.loads(row['envelope']); evs = {}
+        record = json.loads(row['envelope'])
         refs = evidence_references(record['candidate'])
-        for item in self.db.all('SELECT payload FROM evidence WHERE run_id=?', (row['run_id'],)):
-            e = json.loads(item['payload'])
-            if e['evidence_id'] in refs:
-                e['file_name'] = self.db.one('SELECT name FROM documents WHERE id=? AND project_id=?', (e['document_id'], row['project_id']))['name']
-                evs[e['evidence_id']] = e
+        evs = self._evidence_bundle(row['run_id'], row['project_id'], refs)
         return row, record, evs
 
     def get(self, record_id: str) -> dict:
@@ -228,10 +260,8 @@ class VerificationService:
             if not row or digest(json.loads(row['envelope'])['candidate']) != report['candidate_hash']:
                 return False
             # Source payloads are append-only in normal app use; protect against changed snapshots as well.
-            record = json.loads(row['envelope']); refs = evidence_references(record['candidate']); evs = {}
-            for r in c.execute('SELECT payload FROM evidence WHERE run_id=?', (record['meta']['analysis_run_id'],)):
-                e = json.loads(r['payload'])
-                if e['evidence_id'] in refs: evs[e['evidence_id']] = e
+            record = json.loads(row['envelope']); refs = evidence_references(record['candidate'])
+            evs = self._evidence_bundle(record['meta']['analysis_run_id'], record['meta']['project_id'], refs, c)
             if fingerprint(evs) != report['evidence_fingerprint']:
                 return False
             c.execute('INSERT INTO verification_events VALUES(?,?,?,?)', (uid('VFY'), report['record_id'], dumps(report), now()))
@@ -284,7 +314,10 @@ class VerificationService:
                 f.update(status='UNSUPPORTED', method='NO_SOURCE'); f['issues'].append('没有文档证据，不能确认。')
             elif any(e['extraction_method'] in ('OCR', 'VISION') for e in sources.values()):
                 f.update(status='NEEDS_CONTEXT', method='VISUAL_REVIEW_REQUIRED')
-                f['issues'].append('图像识别文字需要原图人工复验。')
+                if any(e['extraction_method'] == 'VISION' for e in sources.values()):
+                    f['issues'].append('视觉模型输出只保留为整页定位和人工审查提示；它不是原始文件原句，不能作为支持或反对结论。')
+                else:
+                    f['issues'].append('图像识别文字需要原图人工复验。')
             # In mock mode, no semantic model is available. Do not create synthetic verifier success.
             report['fields'].append(f)
         summarize(report); self.save(report)
@@ -293,6 +326,8 @@ class VerificationService:
         run = self.db.one('SELECT * FROM runs WHERE id=?', (row['run_id'],))
         pending = [f for f in report['fields'] if f['status'] == 'NEEDS_SEMANTIC']
         for offset in range(0, len(pending), MAX_BATCH_FIELDS):
+            if job_id and self.db.one("SELECT id FROM verification_jobs WHERE id=? AND state='RUNNING'",(job_id,),False) is None:
+                raise ProviderPaused('核验任务已停止；不发送新请求',409)
             current = self.db.one('SELECT envelope FROM records WHERE id=?', (record_id,))
             if digest(json.loads(current['envelope'])['candidate']) != report['candidate_hash']:
                 return self.get(record_id)
@@ -352,7 +387,7 @@ class VerificationService:
         row, record, _ = self.load(record_id)
         if row['review_version'] != expected_version:
             raise DomainError('记录已变化，请刷新后核验', 409)
-        if self.s.provider != 'deepseek' or self.s.live_errors():
+        if self.s.provider == 'mock' or self.s.live_errors():
             raise DomainError('语义核验需要已配置且批准的真实API；模拟模式不伪造核验结果', 409)
         run = self.db.one('SELECT * FROM runs WHERE id=?', (row['run_id'],))
         if run['provider'] != self.s.provider:
@@ -392,8 +427,9 @@ class VerificationService:
                     state = 'STALE'
         except BudgetError:
             state = 'PAUSED_BUDGET'; message = '预算不足，核验未完成。'
-        except ProviderPaused:
-            state = 'PAUSED_PROVIDER'; message = '接口或账务待核对，不自动重复请求。'
+        except ProviderPaused as exc:
+            state = 'PAUSED_PROVIDER'; message = str(exc)
         except Exception:
             state = 'FAILED'; message = '核验任务失败；已有证据保留，不能标记通过。'
-        self.db.execute('UPDATE verification_jobs SET state=?,message=?,updated_at=? WHERE id=?', (state, message, now(), job_id))
+        self.db.execute("""UPDATE verification_jobs SET state=?,message=?,updated_at=?
+                         WHERE id=? AND state='RUNNING'""", (state, message, now(), job_id))

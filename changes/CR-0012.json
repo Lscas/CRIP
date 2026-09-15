@@ -1,0 +1,54 @@
+{
+  "change_id": "CR-0012",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-API-001",
+    "FR-ROUTE-003",
+    "FR-BUDGET-002",
+    "FR-LOCAL-001"
+  ],
+  "summary": "把修复后的live复测切换为DeepSeek V4 Flash，增加官方端点锁定的不落盘Key启动入口，并更新当前峰值价格快照与人民币安全预留上界。",
+  "decision_refs": [
+    "docs/adr/0007-deepseek-v4-flash-live.md",
+    "docs/PROVIDER_INTEGRATION.md#deepseek-v4-flash当前选择"
+  ],
+  "affected_paths": [
+    ".env.example",
+    "app/settings.py",
+    "scripts/gemini_local_setup.py",
+    "scripts/deepseek_local_setup.py",
+    "start-deepseek-live.ps1",
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_local_entry.py",
+    "config/provider_price_snapshot.json",
+    "spec/traceability.json",
+    "docs/adr/0007-deepseek-v4-flash-live.md",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/MODEL_COST_POLICY.md",
+    "docs/SOURCES.md",
+    "docs/LOCAL_DEPLOY.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/EVIDENCE_VALIDATION.md",
+    "docs/VALIDATION_REPORT.md",
+    "README.md",
+    "CHANGELOG.md",
+    "changes/CR-0012.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_local_entry.py",
+    "tests/app/test_gateway_budget.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户明确要求更新API并切换为DeepSeek V4 Flash。",
+  "known_limitations": [
+    "配置与离线测试不调用DeepSeek；真实连通、实际账单及59页PDF完整输出仍需用户在本机输入Key后验证",
+    "当前只接入文本chat/completions，不把PDF图像发送给视觉实验模型，OCR、DWG和几何量算仍未实现",
+    "原Gemini项目的两条未决费用必须依据Google账单人工核对，切换供应商不会自动结算或删除",
+    "固定10 CNY/USD仅为预算安全倍数，不是报价或实时汇率"
+  ]
+}

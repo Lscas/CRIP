@@ -1,5 +1,7 @@
 # v0.2.5 显示语言实际验证
 
+> Historical validation record. D-25 supersedes the bilingual runtime behavior; current release checks require English-only application presentation.
+
 ## 本轮范围
 在v0.2.4-local完整Git基线上增加FR-UI-002。工作分支`feature/ui-language`。未修改用户电脑、账户配置或远端仓库，未创建云资源。
 

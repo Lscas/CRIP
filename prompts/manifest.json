@@ -59,11 +59,11 @@
     },
     {
       "id": "drawing-crop",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "path": "prompts/drawing-crop/system.md",
-      "schema": "spec/schemas/extraction-result.schema.json",
+      "schema": "spec/schemas/vision-result.schema.json",
       "role": "vision",
-      "status": "draft_text_present_not_live_evaluated"
+      "status": "implemented_mocktransport_tested_live_59_page_validated_concise_output"
     },
     {
       "id": "claim-verification",

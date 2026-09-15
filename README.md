@@ -1,60 +1,101 @@
-# CIRP v0.2.6：原文引用与独立核验
+# CRIP — CIRP v0.2.6 Recovery and Validation Snapshot
 
-新增逐字段原句、低成本语义核验、编辑失效复验及Excel/JSON证据导出。默认mock只定位原句，不伪造核验通过。真实API模式沿用原有用户配置、便宜模型和300CNY预算。
+This public repository contains the recovered CIRP v0.2.6 application source, its original Git history, and a validated English Excel result. The repository name is **CRIP** as requested; the application identifier remains **CIRP** for compatibility with existing files, APIs, and local data.
 
-启动：解压完整项目后双击`start-local.cmd`。保留旧`.local/`和`.env`；先停止并备份旧服务数据再更新代码，新增表会幂等创建，不重置任何预算。
+CIRP is a local construction-document review prototype. It parses project files, prepares reviewer candidates, keeps supporting evidence with each item, and requires human approval before results are used.
 
-打开结果可查看“原文引用与独立核验”；旧记录点击“不调用模型”的引用检查后可生成报告。只有显式配置真实API或点击付费重验才发送模型请求。
+## Current reviewer scope
 
-- [功能与边界](docs/EVIDENCE_VERIFICATION.md)
-- [本轮验证记录](docs/EVIDENCE_VALIDATION.md)
-- 定向：`python scripts/run_checks.py --area evidence`
-- 全套：`python scripts/run_checks.py --area all`
+- Materials and equipment, with the item name, quantity, unit, design properties, specification section, location, status, and evidence separated into readable fields.
+- Executable inspections and tests, with the QA activity, specification section, performer, witness, timing, frequency, acceptance criteria, and evidence kept with the item.
+- English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.
+- Optional local OCR, full-page visual analysis, DXF/CAD metadata, and review-only quantity candidates.
+- Local human review and a project cost ledger with a CNY 300 dispatch cap.
 
-完整图纸/OCR/DWG/Takeoff和全项目无漏项仍未完成；本轮未接入实际模型或进行施工准确率评测。
+Conflict and Missing Information are not shown as current reviewer categories or export sheets. Legacy stored records are preserved for compatibility. Coverage and partial-processing status remain visible at run level.
 
-## 以下为历史版本说明，当前交付以上文为准
+## Safety defaults
 
-# CIRP v0.2.5：中文 / English 界面
-页头“界面语言 / Display language”选择中文或English，即时切换。新建项目和审核抽屉也有选择器；当前浏览器保存偏好。
-**只改显示，不改分析、上传、审核、预算、导出或项目数据。** 原始文件、材料名称、型号、证据、编辑JSON和导出保持原文，不用LLM翻译。
-启动仍为`start-local.cmd`（Windows）或`./start-local.sh`。关闭旧进程后替换程序文件，必须保留自己的`.local/`、`.env`和数据目录。无需数据库迁移。
-[语言功能与边界](docs/UI_LANGUAGE.md) · [实际验证](docs/UI_LANGUAGE_VALIDATION.md)。未连接到用户电脑或远端仓库，本包不代表已在其电脑更新。
+The ordinary local launcher runs in mock mode and does not call a paid model API. Live provider use requires an explicit live launcher and local configuration. Saved API keys use Windows DPAPI current-user encryption and are excluded from Git.
 
-## 沿用的本机与远程部署能力
-以下是原有说明，历史版本测试结果不作为本轮新增验证：
+Never commit `.env`, `.local`, databases, uploaded source documents, logs, or provider credentials. The repository ignore rules exclude those paths by default.
 
-# CIRP v0.2.4 · 全部应用服务在本机运行
-面向施工工程师的文件审查原型。上传 → 基础解析 → 材料、检查/测试/报告、冲突、缺失信息 → 来源 → 人工审核 → 导出。
+## Start locally
 
-**Windows：安装 Python 3.11+，解压后双击 `start-local.cmd`。** 网页地址 `http://127.0.0.1:8000`，服务窗口须保持运行。首次需要安装依赖；依赖未改变时后续启动跳过安装。无需 GitHub、Render、Docker、Node、GPU或云数据库。
+Requirements:
 
-**当前交付是可运行代码和会话Linux环境验证，不是已在你的Windows电脑启动的服务器。** 模拟示例流程已验证；真实API、复杂图纸、OCR、DWG和完整Takeoff未验证/未实现，不宣传已完成全项目分析。
+- Windows with Python 3.11 or newer for the standard local launcher.
+- macOS or Linux can use the shell launcher.
 
-## 入口
-| 用途 | 命令 |
-|---|---|
-| 本机模拟测试 | 双击 `start-local.cmd` |
-| 本机真实API，须先配置密钥/实际价格 | `start-local.cmd --live` |
-| 手机/办公室远程模拟测试，须装cloudflared | 双击 `start-online-test.cmd` |
-| macOS/Linux | `./start-local.sh` |
-| 检查但不安装不启动 | `python scripts/local_deploy.py --check` |
+Windows mock mode:
 
-模拟模式不读取 `.env`，不调用收费API。原`python -m app`入口保持兼容，仍可能加载用户已启用的API配置；需要零费用启动时使用本版新入口。
-
-[本机启动与数据说明](docs/LOCAL_DEPLOY.md) · [本轮实际验证](docs/LOCAL_VALIDATION.md) · [API接入](docs/PROVIDER_INTEGRATION.md) · [产品规格](docs/PRODUCT_SPEC.md)
-
-## 先验证示例
-新建项目后上传 `examples/demo/01_original.txt`、`02_revision.txt`。预期为两条材料、两条检查/报告、一条修订差异；状态PARTIAL。可查看来源、接受/修改/拒绝、导出Excel/JSON。真实资料在模拟模式下不生成虚假的示例材料。
-
-## 数据与费用
-数据库、上传文件、审核记录和预算在本机 `.local/`，正常重启保留；请自己备份。模型推理仍通过你配置的外部API，并非本地大模型。廉价非思考任务、累计300CNY预算和人工核验边界保留，Codex开发费用另计。本轮真实模型调用为0。
-
-## 继续开发
-先读 `AGENTS.md` 与 `docs/DEV_STATE.md`，使用任务上下文包，不重复扫描整个仓库：
-```bash
-python scripts/context_pack.py DEV-002
-python scripts/run_checks.py --area local
-python scripts/run_checks.py --area all
+```text
+start-local.cmd
 ```
-本轮本地Git分支`feature/local-deployment`，无远端推送或云服务创建。现有Render/Cloudflare代码保留，但不作为本机运行前提。
+
+macOS or Linux mock mode:
+
+```bash
+./start-local.sh
+```
+
+The default local address is `http://127.0.0.1:8000`.
+
+Live-provider launchers are available for local, explicitly authorized use:
+
+```powershell
+.\start-deepseek-live.ps1
+.\start-gemini-live.ps1
+```
+
+Review the on-screen data-transfer and cost notice before starting a live analysis. A browser tab or successful startup message does not prove that a document analysis completed; check run status, coverage, records, and the cost ledger.
+
+## Validate the source
+
+Install the pinned application and development dependencies in an isolated environment, then run:
+
+```bash
+python scripts/run_checks.py --area all
+python scripts/build_bundle_manifest.py --check
+node --check web/i18n.js
+node --check web/app.js
+node --test tests/web/i18n.test.mjs
+node --test tests/deploy/worker.test.mjs
+```
+
+The publication recovery was validated from a clean local environment with:
+
+- 494 Python tests passed.
+- 23 localization/UI JavaScript tests passed.
+- 11 deployment-boundary JavaScript tests passed.
+- Requirements/specification synchronization passed.
+- The source bundle manifest passed for 248 files.
+
+No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
+
+## Published test result
+
+The validated workbook is available at [test-results/CIRP_Focused_English_Result.xlsx](test-results/CIRP_Focused_English_Result.xlsx). Its verification record and SHA-256 checksum are in [test-results/README.md](test-results/README.md).
+
+The workbook contains 2,804 material/equipment candidates and 380 inspection/test candidates on three visible sheets. It contains no formulas, hyperlinks, comments, external workbook links, CJK characters, private-use glyphs, or CIRP internal record/evidence/call identifiers.
+
+The source PDFs are intentionally not included. The workbook is a reviewer candidate set, not a construction-accuracy certification, procurement list, approved takeoff, or substitute for professional review.
+
+## Repository structure
+
+- `app/` — local API, parsing, assembly, export, verification, OCR, visual, CAD, security, and credential handling.
+- `web/` — browser interface and English localization.
+- `spec/` and `contracts/` — requirements and machine-readable contracts.
+- `prompts/` — provider-facing extraction and verification prompts.
+- `tests/` — offline application, contract, governance, UI, and deployment tests.
+- `docs/` — architecture, operational boundaries, decisions, and historical validation notes.
+- `test-results/` — the public validated workbook and its verification record.
+
+## Important limitations
+
+- All extracted items remain subject to human review.
+- A partial run is not evidence of construction accuracy or completeness.
+- PDF vector geometry is not treated as material quantity.
+- CAD-derived counts and measurements remain review candidates until scope, units, and duplicate representations are verified.
+- The public workbook demonstrates the export format and a completed processing result; it does not prove that every extracted item is correct.
+- No license file is included. Public visibility does not grant reuse rights beyond applicable law and the repository owner's permissions.

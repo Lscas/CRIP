@@ -172,11 +172,15 @@
                 "granularity": {
                   "enum": [
                     "SENTENCE_OR_LINE",
-                    "FRAGMENT_CONTEXT"
+                    "FRAGMENT_CONTEXT",
+                    "PAGE_VISUAL_CONTEXT"
                   ]
                 },
                 "text_basis": {
-                  "const": "PARSER_TEXT"
+                  "enum": [
+                    "PARSER_TEXT",
+                    "MODEL_VISION_OUTPUT"
+                  ]
                 }
               },
               "required": [
@@ -197,7 +201,38 @@
                 "granularity",
                 "text_basis"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "text_basis": {
+                        "const": "MODEL_VISION_OUTPUT"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "role": {
+                        "const": "CONTEXT"
+                      },
+                      "granularity": {
+                        "const": "PAGE_VISUAL_CONTEXT"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "granularity": {
+                        "enum": [
+                          "SENTENCE_OR_LINE",
+                          "FRAGMENT_CONTEXT"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "issues": {

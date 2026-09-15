@@ -1,11 +1,12 @@
 """定向离线检查；完整日志留在reports/local，终端只给有界摘要。"""
 from __future__ import annotations
-import argparse,subprocess,sys,shutil
+import argparse,os,subprocess,sys,shutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 AREAS={'evidence':['tests/app/test_verification.py'],'ui':['tests/web/test_display_contract.py'],'local':['tests/app/test_local_entry.py'],'render':['tests/app/test_render_preview.py'],'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
        'parsers':['tests/app/test_parsers.py'],'governance':['tests/test_governance.py','tests/test_devtools.py'],'all':['tests']}
 def main()->int:
+    if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8',errors='replace')
     p=argparse.ArgumentParser();p.add_argument('--area',choices=AREAS,default='all');args=p.parse_args()
     commands=[[sys.executable,'-m','pytest',*AREAS[args.area],'-q','--tb=short']]
     if args.area in ('governance','all'):commands.append([sys.executable,'scripts/check_spec_sync.py'])
@@ -13,8 +14,9 @@ def main()->int:
         commands.extend([['node','--check','web/i18n.js'],['node','--check','web/app.js'],['node','--test','tests/web/i18n.test.mjs']])
     if args.area in ('remote','all') and shutil.which('node'):commands.append(['node','--test','tests/deploy/worker.test.mjs'])
     out=ROOT/'reports/local';out.mkdir(parents=True,exist_ok=True);failed=False
+    child_env={**os.environ,'PYTHONUTF8':'1'}
     for index,command in enumerate(commands):
-        completed=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,encoding='utf-8',errors='replace')
+        completed=subprocess.run(command,cwd=ROOT,env=child_env,capture_output=True,text=True,encoding='utf-8',errors='replace')
         text=completed.stdout+completed.stderr;(out/f'{args.area}-{index}.log').write_text(text,encoding='utf-8')
         print(('PASS ' if completed.returncode==0 else 'FAIL ')+' '.join(command))
         if completed.returncode:print('\n'.join(text.splitlines()[-50:])[:10000]);failed=True

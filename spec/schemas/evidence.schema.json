@@ -137,6 +137,12 @@
     "raw_text": {
       "type": "string"
     },
+    "content_basis": {
+      "enum": [
+        "SOURCE_PARSED_TEXT",
+        "MODEL_VISION_OUTPUT"
+      ]
+    },
     "image_crop_uri": {
       "type": [
         "string",

@@ -2,7 +2,7 @@
 
 /* Display-language controls; no changes to workflow or data. */
 .header-controls{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
-.language-control{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap}
+.language-control{display:none}
 .language-control select{padding:5px 8px;font-size:12px;min-width:90px}
 html[lang="en"] .review-stamp{letter-spacing:1px}
 @media(max-width:1100px){header{height:auto;min-height:78px;padding:12px 0;flex-wrap:wrap}.header-controls .pill{white-space:normal}.title-row h1{max-width:740px}}
@@ -13,3 +13,6 @@ html[lang="en"] .review-stamp{letter-spacing:1px}
 
 /* Evidence review panel: source text never enters HTML interpolation. */
 .verification-panel{margin:1rem 0;padding:1rem;border:1px solid #ccd4db;border-radius:10px}.verification-field{padding:.85rem 0;border-top:1px solid #e0e5ea}.verification-field strong,.verification-field small{display:block;overflow-wrap:anywhere}.verification-field blockquote{white-space:pre-wrap;overflow-wrap:anywhere;margin:.5rem 0;padding:.6rem .8rem;border-left:3px solid #70889d;background:#f3f6f8;font-size:.86rem}.verification-panel .row{flex-wrap:wrap}.citation-preview{max-width:100%;height:auto;border:1px solid #ccd4db}.verification-summary{display:block;margin-top:.35rem}mark{background:#ffe585;color:#14283c}
+
+/* Unknown provider calls require an explicit, auditable billing decision before resume. */
+.reconciliation-panel{margin:0 24px 20px;padding:16px;border:1px solid #e2c77f;border-radius:7px;background:#fffaf0}.reconciliation-panel h3{margin:0;font-size:14px;color:#76561c}.reconciliation-panel>p{margin:5px 0 12px}.reconciliation-call{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid #eadbb4;padding:12px 0}.reconciliation-call:first-child{border-top:0}.reconciliation-call strong,.reconciliation-call small{display:block;overflow-wrap:anywhere}.reconciliation-call small{color:var(--muted);font-size:10px;margin-top:2px}#reconcile-dialog form{display:grid;gap:8px}#reconcile-dialog select,#reconcile-dialog textarea{width:100%}#reconcile-dialog input{margin:0}#reconcile-dialog textarea{min-height:80px;resize:vertical}.confirm-check{display:flex;align-items:flex-start;gap:8px;margin:10px 0}.confirm-check input{width:auto;margin-top:5px}#reconcile-dialog .row{margin-top:8px}@media(max-width:760px){.reconciliation-panel{margin:0 18px 18px}.reconciliation-call{align-items:flex-start;flex-direction:column}}

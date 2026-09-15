@@ -28,9 +28,9 @@
 ## 4. 原始文件及解析
 原始二进制与SHA-256不可变，派生文本、表格、图像和CAD对象均链接源文件与解析器版本。重名不同哈希是不同内容；相同哈希可以复用解析，但仍保留每次来源关系。
 
-数字PDF先提取文字、词坐标、表格、旋转和批注；不能因为存在文字层就忽略图形。扫描PDF仅对需要区域做OCR／视觉。没有可信OCR分数时confidence=null，不能让LLM编造0.99。图纸保存Sheet、View、Detail、Legend、Callout、局部裁剪与整页坐标变换。
+数字PDF先提取文字、词坐标、表格、旋转和批注；不能因为存在文字层就忽略图形。扫描PDF仅对需要区域做OCR／视觉。没有可信OCR分数时confidence=null，不能让LLM编造0.99。完整产品目标是保存Sheet、View、Detail、Legend、Callout、局部裁剪与整页坐标变换；当前实现仅保存页面级任务、OCR bbox/confidence和整页图像定位，尚未实现局部裁剪与变换链。
 
-DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可解析的修订和批注要区分正文，不确定采用状态则标记。TXT保留编码与行号。图片保留原尺寸、旋转、裁剪变换和OCR文字。DWG用合法可配置转换服务，缺Xref、字体、自定义对象、单位或Layout明确报出；RENDER_ONLY不能声称对象级工程量。
+DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可解析的修订和批注要区分正文，不确定采用状态则标记。TXT保留编码与行号。完整产品中的图片保留原尺寸、旋转、裁剪变换和OCR文字；当前已提供本机OCR和页面级视觉任务，但未实现局部裁剪变换。DWG用合法可配置转换服务，缺Xref、字体、自定义对象、单位或Layout明确报出；当前转换和对象解析均成功时才标记`OBJECT_METADATA`，转换器缺失、转换失败或对象不可解析均标记`UNAVAILABLE`；不将部分对象解析冒充为完整CAD语义。
 
 解析能力需真实样本集成验证；本规格不保证具体解析器自动满足全部字段。
 
@@ -51,9 +51,9 @@ DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可�
 不分析采购责任。业主供货或其他承包商供货不导致从总项目清单删除。保留原文备注但不生成责任仲裁。
 
 ## 7. 设计净量
-仅设计净量，不加损耗、库存、包装或采购取整。允许直接数字、Schedule、CAD对象计数、Vector PDF长度／面积／体积和已校准扫描测量。数量必须具备单位、方法、位置范围、证据和人工核验。
+仅设计净量，不加损耗、库存、包装或采购取整。产品目标允许直接数字、Schedule、CAD对象计数、Vector PDF长度／面积／体积和已校准扫描测量。数量必须具备单位、方法、位置范围、证据和人工核验。当前CAD对象/图层候选和PDF矢量值只供审计或人工复核，未自动确认图例、重复表达、比例或材料范围，因此不写入设计净量。
 
-直接／Schedule数量可无比例尺；几何量算必须有视图比例、公式ID或安全表达式、测量输入、坐标和校准证据。尺寸存在不等于可以据此推导整个视图比例；多个Viewport分别校准。详图不得当作重复实物计数。
+直接／Schedule数量可无比例尺；几何量算必须有视图比例、公式ID或安全表达式、测量输入、坐标和校准证据。尺寸存在不等于可以据此推导整个视图比例；多个Viewport分别校准。详图不得当作重复实物计数。当前PDF实现仅审计纸面矢量几何和可识别标定信息，不能据此推导材料工程量。
 
 值未知为null，不用0表示未知。推导公式由白名单计算器执行，不eval模型代码。模板临时材料无需精确量。原型可先交付显式／Schedule数量；未实现几何能力必须如实显示待量算，自动Takeoff仍保留在完整产品目标。
 
@@ -86,11 +86,11 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 状态COMPLETED表示计划范围任务已完成，不等于零遗漏或工程正确。未做历史项目评测前不宣传准确率和省时百分比。
 
 ## 12. 模型及token经济性
-遵循`config/model_routing.json`与`docs/MODEL_COST_POLICY.md`。程序任务不耗LLM token；简单分类和联合抽取使用低成本Flash非思考模式；只对确实需要语义协调的少量任务启用Flash低强度思考。更贵模型默认禁用，视觉走独立具备能力的接口。
+遵循`config/model_routing.json`与`docs/MODEL_COST_POLICY.md`。程序任务不耗LLM token；简单分类和联合抽取使用低成本Flash的最低可用推理模式：供应商支持关闭时显式关闭，Gemini 3无法关闭时显式使用minimal并把推理token计入输出费用。只对确实需要语义协调的少量任务提高推理强度。更贵模型默认禁用，视觉走独立具备能力的接口。
 
 同一片段一次提取三类候选，后续使用原子事实与短证据包，不让多个代理重复读取全文。不把完整项目或仓库作为每次上下文。严格保留否定、条件、单位与脚注，不能以压缩为由丢内容。
 
-低价模型降低每token成本；减少实际token靠零调用、短输入、缓存复用、非思考、短JSON及有限重试。没有可用更小模型时可以多个任务共享Flash，不能把不同Prompt伪装成多个不同尺寸模型。
+低价模型降低每token成本；减少实际token靠零调用、短输入、缓存复用、最低推理、短JSON及有限重试。没有可用更小模型时可以多个任务共享Flash，不能把不同Prompt伪装成多个不同尺寸模型。
 
 ## 13. 预算、时间和状态
 每项目300CNY是累计直接处理上限，包括重试及后续运行；基于已结算+未结算预留（其中包含计费未决请求，不重复计算），下一次调用发送前检查。模型/OCR/CAD/直接计算分别核算。共享基础设施费用单独记录分摊，不伪称免费。
@@ -102,10 +102,10 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 ## 14. 用户审核与导出
 全部结果初始PENDING；模型不得填写已批准状态。用户接受／编辑／拒绝由服务端记录身份、时间、原值、新值和说明。本轮不设计跨运行编辑继承；重新分析保留旧快照，开始新的审核。
 
-未审核结果可以预览及导出，但每行和文件总说明显示状态，未完成Run有PARTIAL说明。正式已审核导出只包含对应审核项。来源始终可定位。导出读取保存数据，不重新生成自然语言材料。
+未审核结果可以预览及导出，但每行和文件总说明显示状态，未完成Run有PARTIAL说明。正式已审核导出只包含对应审核项；在量算/几何/视觉尚无独立接受流程时，不将这些`PENDING`分析辅助混入`reviewed_only`导出。来源始终可定位。导出读取保存数据，不重新生成自然语言材料。JSON/XLSX固定使用英文工程审核视图，名称、数量和单位分列，证据随项目显示，冲突双方原文与来源并排；不显示内部ID、原始结构代码或PDF纸面几何审计。
 
 ## 15. 开发治理和测试
-需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由、Assembly和价格配置进入Git；密钥不进入Git。
+需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由、Assembly和价格配置进入Git；密钥不进入Git。用户明确要求避免重复输入时，本机live入口可把供应商密钥保存为Windows DPAPI当前用户加密文件；不得保存明文`.env`，也不得进入网址、命令行或日志。更换Windows账户或电脑不能直接复用该密文。
 
 开发LLM可提议和实现已批准内容，不能自行更改范围、规则、预算、外传边界或验收标准。变更清单区分spec_only、implementation、bugfix；规格先行时产品状态仍planned，不能因为Schema通过就标业务功能implemented。
 
@@ -113,7 +113,7 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 
 ## 16. 当前包与后续交付
 本轮用户已授权开始搭建。交付可运行的本地上传网页、SQLite持久化、基础文字解析、单运行任务、模拟Provider、文本DeepSeek适配器、预算、候选审核和JSON/XLSX导出，以及原规格/契约/测试。
-真实API仅做MockTransport测试；完整图纸、OCR、DWG、几何量算、复杂跨专业分析尚未实现。原型所有运行明确PARTIAL，不因mock演示成功宣称全专业工程能力。详见IMPLEMENTATION_STATUS和VALIDATION_REPORT。
+真实API除MockTransport回归外，已完成Gemini合成连通/局部PDF测试及DeepSeek 144/144文字片段全量运行。本轮又实现本机OCR、DeepSeek页面视觉路由、DXF/DWG对象元数据和几何审计：指定PDF离线已补齐53至58页OCR并建立59页视觉任务；合成DWG转换及对象量算通过。视觉live、真实用户DWG兼容性、图形到材料的完整净量归并、复杂跨专业分析和施工准确率仍需逐项验收。原型明确PARTIAL/待审核，不因接口或局部能力成功宣称全专业工程能力。详见IMPLEMENTATION_STATUS和EVIDENCE_VALIDATION。
 开发token策略落为短AGENTS、分目录指令、有限任务包和定向测试。项目级Codex配置只提供low推理建议，不强制账户模型和token硬上限，不代替安全审查。
 后续仍保留完整全项目目标，不把当前切片当作缩减后的产品验收。跨运行编辑继承、采购定价、正式Gold评测继续按用户决定暂缓。
 
@@ -129,11 +129,11 @@ Cloudflare账户资源实际创建与公网验证是独立待完成需求，不�
 ## 本轮部署交付：D-20
 用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；不修改300CNY预算、Revision规则、业务范围或工程精度承诺。Windows入口提供但无实机验证；首次依赖安装与实际HTTP验证分别报告。见docs/LOCAL_DEPLOY.md。
 
-## 显示语言 v0.2.5（FR-UI-002）
-界面提供中文与English切换，默认中文、保存在当前浏览器。切换只影响标题、菜单、操作按钮、状态标签和已知系统提示。原文件、模型候选、证据、项目名称、数量/单位、候选编辑JSON、审核正文、原始技术诊断及导出内容保持原样。切换无网络/模型调用、不重置运行/上传/未保存输入；后端、Prompt正文和业务配置没有因本次显示改动而变化。细则见`docs/UI_LANGUAGE.md`。
+## English-only presentation (FR-UI-002)
+Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, cost descriptions, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. This presentation change does not add a network or model call and does not change project data, review history, API paths, canonical status codes, algorithms, provider configuration, or the ¥300 budget. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
 
 ## 24. 本轮增量：原文引用与独立核验
 采用成本优先方案A。新增逐字段citation、独立verification报告与付费重验任务，保留原始业务候选和人工审核状态。材料/检查/冲突字段关联原句；推导、计算、缺失报告仅标示其真实依据，不制造设计原句。
-自动分析结束阶段执行免费引用构建，并在已配置真实API时用原有低价非思考模型作分批语义核验；默认模拟模式不调用API、不显示虚假核验通过。GET、语言切换、导出和人工编辑不会自动发送付费请求。编辑会免费重建引用，变化字段失效，后续语义重验须显式请求。
+自动分析结束阶段执行免费引用构建，并在已配置真实API时用原有低价模型的最低可用推理模式作分批语义核验；默认模拟模式不调用API、不显示虚假核验通过。GET、语言切换、导出和人工编辑不会自动发送付费请求。编辑会免费重建引用，变化字段失效，后续语义重验须显式请求。
 所有费用进入原项目账本，24小时原运行时限不自动延长；预算不足保留部分结果。核验只覆盖关联片段及其上下文，不等于全项目反证搜索或完整性评测。详见docs/EVIDENCE_VERIFICATION.md。
 JSON与XLSX增加核验和原句表，不翻译设计原文、不默认打包原始文档。新增SQLite表幂等升级，旧项目和预算不重置。

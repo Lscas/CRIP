@@ -59,14 +59,14 @@ def test_authenticated_demo_upload_limit_and_secret_safety(tmp_path):
     with TestClient(create_app(settings(tmp_path)),base_url='https://'+HOST,
                     headers={'Authorization':'Basic '+base64.b64encode(('engineer:'+PASSWORD).encode()).decode(), 'X-CIRP-Client':'browser','Origin':'https://'+HOST}) as c:
         s=c.get('/api/settings');assert s.status_code==200 and PASSWORD not in s.text
-        assert s.json()['render_free_preview'] and '丢失' in s.json()['storage_warning']
+        assert s.json()['render_free_preview'] and 'Data is lost' in s.json()['storage_warning']
         assert not s.json()['live_ready'] and not s.json()['local_single_user']
         assert c.get('/api/demo-files/01_original.txt').status_code==200
         assert c.get('/api/demo-files/secret.txt').status_code==404
         p=c.post('/api/projects',json={'name':'isolated test'}).json()['id']
         assert c.post(f'/api/projects/{p}/uploads',json={'name':'too-big.txt','size':PREVIEW_BYTES+1}).status_code==413
         run=run_demo(c,p)
-        assert len(c.get(f'/api/analysis-runs/{run}/records').json())==5
+        assert len(c.get(f'/api/analysis-runs/{run}/records').json())==4
         assert c.get(f'/api/analysis-runs/{run}/cost').json()['calls']==0
         assert c.get(f'/api/analysis-runs/{run}/exports/json').status_code==200
         assert c.post('/api/projects',json={'name':'bad'},headers={'Origin':'https://evil.invalid'}).status_code==403
@@ -79,7 +79,7 @@ def test_port_defaults_and_boundaries():
     assert listen_port({})==10000 and listen_port({'PORT':'12345'})==12345
 
 def test_blueprint_only_explicit_free_service():
-    config=yaml.safe_load((ROOT/'render.yaml').read_text())
+    config=yaml.safe_load((ROOT/'render.yaml').read_text(encoding='utf-8'))
     assert set(config)=={'services'} and len(config['services'])==1
     service=config['services'][0]
     assert service['type']=='web' and service['runtime']=='python' and service['plan']=='free'
@@ -90,6 +90,6 @@ def test_blueprint_only_explicit_free_service():
     assert not any('API_KEY' in k for k in env)
 
 def test_ui_discloses_ephemeral_and_has_demo_links():
-    assert 'environment-warning' in (ROOT/'web/index.html').read_text()
-    assert 'storage_warning' in (ROOT/'web/app.js').read_text()
-    assert '/api/demo-files/01_original.txt' in (ROOT/'web/index.html').read_text()
+    assert 'environment-warning' in (ROOT/'web/index.html').read_text(encoding='utf-8')
+    assert 'storage_warning' in (ROOT/'web/app.js').read_text(encoding='utf-8')
+    assert '/api/demo-files/01_original.txt' in (ROOT/'web/index.html').read_text(encoding='utf-8')

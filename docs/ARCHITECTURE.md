@@ -10,6 +10,8 @@
 | 事务/费用/缓存 | app/db.py、migrations/001_initial.sql |
 | 续传/哈希/不可变存储 | app/uploads.py |
 | 解析/失败隔离 | app/parsers.py、app/parser_worker.py |
+| 本机OCR、PDF页面渲染与几何审计 | app/visual_pipeline.py |
+| DXF对象元数据与受限DWG转换 | app/cad.py |
 | 唯一模型入口 | app/gateway.py |
 | 片段与运行生命周期 | app/runner.py |
 | 四表候选/日期归并 | app/assemble.py |
@@ -20,11 +22,13 @@
 Run锁定文件ID与内容；原始文件不可变。每个片段有唯一逻辑EV ID，数据库以Run前缀隔离，运行元数据由服务端加入，模型不能写人工审核状态。重跑创建新审核，不继承上一Run修改。
 
 ## 模型与成本
-默认mock，无HTTP。DeepSeekadapter使用chat/completions、短JSON、thinking disabled；user-provided价格确认之前不发HTTP。并不依赖Codex配置切产品模型。只有本切片L1已接线；配置中规划的reasoning/vision不是已实现能力。
+默认mock，无HTTP。DeepSeek文本适配器使用chat/completions、短JSON、thinking disabled；用户明确选择Gemini 3.6 Flash时锁定Google官方兼容基址并使用reasoning_effort minimal。DeepSeek启用视觉开关时，只有专用`deepseek-v4-flash-vision-exp`可接收本机生成的受限整页PNG，视觉结果必须通过独立Schema并保持人工待审。用户确认人民币计费上界和数据外传提示之前不发HTTP。并不依赖Codex配置切产品模型。
+
+RapidOCR/ONNX、PDF整页视觉任务、DXF对象元数据、GNU LibreDWG受限转换和PDF矢量几何审计已接入本机流程。PDF几何只输出页面对象与可能的标定信息，不写入材料设计净量；CAD块/图层计数或已知单位下的长度面积仅输出可追溯、待审核候选。整页视觉的真实59页吞吐仍在复测中；局部高分辨率裁剪、图纸语义归并、施工准确率和自动材料净量都尚未实现。
 引用本地12套JSON契约，只给模型内联当前抽取Schema。缓存包含项目/快照/模型/Prompt/规则等，不跨项目复用。一次首读联合抽取，汇总/导出用程序；输入字节工程估计超限显示待细分，不隐式丢片段。
 
 ## 仍为目标架构
-PostgreSQL + 对象存储 + 独立队列、完整图纸/视觉/CAD、混合检索和跨专业关系。不要因为本地适配器已经运行就把这些标implemented。实现选择与回滚见ADR-0004，功能边界见IMPLEMENTATION_STATUS。
+PostgreSQL + 对象存储 + 独立队列、局部高分辨率图纸视觉、完整CAD语义、自动设计净量、混合检索和跨专业关系。不要因为本地适配器已经运行就把这些标implemented。实现选择与回滚见ADR-0004，功能边界见IMPLEMENTATION_STATUS。
 
 ## Cloudflare测试入口
 `浏览器 -> Pages Worker(可选) -> Cloudflare Tunnel -> 127.0.0.1 Python -> SQLite/文件`。

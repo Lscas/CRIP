@@ -1,26 +1,45 @@
 {
   "version": "0.2.0",
-  "verified_at": "2026-09-08",
-  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
-  "currency": "CNY",
+  "verified_at": "2026-09-11",
+  "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "currency": "USD",
   "unit": "per_1m_tokens",
   "confirmed_for_user_endpoint": false,
   "reservation_basis": "peak_time_cache_miss",
   "models": {
     "deepseek-v4-flash": {
-      "input_miss": "3.00",
-      "input_hit": "0.10",
-      "output": "9.00"
+      "input_miss": "0.44",
+      "input_hit": "0.014",
+      "output": "1.32"
     },
     "deepseek-v4-flash-vision-exp": {
-      "input_miss": "3.00",
-      "input_hit": "0.10",
-      "output": "9.00"
+      "input_miss": "0.44",
+      "input_hit": "0.014",
+      "output": "1.32"
     },
     "deepseek-v4-pro": {
-      "input_miss": "9.00",
-      "input_hit": "0.30",
-      "output": "27.00"
+      "input_miss": "1.32",
+      "input_hit": "0.044",
+      "output": "3.96"
+    }
+  },
+  "runtime_cny_ceiling": {
+    "basis": "peak_cache_miss_and_output_at_10_CNY_per_USD",
+    "deepseek-v4-flash_input": "4.40",
+    "deepseek-v4-flash_output": "13.20"
+  },
+  "external_provider_snapshots": {
+    "gemini": {
+      "verified_at": "2026-09-10",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "currency": "USD",
+      "model": "gemini-3.6-flash",
+      "service_tier": "standard",
+      "valid_through": "2026-12-31",
+      "input": "0.75",
+      "output_including_thinking": "3.75",
+      "confirmed_for_user_endpoint": false,
+      "runtime_cny_rates": "user_confirmation_required"
     }
   },
   "external_service_prices": {
@@ -28,5 +47,5 @@
     "cad_conversion": null,
     "attributable_compute": null
   },
-  "note": "不是报价保证，用户中转API计费需重新核实；推理tokens若已含completion总数，不重复相加。"
+  "note": "2026-08-16起的官方峰值美元价快照，不是报价或实时汇率保证；运行时用10 CNY/USD安全倍数。用户中转API需重新核实；推理tokens若已含completion总数，不重复相加。"
 }

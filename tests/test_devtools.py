@@ -3,6 +3,7 @@ import json,tomllib
 from pathlib import Path
 import pytest
 from scripts.context_pack import build,ROOT
+from scripts.build_bundle_manifest import source_files
 
 def test_context_pack_is_bounded_and_contains_only_selected_requirements():
     out=build('DEV-002')
@@ -23,3 +24,8 @@ def test_codex_config_is_small_and_does_not_weaken_security():
     data=tomllib.loads((ROOT/'.codex/config.toml').read_text(encoding="utf-8"))
     assert data=={'model_reasoning_effort':'low'}
     assert len((ROOT/'AGENTS.md').read_text(encoding="utf-8"))<3000
+
+def test_source_bundle_manifest_excludes_runtime_outputs():
+    included = [path.relative_to(ROOT).parts for path in source_files()]
+    assert all('outputs' not in parts for parts in included)
+    assert all('.git' not in parts for parts in included)

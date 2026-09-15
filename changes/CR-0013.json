@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0013",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-UI-001",
+    "FR-LOCAL-001",
+    "FR-VERIFY-001"
+  ],
+  "summary": "修复运行中网页每2.5秒重叠加载完整记录集导致的CPU和内存放大；轮询改为串行，只在运行结束后加载一次完整记录，人工审核和手动核验后仍强制刷新。",
+  "decision_refs": [
+    "docs/EVIDENCE_VALIDATION.md#deepseek-v4-flash真实pdf复测",
+    "docs/IMPLEMENTATION_STATUS.md#v026字段原句与独立核验"
+  ],
+  "affected_paths": [
+    "web/app.js",
+    "tests/web/test_display_contract.py",
+    "spec/traceability.json",
+    "docs/EVIDENCE_VALIDATION.md",
+    "docs/VALIDATION_REPORT.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/PROVIDER_INTEGRATION.md",
+    "README.md",
+    "CHANGELOG.md",
+    "changes/CR-0013.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/web/test_display_contract.py",
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户输入DeepSeek Key并明确要求继续真实PDF复测；复测中出现稳定性问题后继续修复。",
+  "known_limitations": [
+    "只优化网页轮询，不把完整记录接口改为分页；290条记录的首次终态加载仍需实际浏览器验收",
+    "59页PDF只有文字层分析，53至58页需要OCR或视觉；不声称施工准确率或无漏项",
+    "DeepSeek实测费用是本机账本结果，供应商最终账单仍以用户账户为准"
+  ]
+}

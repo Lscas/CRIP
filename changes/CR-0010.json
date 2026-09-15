@@ -1,0 +1,72 @@
+{
+  "change_id": "CR-0010",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-API-001",
+    "FR-API-003",
+    "FR-ROUTE-003",
+    "FR-BUDGET-001",
+    "FR-LOCAL-001",
+    "FR-VERIFY-001"
+  ],
+  "summary": "增加Google Gemini 3.6 Flash本机live适配、最低推理参数、保守token结算和不落盘密钥启动入口。",
+  "decision_refs": [
+    "docs/PROVIDER_INTEGRATION.md#google-gemini-36-flash推荐用安全启动器"
+  ],
+  "affected_paths": [
+    "app/settings.py",
+    "app/gateway.py",
+    "app/runner.py",
+    "app/verification.py",
+    "app/assemble.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_local_entry.py",
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py",
+    "start-gemini-live.ps1",
+    "scripts/local_deploy.py",
+    "scripts/gemini_local_setup.py",
+    "scripts/build_bundle_manifest.py",
+    "BUNDLE_MANIFEST.json",
+    ".env.example",
+    "config/model_routing.json",
+    "config/provider_price_snapshot.json",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "docs/REQUIREMENTS.md",
+    "docs/PRODUCT_SPEC.md",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/MODEL_COST_POLICY.md",
+    "docs/SOURCES.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/DEV_STATE.md",
+    "docs/EVIDENCE_VERIFICATION.md",
+    "docs/ARCHITECTURE.md",
+    "docs/ACCEPTANCE_CHECKLIST.md",
+    "docs/LOCAL_DEPLOY.md",
+    "docs/EVIDENCE_VALIDATION.md",
+    "docs/VALIDATION_REPORT.md",
+    "docs/REVIEW_RESOLUTION.md",
+    "docs/adr/0006-gemini-live.md",
+    "README.md",
+    "CHANGELOG.md",
+    "changes/CR-0010.json"
+  ],
+  "tests": [
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_local_entry.py",
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "用户明确要求启动Google Gemini live API，并指定Gemini 3.6 Flash；聊天中出现的密钥不使用、不保存。",
+  "known_limitations": [
+    "已完成一次合成文本连通验证，以及59页真实PDF的首次运行和一次用户授权重试；两次PDF运行分别处理6/144和7/144个片段后因HTTP错误进入PAUSED_PROVIDER，项目累计2条未决调用，尚未验证施工准确率、完整大文件吞吐或Google账单后台一致性",
+    "Gemini 3.6 Flash不能关闭thinking，因此使用最低minimal并按输出计费",
+    "安全启动器使用保守人民币预留上界，实际账单仍由Google账户决定",
+    "图片、图形、DWG和几何量算仍未接入Gemini多模态能力"
+  ]
+}

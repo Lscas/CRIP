@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 import argparse,base64,json,re,shutil,sys,tempfile
+from decimal import Decimal
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -19,7 +20,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='cirp-ui-') as tmp:
         app=create_app(Settings(Path(tmp),start_worker=False))
         with TestClient(app) as client,sync_playwright() as p:
-            executable=args.browser or shutil.which('chromium') or shutil.which('google-chrome')
+            candidates=(args.browser,shutil.which('chromium'),shutil.which('google-chrome'),shutil.which('chrome'),
+                        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                        r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
+            executable=next((str(Path(x)) for x in candidates if x and Path(x).is_file()),None)
             options={'headless':True}
             if executable:options['executable_path']=executable
             browser=p.chromium.launch(**options)
@@ -63,6 +67,25 @@ def main():
                 page.wait_for_function("document.querySelector('#run-state').dataset.code==='PARTIAL'")
                 counts={kind:int(page.locator('#count-'+kind).inner_text()) for kind in ['MATERIAL','INSPECTION','CONFLICT','MISSING']}
                 assert counts=={'MATERIAL':2,'INSPECTION':2,'CONFLICT':1,'MISSING':0},counts
+                rid=app.state.db.one('SELECT id FROM runs ORDER BY created_at DESC LIMIT 1')['id']
+                app.state.db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+                call_id=app.state.db.reserve(app.state.db.one('SELECT project_id FROM runs WHERE id=?',(rid,))['project_id'],rid,
+                                                  'browser-reconciliation',Decimal('0.1'),'mock-test','hash',Decimal('1'),Decimal('1'))
+                app.state.db.unknown(call_id,'{"kind":"NETWORK_ERROR","class":"TIMEOUT"}')
+                app.state.db.execute("UPDATE runs SET status='PAUSED_PROVIDER' WHERE id=?",(rid,))
+                page.wait_for_function("!document.querySelector('#reconciliation-panel').hidden")
+                assert page.locator('#resume').is_disabled()
+                page.locator('#unresolved-calls button').click()
+                assert page.locator('#reconcile-dialog').evaluate('(n)=>n.open')
+                page.locator('#reconcile-form button[type=submit]').click()
+                page.wait_for_timeout(50)
+                assert app.state.db.one('SELECT actual_units FROM model_calls WHERE id=?',(call_id,))['actual_units'] is None
+                page.locator('#reconcile-confirm').check()
+                page.locator('#reconcile-form button[type=submit]').click()
+                page.wait_for_function("document.querySelector('#reconciliation-panel').hidden")
+                assert not page.locator('#resume').is_disabled()
+                assert app.state.db.one('SELECT state FROM model_calls WHERE id=?',(call_id,))['state']=='RECONCILED_ZERO'
+                assert app.state.db.one('SELECT COUNT(*) AS n FROM call_reconciliation_events WHERE call_id=?',(call_id,))['n']==1
                 page.locator('#results-body tr td:first-child button').first.click()
                 page.locator('#drawer-body').get_by_role('button',name='接受',exact=True).click()
                 page.wait_for_function("document.querySelector('#results-body').textContent.includes('ACCEPTED')")
@@ -78,6 +101,7 @@ def main():
                 assert width<=390,('移动端横向溢出',width)
                 assert not errors,errors
                 report={'mode':'offline DOM + TestClient bridge, no network','counts':counts,'review':'ACCEPTED',
+                        'reconciliation':'required confirmation; audit retained; resume unlocked',
                         'evidence':'original text and locator visible','mobile_scroll_width':width,'js_errors':errors,
                         'not_tested':['real localhost browser HTTP','real model API','10GB scale','construction accuracy']}
                 (output/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')

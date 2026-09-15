@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.0/vision-result.schema.json",
+  "title": "单页视觉证据候选",
+  "type": "object",
+  "properties": {
+    "page_type": {
+      "enum": ["DRAWING", "SCHEDULE", "SPEC_PAGE", "PHOTO", "DIAGRAM", "FORM", "OTHER", "UNKNOWN"]
+    },
+    "sheet_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 120},
+    "important_visible_text": {"type": "string", "maxLength": 4000},
+    "observations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 600},
+      "maxItems": 12
+    },
+    "explicit_quantity_texts": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 300},
+      "maxItems": 12
+    },
+    "scale_text": {"type": ["string", "null"], "minLength": 1, "maxLength": 160},
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 300},
+      "maxItems": 8
+    },
+    "needs_review": {"const": true}
+  },
+  "required": [
+    "page_type", "sheet_id", "important_visible_text", "observations",
+    "explicit_quantity_texts", "scale_text", "limitations", "needs_review"
+  ],
+  "additionalProperties": false
+}

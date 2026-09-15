@@ -1,4 +1,6 @@
 # 中文 / English 界面切换
+
+> Historical v0.2.5 behavior. D-25 supersedes this document: the current application assumes English-speaking users and developers, defaults to English only, and ignores legacy saved zh-CN preferences.
 规格／应用版本：0.2.5。需求：FR-UI-002。
 
 ## 使用
@@ -13,7 +15,7 @@
 - 项目名、上传文件名、证据原文、修订日期、型号、品牌、分析候选和用户审核说明。
 - 候选编辑器中的JSON、审核历史JSON、Coverage/能力/费用原始诊断JSON。
 - 数量、单位、币种、数据格式、请求载荷和后台状态。中文切换为英文不会把米换成英尺，也不把CNY换成美元。
-- JSON/Excel导出的字段、表名、内容和来源。按钮名称可翻译，文件仍使用原有导出规则。
+- JSON/Excel文件固定使用D-24定义的英文工程审核格式，不随网页显示语言改变；源文件证据保持原文，只规范多余空白。
 - 未知服务端错误原文。固定的已知诊断使用本地词典翻译；未知异常不能猜译或掩盖。
 
 ## 行为边界

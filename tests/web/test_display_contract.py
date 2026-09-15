@@ -53,12 +53,30 @@ def test_original_actions_and_input_constraints_remain_present():
     elements = Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
     byid = {attrs['id']: (tag, attrs) for tag, attrs in elements if 'id' in attrs}
     expected = ('project-select', 'new-project', 'start', 'pause', 'resume', 'file-input', 'folder-input',
-                'filter', 'run-select', 'export-json', 'export-xlsx', 'drawer', 'project-form')
+                'filter', 'run-select', 'export-json', 'export-xlsx', 'drawer', 'project-form',
+                'reconciliation-panel', 'unresolved-calls', 'reconcile-dialog', 'reconcile-form',
+                'reconcile-resolution', 'reconcile-amount', 'reconcile-confirm')
     assert all(id_ in byid for id_ in expected)
     assert byid['project-input'][1]['maxlength'] == '150'
     assert byid['file-input'][1]['type'] == 'file' and 'multiple' in byid['file-input'][1]
     assert 'webkitdirectory' in byid['folder-input'][1]
     assert byid['project-form'][0] == 'form'
+    assert byid['reconcile-confirm'][1]['required'] == ''
+    assert byid['reconcile-note'][1]['maxlength'] == '1000'
+    assert byid['resume'][1]['data-i18n-title'] == 'reconcile.resumePolicy'
+
+
+def test_reconciliation_ui_requires_provider_check_and_never_inserts_diagnostic_html():
+    source = (ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert "confirmation:'PROVIDER_BILLING_CHECKED'" in source
+    assert "resolution==='BILLED'?'reconcile.savedBilled':'reconcile.savedNotBilled'" in source
+    assert "state.unresolvedCalls.length>0" in source
+    assert "!manifest.documents.length||state.unresolvedCalls.length>0" in source
+    assert "call.provider_request_id||d.provider_request_id" in source
+    assert '保存不会自动重试' in translations and '每个任务族累计最多 3 次' in translations
+    assert 'Saving never retries automatically' in translations and 'at most three calls per task family' in translations
+    assert 'innerHTML' not in source
 
 
 def test_pages_bundle_includes_localization_without_private_files(tmp_path):
@@ -92,5 +110,55 @@ def test_current_version_is_supported_by_record_and_change_metadata():
                 yield from version_fields(child)
 
     for name in ('common.schema.json', 'change-record.schema.json'):
-        fields = list(version_fields(json.loads((ROOT/'spec/schemas'/name).read_text())))
+        fields = list(version_fields(json.loads((ROOT/'spec/schemas'/name).read_text(encoding='utf-8'))))
         assert fields and all(version in values and '0.2.4' in values for values in fields)
+
+
+def test_reviewer_scope_contains_only_material_and_qa_tabs():
+    source = (ROOT/'web/app.js').read_text(encoding='utf-8')
+    html = (ROOT/'web/index.html').read_text(encoding='utf-8')
+    assert "const primaryKind=['MATERIAL','INSPECTION'].find" in source
+    assert 'data-kind="MATERIAL"' in html
+    assert 'data-kind="INSPECTION"' in html
+    assert 'data-kind="CONFLICT"' not in html
+    assert 'data-kind="MISSING"' not in html
+
+
+def test_active_run_polling_is_serialized_and_defers_full_record_loading():
+    source = (ROOT/'web/app.js').read_text(encoding='utf-8')
+    assert 'recordPagination:null,recordsRun:null,recordLoadPromise:null' in source
+    assert 'if(state.refreshPromise){await state.refreshPromise;if(!forceRecords)return;}' in source
+    assert "if(forceRecords||(!active&&state.recordsRun!==rid))" in source
+    assert "api(`/analysis-runs/${rid}/record-summaries?limit=1`)" in source
+    assert "api(`/analysis-runs/${rid}/record-summaries?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=100`)" in source
+    assert 'state.records=previous.concat(page.items.filter(item=>!seen.has(item.record.meta.record_id)));' in source
+    assert "$('results-load-more').onclick" in source
+    assert 'await api(`/records/${row.record.meta.record_id}`)' in source
+    assert 'await refreshRun(true)' in source
+
+
+def test_record_pagination_has_bilingual_visible_controls_and_kind_reset():
+    html=(ROOT/'web/index.html').read_text(encoding='utf-8')
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert 'id="results-load-more"' in html and 'id="results-page-status"' in html
+    assert '"results.loaded": "当前分类已加载 {loaded} / {total} 条结果"' in translations
+    assert '"results.loaded": "Loaded {loaded} of {total} results in this category"' in translations
+    assert 'state.records=[];state.recordPagination=null;await loadRecordPage(true);' in source
+
+
+def test_live_vision_has_explicit_full_page_data_transfer_disclosure():
+    html=(ROOT/'web/index.html').read_text(encoding='utf-8')
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert 'id="vision-disclosure"' in html and '整页 PNG 派生图和解析文本发送到 DeepSeek 官方 API' in html
+    assert "state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready" in source
+    assert 'Live vision sends eligible full-page PNG derivatives' in translations
+
+
+def test_vision_output_is_never_rendered_as_an_original_quote():
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert "e.extraction_method==='VISION'?'evidence.visionTitle':'evidence.title'" in source
+    assert "q.text_basis==='MODEL_VISION_OUTPUT'" in source
+    assert '视觉模型输出仅作为整页审查提示' in translations

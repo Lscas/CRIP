@@ -1,4 +1,4 @@
-"""仅本机入口：默认模拟模式，不读取 .env；--live 才加载用户配置。"""
+"""Local-only entry point: mock by default; --live loads user configuration."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,7 @@ import webbrowser
 
 import uvicorn
 from app.main import create_app
+from app.local_credentials import LocalCredentialError, remember_enabled, save_api_key
 from app.settings import ROOT, VERSION, Settings
 
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '[::1]')
@@ -19,7 +20,7 @@ LOCAL_HOSTS = ('127.0.0.1', 'localhost', '[::1]')
 def port_number(value: str) -> int:
     port = int(value)
     if not 1024 <= port <= 65535:
-        raise argparse.ArgumentTypeError('端口必须在 1024 至 65535 之间。')
+        raise argparse.ArgumentTypeError('Port must be between 1024 and 65535.')
     return port
 
 
@@ -28,28 +29,34 @@ def check_port(port: int) -> None:
         try:
             sock.bind(('127.0.0.1', port))
         except OSError as exc:
-            raise ValueError(f'端口 {port} 已占用；不会关闭已有程序。请使用 --port 8002。') from exc
+            raise ValueError(f'Port {port} is already in use. No existing process was stopped; use --port 8002.') from exc
 
 
 def local_settings(data_dir: Path | None = None, *, live: bool = False) -> Settings:
     if not live:
-        # 不继承外部进程中的付费开关，也不读取 .env 中的任何密钥。
+        # Do not inherit paid-mode switches or API keys from the outer process.
         return Settings(data_dir=(data_dir or ROOT / '.local').resolve(), allowed_hosts=LOCAL_HOSTS)
     settings = Settings.from_env()
     errors = settings.live_errors()
     if errors:
-        raise ValueError('真实 API 尚未配置：' + '；'.join(errors))
+        raise ValueError('Live API is not configured: ' + '; '.join(errors))
     if settings.remote_enabled or settings.render_free_preview:
-        raise ValueError('本机真实 API 配置不得同时启用远程预览。')
-    return replace(settings, data_dir=(data_dir or settings.data_dir).resolve(), allowed_hosts=LOCAL_HOSTS)
+        raise ValueError('Local live API mode cannot be combined with remote preview mode.')
+    resolved_data_dir = (data_dir or settings.data_dir).resolve()
+    if remember_enabled(resolved_data_dir, settings.provider):
+        try:
+            save_api_key(resolved_data_dir, settings.provider, settings.api_key)
+        except (LocalCredentialError, OSError) as exc:
+            raise ValueError('The API key could not be loaded from Windows current-user encrypted storage; the live service was not started.') from exc
+    return replace(settings, data_dir=resolved_data_dir, allowed_hosts=LOCAL_HOSTS)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='CIRP 本机网页、后台任务和 SQLite 一体启动。')
+    parser = argparse.ArgumentParser(description='Start the local CIRP web app, background worker, and SQLite store.')
     parser.add_argument('--port', type=port_number, default=8000)
     parser.add_argument('--data-dir', type=Path)
     parser.add_argument('--no-browser', action='store_true')
-    parser.add_argument('--live', action='store_true', help='显式读取用户的 .env；点击分析后才可能产生模型费用')
+    parser.add_argument('--live', action='store_true', help='Explicitly load live-provider settings; model charges are possible only after Start analysis is clicked')
     args = parser.parse_args(argv)
     try:
         check_port(args.port)
@@ -70,17 +77,17 @@ def main(argv: list[str] | None = None) -> int:
         while not stop_notice.wait(.1):
             if server.started:
                 print(f'[READY] CIRP {VERSION}: {url}', flush=True)
-                print('数据目录：' + str(settings.data_dir), flush=True)
-                print('模式：' + ('真实 API（启动本身不发起模型请求）' if args.live else '模拟模式，模型费用为零'), flush=True)
-                print('关闭窗口或 Ctrl+C 停止服务；正常重启不删除上传文件、审核记录及预算账本。', flush=True)
+                print('Data directory: ' + str(settings.data_dir), flush=True)
+                print('Mode: ' + ('live API (startup itself makes no model request)' if args.live else 'mock; model cost is zero'), flush=True)
+                print('Close the window or press Ctrl+C to stop. A normal restart preserves uploads, review history, and the budget ledger.', flush=True)
                 if not args.no_browser:
                     try:
                         webbrowser.open(url)
                     except Exception:
-                        print('未能自动打开浏览器，请手动访问上方地址。', flush=True)
+                        print('The browser could not be opened automatically. Use the URL shown above.', flush=True)
                 return
             if time.monotonic() >= deadline:
-                print('[WAIT] 服务尚未完成启动，请查看终端错误。没有生成公网入口。', flush=True)
+                print('[WAIT] The service did not finish starting. Review the terminal error; no public endpoint was created.', flush=True)
                 return
 
     thread = threading.Thread(target=notify_ready, name='cirp-readiness', daemon=True)

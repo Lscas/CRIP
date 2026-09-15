@@ -73,7 +73,7 @@
 
 ## FR-PARSE-002 · OCR fallback
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
 对扫描或低文本密度页面使用 OCR/vision fallback。
 
@@ -103,13 +103,14 @@ TXT 保留原始内容、编码和行号。
 
 - 文本和 bbox 可用于 Evidence。
 
-## FR-PARSE-006 · DWG API 转换
+## FR-PARSE-006 · DWG 合法转换
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
-DWG 通过受支持 CAD API 转换并标记解析等级。
+DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解析等级。
 
-- 每个 DWG 标记 RENDER_ONLY 或 OBJECT_METADATA。
+- 转换器可用且派生 DXF 对象解析成功时标记 OBJECT_METADATA；转换器未配置、转换失败或对象解析不可用时标记 UNAVAILABLE。
+- 原 DWG 不改写；派生文件、转换器标识和兼容性警告可追溯，不将部分对象解析冒充为完整 CAD 语义。
 
 ## FR-DATA-001 · 统一文档模型
 
@@ -266,10 +267,11 @@ Material Register 主要按 CSI Division/Section 组织。
 
 ## FR-CONFLICT-001 · 设计差异与真实冲突
 
-优先级：P0；状态：planned
+优先级：P0；状态：superseded
 
 比较同一内容不同来源，区分已按最新版采用的变更、未解冲突及选项差异；不裁定商业供货责任。
 
+替代需求：FR-EXPORT-002
 - 最新版采用保留双方证据。
 - 相同值不同单位经换算后不误报警。
 - 供货责任不作为首版分析任务。
@@ -285,18 +287,20 @@ Material Register 主要按 CSI Division/Section 组织。
 
 ## FR-CONFLICT-003 · 影响关联
 
-优先级：P1；状态：planned
+优先级：P1；状态：superseded
 
 冲突关联受影响材料、QA/QC 和 Missing 项。
 
+替代需求：FR-EXPORT-002
 - Conflict 输出包含 affected IDs。
 
 ## FR-MISSING-001 · 只报告阻断性缺失
 
-优先级：P0；状态：planned
+优先级：P0；状态：superseded
 
 仅在缺少信息阻碍当前输出或判断时生成独立缺失项，区分未上传、未解析和未检索到。
 
+替代需求：FR-EXPORT-002
 - 未指定型号但性能完整只显示待选型。
 - 引用标准未上传不从外网或模型记忆补条款。
 
@@ -370,9 +374,9 @@ Material Register 主要按 CSI Division/Section 组织。
 
 优先级：P1；状态：planned
 
-能程序化的不调用LLM；简单语义任务走低成本非思考模式，复杂任务按条件升级。
+能程序化的不调用LLM；简单语义任务走低成本模型的最低可用推理模式，复杂任务按条件升级。
 
-- 分类与字段提取显式关闭thinking。
+- 分类与字段提取不得依赖供应商默认推理强度：能关闭时显式关闭，不能关闭时显式采用最低支持级别并计入推理token。
 - 无证据不升级更强模型来猜测。
 - 高价模型默认禁用。
 
@@ -416,6 +420,7 @@ Material Register 主要按 CSI Division/Section 组织。
 无额外地区或零保留限制，但保留密钥保护、项目隔离、输入安全及基本访问控制。
 
 - 无密钥进入Git。
+- 只有用户明确选择保存时，API密钥才可写入Windows DPAPI当前用户加密文件；不得写入明文.env、网址、命令行或日志。
 - 不执行上传文档内指令或宏。
 - 不自动将客户资料用于跨项目训练。
 
@@ -590,13 +595,14 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 - 无模型路由调用。
 - 模糊分类才升级cheap。
 
-## FR-ROUTE-003 · Flash非思考默认
+## FR-ROUTE-003 · Flash最低推理默认
 
 优先级：P0；状态：implemented
 
-cheap角色使用deepseek-v4-flash且thinking disabled，输出短JSON。
+cheap角色默认使用deepseek-v4-flash且thinking disabled；用户明确选择Gemini 3.6 Flash时使用reasoning_effort minimal，输出短JSON。
 
-- 不得依赖供应商默认思考模式。
+- 不得依赖供应商默认思考模式；Gemini 3无法关闭推理时采用其最低支持级别。
+- 推理token计入输出预算，不重复计算。
 - 不要求输出思维链。
 
 ## FR-ROUTE-004 · 受控升级
@@ -828,18 +834,18 @@ PR含可解析变更清单，涉及行为的配置/Prompt/代码变化必须关�
 - 已有依赖环境真实HTTP示例流程和重启持久化通过；未验证平台/依赖安装如实报告。
 - 原远程预览保护和预算不变，不将本机端口公开。
 
-## FR-UI-002 · 中英文界面切换，不改变业务行为
+## FR-UI-002 · English-only user and developer presentation
 
 优先级：P1；状态：implemented
 
-网页支持zh-CN与en显示切换，保存当前浏览器偏好；仅翻译界面自有文字，不改变业务数据、请求、分析、审核、预算或导出。
+Assume users and developers work in English. The application, setup flow, launcher diagnostics, public status text, and reviewer exports present CIRP-owned text in English without changing project data, analysis, review, or budget behavior.
 
-- 默认中文，页头、项目弹窗和审核抽屉提供中文/English选择器；刷新可从本地偏好恢复。
-- 切换无需刷新或网络调用；存储不可用时仍可在内存中切换。
-- 不清空未保存项目名称、候选JSON、审核说明、筛选、上传选择，不改变项目/运行/筛选状态。
-- 原始文件、项目名称、材料型号、证据、模型输出、数字/单位和原始技术JSON不翻译。
-- API路径/载荷/状态码、请求头、算法、预算和JSON/XLSX导出字段及正文保持不变；状态码可显示本地化标签但原始值不变。
-- 中文和英文在窄屏正常布局，不用翻译API、不引入新前端框架或运行时依赖。
+- English is the only selectable display language; an old saved zh-CN preference cannot switch the interface back to Chinese.
+- The key-entry page, local launcher, dependency checks, public settings, and cost descriptions use English application-owned messages.
+- The change does not clear unsaved project names, review notes, filters, upload selection, or project/run state and does not add a network or model call.
+- Original source-document quotations remain faithful to the source; fixed reviewer output otherwise uses concise English and fails closed when required legacy business text cannot be translated safely.
+- API paths, canonical status codes, request headers, algorithms, saved project data, human reviews, and budget state do not change.
+- The English interface remains readable on narrow screens without a translation API, new front-end framework, or runtime dependency.
 
 ## FR-CITATION-001 · 逐字段原文定位
 
@@ -858,7 +864,7 @@ PR含可解析变更清单，涉及行为的配置/Prompt/代码变化必须关�
 新增独立核验状态，与项目要求状态和人工批准状态分离。
 
 - 程序校验引用范围、文本片段及数值风险；小模型按每批最多4个字段复核含义。
-- 语义核验显式使用现有便宜模型、非思考模式，计入原项目300CNY预算。
+- 语义核验显式使用现有便宜模型的最低可用推理模式，推理token计入原项目300CNY预算。
 - 无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。
 - 不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。
 
@@ -872,12 +878,14 @@ PR含可解析变更清单，涉及行为的配置/Prompt/代码变化必须关�
 - 付费重验需显式入队，进程中断、过期任务和内容变化不会静默重复收费。
 - 旧记录可查看，旧预算及审核历史不删除；新增表为幂等可加迁移。
 
-## FR-EXPORT-002 · 核验与原句随导出保留
+## FR-EXPORT-002 · 面向工程审核的英文简洁导出
 
 优先级：P0；状态：implemented
 
-JSON和Excel增加逐字段核验、原句、源文件指纹、Revision和位置。
+JSON和Excel以固定英文只输出可直接审核的材料/设备与可执行测试/检查；名称、设计属性、规格章节、数量、执行方和对应证据分列，不显示Conflict、Missing、内部ID或原始结构代码。
 
 - 导出读取已保存结果，不调用模型。
-- Excel字段核验表链接到原句引用表及证据表，原文不作为公式执行。
-- 切换显示语言不改变原文或导出内容；不默认打包全部原件。
+- Excel固定使用英文Summary、Materials & Equipment和Inspections & Tests表；有已保存CAD量算候选时才增加Quantity Takeoffs，不输出Conflict、Missing Information、独立Evidence、Field Verification、Citations或PDF Geometry Audit表。
+- 材料或设备名称、设计属性、规格章节、数量和单位分列；尺寸、厚度、规格和明确数量不得充当名称，数量无明确依据时保持空白且不得写为零。
+- Tests & Inspections只列可执行QA活动，并分列规格章节、执行方、见证方、时机、频率和验收标准；接线图、Shop Drawings、进度资料和普通Submittal不得充当测试。
+- JSON与Excel不显示内部记录/证据/调用ID、原始候选JSON、字段路径、哈希或格式代码；证据紧随对应项目且优先显示实际支持句，所有文本不作为公式执行。
