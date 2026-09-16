@@ -120,11 +120,12 @@ DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解�
 Parse RFC-style EML headers and visible body text locally while preserving RFI, Submittal and attachment boundaries.
 
 - EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
-- Attachments are inventoried as not processed and cannot silently contribute evidence unless uploaded and analyzed separately.
+- Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
+- Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized, and roleless RFI references remain unknown rather than becoming questions.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
-- MSG, mailbox synchronization, attachment recursion and semantic thread inference remain unsupported and are reported as such.
+- MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
 
 ## FR-WORKFLOW-001 · Deterministic workflow relationships
 
@@ -132,8 +133,8 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
-- RFI numeric identifiers are normalized and question/response sources are linked while duplicate roles remain ambiguous.
-- Submittals with the same exact identifier retain source statuses and conflicting statuses remain ambiguous.
+- RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous.
+- Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized and conflicting statuses remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
 
@@ -148,6 +149,17 @@ Allow a customer-configured read-only Autodesk APS or Procore connection to brow
 - Imported bytes pass through the existing project capacity, 4 MiB chunk, SHA-256 and duplicate-content controls.
 - Only trusted HTTPS download hosts are accepted and a bearer token is not forwarded to a different signed-storage host.
 - All automated validation uses synthetic httpx MockTransport responses and makes no live Autodesk or Procore request.
+
+## FR-INGEST-006 · Selected EML attachment import
+
+优先级：P0；状态：implemented
+
+Let a reviewer inspect inert EML attachments and explicitly import one selected attachment through the existing immutable upload pipeline.
+
+- Attachment listing returns only bounded metadata and a SHA-256 identity; raw attachment bytes are not returned by the listing endpoint.
+- The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
+- Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.
+- Attached emails require another explicit selection before nested attachments are visible; active content and remote resources remain inert.
 
 ## FR-DATA-001 · 统一文档模型
 

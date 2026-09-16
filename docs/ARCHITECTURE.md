@@ -8,7 +8,8 @@
 |---|---|
 | 配置/真实API门禁 | app/settings.py |
 | 事务/费用/缓存 | app/db.py、migrations/001_initial.sql |
-| 续传/哈希/不可变存储 | app/uploads.py |
+| 续传/哈希/不可变存储及导入来源 | app/uploads.py、migrations/005_upload_sources.sql |
+| 选定EML附件的本机检查/导入 | app/email_attachments.py |
 | Autodesk/Procore只读目录与选定文件导入 | app/connectors.py |
 | 解析/失败隔离 | app/parsers.py、app/parser_worker.py |
 | RFI/Submittal/Email确定性关系索引 | app/workflows.py |
@@ -26,7 +27,7 @@ Run锁定文件ID与内容；原始文件不可变。每个片段有唯一逻辑
 ## 模型与成本
 默认mock，无HTTP。DeepSeek文本适配器使用chat/completions、短JSON、thinking disabled；用户明确选择Gemini 3.6 Flash时锁定Google官方兼容基址并使用reasoning_effort minimal。DeepSeek启用视觉开关时，只有专用`deepseek-v4-flash-vision-exp`可接收本机生成的受限整页PNG，视觉结果必须通过独立Schema并保持人工待审。用户确认人民币计费上界和数据外传提示之前不发HTTP。并不依赖Codex配置切产品模型。
 
-RapidOCR/ONNX、PDF选择性整页视觉任务、DXF对象元数据、GNU LibreDWG受限转换和PDF矢量几何审计已接入本机流程。可识别的Spec/Schedule有边框表格可路由到一个保留整页坐标的高分辨率局部裁剪；其他合格页面仍使用一次整页概览。RFC风格EML用Python标准库在本机把当前正文、显式引用历史与头信息分开；HTML主动内容不执行，远程资源不请求，附件只登记。确定性守卫阻止RFI问句、被拒Submittal或仅来自邮件引用历史的内容直接成为当前材料/QA候选；精确RFI/Submittal编号及哈希化Message-ID形成有界只读关系索引，歧义不自动裁决。Autodesk/Procore连接器复用已安装`httpx`、现有Uploads路径和Windows DPAPI，不增加SDK或运行时；只列目录和导入选定文件，不执行远程写入。PDF几何只输出页面对象与可能的标定信息，不写入材料设计净量；CAD块/图层计数或已知单位下的长度面积仅输出可追溯、待审核候选。MSG、邮箱同步、附件递归、语义邮件线程推断、连接器交互OAuth/刷新/同步、通用图纸区域检测、图纸语义归并、局部裁剪live质量、施工准确率和自动材料净量仍未实现。
+RapidOCR/ONNX、PDF选择性整页视觉任务、DXF对象元数据、GNU LibreDWG受限转换和PDF矢量几何审计已接入本机流程。可识别的Spec/Schedule有边框表格可路由到一个保留整页坐标的高分辨率局部裁剪；其他合格页面仍使用一次整页概览。RFC风格EML用Python标准库在本机把当前正文、显式引用历史与头信息分开；HTML主动内容不执行，远程资源不请求。附件先保持不活动，审核者可显式选择单个附件，经现有容量、分片、SHA-256和去重路径导入；独立来源表保留父邮件和附件身份，嵌套附件不会自动递归。确定性守卫阻止RFI问句、被拒Submittal或仅来自邮件引用历史的内容直接成为当前材料/QA候选；只有含数字的RFI/Submittal编号进入关系索引，带空格CSI式编号和常见明确Submittal状态被规范化，无角色RFI仍保持未知。Autodesk/Procore连接器复用已安装`httpx`、现有Uploads路径和Windows DPAPI，不增加SDK或运行时；只列目录和导入选定文件，不执行远程写入。PDF几何只输出页面对象与可能的标定信息，不写入材料设计净量；CAD块/图层计数或已知单位下的长度面积仅输出可追溯、待审核候选。MSG、邮箱同步、自动附件递归、语义邮件线程推断、连接器交互OAuth/刷新/同步、通用图纸区域检测、图纸语义归并、局部裁剪live质量、施工准确率和自动材料净量仍未实现。
 引用本地12套JSON契约，只给模型内联当前抽取Schema。缓存包含项目/快照/模型/Prompt/规则等，不跨项目复用。一次首读联合抽取，汇总/导出用程序；输入字节工程估计超限显示待细分，不隐式丢片段。
 
 ## 仍为目标架构

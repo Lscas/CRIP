@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from PIL import Image,ImageDraw
-from app.parsers import MAX_FRAGMENT_BYTES,parse_file,revision
+from app.parsers import MAX_FRAGMENT_BYTES,document_context,parse_file,revision,workflow_references
 from app.parser_worker import save_result
 from app.visual_pipeline import (PDF_CROP_COORDINATE_SYSTEM, ocr_pdf_page,
                                  render_pdf_page, render_visual_png)
@@ -43,7 +43,7 @@ def test_rfi_txt_separates_question_from_response_evidence(tmp_path):
 
     question=next(item for item in result['fragments'] if 'May PVC' in item['text'])
     response=next(item for item in result['fragments'] if 'Type L copper' in item['text'])
-    assert result['document_type']=='RFI_QUESTION'
+    assert result['document_type']=='RFI_RESPONSE'
     assert '> QUESTION' in question['locator']['section']
     assert '> RESPONSE' in response['locator']['section']
     assert question['locator']['text_line_start']<response['locator']['text_line_start']
@@ -58,6 +58,42 @@ def test_submittal_txt_retains_explicit_status_without_inferring_approval(tmp_pa
     assert result['document_type']=='SUBMITTAL'
     assert all('SUBMITTAL 22-11-16 > STATUS: PENDING' in item['locator']['section']
                for item in result['fragments'])
+
+
+def test_workflow_identifiers_require_digits_and_preserve_uncertain_roles():
+    assert workflow_references('The RFI shall be answered before procurement.')==[]
+    assert workflow_references('See RFI No. 0042 and Submittal 23 05 00-01.')==[
+        {'workflow_type':'RFI','identifier':'42'},
+        {'workflow_type':'SUBMITTAL','identifier':'23 05 00-01'},
+    ]
+    assert document_context('RFI 42')=={
+        'document_type':'OTHER','workflow_type':'RFI','identifier':'42','role':'UNKNOWN','status':None}
+
+
+def test_spaced_submittal_identifier_and_common_status_are_canonical():
+    context=document_context('Submittal No: 23 05 00 - 01\nStatus: Approved with comments')
+    assert context=={'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',
+                     'identifier':'23 05 00-01','role':'SUBMITTAL','status':'APPROVED AS NOTED'}
+
+
+def test_forwarded_email_subject_keeps_exact_workflow_identifier():
+    context=document_context('Subject: Fwd: Re: RFI No. 0009 - Door hardware\nResponse:\nApproved as noted.')
+    assert context['identifier']=='9' and context['role']=='RESPONSE'
+
+
+def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
+    path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
+    result=parse_file(path,path.name)
+    assert result['document_type']=='OTHER'
+    assert all('RFI 42 > UNKNOWN' in item['locator']['section'] for item in result['fragments'])
+
+
+def test_not_approved_submittal_status_is_canonical_rejected(tmp_path):
+    path=tmp_path/'submittal.txt'
+    path.write_text('Submittal No: 23 05 00-02\nStatus: Not Approved\nPump P-1',encoding='utf-8')
+    result=parse_file(path,path.name)
+    assert result['workflow_contexts'][0]['status']=='REJECTED'
+    assert all('STATUS: REJECTED' in item['locator']['section'] for item in result['fragments'])
 
 
 def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tmp_path):
@@ -77,7 +113,7 @@ def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tm
                                     'status':'NOT_PROCESSED'}]
     assert 'Type L copper pipe' in text and 'ATTACHMENT-ONLY' not in text
     body=next(item for item in result['fragments'] if item['locator']['native_element_id']=='email-body')
-    assert 'EMAIL > BODY > RFI 042 > RESPONSE' in body['locator']['section']
+    assert 'EMAIL > BODY > RFI 42 > RESPONSE' in body['locator']['section']
     assert body['internal_revision_date']=='2026-09-15'
     assert any('not analyzed' in warning for warning in result['warnings'])
 

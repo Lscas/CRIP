@@ -78,6 +78,7 @@ class Database:
             c.executescript((ROOT / 'migrations/002_verification.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/003_call_reconciliation.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/004_performance_budget.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/005_upload_sources.sql').read_text(encoding="utf-8"))
 
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:

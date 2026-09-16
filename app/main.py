@@ -25,6 +25,7 @@ from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
 from app.remote_access import PreviewAccess
 from app.workflows import build_workflow_index
 from app.connectors import ExternalConnectors
+from app.email_attachments import import_email_attachment,list_email_attachments
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -45,6 +46,10 @@ class ConnectorInput(Input):
 class ConnectorImportInput(Input):
     provider:Literal['autodesk','procore']
     remote_id:str=Field(min_length=1,max_length=2048)
+class EmailAttachmentImportInput(Input):
+    document_id:str=Field(min_length=1,max_length=128)
+    attachment_index:int=Field(ge=0,le=10000)
+    expected_sha256:str=Field(pattern=r'^[0-9a-f]{64}$')
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
     semantic:bool=False
@@ -147,7 +152,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
     @app.get('/api/projects/{pid}/manifest')
     def manifest(pid:str):
         db.one('SELECT * FROM projects WHERE id=?',(pid,))
-        return {'uploads':db.all('SELECT * FROM uploads WHERE project_id=? ORDER BY created_at',(pid,)),
+        upload_rows=db.all('''SELECT u.*,s.source_document_id,s.source_kind,s.source_detail,
+                              d.name AS source_document_name FROM uploads u
+                              LEFT JOIN upload_sources s ON s.upload_id=u.id
+                              LEFT JOIN documents d ON d.id=s.source_document_id
+                              WHERE u.project_id=? ORDER BY u.created_at''',(pid,))
+        for row in upload_rows:row['source_detail']=json.loads(row['source_detail']) if row['source_detail'] else None
+        return {'uploads':upload_rows,
                 'documents':db.all('SELECT id,project_id,name,size,sha256,created_at FROM documents WHERE project_id=? ORDER BY created_at',(pid,))}
     @app.get('/api/projects/{pid}/budget')
     def project_budget(pid:str):return db.cost(pid)
@@ -190,6 +201,15 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def document_file(did:str):
         doc=db.one('SELECT * FROM documents WHERE id=?',(did,))
         return FileResponse(uploads.object_path(doc),filename=doc['name'],media_type='application/octet-stream')
+    @app.get('/api/documents/{did}/email-attachments')
+    def email_attachment_list(did:str):
+        doc=db.one('SELECT * FROM documents WHERE id=?',(did,))
+        return {'document_id':did,'file_name':doc['name'],
+                'attachments':list_email_attachments(uploads.object_path(doc),doc['name'])}
+    @app.post('/api/projects/{pid}/email-attachment-imports',status_code=201)
+    def email_attachment_import(pid:str,data:EmailAttachmentImportInput):
+        doc=db.one('SELECT * FROM documents WHERE id=? AND project_id=?',(data.document_id,pid))
+        return import_email_attachment(uploads,doc,data.attachment_index,data.expected_sha256)
     @app.post('/api/projects/{pid}/analysis-runs',status_code=202)
     def run_create(pid:str,data:RunInput|None=None):return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')

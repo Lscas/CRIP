@@ -47,6 +47,21 @@ def test_reference_without_primary_document_remains_open():
     assert 'primary document' in item['warnings'][0]
 
 
+def test_roleless_rfi_is_open_and_spaced_submittal_ids_link_exactly():
+    result=build_workflow_index([
+        row('D1','rfi-cover.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'0008','role':'UNKNOWN','status':None}]),
+        row('D2','submittal-a.pdf',workflow_contexts=[
+            {'workflow_type':'SUBMITTAL','identifier':'23 05 00 - 01','role':'SUBMITTAL','status':'PENDING'}]),
+        row('D3','submittal-b.pdf',workflow_references=[
+            {'workflow_type':'SUBMITTAL','identifier':'23 05 00-01'}]),
+    ])
+    rfi=next(item for item in result['items'] if item['kind']=='RFI')
+    submittal=next(item for item in result['items'] if item['kind']=='SUBMITTAL')
+    assert rfi['state']=='OPEN' and 'no explicit Question or Response' in rfi['warnings'][0]
+    assert submittal['identifier']=='23 05 00-01' and len(submittal['members'])==2
+
+
 def test_email_threads_link_only_hashed_exact_headers_and_count_external_references():
     parent='MSG-'+'a'*24;child='MSG-'+'b'*24;missing='MSG-'+'c'*24
     result=build_workflow_index([

@@ -6,17 +6,38 @@ import re
 from collections import defaultdict
 
 
+_SPACED_SUBMITTAL_ID=re.compile(
+    r'^\d{1,2}\s+\d{2}\s+\d{2}(?:\s*[-./]\s*[A-Z0-9][A-Z0-9._/-]{0,20})?')
+_COMPACT_ID=re.compile(r'^[A-Z0-9]*\d[A-Z0-9]*(?:[._/-][A-Z0-9]+)*')
+
+
+def normalize_identifier(workflow: str, value: object) -> str | None:
+    """Return a conservative exact workflow identifier; ordinary words never qualify."""
+    if workflow not in {'RFI','SUBMITTAL'} or not isinstance(value,str):return None
+    normalized=' '.join(value.upper().translate(str.maketrans({'–':'-','—':'-'})).strip().split())
+    normalized=re.sub(rf'^{workflow}\b','',normalized).strip()
+    normalized=re.sub(r'^(?:NO\.?|NUMBER)\b','',normalized).lstrip(' #:-')
+    if not re.search(r'\d',normalized):return None
+    match=_SPACED_SUBMITTAL_ID.match(normalized) if workflow=='SUBMITTAL' else None
+    if match:
+        identifier=re.sub(r'\s*([-./])\s*',r'\1',' '.join(match.group(0).split()))
+    else:
+        match=_COMPACT_ID.match(normalized)
+        if not match:return None
+        identifier=match.group(0)
+    identifier=identifier.rstrip('._/-')
+    if not identifier:return None
+    if workflow=='RFI' and identifier.isdigit():identifier=str(int(identifier))
+    return identifier
+
+
 def _key(prefix: str, *values: str) -> str:
     raw='|'.join(values).encode('utf-8')
     return prefix+'-'+hashlib.sha256(raw).hexdigest()[:20]
 
 
 def _identifier(workflow: str, value: object) -> str | None:
-    if not isinstance(value,str):return None
-    normalized=' '.join(value.strip().upper().split())
-    if not normalized:return None
-    if workflow=='RFI' and normalized.isdigit():return str(int(normalized))
-    return normalized
+    return normalize_identifier(workflow,value)
 
 
 def _contexts(summary: dict) -> list[dict]:
@@ -56,11 +77,14 @@ def _workflow_state(workflow: str, members: list[dict]) -> tuple[str,list[str]]:
     if workflow=='RFI':
         questions=[member for member in primary if member.get('role') in {'QUESTION','MIXED'}]
         responses=[member for member in primary if member.get('role') in {'RESPONSE','MIXED'}]
+        unknown=[member for member in primary if member.get('role') not in {'QUESTION','RESPONSE','MIXED'}]
         if len(questions)>1 or len(responses)>1:
             return 'AMBIGUOUS',['Multiple question or response sources share this RFI identifier; compare the originals.']
-        if questions and responses:return 'LINKED',[]
+        if questions and responses:
+            return 'LINKED',(['Other sources with this identifier have no explicit Question/Response role.'] if unknown else [])
         if questions:return 'OPEN',['No explicit response document with this identifier was found in the run.']
         if responses:return 'OPEN',['No explicit question document with this identifier was found in the run.']
+        return 'OPEN',['This RFI identifier has no explicit Question or Response role; review the source.']
     else:
         statuses={str(member['status']).upper() for member in primary if member.get('status')}
         if len(statuses)>1:return 'AMBIGUOUS',['Submittal sources with this identifier have different explicit statuses.']

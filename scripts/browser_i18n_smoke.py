@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import time
+from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -164,6 +165,11 @@ def main():
                 assert client.get(f'/api/projects/{pid}').json()['name'] == project_name
                 passed('New-project form draft and submitted project name remain literal in the English-only UI')
 
+                message=EmailMessage();message['Subject']='RFI 55 response package'
+                message.set_content('Response:\nSee the selected attachment.')
+                message.add_attachment('Attached local note',subtype='plain',filename='attachment.txt')
+                email_path=Path(tmp)/'response.eml';email_path.write_bytes(message.as_bytes())
+
                 page.evaluate('''() => {
                     const original=window.fetch; let held=false;
                     window.fetch=async(...args)=>{
@@ -185,6 +191,17 @@ def main():
                 assert page.locator('#file-total').inner_text() == '2 unique-content files'
                 assert 'Uploaded (COMPLETE)' in page.locator('#files-body').inner_text()
                 passed('English-only display remains stable during a held upload without losing file selection, progress or controls')
+
+                page.locator('#file-input').set_input_files(str(email_path))
+                wait_until(lambda:'3 unique-content files' in (page.locator('#file-total').text_content() or ''),'email upload did not complete')
+                page.get_by_role('button',name='Review email attachments',exact=True).click()
+                wait_until(lambda:page.locator('#drawer-title').text_content()=='Email attachments','email attachment drawer did not open')
+                assert 'attachment.txt' in page.locator('#drawer-body').inner_text()
+                page.locator('#drawer-body').get_by_role('button',name='Import into this project',exact=True).click()
+                wait_until(lambda:'4 unique-content files' in (page.locator('#file-total').text_content() or ''),'selected attachment import did not complete')
+                assert page.locator('#files-body tr').count()==4 and page.locator('#drawer').evaluate('(n)=>n.hidden')
+                assert 'Email attachment from response.eml' in page.locator('#files-body').inner_text()
+                passed('A selected EML attachment imports locally with source provenance and without automatic recursive analysis')
 
                 page.locator('#start').click()
                 wait_until(lambda:page.locator('#run-state').get_attribute('data-code')=='PARTIAL','run did not reach PARTIAL')

@@ -15,11 +15,12 @@ from pathlib import Path
 from time import monotonic
 from defusedxml import ElementTree as ET
 from app.cad import parse_cad
+from app.workflows import normalize_identifier
 from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_file,
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-7'
+PARSER_VERSION='multisource-8'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -40,23 +41,33 @@ _CLAUSE=re.compile(r'^\s*((?:\d+\.)+\d+|\d+\.|[A-Z]\.|\([a-z0-9]+\))\s+',re.I)
 _SCHEDULE=re.compile(r'\b(?:MATERIAL|EQUIPMENT|DOOR|WINDOW|FINISH|FIXTURE|PANEL|VALVE|LIGHTING)?\s*SCHEDULE\b',re.I)
 _RFI_HEADER=re.compile(
     r'(?im)^\s*(?:REQUEST\s+FOR\s+INFORMATION|RFI)(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
-    r'([A-Z0-9][A-Z0-9.-]{0,30})?\s*$')
+    r'([^\r\n]{0,80})\s*$')
 _SUBMITTAL_HEADER=re.compile(
     r'(?im)^\s*(?:SUBMITTAL|SUBMISSION)(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
-    r'([A-Z0-9][A-Z0-9.-]{0,30})?\s*$')
+    r'([^\r\n]{0,100})\s*$')
 _RFI_ROLE=re.compile(r'(?im)^\s*(QUESTION|REQUEST|RESPONSE|ANSWER|REPLY)\s*[:#-]?\s*')
 _SUBMITTAL_STATUS=re.compile(
     r'(?im)^\s*(?:SUBMITTAL\s+)?STATUS\s*[:#-]\s*'
-    r'(APPROVED\s+AS\s+NOTED|REVISE\s+AND\s+RESUBMIT|REJECTED|APPROVED|REVIEWED|PENDING)\b')
+    r'(APPROVED\s+WITH\s+COMMENTS|APPROVED\s+AS\s+SUBMITTED|APPROVED\s+AS\s+NOTED|'
+    r'NO\s+EXCEPTIONS\s+TAKEN|MAKE\s+CORRECTIONS\s+NOTED|REVIEWED\s+AS\s+NOTED|'
+    r'REVISE\s*(?:AND|/)\s*RESUBMIT|RETURNED\s+FOR\s+CORRECTION|NOT\s+APPROVED|'
+    r'REJECTED|APPROVED|REVIEWED|PENDING|SUBMITTED|FOR\s+REVIEW|UNDER\s+REVIEW)\b')
 _EMAIL_RFI_SUBJECT=re.compile(
-    r'(?im)^Subject:\s*(?:Re:\s*)?(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
-    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})?')
+    r'(?im)^Subject:\s*(?:(?:RE|FW|FWD)\s*:\s*)*(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
+    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([^\r\n]{0,100})')
 _EMAIL_SUBMITTAL_SUBJECT=re.compile(
-    r'(?im)^Subject:\s*(?:Re:\s*)?(?:SUBMITTAL|SUBMISSION)'
-    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})?')
+    r'(?im)^Subject:\s*(?:(?:RE|FW|FWD)\s*:\s*)*(?:SUBMITTAL|SUBMISSION)'
+    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([^\r\n]{0,120})')
 _WORKFLOW_REFERENCES={
-    'RFI':re.compile(r'(?i)\bRFI(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})'),
-    'SUBMITTAL':re.compile(r'(?i)\bSUBMITTAL(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})'),
+    'RFI':re.compile(r'(?im)\bRFI(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,80})'),
+    'SUBMITTAL':re.compile(r'(?im)\bSUBMITTAL(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,100})'),
+}
+_SUBMITTAL_STATUS_MAP={
+    'APPROVED AS SUBMITTED':'APPROVED','NO EXCEPTIONS TAKEN':'APPROVED',
+    'APPROVED WITH COMMENTS':'APPROVED AS NOTED','MAKE CORRECTIONS NOTED':'APPROVED AS NOTED',
+    'REVIEWED AS NOTED':'APPROVED AS NOTED','NOT APPROVED':'REJECTED',
+    'RETURNED FOR CORRECTION':'REVISE AND RESUBMIT','REVISE/RESUBMIT':'REVISE AND RESUBMIT',
+    'SUBMITTED':'PENDING','FOR REVIEW':'PENDING','UNDER REVIEW':'PENDING',
 }
 _HTML_QUOTE_MARKER='\x00CIRP-QUOTED-HISTORY\x00'
 _EMAIL_HISTORY_START=re.compile(
@@ -114,11 +125,12 @@ def split_lines(lines: list[str], loc: dict, method: str, rev: tuple,
 
 
 def _clean_identifier(value: str | None, prefix: str) -> str | None:
-    if not value:return None
-    value=value.strip().upper()
-    if value in {'QUESTION','REQUEST','RESPONSE','ANSWER','REPLY','NO','NUMBER','STATUS',
-                 'PENDING','REVIEWED','APPROVED','REJECTED'}:return None
-    return value.removeprefix(prefix).lstrip(' #:-') or None
+    return normalize_identifier(prefix,value)
+
+
+def _submittal_status(value: str) -> str:
+    normalized=' '.join(value.upper().split()).replace(' / ','/').replace('/ ','/').replace(' /','/')
+    return _SUBMITTAL_STATUS_MAP.get(normalized,normalized)
 
 
 def workflow_references(text: str) -> list[dict]:
@@ -126,7 +138,7 @@ def workflow_references(text: str) -> list[dict]:
     found=[];seen=set()
     for workflow,pattern in _WORKFLOW_REFERENCES.items():
         for match in pattern.finditer(text[:200_000]):
-            identifier=_clean_identifier(match.group(1),workflow)
+            identifier=normalize_identifier(workflow,match.group(1))
             if not identifier:continue
             identity=(workflow,identifier.casefold())
             if identity in seen:continue
@@ -145,8 +157,11 @@ def document_context(text: str, original_name: str = '') -> dict:
         identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
         roles={value.upper() for value in _RFI_ROLE.findall(searchable)}
         role=('MIXED' if {'QUESTION','REQUEST'} & roles and {'RESPONSE','ANSWER','REPLY'} & roles else
-              'RESPONSE' if {'RESPONSE','ANSWER','REPLY'} & roles else 'QUESTION')
-        return {'document_type':'RFI_RESPONSE' if role=='RESPONSE' else 'RFI_QUESTION',
+              'RESPONSE' if {'RESPONSE','ANSWER','REPLY'} & roles else
+              'QUESTION' if {'QUESTION','REQUEST'} & roles else 'UNKNOWN')
+        document_type=('RFI_RESPONSE' if role in {'RESPONSE','MIXED'} else
+                       'RFI_QUESTION' if role=='QUESTION' else 'OTHER')
+        return {'document_type':document_type,
                 'workflow_type':'RFI','identifier':identifier,'role':role,'status':None}
     submittal=_SUBMITTAL_HEADER.search(searchable) or _EMAIL_SUBMITTAL_SUBJECT.search(searchable)
     if not submittal:
@@ -156,7 +171,7 @@ def document_context(text: str, original_name: str = '') -> dict:
         identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
         status_match=_SUBMITTAL_STATUS.search(searchable)
         return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,
-                'role':None,'status':status_match.group(1).upper() if status_match else None}
+                'role':'SUBMITTAL','status':_submittal_status(status_match.group(1)) if status_match else None}
     return {'document_type':'UNKNOWN','workflow_type':None,'identifier':None,'role':None,'status':None}
 
 
@@ -165,7 +180,7 @@ def _workflow_label(context: dict, role: str | None = None) -> str | None:
     if not workflow:return None
     label=workflow
     if context.get('identifier'):label+=' '+context['identifier']
-    if workflow=='RFI':label+=' > '+(role or context.get('role') or 'MIXED')
+    if workflow=='RFI':label+=' > '+(role or context.get('role') or 'UNKNOWN')
     if workflow=='SUBMITTAL' and context.get('status'):label+=' > STATUS: '+context['status']
     return label
 
@@ -194,7 +209,8 @@ def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
         fragments=split_lines(lines,loc,method,rev)
         annotate_workflow_fragments(fragments,text,original_name,prefix=prefix)
         return fragments,context
-    groups=[];start=0;current='QUESTION';buffer=[]
+    groups=[];start=0;current=context.get('role');buffer=[]
+    if current not in {'QUESTION','RESPONSE'}:current='UNKNOWN'
     for index,line in enumerate(lines):
         match=_RFI_ROLE.match(line)
         role=None
@@ -565,7 +581,8 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
                 workflow=_workflow_label(default_context,current)
                 fragment.locator['section']=' > '.join(value for value in (workflow,existing) if value) or None
             page_context={**default_context,'role':current,
-                          'document_type':'RFI_RESPONSE' if current=='RESPONSE' else default_context['document_type']}
+                          'document_type':('RFI_RESPONSE' if current in {'RESPONSE','MIXED'} else
+                                           'RFI_QUESTION' if current=='QUESTION' else 'OTHER')}
         return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
                                               'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables),
                                               'document_type':page_context.get('document_type','UNKNOWN')},'warnings':warnings,

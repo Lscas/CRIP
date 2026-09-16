@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from pathlib import Path
-from app.db import Database, DomainError, now, uid
+from app.db import Database, DomainError, dumps, now, uid
 from app.settings import Settings
 
 class Uploads:
@@ -11,15 +11,24 @@ class Uploads:
         self.tmp=settings.data_dir/'uploads'; self.objects=settings.data_dir/'objects'
         self.tmp.mkdir(parents=True,exist_ok=True); self.objects.mkdir(parents=True,exist_ok=True)
 
-    def create(self, project_id: str, name: str, size: int):
+    def create(self, project_id: str, name: str, size: int, *, source_document_id: str | None=None,
+               source_kind: str | None=None, source_detail: dict | None=None):
         name=name.replace('\\','/').split('/')[-1]
         if not name or len(name)>240 or any(ord(x)<32 for x in name): raise DomainError('无效文件名')
         upload_id=uid('UP')
         with self.db.connect(True) as c:
             if not c.execute('SELECT id FROM projects WHERE id=?',(project_id,)).fetchone(): raise DomainError('项目不存在',404)
+            if any(value is not None for value in (source_document_id,source_kind,source_detail)):
+                if not source_document_id or source_kind!='EMAIL_ATTACHMENT' or not isinstance(source_detail,dict):
+                    raise DomainError('无效导入来源')
+                source=c.execute('SELECT id FROM documents WHERE id=? AND project_id=?',(source_document_id,project_id)).fetchone()
+                if not source:raise DomainError('导入来源不存在',404)
             total=c.execute("SELECT COALESCE(SUM(size),0) FROM uploads WHERE project_id=? AND state NOT IN ('DUPLICATE','ABORTED')",(project_id,)).fetchone()[0]
             if size<0 or total+size>self.settings.project_bytes: raise DomainError(f'超出当前项目接收容量配置（{self.settings.project_bytes:,} bytes）',413)
             c.execute('INSERT INTO uploads(id,project_id,name,size,created_at) VALUES(?,?,?,?,?)',(upload_id,project_id,name,size,now()))
+            if source_document_id:
+                c.execute('INSERT INTO upload_sources VALUES(?,?,?,?)',
+                          (upload_id,source_document_id,source_kind,dumps(source_detail)))
         (self.tmp/upload_id).touch()
         return self.get(upload_id)
 
@@ -73,6 +82,18 @@ class Uploads:
                 state='COMPLETE'
             c.execute('UPDATE uploads SET state=?,document_id=? WHERE id=?',(state,doc_id,upload_id))
         return self.get(upload_id)
+
+    def import_bytes(self,project_id: str,name: str,data: bytes, **source):
+        """Feed trusted local bytes through the same capacity, chunk, hash and dedupe path as uploads."""
+        upload=None
+        try:
+            upload=self.create(project_id,name,len(data),**source)
+            for offset in range(0,len(data),self.settings.chunk_bytes):
+                self.write_chunk(upload['id'],offset,data[offset:offset+self.settings.chunk_bytes])
+            return self.complete(upload['id'])
+        except Exception:
+            if upload:self.db.execute("UPDATE uploads SET state='ABORTED' WHERE id=? AND state='UPLOADING'",(upload['id'],))
+            raise
 
     def object_path(self, doc: dict) -> Path:
         path=(self.objects/doc['object_key']).resolve()

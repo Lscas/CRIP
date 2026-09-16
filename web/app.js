@@ -45,7 +45,13 @@ async function selectProject(id){state.project=id;state.run=null;state.records=[
 async function refresh(){
  if(!state.project)return;
  const manifest=await api(`/projects/${state.project}/manifest`);$('files-body').replaceChildren();
- manifest.uploads.forEach(u=>{const tr=el('tr');tr.append(el('td',u.name),el('td',(u.size/1024/1024).toFixed(2)+' MB'),I.bindStatus(el('td'),u.state),elT('td',u.state==='DUPLICATE'?'files.duplicate':u.state==='COMPLETE'?'files.hash':'files.chunk',{offset:u.offset,size:u.size}));$('files-body').append(tr);});
+ manifest.uploads.forEach(u=>{const tr=el('tr'),name=el('td',u.name),verification=elT('td',u.state==='DUPLICATE'?'files.duplicate':u.state==='COMPLETE'?'files.hash':'files.chunk',{offset:u.offset,size:u.size});
+  if(u.source_kind==='EMAIL_ATTACHMENT'&&u.source_document_name)name.append(elT('small','files.emailAttachmentSource',{source:u.source_document_name},'muted'));
+  if(u.document_id&&/\.eml$/i.test(u.name)&&['COMPLETE','DUPLICATE'].includes(u.state)){
+   const attachments=elT('button','emailAttachments.open',{},'link evidence-button');attachments.onclick=error(()=>showEmailAttachments(u.document_id,u.name));verification.append(attachments);
+  }
+  tr.append(name,el('td',(u.size/1024/1024).toFixed(2)+' MB'),I.bindStatus(el('td'),u.state),verification);$('files-body').append(tr);
+ });
  I.bindText($('file-total'),'files.total',{count:manifest.documents.length});
  const runs=await api(`/projects/${state.project}/analysis-runs`);$('run-select').replaceChildren(optionT('run.select'));
  runs.forEach(r=>$('run-select').append(I.bindText(new Option('',r.id),()=>r.created_at.slice(0,19).replace('T',' ')+' · '+I.status(r.status))));
@@ -204,6 +210,16 @@ function renderConnectorItems(){
   button.onclick=error(async()=>{if(item.kind==='FOLDER')await listConnectorItems(item.remote_id);else{button.disabled=true;await api(`/projects/${state.project}/connector-imports`,'POST',{provider:selectedConnector(),remote_id:item.remote_id});toast(I.t('connector.imported',{name:item.name}));await refresh();}});action.append(button);
   const hasSize=item.size!==null&&item.size!==undefined&&Number.isFinite(Number(item.size));
   tr.append(el('td',item.name),I.bindStatus(el('td'),item.kind),el('td',hasSize?(Number(item.size)/1024/1024).toFixed(2)+' MB':'—'),action);body.append(tr);
+ });
+}
+async function showEmailAttachments(documentId,fileName){
+ const listing=await api(`/documents/${documentId}/email-attachments`);$('drawer').hidden=false;I.bindText($('drawer-title'),'emailAttachments.title');const body=$('drawer-body');body.replaceChildren();
+ body.append(elT('p','emailAttachments.description',{file:fileName},'muted'));
+ if(!listing.attachments.length){body.append(elT('p','emailAttachments.empty',{},'muted'));return;}
+ listing.attachments.forEach(item=>{const card=el('article',null,'verification-field');card.append(el('strong',item.name),el('small',`${item.content_type} · ${item.size==null?'—':(item.size/1024).toFixed(1)+' KB'}`));
+  const button=elT('button','emailAttachments.import',{},'outline');button.disabled=!item.importable||!state.project;
+  button.onclick=error(async()=>{button.disabled=true;await api(`/projects/${state.project}/email-attachment-imports`,'POST',{document_id:documentId,attachment_index:item.attachment_index,expected_sha256:item.sha256});$('drawer').hidden=true;toast(I.t('emailAttachments.imported',{name:item.name}));await refresh();});
+  card.append(button);if(!item.importable)card.append(elT('small','emailAttachments.unsupported'));body.append(card);
  });
 }
 async function showRecord(row){
