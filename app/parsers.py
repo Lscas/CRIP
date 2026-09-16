@@ -7,6 +7,9 @@ from concurrent.futures import ProcessPoolExecutor
 from collections.abc import Callable
 from dataclasses import dataclass, asdict, field
 from datetime import date
+from email import policy
+from email.parser import BytesParser
+from html.parser import HTMLParser
 from pathlib import Path
 from time import monotonic
 from defusedxml import ElementTree as ET
@@ -15,7 +18,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-5'
+PARSER_VERSION='multisource-6'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -34,6 +37,22 @@ _SPEC_PART=re.compile(r'^\s*PART\s+[123IVX]+\b(?:\s*[-–—:]\s*.*)?$',re.I|re.
 _DIVISION=re.compile(r'^\s*DIVISION\s+\d{1,2}\b(?:\s*[-–—:]\s*.*)?$',re.I|re.M)
 _CLAUSE=re.compile(r'^\s*((?:\d+\.)+\d+|\d+\.|[A-Z]\.|\([a-z0-9]+\))\s+',re.I)
 _SCHEDULE=re.compile(r'\b(?:MATERIAL|EQUIPMENT|DOOR|WINDOW|FINISH|FIXTURE|PANEL|VALVE|LIGHTING)?\s*SCHEDULE\b',re.I)
+_RFI_HEADER=re.compile(
+    r'(?im)^\s*(?:REQUEST\s+FOR\s+INFORMATION|RFI)(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
+    r'([A-Z0-9][A-Z0-9.-]{0,30})?\s*$')
+_SUBMITTAL_HEADER=re.compile(
+    r'(?im)^\s*(?:SUBMITTAL|SUBMISSION)(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
+    r'([A-Z0-9][A-Z0-9.-]{0,30})?\s*$')
+_RFI_ROLE=re.compile(r'(?im)^\s*(QUESTION|REQUEST|RESPONSE|ANSWER|REPLY)\s*[:#-]?\s*')
+_SUBMITTAL_STATUS=re.compile(
+    r'(?im)^\s*(?:SUBMITTAL\s+)?STATUS\s*[:#-]\s*'
+    r'(APPROVED\s+AS\s+NOTED|REVISE\s+AND\s+RESUBMIT|REJECTED|APPROVED|REVIEWED|PENDING)\b')
+_EMAIL_RFI_SUBJECT=re.compile(
+    r'(?im)^Subject:\s*(?:Re:\s*)?(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
+    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})?')
+_EMAIL_SUBMITTAL_SUBJECT=re.compile(
+    r'(?im)^Subject:\s*(?:Re:\s*)?(?:SUBMITTAL|SUBMISSION)'
+    r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})?')
 
 @dataclass
 class Fragment:
@@ -59,20 +78,23 @@ def revision(text: str):
     return (next(iter(dates)) if len(dates)==1 else None,
             labels[0] if len(set(labels))==1 else None)
 
-def split_lines(lines: list[str], loc: dict, method: str, rev: tuple) -> list[Fragment]:
+def split_lines(lines: list[str], loc: dict, method: str, rev: tuple,
+                line_offset: int = 0) -> list[Fragment]:
     out=[]; buf=[]; first=1; chars=0;size=0
     def flush(last):
         nonlocal buf,chars,size,first
         text='\n'.join(buf)
         if text.strip():
-            out.append(Fragment(text, {**loc,'text_line_start':first,'text_line_end':last},method,*rev))
+            out.append(Fragment(text, {**loc,'text_line_start':first+line_offset,
+                                      'text_line_end':last+line_offset},method,*rev))
         buf=[];chars=0;size=0
     for i,line in enumerate(lines,1):
         line_size=len(line.encode('utf-8'))
         if len(line)>MAX_FRAGMENT_CHARS or line_size>MAX_FRAGMENT_BYTES:
             if buf: flush(i-1)
             for part in split_text(line):
-                out.append(Fragment(part,{**loc,'text_line_start':i,'text_line_end':i},method,*rev))
+                out.append(Fragment(part,{**loc,'text_line_start':i+line_offset,
+                                          'text_line_end':i+line_offset},method,*rev))
             first=i+1
             continue
         if buf and (chars+len(line)+1>MAX_FRAGMENT_CHARS or size+line_size+1>MAX_FRAGMENT_BYTES):
@@ -81,6 +103,169 @@ def split_lines(lines: list[str], loc: dict, method: str, rev: tuple) -> list[Fr
         buf.append(line);chars+=len(line)+1;size+=line_size+1
     flush(len(lines))
     return out
+
+
+def _clean_identifier(value: str | None, prefix: str) -> str | None:
+    if not value:return None
+    value=value.strip().upper()
+    if value in {'QUESTION','REQUEST','RESPONSE','ANSWER','REPLY','NO','NUMBER'}:return None
+    return value.removeprefix(prefix).lstrip(' #:-') or None
+
+
+def document_context(text: str, original_name: str = '') -> dict:
+    """Return a conservative workflow label; it is routing metadata, not approval."""
+    searchable=text[:80_000]
+    rfi=_RFI_HEADER.search(searchable) or _EMAIL_RFI_SUBJECT.search(searchable)
+    if not rfi:
+        rfi=re.search(r'(?i)(?:^|[\s_.-])RFI(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',
+                      Path(original_name).stem)
+    if rfi is not None:
+        identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
+        roles={value.upper() for value in _RFI_ROLE.findall(searchable)}
+        role=('MIXED' if {'QUESTION','REQUEST'} & roles and {'RESPONSE','ANSWER','REPLY'} & roles else
+              'RESPONSE' if {'RESPONSE','ANSWER','REPLY'} & roles else 'QUESTION')
+        return {'document_type':'RFI_RESPONSE' if role=='RESPONSE' else 'RFI_QUESTION',
+                'workflow_type':'RFI','identifier':identifier,'role':role,'status':None}
+    submittal=_SUBMITTAL_HEADER.search(searchable) or _EMAIL_SUBMITTAL_SUBJECT.search(searchable)
+    if not submittal:
+        submittal=re.search(r'(?i)(?:^|[\s_.-])SUBMITTAL(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',
+                            Path(original_name).stem)
+    if submittal is not None:
+        identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
+        status_match=_SUBMITTAL_STATUS.search(searchable)
+        return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,
+                'role':None,'status':status_match.group(1).upper() if status_match else None}
+    return {'document_type':'UNKNOWN','workflow_type':None,'identifier':None,'role':None,'status':None}
+
+
+def _workflow_label(context: dict, role: str | None = None) -> str | None:
+    workflow=context.get('workflow_type')
+    if not workflow:return None
+    label=workflow
+    if context.get('identifier'):label+=' '+context['identifier']
+    if workflow=='RFI':label+=' > '+(role or context.get('role') or 'MIXED')
+    if workflow=='SUBMITTAL' and context.get('status'):label+=' > STATUS: '+context['status']
+    return label
+
+
+def annotate_workflow_fragments(fragments: list[Fragment], text: str, original_name: str,
+                                *, prefix: str | None = None) -> dict:
+    context=document_context(text,original_name);current=context.get('role')
+    for fragment in fragments:
+        matches={value.upper() for value in _RFI_ROLE.findall(fragment.text)}
+        if {'QUESTION','REQUEST'} & matches and {'RESPONSE','ANSWER','REPLY'} & matches:current='MIXED'
+        elif {'QUESTION','REQUEST'} & matches:current='QUESTION'
+        elif {'RESPONSE','ANSWER','REPLY'} & matches:current='RESPONSE'
+        workflow=_workflow_label(context,current)
+        existing=fragment.locator.get('section')
+        section=' > '.join(value for value in (prefix,workflow,existing) if value)
+        if section:fragment.locator['section']=section
+    return context
+
+
+def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
+                         text: str, original_name: str, *, prefix: str | None = None
+                         ) -> tuple[list[Fragment],dict]:
+    """Split explicit RFI question/response headings before ordinary size batching."""
+    context=document_context(text,original_name)
+    if context.get('workflow_type')!='RFI':
+        fragments=split_lines(lines,loc,method,rev)
+        annotate_workflow_fragments(fragments,text,original_name,prefix=prefix)
+        return fragments,context
+    groups=[];start=0;current='QUESTION';buffer=[]
+    for index,line in enumerate(lines):
+        match=_RFI_ROLE.match(line)
+        role=None
+        if match:
+            value=match.group(1).upper()
+            role='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+        if role and buffer:
+            groups.append((start,buffer,current));buffer=[];start=index
+        if not buffer:start=index
+        if role:current=role
+        buffer.append(line)
+    if buffer:groups.append((start,buffer,current))
+    fragments=[]
+    for offset,group,role in groups:
+        section=' > '.join(value for value in (prefix,_workflow_label(context,role),loc.get('section')) if value)
+        fragments.extend(split_lines(group,{**loc,'section':section or None},method,rev,offset))
+    return fragments,context
+
+
+class _PlainHTML(HTMLParser):
+    """Extract visible HTML text without executing or fetching active content."""
+    _BLOCKS={'address','article','br','div','h1','h2','h3','h4','h5','h6','li','p','section','table','tr'}
+    def __init__(self):
+        super().__init__(convert_charrefs=True);self.parts=[];self.hidden=0
+    def handle_starttag(self,tag,attrs):
+        tag=tag.casefold()
+        if tag in {'script','style','noscript'}:self.hidden+=1
+        elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
+    def handle_endtag(self,tag):
+        tag=tag.casefold()
+        if tag in {'script','style','noscript'} and self.hidden:self.hidden-=1
+        elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
+    def handle_data(self,data):
+        if not self.hidden:self.parts.append(data)
+    def text(self):
+        return '\n'.join(line.strip() for line in ''.join(self.parts).splitlines() if line.strip())
+
+
+def _email_part_text(part) -> tuple[str,str] | None:
+    content_type=part.get_content_type()
+    if content_type not in {'text/plain','text/html'}:return None
+    try:value=part.get_content()
+    except (LookupError,UnicodeError,ValueError):return None
+    if not isinstance(value,str):return None
+    if content_type=='text/html':
+        parser=_PlainHTML();parser.feed(value);parser.close();value=parser.text()
+    return content_type,value
+
+
+def _parse_email(path: Path, original_name: str) -> dict:
+    size=path.stat().st_size
+    if size>MAX_CHARS*4:
+        return result_payload('FAILED',[],[],['Email exceeds the local 8 MB parsing limit; no model was called.'],
+                              document_type='EMAIL',workflow_type=None,attachments=[])
+    message=BytesParser(policy=policy.default).parsebytes(path.read_bytes())
+    headers=[]
+    for name in ('Subject','From','To','Cc','Date'):
+        value=message.get(name)
+        if value is not None:headers.append(f'{name}: {str(value)[:4000]}')
+    attachments=[];plain=[];html=[]
+    parts=message.walk() if message.is_multipart() else [message]
+    for part in parts:
+        disposition=part.get_content_disposition();filename=part.get_filename()
+        if disposition=='attachment' or filename:
+            attachments.append({'file_name':str(filename or 'unnamed attachment')[:240],
+                                'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
+            continue
+        if part.is_multipart():continue
+        parsed=_email_part_text(part)
+        if parsed:
+            (plain if parsed[0]=='text/plain' else html).append(parsed[1])
+    body='\n\n'.join(value for value in (plain or html) if value.strip())
+    if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
+    full='\n'.join(headers+[body]);rev=revision(full);fragments=[]
+    context=document_context(full,original_name)
+    if headers:
+        header_section=' > '.join(value for value in ('EMAIL > HEADERS',_workflow_label(context,context.get('role'))) if value)
+        fragments.extend(split_lines(headers,locator(section=header_section,native_element_id='email-headers'),
+                                     'EMAIL',rev))
+    if body:
+        body_fragments,context=split_workflow_lines(
+            body.splitlines(),locator(native_element_id='email-body'),'EMAIL',rev,full,original_name,
+            prefix='EMAIL > BODY')
+        fragments.extend(body_fragments)
+    else:context=document_context(full,original_name)
+    warnings=[]
+    if attachments:warnings.append('Email attachments were inventoried but not analyzed; upload each attachment separately.')
+    if not body:warnings.append('Email has no supported plain-text or HTML body.')
+    pages=[{'page':None,'status':'EMAIL_BODY_EXTRACTED' if body else 'EMAIL_HEADERS_ONLY'}]
+    return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,
+                          document_type='EMAIL',workflow_type=context.get('workflow_type'),
+                          document_identifier=context.get('identifier'),workflow_status=context.get('status'),
+                          attachments=attachments,active_content_processed=False)
 
 
 def split_text(text: str) -> list[str]:
@@ -245,7 +430,7 @@ def _visual_tasks(page, page_number: int, page_type: str, tables: list,
              'region_id':f'page-{page_number}-overview','region_type':'FULL_PAGE','bbox':None,
              'coordinate_system':PDF_CROP_COORDINATE_SYSTEM,'page_type':page_type}]
 
-def _parse_pdf_page(path: Path, page, index: int) -> dict:
+def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None = None) -> dict:
     fragments=[];warnings=[];visual_tasks=[];geometry=[];text_chars=0
     try:
         # Analysis follows the visible CropBox used by OCR, preview, and vision.
@@ -296,19 +481,34 @@ def _parse_pdf_page(path: Path, page, index: int) -> dict:
                 warnings.append(f'PDF第{index}页文字层密度低；已追加本机{OCR_VERSION}结果，需对照图面去重审核。')
             elif low_text_density:
                 warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
+        page_source=page_text or '\n'.join(fragment.text for fragment in fragments)
+        page_context=annotate_workflow_fragments(fragments,page_source,str(path))
+        if not page_context.get('workflow_type') and default_context and default_context.get('workflow_type'):
+            current=default_context.get('role')
+            for fragment in fragments:
+                matches={value.upper() for value in _RFI_ROLE.findall(fragment.text)}
+                if {'QUESTION','REQUEST'} & matches and {'RESPONSE','ANSWER','REPLY'} & matches:current='MIXED'
+                elif {'QUESTION','REQUEST'} & matches:current='QUESTION'
+                elif {'RESPONSE','ANSWER','REPLY'} & matches:current='RESPONSE'
+                existing=fragment.locator.get('section')
+                workflow=_workflow_label(default_context,current)
+                fragment.locator['section']=' > '.join(value for value in (workflow,existing) if value) or None
+            page_context={**default_context,'role':current,
+                          'document_type':'RFI_RESPONSE' if current=='RESPONSE' else default_context['document_type']}
         return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
-                                              'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables)},'warnings':warnings,
+                                              'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables),
+                                              'document_type':page_context.get('document_type','UNKNOWN')},'warnings':warnings,
                 'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars}
     finally:
         page.close()
 
 
-def _parse_pdf_chunk(source: str, page_numbers: list[int]) -> list[dict]:
+def _parse_pdf_chunk(source: str, page_numbers: list[int], default_context: dict | None = None) -> list[dict]:
     """Open one PDF once per bounded chunk; each worker keeps its own OCR engine."""
     import pdfplumber
     path=Path(source)
     with pdfplumber.open(path) as pdf:
-        return [_parse_pdf_page(path,pdf.pages[number-1],number) for number in page_numbers]
+        return [_parse_pdf_page(path,pdf.pages[number-1],number,default_context) for number in page_numbers]
 
 
 def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] | None = None,
@@ -335,6 +535,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                               geometry_summaries=[])
     if ext in ('.dwg','.dxf'):
         return parse_cad(path,original_name)
+    if ext=='.eml':
+        return _parse_email(path,original_name)
     if ext=='.txt':
         data=path.read_bytes() if path.stat().st_size<=MAX_CHARS*4 else path.open('rb').read(MAX_CHARS*4)
         if path.stat().st_size>len(data): warnings.append('文本超出当前单文件解析资源限额，剩余内容未处理。')
@@ -344,8 +546,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             return {'status':'FAILED','fragments':[],'pages':[],
                     'warnings':['文本编码不是受支持的UTF-8或带BOM的UTF-16；需转换，不猜编码。'],'parser_version':PARSER_VERSION}
         if len(text)>MAX_CHARS: text=text[:MAX_CHARS];warnings.append('字符上限后的内容未处理。')
-        fragments=split_lines(text.splitlines(),locator(), 'TXT', revision(text))
-        pages=[{'page':1,'status':'TEXT_EXTRACTED'}]
+        fragments,context=split_workflow_lines(text.splitlines(),locator(),'TXT',revision(text),text,original_name)
+        pages=[{'page':1,'status':'TEXT_EXTRACTED','document_type':context['document_type']}]
     elif ext=='.docx':
         with zipfile.ZipFile(path) as z:
             members=z.infolist()
@@ -371,9 +573,11 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             if root.findall('.//w:ins',ns) or root.findall('.//w:del',ns):warnings.append('DOCX含修订痕迹，接受状态未判定，需人工检查原件。')
             if any(re.match(r'word/(header|footer|comments|footnotes|endnotes)',m.filename) for m in members):warnings.append('DOCX页眉/页脚/批注/注脚等附属内容未提取。')
             warnings.append('DOCX仅正文与表格文字；表格合并关系和父条款继承未完成。')
-            pages=[{'page':None,'status':'BODY_TEXT_EXTRACTED'}]
+            context=annotate_workflow_fragments(fragments,full,original_name)
+            pages=[{'page':None,'status':'BODY_TEXT_EXTRACTED','document_type':context['document_type']}]
     elif ext=='.pdf':
         import pdfplumber
+        default_context=document_context('',original_name)
         last_progress=monotonic()-PROGRESS_INTERVAL_SECONDS
         def save_progress():
             nonlocal last_progress
@@ -397,7 +601,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         if workers==1:
             with pdfplumber.open(path) as pdf:
                 for index,page in enumerate(pdf.pages,1):
-                    merge_page(_parse_pdf_page(path,page,index))
+                    merge_page(_parse_pdf_page(path,page,index,default_context))
                     if limit_reached:break
         else:
             # ponytail: bounded four-page chunks give one large PDF useful parallelism without a queue.
@@ -406,7 +610,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 for start in range(1,page_count+1,window):
                     groups=[list(range(first,min(first+PDF_PAGE_CHUNK,page_count+1)))
                             for first in range(start,min(start+window,page_count+1),PDF_PAGE_CHUNK)]
-                    for results in pool.map(_parse_pdf_chunk,[str(path)]*len(groups),groups):
+                    for results in pool.map(_parse_pdf_chunk,[str(path)]*len(groups),groups,
+                                            [default_context]*len(groups)):
                         for result in results:
                             merge_page(result)
                             if limit_reached:break
@@ -416,8 +621,12 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         return {'status':'UNSUPPORTED','fragments':[],'pages':[],
                 'warnings':[f'格式{ext or "无扩展名"}尚未支持，未调用模型。'],'parser_version':PARSER_VERSION}
     if not fragments:warnings.append('没有可用于文本模型的内容，不代表文件没有要求。')
+    document_types={page.get('document_type') for page in pages if page.get('document_type') not in (None,'UNKNOWN')}
+    document_type=(next(iter(document_types)) if len(document_types)==1 else
+                   'UNKNOWN' if not document_types else 'OTHER')
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,page_count,
-                          visual_tasks=visual_tasks,geometry_summaries=geometry)
+                          visual_tasks=visual_tasks,geometry_summaries=geometry,
+                          document_type=document_type)
 
 def pdf_fragment(words, page, rev, cropbox=(0.0, 0.0, 0.0, 0.0), **location):
     text=' '.join(w['text'] for w in words)

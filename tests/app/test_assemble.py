@@ -155,3 +155,57 @@ def test_quality_rejects_property_citation_from_unrelated_document_context():
     checked,flags=apply_deterministic_quality(
         {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},evidence)
     assert checked['requirements'][0]['properties']==[] and 'PROPERTY_RELATION' in flags
+
+
+def test_rfi_question_cannot_become_material_but_explicit_response_can():
+    atom={'candidate_key':'R5','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-Q'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[]}
+    question={'evidence_id':'EV-Q','document_id':'DOC-RFI','raw_text':'May PVC pipe be used?',
+              'locator':{'section':'RFI 042 > QUESTION'}}
+    response={'evidence_id':'EV-R','document_id':'DOC-RFI','raw_text':'Provide Type L copper pipe.',
+              'locator':{'section':'RFI 042 > RESPONSE'}}
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[question,response])
+    assert checked['requirements']==[] and flags==['RFI_QUESTION_SOURCE']
+
+    atom['evidence_ids']=['EV-R']
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[question,response])
+    assert len(checked['requirements'])==1 and flags==[]
+    candidate=material(atom,response)
+    assert candidate['requirement_status']=='CONDITIONAL'
+    assert candidate['condition']=='RFI response source; contractual effect requires review.'
+
+
+def test_submittal_status_is_review_visible_and_rejected_source_is_not_current_candidate():
+    atom={'candidate_key':'R6','category':'MATERIAL','subject':'Air Handling Unit','action':'Provide',
+          'object':'Air Handling Unit','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-S'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[]}
+    pending={'evidence_id':'EV-S','document_id':'DOC-S','raw_text':'AHU-1 product data',
+             'locator':{'section':'SUBMITTAL 23-09-23 > STATUS: PENDING'}}
+    candidate=material(atom,pending)
+    assert candidate['requirement_status']=='CONDITIONAL'
+    assert candidate['condition']=='Submittal status: PENDING.'
+
+    rejected={**pending,'locator':{'section':'SUBMITTAL 23-09-23 > STATUS: REJECTED'}}
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[rejected])
+    assert checked['requirements']==[] and flags==['REJECTED_SUBMITTAL_SOURCE']
+
+
+def test_email_headers_cannot_become_material_without_body_evidence():
+    atom={'candidate_key':'R7','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-H'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[]}
+    header={'evidence_id':'EV-H','document_id':'DOC-E','raw_text':'Subject: RFI 101 - copper pipe',
+            'locator':{'section':'EMAIL > HEADERS > RFI 101 > QUESTION'}}
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[header])
+
+    assert checked['requirements']==[] and flags==['EMAIL_HEADER_SOURCE']

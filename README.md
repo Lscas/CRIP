@@ -14,6 +14,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - User-selectable 1, 2, or 4 local workers across documents or bounded page chunks inside one PDF, selective vision routing, adjacent-evidence extraction batching, evidence-scope verification batching, and visible stage/model timing.
 - Deterministic pre-publication checks for clear material-name, QA-activity, duplicate-property, and evidence-scope errors; the original extraction remains available for review.
 - Native PDF page routing with specification Section/Part/clause locators and bordered table rows kept as coordinate-backed evidence. Borderless and cross-page tables still require review.
+- Local `.eml` parsing for safe headers and visible body text, with RFI question/response and Submittal status evidence boundaries. Attachments are inventory-only and must be uploaded separately; HTML active content and remote resources are not executed or fetched.
 - Reproducible offline PDF performance measurement in `scripts/benchmark_local_parse.py`; see `docs/PERFORMANCE_BASELINE.md` for the measured fixture and limits.
 
 Conflict and Missing Information are not shown as current reviewer categories or export sheets. Legacy stored records are preserved for compatibility. Coverage and partial-processing status remain visible at run level.
@@ -69,11 +70,11 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 494 Python tests passed.
-- 23 localization/UI JavaScript tests passed.
+- 531 Python tests passed.
+- 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - Requirements/specification synchronization passed.
-- The source bundle manifest passed for 248 files.
+- The source bundle manifest passed for 261 files.
 
 No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
 
@@ -101,5 +102,6 @@ The source PDFs are intentionally not included. The workbook is a reviewer candi
 - A partial run is not evidence of construction accuracy or completeness.
 - PDF vector geometry is not treated as material quantity.
 - CAD-derived counts and measurements remain review candidates until scope, units, and duplicate representations are verified.
+- Outlook MSG, mailbox synchronization, attachment recursion and email-thread reconstruction are not supported yet.
 - The public workbook demonstrates the export format and a completed processing result; it does not prove that every extracted item is correct.
 - No license file is included. Public visibility does not grant reuse rights beyond applicable law and the repository owner's permissions.

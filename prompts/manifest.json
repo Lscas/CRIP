@@ -3,7 +3,7 @@
   "prompts": [
     {
       "id": "document-classification",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "path": "prompts/document-classification/system.md",
       "schema": "spec/schemas/classification.schema.json",
       "role": "cheap",
@@ -11,7 +11,7 @@
     },
     {
       "id": "joint-extraction",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "path": "prompts/joint-extraction/system.md",
       "schema": "spec/schemas/extraction-result.schema.json",
       "role": "cheap",

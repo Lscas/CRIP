@@ -203,6 +203,29 @@
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
     },
     {
+      "requirement_id": "FR-PARSE-007",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/parse",
+        "app/class"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py",
+        "tests/app/test_assemble.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_synthetic_email_and_workflow_documents",
+      "implemented_product_paths": [
+        "app/parsers.py",
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md",
+        "spec/schemas/classification.schema.json",
+        "web/index.html"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "RFC-style EML headers and safe visible body text are locally parsed; active HTML and remote resources are not executed or fetched. Attachments are inventory-only. RFI question/response and Submittal status locators feed deterministic output guards. MSG, mailbox sync, attachment recursion and thread reconstruction remain planned."
+    },
+    {
       "requirement_id": "FR-DATA-001",
       "implementation_status": "planned",
       "planned_product_modules": [
@@ -223,8 +246,13 @@
       "planned_product_tests": [],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/parsers.py",
+        "app/assemble.py",
+        "spec/schemas/classification.schema.json"
+      ],
+      "verification_report": null,
+      "progress_note": "Explicit RFI question/response roles, Submittal status and EML header/body roles are preserved deterministically before extraction. Full semantic classification, discipline/CSI assignment and user correction remain planned."
     },
     {
       "requirement_id": "FR-REVISION-001",

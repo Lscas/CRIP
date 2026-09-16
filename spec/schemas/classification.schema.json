@@ -11,6 +11,7 @@
         "RFI_QUESTION",
         "RFI_RESPONSE",
         "SUBMITTAL",
+        "EMAIL",
         "SHOP_DRAWING",
         "ADDENDUM",
         "REPORT",

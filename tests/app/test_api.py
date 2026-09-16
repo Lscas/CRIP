@@ -1,5 +1,6 @@
 """FR-INGEST-003/004, FR-REVIEW-001/002, FR-EXPORT-001, PRD-PROTOTYPE-001"""
 import hashlib,io,json,subprocess,threading
+from email.message import EmailMessage
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -67,6 +68,27 @@ def test_upload_limit_and_basename(client,project):
     assert client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'huge.txt','size':10000000001}).status_code==413
     u=upload(client,project['id'],'../../outside.txt',b'abc')
     assert u['name']=='outside.txt'
+
+
+def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client,project):
+    message=EmailMessage();message['Subject']='RFI 101';message['From']='contractor@example.test'
+    message['To']='engineer@example.test';message.set_content('Response:\nProvide Type L copper pipe.')
+    message.add_attachment(b'ATTACHMENT-ONLY MATERIAL',maintype='application',subtype='pdf',filename='detail.pdf')
+    document=upload(client,project['id'],'rfi-response.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    rows=db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))
+    evidence=[json.loads(row['payload']) for row in rows]
+    summary=json.loads(db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary'])
+
+    assert any('Type L copper pipe' in item['raw_text'] for item in evidence)
+    assert all('ATTACHMENT-ONLY MATERIAL' not in item['raw_text'] for item in evidence)
+    assert any('EMAIL > BODY > RFI 101 > RESPONSE' in (item['locator']['section'] or '') for item in evidence)
+    assert summary['attachments']==[{'file_name':'detail.pdf','content_type':'application/pdf',
+                                     'status':'NOT_PROCESSED'}]
 
 def test_chunk_limit(client,project):
     u=client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'x.txt','size':6000000}).json()

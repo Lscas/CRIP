@@ -165,6 +165,21 @@
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
+      "id": "FR-PARSE-007",
+      "title": "EML email parsing and workflow evidence",
+      "statement": "Parse RFC-style EML headers and visible body text locally while preserving RFI, Submittal and attachment boundaries.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.",
+        "Attachments are inventoried as not processed and cannot silently contribute evidence unless uploaded and analyzed separately.",
+        "Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.",
+        "MSG, mailbox synchronization, attachment recursion and cross-message thread reconstruction remain unsupported and are reported as such."
+      ],
+      "decision_source": "The user asked to improve adaptability for RFI, Submittal and email content; implemented with synthetic offline tests on 2026-09-15.",
+      "spec_section": "docs/PRODUCT_SPEC.md"
+    },
+    {
       "id": "FR-DATA-001",
       "title": "统一文档模型",
       "statement": "所有输入转化为 Canonical Document Model。",
@@ -183,9 +198,10 @@
       "priority": "P0",
       "status": "planned",
       "acceptance_criteria": [
-        "用户可查看并修正分类。"
+        "用户可查看并修正分类。",
+        "Deterministic parsing preserves explicit RFI question/response, Submittal status and EML body/header source roles before semantic classification."
       ],
-      "decision_source": "已批准的产品目标；实现尚未交付",
+      "decision_source": "已批准的产品目标；RFI/Submittal/EML工作流证据边界已实现，完整用户可修正分类仍未交付",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {

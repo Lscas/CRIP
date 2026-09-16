@@ -113,6 +113,17 @@ DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解�
 - 转换器可用且派生 DXF 对象解析成功时标记 OBJECT_METADATA；转换器未配置、转换失败或对象解析不可用时标记 UNAVAILABLE。
 - 原 DWG 不改写；派生文件、转换器标识和兼容性警告可追溯，不将部分对象解析冒充为完整 CAD 语义。
 
+## FR-PARSE-007 · EML email parsing and workflow evidence
+
+优先级：P0；状态：implemented
+
+Parse RFC-style EML headers and visible body text locally while preserving RFI, Submittal and attachment boundaries.
+
+- EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
+- Attachments are inventoried as not processed and cannot silently contribute evidence unless uploaded and analyzed separately.
+- Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
+- MSG, mailbox synchronization, attachment recursion and cross-message thread reconstruction remain unsupported and are reported as such.
+
 ## FR-DATA-001 · 统一文档模型
 
 优先级：P0；状态：planned
@@ -128,6 +139,7 @@ DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解�
 自动识别文档类型、专业、CSI、系统、设备、区域和 Revision。
 
 - 用户可查看并修正分类。
+- Deterministic parsing preserves explicit RFI question/response, Submittal status and EML body/header source roles before semantic classification.
 
 ## FR-REVISION-001 · 内部日期最新优先
 

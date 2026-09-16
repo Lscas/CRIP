@@ -1,5 +1,6 @@
 """FR-PARSE-001/003/004，基础文字解析，不是施工视觉评测。"""
 import io,zipfile
+from email.message import EmailMessage
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
@@ -32,6 +33,68 @@ def test_txt_long_chinese_splits_by_utf8_budget_without_data_loss(tmp_path):
     fragments=parse_file(p,p.name)['fragments']
     assert len(fragments)>1 and ''.join(f['text'] for f in fragments)==text
     assert all(len(f['text'].encode('utf-8'))<=MAX_FRAGMENT_BYTES for f in fragments)
+
+
+def test_rfi_txt_separates_question_from_response_evidence(tmp_path):
+    path=tmp_path/'RFI-042.txt'
+    path.write_text('RFI No: 042\nQuestion:\nMay PVC pipe be used?\nResponse:\nProvide Type L copper pipe.',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    question=next(item for item in result['fragments'] if 'May PVC' in item['text'])
+    response=next(item for item in result['fragments'] if 'Type L copper' in item['text'])
+    assert result['document_type']=='RFI_QUESTION'
+    assert '> QUESTION' in question['locator']['section']
+    assert '> RESPONSE' in response['locator']['section']
+    assert question['locator']['text_line_start']<response['locator']['text_line_start']
+
+
+def test_submittal_txt_retains_explicit_status_without_inferring_approval(tmp_path):
+    path=tmp_path/'submittal-221116.txt'
+    path.write_text('Submittal No: 22-11-16\nStatus: Pending\nProduct: Type L copper pipe',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['document_type']=='SUBMITTAL'
+    assert all('SUBMITTAL 22-11-16 > STATUS: PENDING' in item['locator']['section']
+               for item in result['fragments'])
+
+
+def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 042';message['From']='contractor@example.test'
+    message['To']='engineer@example.test';message.set_content(
+        'Response:\nProvide Type L copper pipe.\nRevision Date: 2026-09-15')
+    message.add_attachment(b'ATTACHMENT-ONLY SECRET REQUIREMENT',maintype='application',subtype='pdf',
+                           filename='response.pdf')
+    path=tmp_path/'message.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert result['document_type']=='EMAIL' and result['workflow_type']=='RFI'
+    assert result['active_content_processed'] is False
+    assert result['attachments']==[{'file_name':'response.pdf','content_type':'application/pdf',
+                                    'status':'NOT_PROCESSED'}]
+    assert 'Type L copper pipe' in text and 'ATTACHMENT-ONLY' not in text
+    body=next(item for item in result['fragments'] if item['locator']['native_element_id']=='email-body')
+    assert 'EMAIL > BODY > RFI 042 > RESPONSE' in body['locator']['section']
+    assert body['internal_revision_date']=='2026-09-15'
+    assert any('not analyzed' in warning for warning in result['warnings'])
+
+
+def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_path):
+    message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
+        '<html><style>.hidden{display:none}</style><body><p>Status: Reviewed</p>'
+        '<p>Air handling unit AHU-1</p><script>ACTIVE-CONTENT</script>'
+        '<img src="https://invalid.example.test/tracker.png"></body></html>',subtype='html')
+    path=tmp_path/'html.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert 'Air handling unit AHU-1' in text
+    assert 'ACTIVE-CONTENT' not in text and 'tracker.png' not in text
+    assert result['workflow_type']=='SUBMITTAL' and result['active_content_processed'] is False
 
 def test_docx_minimal(tmp_path):
     p=tmp_path/'x.docx'
@@ -82,6 +145,17 @@ def test_pdf_text_and_bbox(tmp_path):
     assert r['fragments'][0]['locator']['page_number']==1
     assert len(r['fragments'][0]['locator']['bbox'])==4
     assert 'Provide' in r['fragments'][0]['text']
+
+
+def test_rfi_pdf_filename_context_still_respects_explicit_response_heading(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'RFI-109.pdf';drawing=canvas.Canvas(str(path))
+    drawing.drawString(72,700,'Response:');drawing.drawString(72,675,'Provide Type L copper pipe.');drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['document_type']=='RFI_RESPONSE'
+    assert all('RFI 109 > RESPONSE' in (item['locator']['section'] or '') for item in result['fragments'])
 
 
 def test_single_pdf_page_workers_preserve_order_and_content(tmp_path):
