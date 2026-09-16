@@ -15,7 +15,8 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-4'
+PARSER_VERSION='multisource-5'
+PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
 # The default simple-task envelope is 6,000 conservative UTF-8 units. Leave
@@ -26,6 +27,13 @@ PDF_PAGE_CHUNK=4
 IMAGE_SUFFIXES={'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
 LOW_TEXT_WORDS=8
 LOW_TEXT_CHARS=80
+_SPEC_SECTION=re.compile(r'\b(?:SECTION\s+)?\d{2}\s+\d{2}\s+\d{2}\b',re.I)
+_SPEC_SECTION_HEADING=re.compile(
+    r'^\s*(?:SECTION\s+)?\d{2}\s+\d{2}\s+\d{2}(?:\s*[-–—:]\s*[^;]{1,100})?\s*$',re.I)
+_SPEC_PART=re.compile(r'^\s*PART\s+[123IVX]+\b(?:\s*[-–—:]\s*.*)?$',re.I|re.M)
+_DIVISION=re.compile(r'^\s*DIVISION\s+\d{1,2}\b(?:\s*[-–—:]\s*.*)?$',re.I|re.M)
+_CLAUSE=re.compile(r'^\s*((?:\d+\.)+\d+|\d+\.|[A-Z]\.|\([a-z0-9]+\))\s+',re.I)
+_SCHEDULE=re.compile(r'\b(?:MATERIAL|EQUIPMENT|DOOR|WINDOW|FINISH|FIXTURE|PANEL|VALVE|LIGHTING)?\s*SCHEDULE\b',re.I)
 
 @dataclass
 class Fragment:
@@ -94,6 +102,149 @@ def result_payload(status: str, fragments: list[Fragment], pages: list[dict], wa
     result.update(extras)
     return result
 
+
+def _page_type(words: list[dict], text: str, graphics: int, width: float, height: float) -> str:
+    """Cheap deterministic router; it does not claim semantic document classification."""
+    large=width>1000 or height>1400
+    if _SCHEDULE.search(text):return 'SCHEDULE'
+    if _SPEC_SECTION.search(text) or _SPEC_PART.search(text) or _DIVISION.search(text):return 'SPEC_PAGE'
+    if not words:return 'GRAPHIC_OR_SCAN' if graphics else 'BLANK'
+    if large or graphics>=40:return 'DRAWING'
+    if len(words)>=120:return 'SPEC_PAGE'
+    return 'MIXED' if graphics else 'TEXT_PAGE'
+
+
+def _word_lines(words: list[dict]) -> list[list[dict]]:
+    """Group native PDF words into visible lines without inventing reading order across columns."""
+    lines=[]
+    for word in sorted(words,key=lambda item:(float(item['top']),float(item['x0']))):
+        top=float(word['top']);height=max(1.0,float(word['bottom'])-top)
+        if lines:
+            previous=lines[-1]
+            anchor=sum(float(item['top']) for item in previous)/len(previous)
+            tolerance=max(2.0,min(5.0,height*.45))
+            if abs(top-anchor)<=tolerance:
+                previous.append(word);continue
+        lines.append([word])
+    for line in lines:line.sort(key=lambda item:float(item['x0']))
+    return lines
+
+
+def _heading_update(text: str, section: str | None, part: str | None) -> tuple[str | None,str | None,str | None]:
+    value=' '.join(text.split())
+    section_match=_SPEC_SECTION_HEADING.match(value)
+    if section_match:
+        number=_SPEC_SECTION.search(section_match.group(0)).group(0)
+        prefix='SECTION '+number.upper().removeprefix('SECTION ').strip()
+        return prefix,None,prefix
+    if _DIVISION.match(value):
+        division=value.upper()
+        return division,None,division
+    if _SPEC_PART.match(value):
+        part=value.upper()
+        return section,part,' > '.join(item for item in (section,part) if item)
+    return section,part,None
+
+
+def _find_tables(page, page_type: str, text: str) -> list:
+    if page_type not in {'SPEC_PAGE','SCHEDULE'} and not _SCHEDULE.search(text):return []
+    if not _SCHEDULE.search(text) and len(page.lines or [])+len(page.rects or [])<4:return []
+    try:
+        return list(page.find_tables() or [])[:12]
+    except Exception:
+        # Table recovery is additive. A malformed vector grid must not discard
+        # native text or turn the whole document into a parser failure.
+        return []
+
+
+def _inside_table(word: dict, boxes: list[tuple[float,float,float,float]]) -> bool:
+    x=(float(word['x0'])+float(word['x1']))/2;y=(float(word['top'])+float(word['bottom']))/2
+    return any(x0<=x<=x1 and top<=y<=bottom for x0,top,x1,bottom in boxes)
+
+
+def _structured_pdf_fragments(page, page_number: int, words: list[dict], rev: tuple,
+                              tables: list) -> list[Fragment]:
+    """Retain section, clause and table-row relationships in canonical evidence."""
+    table_boxes=[tuple(float(value) for value in table.bbox) for table in tables]
+    fragments=[];section=None;part=None;paragraph=None;headings=[];block=[];block_context=None;block_number=0
+
+    def flush():
+        nonlocal block,block_number
+        if not block:return
+        block_number+=1
+        fragments.append(pdf_fragment(
+            block,page_number,rev,page.cropbox,
+            section=block_context[0],paragraph=block_context[1],
+            native_element_id=f'page-{page_number}-block-{block_number}'))
+        block=[]
+
+    for line in _word_lines(words):
+        line_text=' '.join(item['text'] for item in line).strip()
+        if not line_text:continue
+        section,part,heading=_heading_update(line_text,section,part)
+        if heading:
+            flush();paragraph=None;headings.append((min(float(item['top']) for item in line),heading))
+        clause=_CLAUSE.match(line_text)
+        if clause and not heading:
+            flush();paragraph=clause.group(1)
+        if all(_inside_table(item,table_boxes) for item in line):
+            flush();continue
+        context=(' > '.join(item for item in (section,part) if item) or None,paragraph)
+        if block and context!=block_context:flush()
+        block_context=context
+        for word in line:
+            if _inside_table(word,table_boxes):continue
+            for value in split_text(word['text']):
+                candidate={**word,'text':value}
+                proposed=block+[candidate]
+                if block and (sum(len(item['text'])+1 for item in proposed)>MAX_FRAGMENT_CHARS
+                              or sum(len(item['text'].encode('utf-8'))+1 for item in proposed)>MAX_FRAGMENT_BYTES):
+                    flush();block_context=context
+                block.append(candidate)
+    flush()
+
+    for table_number,table in enumerate(tables,1):
+        rows=table.extract() or []
+        table_top=float(table.bbox[1])
+        table_section=next((value for top,value in reversed(headings) if top<=table_top),None)
+        row_objects=list(getattr(table,'rows',[]) or [])
+        for row_number,cells in enumerate(rows,1):
+            values=[' '.join(str(cell or '').split()) for cell in cells]
+            if not any(values):continue
+            raw=' | '.join(values)
+            for piece_number,piece in enumerate(split_text(raw),1):
+                row_bbox=(row_objects[row_number-1].bbox if row_number<=len(row_objects) else table.bbox)
+                fragments.append(Fragment(
+                    piece,locator(page_number=page_number,
+                                  section=table_section,paragraph=f'Table {table_number} row {row_number}',
+                                  bbox=pdf_cropbox_local_bbox(row_bbox,page.cropbox),
+                                  coordinate_system=PDF_CROP_COORDINATE_SYSTEM,
+                                  native_element_id=f'page-{page_number}-table-{table_number}-row-{row_number}-part-{piece_number}'),
+                    'TEXT_LAYER',*rev))
+    return sorted(fragments,key=lambda item:((item.locator.get('bbox') or [0,0])[1],
+                                              (item.locator.get('bbox') or [0,0])[0],
+                                              item.locator.get('native_element_id') or ''))
+
+
+def _local_bbox(page, bbox) -> list[float]:
+    return pdf_cropbox_local_bbox([float(value) for value in bbox],page.cropbox)
+
+
+def _visual_tasks(page, page_number: int, page_type: str, tables: list,
+                  reason: str) -> list[dict]:
+    """Prefer one useful high-resolution table crop; otherwise retain one overview call."""
+    if tables and page_type in {'SCHEDULE','SPEC_PAGE'}:
+        table=max(tables,key=lambda item:(item.bbox[2]-item.bbox[0])*(item.bbox[3]-item.bbox[1]))
+        x0,top,x1,bottom=_local_bbox(page,table.bbox)
+        width,height=float(page.width),float(page.height);pad=8.0
+        bbox=[max(0.0,x0-pad),max(0.0,top-pad),min(width,x1+pad),min(height,bottom+pad)]
+        return [{'page':page_number,'reason':reason,'status':'PENDING',
+                 'region_id':f'page-{page_number}-table-1','region_type':'TABLE','bbox':bbox,
+                 'coordinate_system':PDF_CROP_COORDINATE_SYSTEM,'page_type':page_type}]
+    return [{'page':page_number,'reason':reason,'status':'PENDING',
+             'region_id':f'page-{page_number}-overview','region_type':'FULL_PAGE','bbox':None,
+             'coordinate_system':PDF_CROP_COORDINATE_SYSTEM,'page_type':page_type}]
+
 def _parse_pdf_page(path: Path, page, index: int) -> dict:
     fragments=[];warnings=[];visual_tasks=[];geometry=[];text_chars=0
     try:
@@ -103,6 +254,9 @@ def _parse_pdf_page(path: Path, page, index: int) -> dict:
         page_text=visible_page.extract_text() or ''
         graphics=len(visible_page.images)+len(visible_page.lines)+len(visible_page.curves)+len(visible_page.rects)
         large_format=visible_page.width>1000 or visible_page.height>1400
+        page_type=_page_type(words,page_text,graphics,visible_page.width,visible_page.height)
+        tables=_find_tables(visible_page,page_type,page_text)
+        if tables and _SCHEDULE.search(page_text):page_type='SCHEDULE'
         low_text_density=bool(words) and graphics>0 and (
             len(words)<LOW_TEXT_WORDS or len(page_text.strip())<LOW_TEXT_CHARS)
         visual=large_format or (graphics>0 and (not words or low_text_density or graphics>=40))
@@ -110,7 +264,7 @@ def _parse_pdf_page(path: Path, page, index: int) -> dict:
         if any(summary['primitive_counts'].values()):geometry.append(summary)
         if visual:
             reason='LARGE_FORMAT' if large_format else 'LOW_TEXT_GRAPHICS' if low_text_density or not words else 'DENSE_GRAPHICS'
-            visual_tasks.append({'page':index,'reason':reason,'status':'PENDING'})
+            visual_tasks.extend(_visual_tasks(visible_page,index,page_type,tables,reason))
         ocr=[]
         if (not words or low_text_density) and local_ocr_available():
             ocr=ocr_pdf_page(path,index)
@@ -134,14 +288,7 @@ def _parse_pdf_page(path: Path, page, index: int) -> dict:
             status=('TEXT_AND_OCR_VISUAL_PENDING' if ocr else
                     'TEXT_ONLY_VISUAL_PENDING' if visual else 'TEXT_EXTRACTED')
             if visual:warnings.append(f'PDF第{index}页含图像/线条/大幅面；已排入视觉分析。')
-            buf=[];chars=0;size=0;safe_words=[]
-            for word in words:safe_words.extend({**word,'text':part} for part in split_text(word['text']))
-            for word in safe_words:
-                word_size=len(word['text'].encode('utf-8'))
-                if buf and (chars+len(word['text'])+1>MAX_FRAGMENT_CHARS or size+word_size+1>MAX_FRAGMENT_BYTES):
-                    fragments.append(pdf_fragment(buf,index,rev,page.cropbox));buf=[];chars=0;size=0
-                buf.append(word);chars+=len(word['text'])+1;size+=word_size+1
-            if buf:fragments.append(pdf_fragment(buf,index,rev,page.cropbox))
+            fragments.extend(_structured_pdf_fragments(visible_page,index,words,rev,tables))
             if ocr:
                 ocr_rev=revision('\n'.join(item['text'] for item in ocr))
                 for item in ocr:item['internal_revision_date'],item['revision_label']=ocr_rev
@@ -149,7 +296,8 @@ def _parse_pdf_page(path: Path, page, index: int) -> dict:
                 warnings.append(f'PDF第{index}页文字层密度低；已追加本机{OCR_VERSION}结果，需对照图面去重审核。')
             elif low_text_density:
                 warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
-        return {'fragments':fragments,'page':{'page':index,'status':status},'warnings':warnings,
+        return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
+                                              'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables)},'warnings':warnings,
                 'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars}
     finally:
         page.close()
@@ -176,7 +324,9 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             fragments=[Fragment(**item) for item in ocr_image_file(path)]
         state='OCR_EXTRACTED_VISUAL_PENDING' if fragments else 'NEEDS_VISION'
         pages=[{'page':1,'status':state}]
-        visual_tasks=[{'page':1,'reason':'IMAGE_INPUT','status':'PENDING'}]
+        visual_tasks=[{'page':1,'reason':'IMAGE_INPUT','status':'PENDING','region_id':'page-1-overview',
+                       'region_type':'FULL_PAGE','bbox':None,
+                       'coordinate_system':'image-pixels-top-left-exif-normalized','page_type':'GRAPHIC_OR_SCAN'}]
         if fragments:
             warnings.append(f'图片已用本机{OCR_VERSION}提取文字和坐标；结果需对照原图审核。')
         else:
@@ -269,7 +419,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,page_count,
                           visual_tasks=visual_tasks,geometry_summaries=geometry)
 
-def pdf_fragment(words, page, rev, cropbox=(0.0, 0.0, 0.0, 0.0)):
+def pdf_fragment(words, page, rev, cropbox=(0.0, 0.0, 0.0, 0.0), **location):
     text=' '.join(w['text'] for w in words)
     bbox=pdf_cropbox_local_bbox([min(w['x0'] for w in words),min(w['top'] for w in words),
                                  max(w['x1'] for w in words),max(w['bottom'] for w in words)],cropbox)
@@ -278,4 +428,5 @@ def pdf_fragment(words, page, rev, cropbox=(0.0, 0.0, 0.0, 0.0)):
         mapping.append({'start':offset,'end':offset+len(w['text']),
                         'bbox':pdf_cropbox_local_bbox([w['x0'],w['top'],w['x1'],w['bottom']],cropbox)})
         offset += len(w['text'])+1
-    return Fragment(text,locator(page_number=page,bbox=bbox,coordinate_system=PDF_CROP_COORDINATE_SYSTEM), 'TEXT_LAYER',*rev,text_map=mapping)
+    return Fragment(text,locator(page_number=page,bbox=bbox,coordinate_system=PDF_CROP_COORDINATE_SYSTEM,
+                                 **location), 'TEXT_LAYER',*rev,text_map=mapping)

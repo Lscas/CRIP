@@ -614,7 +614,7 @@ class Gateway:
         evidence=evidences[0];allowed_ids=set(ids)
         if self.s.provider=='mock':
             data=mock_extract_many(evidences)
-            data,_quality_flags=apply_deterministic_quality(data)
+            data,_quality_flags=apply_deterministic_quality(data,evidences)
             self.validate(data,evidences)
             return ModelResult(data,None)
         blockers=self.s.live_errors()
@@ -659,7 +659,7 @@ class Gateway:
                       **({'manual_requeue_generation':generation} if generation else {})})
         cached=self.db.cached(key,run['project_id'])
         if cached:
-            cached,_quality_flags=apply_deterministic_quality(cached)
+            cached,_quality_flags=apply_deterministic_quality(cached,evidences)
             self.validate(cached,evidences)
             return ModelResult(cached,None,True,self.s.provider)
         amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
@@ -688,7 +688,7 @@ class Gateway:
             if not isinstance(text,str) or len(text)>100_000:raise ValueError('空响应或响应过大')
             data,_wrapper_flags=normalize_extraction_result(text)
             data,_contract_flags=normalize_extraction_contract(data,allowed_ids)
-            data,_quality_flags=apply_deterministic_quality(data)
+            data,_quality_flags=apply_deterministic_quality(data,evidences)
             self.validate(data,evidences)
         except Exception as exc:
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
@@ -717,7 +717,9 @@ class Gateway:
         if recovered is not None:return recovered
         recent=self._family_calls(run['id'],task_family)
         self._guard_family_before_request(recent,task,generation,'该视觉页')
-        safe_metadata={k:metadata[k] for k in ('document_id','page','coordinate_system','width','height') if k in metadata}
+        safe_metadata={k:metadata[k] for k in (
+            'document_id','page','coordinate_system','width','height','page_type_hint',
+            'region_id','region_type','crop_bbox') if k in metadata and metadata[k] is not None}
         instruction=self.vision_prompt+'\nJSON Schema:\n'+dumps(self.vision_schema)+'\nPage metadata:\n'+dumps(safe_metadata)
         data_url='data:image/png;base64,'+base64.b64encode(image_png).decode('ascii')
         # The 59-page live drawing proved that 1,200 output tokens truncated a

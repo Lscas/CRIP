@@ -1,0 +1,60 @@
+{
+  "change_id": "CR-0021",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-001",
+    "FR-CONTEXT-001",
+    "FR-VISION-001",
+    "FR-MATERIAL-001",
+    "FR-INSPECTION-001"
+  ],
+  "summary": "Add deterministic native-PDF page routing, specification Section/Part/clause locators, bordered table-row evidence, a single bounded high-resolution schedule-table crop with full-page coordinates and stable recovery identity, matching crop previews, and a deterministic locality check for property citations.",
+  "decision_refs": [
+    "D-27",
+    "User approval to implement the recommended non-OCR PDF drawing/specification parsing update on 2026-09-15"
+  ],
+  "affected_paths": [
+    "app/assemble.py",
+    "app/gateway.py",
+    "app/main.py",
+    "app/parsers.py",
+    "app/runner.py",
+    "app/visual_pipeline.py",
+    "prompts/drawing-crop/system.md",
+    "prompts/manifest.json",
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_parsers.py",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "docs/ARCHITECTURE.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/MODEL_COST_POLICY.md",
+    "docs/PERFORMANCE_BASELINE.md",
+    "docs/REQUIREMENTS.md",
+    "docs/adr/0007-deepseek-v4-flash-live.md",
+    "tasks/DEV-006.json",
+    "tasks/DEV-004.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0021.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_requeue_failed_visual_tasks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user replied '更新' immediately after approving the proposed page router, specification structure/table parsing, local visual crop and deterministic relationship-check workflow.",
+  "known_limitations": [
+    "Only bordered PDF tables are recovered deterministically; borderless and cross-page tables remain planned.",
+    "General drawing-region and legend/symbol relationship detection remain planned; non-table visual pages keep one overview call.",
+    "Crop behavior is offline-tested and has not been evaluated with a paid provider or a customer construction document.",
+    "PDF vector geometry still does not become a material quantity without a separately reviewed mapping and calibration."
+  ]
+}

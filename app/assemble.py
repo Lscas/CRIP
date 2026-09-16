@@ -137,8 +137,22 @@ def _inspection_atom_allowed(atom: dict) -> bool:
         return False
     return True
 
-def apply_deterministic_quality(data: dict) -> tuple[dict,list[str]]:
+def _evidence_is_local(left: dict, right: dict) -> bool:
+    if left.get('document_id')!=right.get('document_id'):return False
+    a=left.get('locator') or {};b=right.get('locator') or {}
+    if a.get('section') and b.get('section'):return a.get('section')==b.get('section')
+    ap=a.get('page_number');bp=b.get('page_number')
+    if type(ap) is int and type(bp) is int:return abs(ap-bp)<=1
+    ae=a.get('text_line_end');bs=b.get('text_line_start')
+    if type(ae) is int and type(bs) is int:return abs(bs-ae)<=1
+    return a.get('native_element_id') is not None and a.get('native_element_id')==b.get('native_element_id')
+
+
+def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[str,dict] | None = None,
+                                ) -> tuple[dict,list[str]]:
     """Remove only structurally clear false positives; never invent or reassign facts."""
+    records=({item['evidence_id']:item for item in evidence_records} if isinstance(evidence_records,list)
+             else evidence_records or {})
     checked=deepcopy(data);kept=[];flags=[]
     for atom in checked.get('requirements',[]):
         category=atom.get('category')
@@ -150,8 +164,16 @@ def apply_deterministic_quality(data: dict) -> tuple[dict,list[str]]:
         properties=[];seen=set()
         for prop in atom.get('properties') or []:
             normalized=re.sub(r'[^a-z0-9]+','_',str(prop.get('name','')).casefold()).strip('_')
-            if not set(prop.get('evidence_ids') or []).issubset(scope):
+            prop_ids=set(prop.get('evidence_ids') or [])
+            if not prop_ids.issubset(scope):
                 flags.append('PROPERTY_SCOPE');continue
+            primary_ids=set(atom.get('evidence_ids') or [])
+            if records and not prop_ids.intersection(primary_ids):
+                related=any(_evidence_is_local(records[left],records[right])
+                            for left in primary_ids if left in records
+                            for right in prop_ids if right in records)
+                if not related:
+                    flags.append('PROPERTY_RELATION');continue
             if category=='MATERIAL' and normalized in _ENTITY_PROPERTY:
                 flags.append('PROPERTY_ROLE');continue
             identity=(normalized,str(prop.get('value')),prop.get('unit'),tuple(sorted(prop.get('evidence_ids') or [])))
@@ -199,7 +221,8 @@ def missing(subject: str, reason: str, code: str, evidence_ids=None, target=None
 def base(atom: dict, evidence: dict):
     condition=atom['condition']
     if atom['exception']: condition=(condition+'；' if condition else '')+'例外：'+atom['exception']
-    sections=re.findall(r'\b\d{2} \d{2} \d{2}\b',evidence['raw_text'])
+    locator_section=str((evidence.get('locator') or {}).get('section') or '')
+    sections=re.findall(r'\b\d{2} \d{2} \d{2}\b',evidence['raw_text']+'\n'+locator_section)
     return {'candidate_key':'C-'+key(evidence['evidence_id'],atom['candidate_key']),
             'requirement_status':'CONDITIONAL' if condition else 'CONFIRMED',
             'evidence_ids':atom['evidence_ids'],'inference_rule_id':None,'condition':condition,

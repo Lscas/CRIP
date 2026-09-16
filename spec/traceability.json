@@ -54,7 +54,8 @@
         "app/main.py",
         "app/parsers.py",
         "app/parser_worker.py",
-        "app/runner.py"
+        "app/runner.py",
+        "app/visual_pipeline.py"
       ],
       "verification_report": "docs/PERFORMANCE_BASELINE.md",
       "progress_note": "PDF text/OCR parsing now supports bounded 1/2/4-worker page chunks with deterministic page-order merge; full format and 10GB coverage remain planned."
@@ -114,7 +115,7 @@
         "app/runner.py"
       ],
       "verification_report": null,
-      "progress_note": "已有本地文字层切片、词坐标、RapidOCR本机回退和有界超时进度保留；复杂表格/结构、阅读顺序及完整无漏项仍未满足；见docs/IMPLEMENTATION_STATUS.md"
+      "progress_note": "Native PDF pages now retain a deterministic page type, specification section/Part/clause locators, and bordered table rows with bboxes. Text-layer slicing, word coordinates, local OCR fallback and bounded timeout checkpoints remain. Borderless/cross-page tables, multi-column reading order and complete semantic coverage remain planned; see docs/IMPLEMENTATION_STATUS.md."
     },
     {
       "requirement_id": "FR-PARSE-002",
@@ -175,10 +176,12 @@
       "implemented_product_paths": [
         "app/visual_pipeline.py",
         "app/gateway.py",
+        "app/main.py",
+        "app/parsers.py",
         "app/runner.py"
       ],
       "verification_report": null,
-      "progress_note": "本机OCR、EXIF方向规范化、PDF CropBox可见区坐标变换、整页视觉路由、证据Schema和预览已实现；局部高分辨率裁剪及真实59页视觉完整验收尚待完成。"
+      "progress_note": "Local OCR, EXIF normalization, PDF CropBox coordinate transforms, selective overview routing, one bounded high-resolution schedule-table crop, evidence schema and matching previews are implemented. General drawing-region crops and live crop-quality validation remain planned."
     },
     {
       "requirement_id": "FR-PARSE-006",
@@ -664,7 +667,8 @@
       ],
       "planned_product_tests": [
         "tests/app/test_gateway_budget.py",
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
       ],
       "contract_tests": [],
       "test_scope": "local_prototype_offline",
@@ -1083,11 +1087,19 @@
       "planned_product_modules": [
         "app/context"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py",
+        "tests/app/test_assemble.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/parsers.py",
+        "app/assemble.py",
+        "app/gateway.py"
+      ],
+      "verification_report": null,
+      "progress_note": "Native PDF evidence now carries detected Section, Part, clause, and bordered table-row context. Deterministic property checks reject context citations from a different document or non-local evidence range. Full inherited definitions, exceptions, footnotes and cross-page tables remain planned."
     },
     {
       "requirement_id": "FR-ROUTE-002",
@@ -1201,12 +1213,14 @@
       "implemented_product_paths": [
         "app/visual_pipeline.py",
         "app/gateway.py",
+        "app/main.py",
+        "app/parsers.py",
         "app/runner.py",
         "prompts/drawing-crop/system.md",
         "spec/schemas/vision-result.schema.json"
       ],
       "verification_report": null,
-      "progress_note": "Whole-page vision routing now selects only large-format, low-text graphic, or dense-graphic pages. Image cache, strict evidence schema, and the common budget gate are implemented; local high-resolution crops remain planned."
+      "progress_note": "Selective routing still limits vision to large-format, low-text graphic, or dense-graphic pages. Detected specification/schedule tables now use one bounded high-resolution crop with full-page coordinates, stable region identity, cache separation and crop preview; other eligible pages retain one overview call. General drawing-region detection and live crop-quality validation remain planned."
     },
     {
       "requirement_id": "FR-CAPABILITY-001",

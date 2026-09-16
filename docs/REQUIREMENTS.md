@@ -70,6 +70,7 @@
 提取 PDF 文字、页码、Bounding Box、图片、表格和版面信息。
 
 - Evidence 可定位到页和 bbox。
+- Native PDF pages retain a deterministic page type, specification section or clause context, and detected table-row coordinates when available.
 
 ## FR-PARSE-002 · OCR fallback
 
@@ -601,6 +602,7 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 - 拆分不能丢失unless/except条件。
 - 长段超限须结构化拆分而非截断。
+- Detected specification sections, clauses, and table rows remain attached to their evidence locators.
 
 ## FR-ROUTE-002 · 零token任务
 

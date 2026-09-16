@@ -55,7 +55,10 @@ def test_local_ocr_returns_traceable_boxes_and_confidence(tmp_path):
     ImageDraw.Draw(image).text((30,55),'MATERIAL DOOR D-101',fill='black',stroke_width=1)
     image.save(p)
     r=parse_file(p,p.name)
-    assert r['visual_tasks']==[{'page':1,'reason':'IMAGE_INPUT','status':'PENDING'}]
+    assert len(r['visual_tasks'])==1
+    task=r['visual_tasks'][0]
+    assert (task['reason'],task['region_type'],task['bbox'],task['page_type'])==(
+        'IMAGE_INPUT','FULL_PAGE',None,'GRAPHIC_OR_SCAN')
     assert r['fragments'] and all(f['method']=='OCR' for f in r['fragments'])
     assert all(0<=f['confidence']<=1 for f in r['fragments'])
     assert all(f['locator']['coordinate_system']=='image-pixels-top-left-exif-normalized' for f in r['fragments'])
@@ -105,7 +108,9 @@ def test_rich_text_page_with_decorative_rule_skips_vision_but_large_sheet_keeps_
     assert parse_file(ordinary,ordinary.name)['visual_tasks']==[]
     large=tmp_path/'large.pdf';drawing=canvas.Canvas(str(large),pagesize=(1600,1000))
     drawing.drawString(72,900,text);drawing.line(72,880,1500,880);drawing.save()
-    assert parse_file(large,large.name)['visual_tasks']==[{'page':1,'reason':'LARGE_FORMAT','status':'PENDING'}]
+    tasks=parse_file(large,large.name)['visual_tasks']
+    assert len(tasks)==1 and tasks[0]['reason']=='LARGE_FORMAT'
+    assert tasks[0]['region_type']=='FULL_PAGE' and tasks[0]['page_type']=='DRAWING'
 
 
 def test_pdf_cropbox_is_the_only_rendered_and_analyzed_region(tmp_path,monkeypatch):
@@ -124,6 +129,10 @@ def test_pdf_cropbox_is_the_only_rendered_and_analyzed_region(tmp_path,monkeypat
     assert (vwidth,vheight,coordinate_system)==(400.0,500.0,PDF_CROP_COORDINATE_SYSTEM)
     with Image.open(io.BytesIO(raw)) as preview:
         assert preview.width / preview.height == pytest.approx(400 / 500,rel=0.01)
+    cropped,cwidth,cheight,crop_system=render_visual_png(path,path.name,1,[50,50,250,300])
+    assert (cwidth,cheight,crop_system)==(400.0,500.0,PDF_CROP_COORDINATE_SYSTEM)
+    with Image.open(io.BytesIO(cropped)) as preview:
+        assert preview.width / preview.height == pytest.approx(200 / 250,rel=0.01)
 
     result=parse_file(path,path.name)
     text='\n'.join(fragment['text'] for fragment in result['fragments'])
@@ -171,6 +180,32 @@ def test_pdf_vector_geometry_requires_explicit_scale_and_does_not_claim_material
     assert g['calibration']['ratio']==48 and g['status']=='CALIBRATED_RAW_GEOMETRY'
     assert g['calibrated_total_length']['unit']=='FT'
     assert g['material_quantity'] is None and '不作为设计净量' in g['scope_note']
+
+
+def test_pdf_spec_structure_and_schedule_rows_keep_relationships_and_route_one_crop(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'schedule.pdf';drawing=canvas.Canvas(str(path),pagesize=(1600,1000))
+    drawing.drawString(72,940,'SECTION 22 11 16')
+    drawing.drawString(72,910,'PART 2 - PRODUCTS')
+    drawing.drawString(72,880,'2.1 EQUIPMENT SCHEDULE')
+    xs=[72,360,620,820];ys=[820,780,740]
+    for x in xs:drawing.line(x,ys[-1],x,ys[0])
+    for y in ys:drawing.line(xs[0],y,xs[-1],y)
+    drawing.drawString(82,792,'Equipment');drawing.drawString(370,792,'Size');drawing.drawString(630,792,'Quantity')
+    drawing.drawString(82,752,'Backflow preventer');drawing.drawString(370,752,'2 inch');drawing.drawString(630,752,'2')
+    drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['pages'][0]['page_type']=='SCHEDULE'
+    assert result['pages'][0]['table_count']>=1
+    rows=[item for item in result['fragments'] if (item['locator']['paragraph'] or '').startswith('Table ')]
+    assert rows and any('Backflow preventer' in item['text'] and '2 inch' in item['text'] for item in rows)
+    assert all('22 11 16' in (item['locator']['section'] or '') for item in rows)
+    assert len(result['visual_tasks'])==1
+    task=result['visual_tasks'][0]
+    assert task['region_type']=='TABLE' and len(task['bbox'])==4
+    assert task['coordinate_system']==PDF_CROP_COORDINATE_SYSTEM
 
 
 def test_dxf_object_count_and_known_unit_geometry_are_pending_review(tmp_path):

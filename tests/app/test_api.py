@@ -9,6 +9,7 @@ import httpx
 from openpyxl import load_workbook
 from PIL import Image
 from app.gateway import Gateway,ModelResult,mock_extract
+from app.parsers import PARSER_VERSION
 from app.runner import adjacent_extraction_batches
 from .conftest import upload,run_demo
 
@@ -629,7 +630,7 @@ def test_mock_end_to_end_revision_and_export(client,project):
     assert not any(x['record']['kind']=='CONFLICT' for x in rows)
     eid=pad['candidate']['evidence_ids'][0]
     source=client.get(f'/api/analysis-runs/{rid}/evidence/{eid}').json()
-    assert pad['meta']['parser_version']==source['evidence']['parser_version']=='multisource-4'
+    assert pad['meta']['parser_version']==source['evidence']['parser_version']==PARSER_VERSION
     assert source['evidence']['raw_text'] and source['file_name']
     assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
     data=client.get(f'/api/analysis-runs/{rid}/exports/json').json()
@@ -740,6 +741,22 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
         'SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
         (run['id'],document['document_id']))['summary'])
     assert repaired['visual_tasks'][0]['status']=='VISION_EXTRACTED'
+
+
+def test_run_page_image_returns_a_validated_source_coordinate_crop(client,project,tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'crop.pdf';drawing=canvas.Canvas(str(path),pagesize=(600,800))
+    drawing.drawString(100,650,'EQUIPMENT SCHEDULE');drawing.rect(100,300,300,300);drawing.save()
+    document=upload(client,project['id'],path.name,path.read_bytes())
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()
+    base=f'/api/analysis-runs/{run["id"]}/documents/{document["document_id"]}/pages/1/image'
+
+    response=client.get(base+'?x0=100&y0=100&x1=400&y1=300')
+
+    assert response.status_code==200 and response.content.startswith(b'\x89PNG')
+    preview=Image.open(io.BytesIO(response.content))
+    assert preview.width / preview.height == pytest.approx(300 / 200,rel=0.01)
+    assert client.get(base+'?x0=100&y0=100').status_code==422
 
 def test_parser_timeout_keeps_completed_page_progress(client,project,monkeypatch,tmp_path):
     document=upload(client,project['id'],'large.pdf',b'not-read-by-fake-worker')

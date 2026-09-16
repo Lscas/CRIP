@@ -383,7 +383,9 @@ class Runner:
             for task in tasks:
                 if task.get('status') not in ('PENDING','PAUSED_PROVIDER'):continue
                 if not self.checkpoint(run['id']):return
-                page=int(task['page']);eid='EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page)
+                page=int(task['page']);region_id=task.get('region_id')
+                eid=('EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page,region_id)
+                     if region_id else 'EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page))
                 storage_id=run['id']+':'+eid
                 if self.db.one('SELECT id FROM evidence WHERE id=?',(storage_id,),False):
                     task['status']='VISION_EXTRACTED'
@@ -392,24 +394,29 @@ class Runner:
                     self.update_coverage(run['id'])
                     continue
                 try:
+                    crop=task.get('bbox')
                     image,width,height,coordinate_system=render_visual_png(
-                        self.uploads.object_path({'object_key':row['object_key']}),row['name'],page)
-                    result=self.gateway.vision(run,f'{row["document_id"]}:{page}',image,{
+                        self.uploads.object_path({'object_key':row['object_key']}),row['name'],page,crop)
+                    task_key=f'{row["document_id"]}:{page}'+(f':{region_id}' if region_id else '')
+                    result=self.gateway.vision(run,task_key,image,{
                         'document_id':row['document_id'],'page':page,'coordinate_system':coordinate_system,
-                        'width':width,'height':height},
+                        'width':width,'height':height,'page_type_hint':task.get('page_type'),
+                        'region_id':region_id,'region_type':task.get('region_type'),'crop_bbox':crop},
                         billing_generation=task.get('billing_generation',0))
                     data=result.data
+                    locator_bbox=crop or [0,0,width,height]
+                    crop_query=('?x0={0:g}&y0={1:g}&x1={2:g}&y1={3:g}'.format(*crop) if crop else '')
                     ev={'evidence_id':eid,'tenant_id':'local','project_id':run['project_id'],
                         'input_snapshot_id':run['snapshot_id'],'document_id':row['document_id'],
-                        'component_id':f'{row["document_id"]}:page:{page}:vision','file_sha256':row['sha256'],
+                        'component_id':f'{row["document_id"]}:page:{page}:vision:{region_id or "overview"}','file_sha256':row['sha256'],
                         'internal_revision_date':None,'revision_label':None,
                         'locator':{'page_number':page,'sheet':data.get('sheet_id'),'section':None,'paragraph':None,
-                                   'bbox':[0,0,width,height],'coordinate_system':coordinate_system,
-                                   'text_line_start':None,'text_line_end':None,'native_element_id':None},
+                                   'bbox':locator_bbox,'coordinate_system':coordinate_system,
+                                   'text_line_start':None,'text_line_end':None,'native_element_id':region_id},
                         'raw_text':self._vision_text(data),
                         # Retained model observation, never parser-extracted source prose.
                         'content_basis':'MODEL_VISION_OUTPUT',
-                        'image_crop_uri':f'/api/analysis-runs/{run["id"]}/documents/{row["document_id"]}/pages/{page}/image',
+                        'image_crop_uri':f'/api/analysis-runs/{run["id"]}/documents/{row["document_id"]}/pages/{page}/image{crop_query}',
                         'extraction_method':'VISION','confidence':None,'text_map':[],
                         'parser_version':VISION_RENDER_VERSION}
                     validate_schema('evidence',ev)

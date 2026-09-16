@@ -97,9 +97,10 @@
       "priority": "P0",
       "status": "planned",
       "acceptance_criteria": [
-        "Evidence 可定位到页和 bbox。"
+        "Evidence 可定位到页和 bbox。",
+        "Native PDF pages retain a deterministic page type, specification section or clause context, and detected table-row coordinates when available."
       ],
-      "decision_source": "已批准的产品目标；实现尚未交付",
+      "decision_source": "Approved product goal; the user approved the page-router, specification-structure and table-evidence update on 2026-09-15.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -881,7 +882,8 @@
       "statement": "抽取上下文保留Section标题、前置定义、否定、例外、数量单位和表格脚注。",
       "acceptance_criteria": [
         "拆分不能丢失unless/except条件。",
-        "长段超限须结构化拆分而非截断。"
+        "长段超限须结构化拆分而非截断。",
+        "Detected specification sections, clauses, and table rows remain attached to their evidence locators."
       ],
       "priority": "P0",
       "status": "planned",
@@ -977,7 +979,7 @@
       ],
       "priority": "P0",
       "status": "planned",
-      "decision_source": "D-27 adds selective whole-page routing; local high-resolution crops remain planned.",
+      "decision_source": "D-27 added selective whole-page routing; on 2026-09-15 the user approved bounded high-resolution table crops with full-page coordinate preservation.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {

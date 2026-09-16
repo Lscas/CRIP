@@ -180,7 +180,8 @@ def create_app(settings:Settings|None=None)->FastAPI:
                         'geometry_summaries':summary.get('geometry_summaries',[])})
         return out
     @app.get('/api/analysis-runs/{rid}/documents/{did}/pages/{page}/image')
-    def run_page_image(rid:str,did:str,page:int):
+    def run_page_image(rid:str,did:str,page:int,x0:float|None=None,y0:float|None=None,
+                       x1:float|None=None,y1:float|None=None):
         run=runner.get(rid)
         if did not in run['document_ids']:raise DomainError('文件不属于该分析运行',404)
         doc=db.one('SELECT * FROM documents WHERE id=?',(did,))
@@ -188,9 +189,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
         if suffix not in ('.pdf','.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'):
             raise DomainError('该文件没有页面图像',422)
         if doc['size']>250*1024*1024:raise DomainError('页面预览暂限250MiB原文件',422)
+        values=(x0,y0,x1,y1)
+        if any(value is not None for value in values) and not all(value is not None for value in values):
+            raise DomainError('局部图像预览需要完整裁剪坐标',422)
+        crop=list(values) if all(value is not None for value in values) else None
         try:
             from app.visual_pipeline import render_visual_png
-            data,_,_,_=render_visual_png(uploads.object_path(doc),doc['name'],page)
+            data,_,_,_=render_visual_png(uploads.object_path(doc),doc['name'],page,crop)
         except Exception as exc:
             raise DomainError('页面图像不可用：'+type(exc).__name__,422) from exc
         return Response(data,media_type='image/png')

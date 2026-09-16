@@ -66,6 +66,19 @@ def test_material_uses_entity_name_and_keeps_dimension_and_quantity_fields():
     ]
 
 
+def test_material_inherits_structured_spec_section_from_evidence_locator():
+    atom = {
+        'condition': None, 'exception': None, 'candidate_key': 'R2A',
+        'evidence_ids': ['EV-test'], 'subject': 'Copper Water Pipe',
+        'category': 'MATERIAL', 'object': 'Copper Water Pipe', 'action': 'Provide',
+        'properties': [],
+    }
+    evidence = {'evidence_id': 'EV-test', 'raw_text': 'Provide copper water pipe.',
+                'locator': {'section': 'SECTION 22 11 16 > PART 2 - PRODUCTS'}}
+
+    assert material(atom,evidence)['csi_sections']==['22 11 16']
+
+
 def test_non_qa_wiring_diagram_is_not_assembled_as_an_inspection():
     atom = {
         'subject': 'Contractor', 'action': 'Submit',
@@ -118,3 +131,27 @@ def test_quality_downgrades_child_when_its_invalid_parent_is_removed():
     assert checked['requirements'][0]['parent_requirement_key'] is None
     assert checked['requirements'][0]['needs_context'] is True and 'PARENT_SCOPE' in flags
     validate_schema('extraction-result',checked)
+
+
+def test_quality_rejects_property_citation_from_unrelated_document_context():
+    atom={'candidate_key':'R4','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-1'],
+          'context_evidence_ids':['EV-2'],'needs_context':False,'properties':[
+              {'name':'diameter','value':'2','unit':'inches','evidence_ids':['EV-2']}]}
+    evidence=[
+        {'evidence_id':'EV-1','document_id':'DOC-1','locator':{'page_number':1,'section':'SECTION 22 11 16'}},
+        {'evidence_id':'EV-2','document_id':'DOC-2','locator':{'page_number':1,'section':'SECTION 22 11 16'}},
+    ]
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},evidence)
+
+    assert checked['requirements'][0]['properties']==[]
+    assert 'PROPERTY_RELATION' in flags
+
+    evidence[1]={'evidence_id':'EV-2','document_id':'DOC-1',
+                 'locator':{'page_number':1,'section':'SECTION 23 05 00'}}
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},evidence)
+    assert checked['requirements'][0]['properties']==[] and 'PROPERTY_RELATION' in flags

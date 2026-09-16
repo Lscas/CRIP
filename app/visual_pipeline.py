@@ -15,6 +15,7 @@ OCR_VERSION = 'rapidocr-3-local-v1'
 VISION_RENDER_VERSION = 'vision-render-1'
 OCR_MAX_SIDE = 6000
 VISION_MAX_SIDE = 2048
+VISION_CROP_MAX_SIDE = 2560
 OCR_RESOLUTION = 150
 _OCR_ENGINE = None
 PDF_CROP_COORDINATE_SYSTEM = 'pdf-cropbox-points-top-left'
@@ -74,19 +75,50 @@ def render_pdf_page(path: Path, page_number: int, *, resolution: int = OCR_RESOL
     return _bounded_rgb(image, max_side), width, height
 
 
-def render_visual_png(path: Path, original_name: str, page_number: int = 1) -> tuple[bytes, float, float, str]:
-    """Create a bounded PNG derivative for vision/API preview; the original stays immutable."""
+def _validated_crop(bbox: list[float] | tuple[float, float, float, float] | None,
+                    width: float, height: float) -> list[float] | None:
+    if bbox is None:
+        return None
+    if len(bbox) != 4:
+        raise ValueError('视觉裁剪范围必须包含四个坐标')
+    x0, top, x1, bottom = (float(value) for value in bbox)
+    if not (0 <= x0 < x1 <= width and 0 <= top < bottom <= height):
+        raise ValueError('视觉裁剪范围超出可见页面')
+    if (x1 - x0) < 8 or (bottom - top) < 8:
+        raise ValueError('视觉裁剪范围过小')
+    return [x0, top, x1, bottom]
+
+
+def render_visual_png(path: Path, original_name: str, page_number: int = 1,
+                      crop_bbox: list[float] | tuple[float, float, float, float] | None = None,
+                      ) -> tuple[bytes, float, float, str]:
+    """Create a bounded full-page or high-resolution crop derivative.
+
+    ``crop_bbox`` always uses the source page's local visible coordinate system.
+    The returned width and height continue to describe that full visible source
+    page so evidence locators never become crop-relative by accident.
+    """
     suffix = Path(original_name).suffix.lower()
     if suffix == '.pdf':
-        # Pick a resolution near the final target so huge plan sheets do not inflate memory.
         import pdfplumber
         with pdfplumber.open(path) as pdf:
             if not 1 <= page_number <= len(pdf.pages):
                 raise ValueError('PDF页码超出范围')
             page = pdf.pages[page_number - 1]
             width, height = pdf_cropbox_dimensions(page)
-            resolution = max(36, min(150, round(VISION_MAX_SIDE * 72 / max(width, height))))
-            image = page.to_image(resolution=resolution, antialias=True, force_mediabox=False).original
+            crop = _validated_crop(crop_bbox, width, height)
+            target = VISION_CROP_MAX_SIDE if crop else VISION_MAX_SIDE
+            render_width = crop[2] - crop[0] if crop else width
+            render_height = crop[3] - crop[1] if crop else height
+            resolution = max(72 if crop else 36,
+                             min(300 if crop else 150,
+                                 round(target * 72 / max(render_width, render_height))))
+            if crop:
+                crop_x, crop_top, _, _ = page.cropbox
+                page = page.crop((crop[0] + crop_x, crop[1] + crop_top,
+                                  crop[2] + crop_x, crop[3] + crop_top))
+            image = page.to_image(resolution=resolution, antialias=True,
+                                  force_mediabox=False).original
         coordinate_system = PDF_CROP_COORDINATE_SYSTEM
     else:
         if page_number != 1:
@@ -95,9 +127,10 @@ def render_visual_png(path: Path, original_name: str, page_number: int = 1) -> t
             normalized=ImageOps.exif_transpose(source)
             normalized.load()
             width, height = float(normalized.width), float(normalized.height)
-            image = normalized.copy()
+            crop = _validated_crop(crop_bbox, width, height)
+            image = normalized.crop(tuple(round(value) for value in crop)) if crop else normalized.copy()
         coordinate_system = 'image-pixels-top-left-exif-normalized'
-    image = _bounded_rgb(image, VISION_MAX_SIDE)
+    image = _bounded_rgb(image, VISION_CROP_MAX_SIDE if crop_bbox is not None else VISION_MAX_SIDE)
     out = io.BytesIO()
     image.save(out, format='PNG', optimize=True)
     return out.getvalue(), width, height, coordinate_system

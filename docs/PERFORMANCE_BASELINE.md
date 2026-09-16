@@ -23,3 +23,15 @@ Reproduce locally:
 ```
 
 To measure an actual project PDF without a model call, append its path. Raw measurements are written only to ignored `reports/local/` files.
+
+## CR-0021 parser-structure recheck
+
+After adding deterministic page routing, specification locators and bordered table-row evidence, the same generated 48-page fixture was rerun on 2026-09-15. It retained 136 fragments, 34 estimated adjacent extraction batches and identical content hashes for all worker settings.
+
+| Local workers | Time | Speedup vs 1 | Output match |
+|---:|---:|---:|---|
+| 1 | 10.351 s | 1.00x | yes |
+| 2 | 9.033 s | 1.15x | yes |
+| 4 | 8.499 s | 1.22x | yes |
+
+The earlier and later wall-clock values are close enough to include ordinary local variance and process-startup effects. This recheck establishes output/request-count stability, not a speed improvement or a customer-document accuracy result.
