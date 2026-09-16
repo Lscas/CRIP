@@ -64,6 +64,9 @@ def test_submittal_txt_retains_explicit_status_without_inferring_approval(tmp_pa
 
 def test_workflow_identifiers_require_digits_and_preserve_uncertain_roles():
     assert workflow_references('The RFI shall be answered before procurement.')==[]
+    assert workflow_references('Contact rfi42@example.test or submittal23@example.test.')==[]
+    assert workflow_references('Contact rfi42@example.test, then see RFI 77.')==[
+        {'workflow_type':'RFI','identifier':'77'}]
     assert workflow_references('See RFI No. 0042 and Submittal 23 05 00-01.')==[
         {'workflow_type':'RFI','identifier':'42'},
         {'workflow_type':'SUBMITTAL','identifier':'23 05 00-01'},
@@ -72,10 +75,11 @@ def test_workflow_identifiers_require_digits_and_preserve_uncertain_roles():
         'document_type':'OTHER','workflow_type':'RFI','identifier':'42','role':'UNKNOWN','status':None}
 
 
-def test_email_address_headers_do_not_create_workflow_references(tmp_path):
+def test_email_addresses_do_not_create_workflow_references(tmp_path):
     message=EmailMessage();message['Subject']='Coordination';message['From']='rfi42@example.test'
     message['To']='submittal23@example.test';message['Cc']='submission24@example.test'
-    message.set_content('General coordination note.')
+    message.set_content('Contact rfi43@example.test for coordination.\n\n'
+                        'On Monday, Pat wrote:\n> From: submittal25@example.test\n> Previous note.')
     path=tmp_path/'address-only.eml';path.write_bytes(message.as_bytes())
 
     result=parse_file(path,path.name)

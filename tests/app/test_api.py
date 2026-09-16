@@ -184,10 +184,11 @@ def test_generic_email_routes_by_first_explicit_body_workflow_heading(client,pro
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
-def test_email_addresses_do_not_create_workflow_groups(client,project):
+def test_email_addresses_in_content_do_not_create_workflow_groups(client,project):
     message=EmailMessage();message['Subject']='Coordination';message['From']='rfi42@example.test'
     message['To']='submittal23@example.test';message['Cc']='submission24@example.test'
-    message.set_content('General coordination note.')
+    message.set_content('Contact rfi43@example.test for coordination.\n\n'
+                        'On Monday, Pat wrote:\n> From: submittal25@example.test\n> Previous note.')
     document=upload(client,project['id'],'address-only.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner

@@ -1,11 +1,18 @@
 """Deterministic workflow relationship index; no provider calls."""
 import json
 
-from app.workflows import build_workflow_index,projected_workflow_summary
+from app.workflows import build_workflow_index,normalize_identifier,projected_workflow_summary
 
 
 def row(did,name,**summary):
     return {'document_id':did,'name':name,'summary':json.dumps(summary)}
+
+
+def test_workflow_identifiers_reject_email_address_suffixes():
+    assert normalize_identifier('RFI','42@example.test') is None
+    assert normalize_identifier('RFI','42+coord@example.test') is None
+    assert normalize_identifier('SUBMITTAL','23-01@example.test') is None
+    assert normalize_identifier('RFI','42')=='42'
 
 
 def test_projected_summary_preserves_legacy_workflow_fields():

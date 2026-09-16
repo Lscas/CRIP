@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-25'
+PARSER_VERSION='multisource-26'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -66,6 +66,7 @@ _WORKFLOW_REFERENCES={
     'SUBMITTAL':re.compile(r'(?im)\b(?:SUBMITTAL|SUBMISSION)'
                            r'(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,100})'),
 }
+_EMAIL_ADDRESS=re.compile(r'(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b')
 _SUBMITTAL_STATUS_MAP={
     'APPROVED AS SUBMITTED':'APPROVED','NO EXCEPTIONS TAKEN':'APPROVED',
     'APPROVED WITH COMMENTS':'APPROVED AS NOTED','MAKE CORRECTIONS NOTED':'APPROVED AS NOTED',
@@ -171,9 +172,11 @@ def _preserve_primary_fields(explicit: dict | None, primary: dict) -> dict | Non
 
 def workflow_references(text: str) -> list[dict]:
     """Extract exact workflow identifiers only; this does not assert a relationship."""
+    searchable=text[:200_000]
+    if '@' in searchable:searchable=_EMAIL_ADDRESS.sub('',searchable)
     found=[];seen=set()
     for workflow,pattern in _WORKFLOW_REFERENCES.items():
-        for match in pattern.finditer(text[:200_000]):
+        for match in pattern.finditer(searchable):
             identifier=normalize_identifier(workflow,match.group(1))
             if not identifier:continue
             identity=(workflow,identifier.casefold())

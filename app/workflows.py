@@ -39,6 +39,7 @@ def normalize_identifier(workflow: str, value: object) -> str | None:
         match=_COMPACT_ID.match(normalized)
         if not match:return None
         identifier=match.group(0)
+    if re.match(r'[A-Z0-9._%+-]*@',normalized[match.end():]):return None
     identifier=identifier.rstrip('._/-')
     if not identifier:return None
     if workflow=='RFI' and identifier.isdigit():identifier=str(int(identifier))
