@@ -132,8 +132,8 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Gmail quote classes and Outlook divRplyFwdMsg delimit HTML history; text after a matching close resumes as current evidence.
 - Exact -- plus trailing space and Gmail gmail_signature create reviewable signature evidence excluded from workflow routing and extraction; closed HTML signatures resume current text.
-- Message-ID, In-Reply-To and References are stored only as local hashes; raw identifiers are never persisted.
-- Multiple Message-IDs set a conflict flag while missing remains standalone; multi-value In-Reply-To preserves each exact relationship.
+- Message-ID, In-Reply-To and References accept only bounded RFC-style angle-bracketed local@domain tokens and store accepted values only as local hashes; raw identifiers are never persisted.
+- Multiple accepted Message-IDs set a conflict flag while missing or malformed values remain standalone; multi-value In-Reply-To preserves each exact accepted relationship.
 - Exact ancestors precede replies; cycles retain every member and remain ambiguous.
 - MSG parsing reuses the existing email evidence and workflow path through the pinned MIT-licensed python-oxmsg package; mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported.
 
@@ -146,9 +146,9 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - Digit-bearing RFI/Submittal aliases normalize identically; exact headings assign RFI roles, known RFI statuses stay reviewer metadata, and uncertainty stays ambiguous.
 - Each exact Submittal ID retains all known explicit dispositions from Status, Review Response, Final Response or Submittal Response labels; references link to the primary, conflicts remain ambiguous, and no final-response precedence is inferred.
 - Email routing ranks a Subject only when it contains a valid digit-bearing workflow ID, then the earliest body heading, then filename; other content IDs are reference-only, while addresses and From, To, Cc and Date cannot create groups or donate role/status.
-- Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
+- Email threads link only exact hashed relationships from bounded RFC-style angle-bracketed Message-ID tokens; arbitrary header words cannot link messages, external references do not expose raw identifiers, and a message that references its own exact ID is ambiguous.
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
-- A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
+- A multi-value In-Reply-To header links every locally present exact accepted hashed identifier into the same review thread without semantic inference.
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
 - An explicitly imported EML or MSG attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.

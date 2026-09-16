@@ -504,6 +504,28 @@ def test_eml_flags_multiple_distinct_message_ids_without_persisting_raw_values(t
     assert 'first@example.test' not in serialized and 'second@example.test' not in serialized
 
 
+def test_eml_malformed_thread_tokens_cannot_link_unrelated_messages(tmp_path):
+    def parse(name,message_id,parent=None,references=None):
+        message=EmailMessage();message['Subject']='Coordination';message['Message-ID']=message_id
+        if parent:message['In-Reply-To']=parent
+        if references:message['References']=references
+        message.set_content('Current coordination text.')
+        path=tmp_path/name;path.write_bytes(message.as_bytes())
+        return parse_file(path,path.name)
+
+    first=parse('one.eml','unavailable')
+    second=parse('two.eml','<second@example.test>','unavailable','<also-invalid>')
+    rows=[{'document_id':did,'name':name,'summary':json.dumps(result)} for did,name,result in
+          [('D1','one.eml',first),('D2','two.eml',second)]]
+    threads=[item for item in build_workflow_index(rows)['items'] if item['kind']=='EMAIL_THREAD']
+
+    assert first['email_thread']['message_key'] is None
+    assert second['email_thread']['parent_message_key'] is None
+    assert second['email_thread']['reference_keys']==[]
+    assert len(threads)==2 and all(item['state']=='SINGLE' and len(item['members'])==1
+                                   for item in threads)
+
+
 def test_eml_outlook_inline_header_starts_quoted_history_without_mixing_rfi_role(tmp_path):
     message=EmailMessage();message['Subject']='RFI 088';message.set_content(
         '<html><body><p>Response:</p><p>Use Type L copper.</p>'

@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-36'
+PARSER_VERSION='multisource-37'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -459,7 +459,7 @@ def _email_message_key(value: object) -> str | None:
 def _email_header_keys(message, name: str) -> list[str]:
     keys=[]
     for raw in message.get_all(name,[]):
-        for value in re.findall(r'<[^<>]{1,998}>',str(raw)) or str(raw).split():
+        for value in re.findall(r'<[^<>\s@]{1,499}@[^<>\s@]{1,499}>',str(raw)):
             key=_email_message_key(value)
             if key and key not in keys:keys.append(key)
     return keys

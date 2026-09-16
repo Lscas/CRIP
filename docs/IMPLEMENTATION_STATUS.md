@@ -7,19 +7,19 @@
 | 项目/任务 | SQLite WAL、事务、单运行锁、输入快照、暂停/恢复/取消/中断状态；每个运行可选1/2/4个本地worker并记录阶段耗时、已处理页数和模型等待/响应汇总 | 多租户/生产任务队列、进程级资源隔离；真实客户文件吞吐仍需逐项目基准 |
 | Parsing | TXT/DOCX; EML/MSG body/history/signature, headers, exact Gmail/Outlook wrappers, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, bounded splitting/progress and 1/2/4-worker page chunks | Mailbox sync, recursive attachments, semantic threads, unknown quote/signature wrappers, borderless/cross-page tables, multi-column order, revision/comments, footnotes and graphic semantics |
 
-EML selects one MIME-alternative body: plain, then safe HTML; conflicts warn, never merge. History/signatures/attachments stay inert. Exact digit-bearing IDs persist; fuzzy/address forms stay unlinked. A valid-ID Subject routes before body and filename; invalid workflow-like Subjects stay evidence. Official Response is RFI-only; known statuses stay metadata, with conflicts ambiguous and no authority inference.
+EML: one body per alternative (plain, then safe HTML); conflicts warn, never merge. History/signatures/attachments stay inert. Exact digit IDs only; fuzzy/address forms stay unlinked. Route: valid-ID Subject, body, filename; invalid Subjects stay evidence. Official Response is RFI-only; statuses are metadata, conflicts ambiguous without authority inference.
 | 图片/DWG | 常见图片本机OCR并建立视觉任务；DXF对象元数据；GNU LibreDWG本机DWG→DXF后按对象解析，转换和对象解析均成功时标记`OBJECT_METADATA`，否则`UNAVAILABLE`；原文件不改 | DWG Xref/自定义对象/字体完整恢复、复杂Layout；真实用户DWG仍需样本验收 |
 | Model | End-to-end mock; DeepSeek non-thinking text and selective vision; Gemini minimal text; configurable OpenAI-compatible remote or loopback local text model; eligible adjacent evidence batches up to 4 fragments/8.8 KB; email headers and quoted history close locally before batching; verification batches up to four fields with one exact evidence scope | Provider-specific parameters/vision in the generic adapter, automatic model discovery, non-loopback LAN, general drawing-region detection, live crop/batch quality and latency comparison, construction-accuracy benchmark, and L2 escalation |
 | 材料/QA | 原子文本要求到受控候选；同明确Tag属性比较；字段证据；Spec locator可补充CSI Section；发布前确定性逐条排除属性标题/泛称材料名、非执行QA、重复属性、证据范围错挂、跨文档/非相邻属性引用、RFI问句、被拒Submittal、邮件头和引用历史直接证据，混合来源中仍有有效依据的候选/属性予以保留；全部剩余RFI答复、Submittal与Email正文来源共同决定条件性和人工审核，不只读取第一条证据 | 完整产品选项、实体多视图归并、结构化数量映射、复杂条件和广义语义质量评估；RFI/Submittal审批权限及语义关系裁决 |
 | 冲突 | 同Tag/属性/单位的不同值；按可用内部日期采用新值并保留差异 | 单位等值、广义跨专业冲突和设计状态解释 |
 | 缺失 | 未解析/未分析/关联上下文缺失明确列出 | 自动判断所有设计缺失的完整性 |
 | 审核/导出 | 来源原文/定位及页面图；接受/编辑/拒绝、CAS冲突检测、历史；固定英文JSON/XLSX工程审核视图，名称/数量/单位分列、证据随项、冲突双方原文来源并排；已保存CAD量算按需显示 | 量算候选的专用接受/驳回事件、全套专业交互、跨Run编辑继承（已暂缓） |
-| 成本 | 原子预留、核销、未知费用保留、人工账单核对入口与不可变审计事件、预算超额冻结、不自动重试；项目上限可由用户在¥0.01–¥1,000,000内设置，新项目默认¥300，不能低于已结算+未结算预留且每次变更留审计；当前合并DeepSeek运行8,501次调用全部结算¥107.047278且预留/未知/未决为0，原Gemini项目的¥0.237238未决预留保持不变；用户选择后由Windows DPAPI为当前用户加密保存live密钥并自动加载 | 自动读取供应商账单、外部OCR/CAD费用适配；DPAPI密文不能跨Windows用户或电脑迁移 |
+| 成本 | 原子预留/核销；未知费用暂停；人工核对与审计；预算超额冻结；项目上限¥0.01–1,000,000，默认¥300且不低于承诺金额；DeepSeek ¥107.047278已结清，Gemini ¥0.237238保留；DPAPI保存live密钥 | 自动供应商账单、外部OCR/CAD费用；DPAPI密文不可迁移 |
 | Codex | 小AGENTS、分目录规则、任务包、定向测试、有界摘要 | 不控制账户实际模型价格/总token，无实际子模型委派 |
 
 RFI角色只由明确Question/Response形成，UNKNOWN保持中性。Submittal正文与精确引用为LINKED；邮件自引用为AMBIGUOUS；附件关系只来自EMAIL父文档。
-Email线程仅按本地精确哈希排序：祖先优先、同级稳定；循环或多个Message-ID标AMBIGUOUS并保留邮件，不猜正文/日期。只存冲突布尔值；无Message-ID仍独立显示。
-Workflow端点用SQLite JSON只投影九个关系字段；合成2,000页/300次查询解码快2.35×，实际收益依设备和摘要。网页显示已加载/总组数，每批至多500组，按需加载并去重。
+Email线程只哈希有界`<local@domain>`头部token；其他值不建关系。祖先优先；循环/多Message-ID为AMBIGUOUS且不猜正文/日期。无有效ID仍独立显示。
+Workflow端点用SQLite JSON投影九个关系字段，不载入重数组；2,000页/300次合成基准快2.35×。网页显示加载数，每批≤500组，按需去重。
 
 默认演示模式只分析明确的DEMO标记；普通真实资料不会伪造材料清单。真实API需用户自行配置密钥、确认价格和开启开关，所有输出仍需审核。当前结果全部标为PARTIAL，不能声称全项目已经完整审查。
 
