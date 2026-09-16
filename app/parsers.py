@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-41'
+PARSER_VERSION='multisource-42'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -169,13 +169,18 @@ def _rfi_status(value: str) -> str:
     return 'VOID' if normalized=='VOIDED' else normalized
 
 
-def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int) -> str:
-    """Stop role/status inheritance when a different exact same-type identifier starts."""
-    pattern=_RFI_HEADER if workflow=='RFI' else _SUBMITTAL_HEADER
-    for match in pattern.finditer(text,start):
-        other=normalize_identifier(workflow,match.group(1))
-        if other and other!=identifier:return text[start:match.start()]
-    return text[start:]
+def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int,
+                    *, stop_cross_type: bool = True) -> str:
+    """Stop inheritance at a different exact section; a valid Subject may own cross-type body fields."""
+    boundaries=[]
+    for other_workflow,pattern in (('RFI',_RFI_HEADER),('SUBMITTAL',_SUBMITTAL_HEADER)):
+        for match in pattern.finditer(text,start):
+            other=normalize_identifier(other_workflow,match.group(1))
+            different=(other_workflow==workflow and other!=identifier)
+            cross_type=(stop_cross_type and other_workflow!=workflow)
+            if other and (different or cross_type):
+                boundaries.append(match.start());break
+    return text[start:min(boundaries)] if boundaries else text[start:]
 
 
 def _explicit_line_context(line: str) -> dict | None:
@@ -219,13 +224,13 @@ def workflow_references(text: str) -> list[dict]:
 
 def document_context(text: str, original_name: str = '') -> dict:
     """Return a conservative workflow label; it is routing metadata, not approval."""
-    searchable=text[:80_000];rfi_in_text=False;submittal_in_text=False
+    searchable=text[:80_000];rfi_in_text=False;submittal_in_text=False;primary_from_subject=False
     rfi_subject=_EMAIL_RFI_SUBJECT.search(searchable)
     submittal_subject=_EMAIL_SUBMITTAL_SUBJECT.search(searchable)
     if rfi_subject and not _clean_identifier(rfi_subject.group(1),'RFI'):rfi_subject=None
     if submittal_subject and not _clean_identifier(submittal_subject.group(1),'SUBMITTAL'):submittal_subject=None
-    if rfi_subject:rfi=rfi_subject;submittal=None;rfi_in_text=True
-    elif submittal_subject:rfi=None;submittal=submittal_subject;submittal_in_text=True
+    if rfi_subject:rfi=rfi_subject;submittal=None;rfi_in_text=True;primary_from_subject=True
+    elif submittal_subject:rfi=None;submittal=submittal_subject;submittal_in_text=True;primary_from_subject=True
     else:
         rfi=_RFI_HEADER.search(searchable)
         submittal=_SUBMITTAL_HEADER.search(searchable)
@@ -239,7 +244,9 @@ def document_context(text: str, original_name: str = '') -> dict:
                       Path(original_name).stem)
     if rfi is not None:
         identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
-        scope=_workflow_scope(searchable,'RFI',identifier,rfi.end()) if rfi_in_text else searchable
+        scope=(_workflow_scope(searchable,'RFI',identifier,rfi.end(),
+                               stop_cross_type=not primary_from_subject)
+               if rfi_in_text else searchable)
         roles={_rfi_role(value) for value in _RFI_ROLE.findall(scope)}
         statuses=sorted({_rfi_status(value) for value in _RFI_STATUS.findall(scope)})
         role='MIXED' if len(roles)>1 else next(iter(roles),'UNKNOWN')
@@ -255,7 +262,8 @@ def document_context(text: str, original_name: str = '') -> dict:
                             Path(original_name).stem)
     if submittal is not None:
         identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
-        scope=(_workflow_scope(searchable,'SUBMITTAL',identifier,submittal.end())
+        scope=(_workflow_scope(searchable,'SUBMITTAL',identifier,submittal.end(),
+                               stop_cross_type=not primary_from_subject)
                if submittal_in_text else searchable)
         statuses=sorted({_submittal_status(value) for value in _SUBMITTAL_STATUS.findall(scope)})
         return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,

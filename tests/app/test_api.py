@@ -385,6 +385,26 @@ def test_submission_alias_reaches_submittal_workflow_index(client,project):
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_cross_type_section_cannot_manufacture_a_linked_rfi(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'RFI 42\nQuestion:\nMay PVC be used?\n'
+        'Submittal 23-01\nResponse:\nProduct data attached.')
+    document=upload(client,project['id'],'cross-workflow.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('RFI','42')]['members'][0]['role']=='QUESTION'
+    assert groups[('RFI','42')]['state']=='OPEN'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_submission_filename_fallback_reaches_workflow_index(client,project):
     document=upload(client,project['id'],'Submission No. 23-01.txt',b'Pump package pending review.')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']

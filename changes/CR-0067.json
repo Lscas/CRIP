@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0067",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Stop body-routed primary role and status scanning when a different exact RFI or Submittal section begins.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy",
+    "FR-PARSE-007 preserves exact workflow evidence boundaries",
+    "Offline reproduction showed later cross-type sections changing a body-routed primary RFI role and Submittal status"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "tasks/DEV-052.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0067.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only exact normalized workflow headings create boundaries; ambiguous prose does not.",
+    "The first exact heading remains the primary routing context and later headings remain references, not inferred relationships.",
+    "A valid Email Subject retains its established priority over cross-type body references; a different same-type identifier still closes its scope.",
+    "The change does not infer authority, approval precedence or semantic thread membership.",
+    "Validation is synthetic and offline; no customer document, mailbox or provider API is used."
+  ]
+}

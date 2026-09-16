@@ -193,6 +193,24 @@ def test_generic_email_uses_first_explicit_body_workflow_heading(tmp_path):
     assert {'workflow_type':'RFI','identifier':'42'} in result['workflow_references']
 
 
+def test_primary_workflow_stops_before_a_different_cross_type_section(tmp_path):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'RFI 42\nQuestion:\nMay PVC be used?\n'
+        'Submittal 23-01\nResponse:\nProduct data attached.')
+    path=tmp_path/'cross-workflow.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name);context=result['workflow_contexts'][0]
+    product=next(item for item in result['fragments'] if 'Product data' in item['text'])
+    submittal=document_context(
+        'Submittal 23-01\nStatus: Approved\nRFI 42\nStatus: Rejected\nConfirm clearance.')
+
+    assert (context['workflow_type'],context['identifier'],context['role'])==(
+        'RFI','42','QUESTION')
+    assert 'EMAIL > BODY > SUBMITTAL 23-01' in product['locator']['section']
+    assert {'workflow_type':'SUBMITTAL','identifier':'23-01'} in result['workflow_references']
+    assert (submittal['identifier'],submittal['status'])==('23-01','APPROVED')
+
+
 def test_full_request_for_information_name_is_an_exact_reference(tmp_path):
     message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
         'Status: Pending\nSee Request for Information No. 0042 before release.')
