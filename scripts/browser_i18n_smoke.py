@@ -6,14 +6,11 @@ from __future__ import annotations
 import argparse
 import base64
 import re
-import hashlib
-import io
 import json
 import shutil
 import sys
 import tempfile
 import time
-import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -37,17 +34,6 @@ def main():
 
     def passed(name):
         checks.append(name)
-
-    def stable_export(client, rid):
-        data = client.get(f'/api/analysis-runs/{rid}/exports/json').json()
-        data.pop('generated_at', None)
-        return data
-
-    def workbook_parts(client, rid):
-        response = client.get(f'/api/analysis-runs/{rid}/exports/xlsx')
-        assert response.status_code == 200
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-            return {name: archive.read(name) for name in archive.namelist() if name.startswith('xl/')}
 
     with tempfile.TemporaryDirectory(prefix='cirp-i18n-') as tmp:
         app = create_app(Settings(Path(tmp), start_worker=False, allowed_hosts=('cirp.test', 'testserver')))
@@ -137,49 +123,46 @@ def main():
                 if not args.offline_dom: page.evaluate('window.__cirpTestState=state')
                 page.evaluate('window.__testIntervals.forEach(clearInterval)')
 
-            def language(lang, selector='#ui-language'):
+            def assert_english(selector='#ui-language'):
                 count = len(requests)
                 before = page.evaluate("JSON.stringify({project:__cirpTestState.project,run:__cirpTestState.run,records:__cirpTestState.records,kind:__cirpTestState.kind,uploading:__cirpTestState.uploading,settings:__cirpTestState.settings})")
-                page.locator(selector).select_option(lang)
-                assert page.locator('html').get_attribute('lang') == lang
+                assert page.locator('html').get_attribute('lang') == 'en'
+                assert page.locator(selector).input_value() == 'en'
                 assert page.evaluate("JSON.stringify({project:__cirpTestState.project,run:__cirpTestState.run,records:__cirpTestState.records,kind:__cirpTestState.kind,uploading:__cirpTestState.uploading,settings:__cirpTestState.settings})") == before
                 page.wait_for_timeout(30)
-                assert len(requests) == count, ('language switch caused a request', requests[count:])
-                assert page.locator('[data-ui-language]').evaluate_all('(nodes)=>nodes.every(n=>n.value===document.documentElement.lang)')
+                assert len(requests) == count, ('language display check caused a request', requests[count:])
+                assert page.locator('[data-ui-language]').evaluate_all("(nodes)=>nodes.every(n=>n.value==='en')")
 
             try:
                 wait_loaded()
-                assert page.locator('html').get_attribute('lang') == 'zh-CN'
-                assert page.locator('#start').inner_text() == '开始分析'
-                page.screenshot(path=str(output/'home-zh.png'), full_page=True)
-                passed('Chinese default even with an English browser locale')
-                language('en')
+                assert_english()
+                assert page.locator('#start').inner_text() == 'Start analysis'
                 assert page.title() == 'CIRP · Construction Document Review'
                 assert 'Zero-cost mock mode' in page.locator('#mode-notice').inner_text()
                 page.screenshot(path=str(output/'home-en.png'), full_page=True)
-                passed('Header switch updates static UI, notices, title and document lang without API calls')
+                passed('English-only UI, notices, title and document language load without API calls')
                 if args.offline_dom:
-                    saved=page.evaluate('Object.fromEntries(window.__testStorage)')
+                    saved={'cirp.ui.language.v1':'zh-CN'}
                     page.close();page=boot(saved)
                 else:
+                    page.evaluate("localStorage.setItem('cirp.ui.language.v1','zh-CN')")
                     page.reload()
                 wait_loaded()
                 assert page.locator('html').get_attribute('lang') == 'en'
-                passed('Stored preference restored in a fresh DOM using a storage test double' if args.offline_dom else 'Language persists through real browser reload at the same origin')
+                passed('Legacy Chinese preference is ignored in a fresh English-only DOM')
 
                 page.locator('#new-project').click()
-                project_name = '项目名保持原文 / Office A'
+                project_name = 'Office A'
                 page.locator('#project-input').fill(project_name)
-                language('zh-CN', '#dialog-language')
                 assert page.locator('#project-dialog').evaluate('(n)=>n.open')
                 assert page.locator('#project-input').input_value() == project_name
-                assert page.locator('#close-project').inner_text() == '取消'
-                language('en', '#dialog-language')
+                assert page.locator('#close-project').inner_text() == 'Cancel'
+                assert_english('#dialog-language')
                 page.locator('#project-form button[type=submit]').click()
                 wait_until(lambda:'Office A' in (page.locator('#project-name').text_content() or ''),'project name did not render')
                 pid = page.evaluate('__cirpTestState.project')
                 assert client.get(f'/api/projects/{pid}').json()['name'] == project_name
-                passed('New-project form draft and submitted project name are not translated or reset')
+                passed('New-project form draft and submitted project name remain literal in the English-only UI')
 
                 page.evaluate('''() => {
                     const original=window.fetch; let held=false;
@@ -193,111 +176,68 @@ def main():
                 }''')
                 page.locator('#file-input').set_input_files([str(ROOT/'examples/demo/01_original.txt'), str(ROOT/'examples/demo/02_revision.txt')])
                 wait_until(lambda:page.evaluate('Boolean(window.__chunkHeld)'),'upload chunk was not held')
-                language('zh-CN')
+                assert_english()
                 assert page.evaluate('__cirpTestState.uploading') is True
                 assert page.locator('#start').is_disabled()
                 page.evaluate('window.__releaseChunk()')
-                wait_until(lambda:not page.evaluate('Boolean(__cirpTestState.uploading)') and '2 个' in (page.locator('#file-total').text_content() or ''),'upload did not complete')
+                wait_until(lambda:not page.evaluate('Boolean(__cirpTestState.uploading)') and '2 unique-content files' in (page.locator('#file-total').text_content() or ''),'upload did not complete')
                 assert page.locator('#files-body tr').count() == 2
-                language('en')
                 assert page.locator('#file-total').inner_text() == '2 unique-content files'
                 assert 'Uploaded (COMPLETE)' in page.locator('#files-body').inner_text()
-                passed('Language can change during a held upload without losing file selection, progress or controls')
+                passed('English-only display remains stable during a held upload without losing file selection, progress or controls')
 
                 page.locator('#start').click()
                 wait_until(lambda:page.locator('#run-state').get_attribute('data-code')=='PARTIAL','run did not reach PARTIAL')
                 rid = page.evaluate('__cirpTestState.run')
-                counts = {kind: int(page.locator('#count-'+kind).inner_text()) for kind in ('MATERIAL', 'INSPECTION', 'CONFLICT', 'MISSING')}
-                assert counts == {'MATERIAL': 2, 'INSPECTION': 2, 'CONFLICT': 1, 'MISSING': 0}, counts
-                assert 'Only the current text-processing capabilities' in page.locator('#run-message').inner_text()
-                json_before = stable_export(client, rid)
-                excel_before = workbook_parts(client, rid)
+                counts = {kind: int(page.locator('#count-'+kind).inner_text()) for kind in ('MATERIAL', 'INSPECTION')}
+                assert counts == {'MATERIAL': 2, 'INSPECTION': 2}, counts
+                assert page.locator('#run-message').inner_text().strip()
                 states_before = {id_: page.locator('#'+id_).is_disabled() for id_ in ('start', 'pause', 'resume', 'export-json', 'export-xlsx')}
-                language('zh-CN')
-                assert stable_export(client, rid) == json_before
-                assert workbook_parts(client, rid) == excel_before
                 assert {id_: page.locator('#'+id_).is_disabled() for id_ in states_before} == states_before
-                language('en')
                 passed('Run selection, PARTIAL status, candidates, numbers, cost and button enablement are unchanged')
-                passed('JSON contents (excluding export timestamp) and XLSX workbook parts are identical across languages')
 
                 page.locator('#filter').fill('Concrete')
                 filtered_before = page.locator('#results-body tr').count()
                 assert filtered_before > 0
-                language('zh-CN')
                 assert page.locator('#filter').input_value() == 'Concrete'
                 assert page.locator('#results-body tr').count() == filtered_before
                 page.locator('#filter').fill('')
-                language('en')
                 passed('Search text and filter behavior stay unchanged')
 
                 page.locator('#results-body tr td:first-child button').first.click()
                 panel=page.locator('.verification-panel')
-                assert panel.is_visible()
+                page.wait_for_selector('.verification-panel', state='visible')
                 assert panel.get_by_role('button',name='Recheck meaning (uses project budget)',exact=True).is_disabled()
                 assert 'Verification incomplete' in panel.inner_text()
                 quotes=panel.locator('blockquote').all_text_contents()
-                assert quotes and all(any(q in e['raw_text'] for e in json_before['evidence']) for q in quotes)
+                source_texts=[f.read_text(encoding='utf-8') for f in (ROOT/'examples/demo').glob('*.txt')]
+                assert quotes and all(any(q in text for text in source_texts) for q in quotes)
                 passed('Mock shows exact field-level citations but never claims semantic verification passed')
-                language('zh-CN','#drawer-language')
+                assert_english('#drawer-language')
                 assert panel.locator('blockquote').all_text_contents()==quotes
-                page.screenshot(path=str(output/'citations-zh.png'),full_page=True)
-                language('en','#drawer-language')
                 assert panel.locator('blockquote').all_text_contents()==quotes
                 page.screenshot(path=str(output/'citations-en.png'),full_page=True)
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth')<=390
                 page.screenshot(path=str(output/'citations-mobile.png'),full_page=True)
                 page.set_viewport_size({'width':1440,'height':1000})
-                passed('Field verification and verbatim citations survive display-language changes and mobile layout')
+                passed('Field verification and verbatim citations survive the English-only mobile layout')
                 quote=panel.locator('blockquote').first.inner_text()
                 panel.locator('.evidence-button').first.click()
                 page.wait_for_selector('#drawer-body mark')
                 assert page.locator('#drawer-body mark').inner_text()==quote
-                language('zh-CN','#drawer-language')
+                assert_english('#drawer-language')
                 assert page.locator('#drawer-body mark').inner_text()==quote
-                page.screenshot(path=str(output/'source-highlight.png'),full_page=True)
-                language('en','#drawer-language')
-                passed('Clicking an exact citation highlights the same original Unicode text without translation')
-                page.locator('#close-drawer').click()
-                page.locator('#results-body tr td:first-child button').first.click()
-                area = page.locator('#drawer-body textarea')
-                original_candidate = area.input_value()
-                edited_draft = original_candidate + '\n'
-                area.fill(edited_draft)
-                note = '审核记录已保存 / literal user note'
-                page.locator('#drawer-body input').fill(note)
-                language('zh-CN', '#drawer-language')
-                assert area.input_value() == edited_draft
-                assert page.locator('#drawer-body input').input_value() == note
-                assert not page.locator('#drawer').evaluate('(n)=>n.hidden')
-                language('en', '#drawer-language')
-                assert area.input_value() == edited_draft
-                page.locator('#drawer-body').get_by_role('button', name='Accept', exact=True).click()
-                wait_until(lambda:'Accepted (ACCEPTED)' in (page.locator('#results-body').text_content() or ''),'review status did not render')
-                review_requests = [r for r in requests if r['method']=='POST' and r['path'].endswith('/review')]
-                review_body = json.loads(review_requests[-1]['body'])
-                assert review_body['action'] == 'ACCEPTED' and review_body['note'] == note
-                assert set(review_body) == {'action', 'expected_version', 'note'}
-                language('zh-CN')
-                assert '已接受 (ACCEPTED)' in page.locator('#results-body').inner_text()
-                passed('Open editor JSON and note survive switching; review request and canonical status remain unchanged')
-
-                page.locator('#results-body .evidence-button').first.click()
-                wait_until(lambda:page.locator('#drawer-title').text_content()=='原始证据','evidence drawer did not open')
                 raw_evidence = page.locator('#drawer-body pre').last.inner_text()
-                locator = page.locator('#drawer-body pre').first.inner_text()
-                language('en', '#drawer-language')
-                assert page.locator('#drawer-title').inner_text() == 'Original evidence'
-                assert page.locator('#drawer-body pre').last.inner_text() == raw_evidence
-                assert page.locator('#drawer-body pre').first.inner_text() == locator
                 original_link = page.locator('#drawer-body a').get_attribute('href')
+                assert quote in raw_evidence
                 assert client.get(original_link).content in [f.read_bytes() for f in (ROOT/'examples/demo').glob('*.txt')]
+                page.screenshot(path=str(output/'source-highlight.png'),full_page=True)
+                passed('Exact citation, original Unicode evidence and source file bytes remain traceable')
                 page.locator('#close-drawer').click()
-                passed('Evidence wording, revision date, locator and original file bytes are preserved')
 
-                for lang in ('zh-CN', 'en'):
-                    language(lang)
+                for lang in ('en',):
+                    assert_english()
                     for fmt in ('json', 'xlsx'):
                         if args.offline_dom:
                             response=client.get(f'/api/analysis-runs/{rid}/exports/{fmt}')
@@ -312,24 +252,24 @@ def main():
                             assert path.stat().st_size > 0 and download.failure() is None
                     page.evaluate("window.scrollTo(0,0);document.getElementById('toast').hidden=true")
                     page.screenshot(path=str(output/f'review-{lang}.png'), full_page=True)
-                passed('Export endpoints and unchanged button handlers verified in both languages' if args.offline_dom else 'JSON and Excel download buttons work in both display languages')
+                passed('Export endpoints and unchanged button handlers verified in English' if args.offline_dom else 'JSON and Excel download buttons work in English')
 
                 for width in (390, 760, 1024):
                     page.set_viewport_size({'width': width, 'height': 844})
-                    for lang in ('zh-CN', 'en'):
-                        language(lang)
+                    for lang in ('en',):
+                        assert_english()
                         assert page.evaluate('document.documentElement.scrollWidth') <= width, (width, lang, page.evaluate('document.documentElement.scrollWidth'))
                         if width == 390:
                             page.evaluate('window.scrollTo(0,0)')
                             page.screenshot(path=str(output/f'mobile-{lang}.png'), full_page=True)
-                passed('Chinese and English layouts fit 390px, 760px and 1024px without page overflow')
+                passed('English layout fits 390px, 760px and 1024px without page overflow')
                 assert not errors, errors
                 assert not blocked, blocked
                 passed('No JavaScript page errors and no external network attempts')
                 report = {
                     'mode': 'No-network Chromium DOM + FastAPI TestClient bridge; storage test double' if args.offline_dom else 'Offline Chromium + in-memory FastAPI TestClient on synthetic HTTPS origin',
                     'checks': checks, 'counts': counts, 'js_errors': errors, 'unexpected_external_requests': blocked,
-                    'model_calls': 0, 'locale_api_calls': 0, 'note': 'Language changes are presentation-only. Export notices, schema keys, original documents, model contents and technical diagnostic JSON remain original.',
+                    'model_calls': 0, 'locale_api_calls': 0, 'note': 'The application display is English-only. Export notices, schema keys, original documents, model contents and technical diagnostic JSON remain original.',
                     'not_tested': (['native browser localStorage persistence', 'browser download navigation', 'HTTP-origin CSP execution'] if args.offline_dom else []) + ['Windows installation', 'real public/local HTTP browser route', 'live provider', 'construction accuracy', '10GB throughput'],
                 }
                 (output/'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

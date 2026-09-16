@@ -18,6 +18,7 @@ from app.security import environment_without_secrets
 from app.uploads import Uploads
 from app.gateway import Gateway,ProviderPaused,InvalidModelOutput
 from app.parsers import PARSER_VERSION
+from app.workflows import build_workflow_index
 from app.visual_pipeline import VISION_RENDER_VERSION,render_visual_png
 from app.assemble import envelopes,missing,key,material_group_key
 from contracts.runtime_rules import validate_schema
@@ -513,7 +514,8 @@ class Runner:
 
     def update_coverage(self,rid):
         run=self.get(rid)
-        docs=self.db.all('SELECT status,summary FROM document_results WHERE run_id=?',(rid,))
+        docs=self.db.all('''SELECT r.status,r.summary,r.document_id,d.name FROM document_results r
+                            JOIN documents d ON d.id=r.document_id WHERE r.run_id=?''',(rid,))
         evidence=self.db.all('SELECT status,payload FROM evidence WHERE run_id=?',(rid,))
         summaries=[json.loads(d['summary']) for d in docs]
         pages=[page for summary in summaries for page in summary.get('pages',[])]
@@ -521,6 +523,7 @@ class Runner:
         visual_tasks=[task for summary in summaries for task in summary.get('visual_tasks',[])]
         geometry=[item for summary in summaries for item in summary.get('geometry_summaries',[])]
         takeoffs=[item for summary in summaries for item in summary.get('takeoffs',[])]
+        workflows=build_workflow_index(docs)['summary']
         limitations=['复杂选项/父条款/跨专业关联仍待完善','没有做施工准确率评测；完成调用不代表完整理解']
         if any(task.get('status')!='VISION_EXTRACTED' for task in visual_tasks):
             limitations.append('仍有页面视觉任务未完成或未启用')
@@ -544,6 +547,13 @@ class Runner:
                  'geometry_pages':len(geometry),
                  'geometry_pages_calibrated':sum(item.get('status')=='CALIBRATED_RAW_GEOMETRY' for item in geometry),
                  'takeoff_candidates':len(takeoffs),
+                 'workflow_documents':workflows['documents'],
+                 'workflow_groups':workflows['groups'],
+                 'rfi_groups':workflows['rfi_groups'],
+                 'submittal_groups':workflows['submittal_groups'],
+                 'email_threads':workflows['email_threads'],
+                 'workflow_ambiguous':workflows['ambiguous'],
+                 'quoted_email_documents':workflows['quoted_email_documents'],
                  'warnings':[w for summary_item in summaries for w in summary_item.get('warnings',[])],
                  'scope_limitations':limitations}
         self.db.execute('UPDATE runs SET coverage=? WHERE id=?',(dumps(summary),rid))

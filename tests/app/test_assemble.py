@@ -209,3 +209,25 @@ def test_email_headers_cannot_become_material_without_body_evidence():
         {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[header])
 
     assert checked['requirements']==[] and flags==['EMAIL_HEADER_SOURCE']
+
+
+def test_email_quoted_history_cannot_become_current_requirement_or_property():
+    atom={'candidate_key':'R8','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-C'],
+          'context_evidence_ids':['EV-Q'],'needs_context':False,'properties':[
+              {'name':'diameter','value':'2','unit':'inches','evidence_ids':['EV-Q']}]}
+    current={'evidence_id':'EV-C','document_id':'DOC-E','raw_text':'Provide copper pipe.',
+             'locator':{'section':'EMAIL > BODY > RFI 8 > RESPONSE'}}
+    quoted={'evidence_id':'EV-Q','document_id':'DOC-E','raw_text':'Use 2 inch copper pipe.',
+            'locator':{'section':'EMAIL > QUOTED HISTORY > RFI 8 > RESPONSE'}}
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[current,quoted])
+    assert checked['requirements'][0]['properties']==[]
+    assert flags==['EMAIL_QUOTED_HISTORY_PROPERTY']
+
+    atom['evidence_ids']=['EV-Q'];atom['properties']=[]
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[current,quoted])
+    assert checked['requirements']==[] and flags==['EMAIL_QUOTED_HISTORY_SOURCE']

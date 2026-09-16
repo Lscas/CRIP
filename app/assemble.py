@@ -167,6 +167,11 @@ def _email_header_source(evidence: dict) -> bool:
     return section.startswith('EMAIL > HEADERS')
 
 
+def _email_quoted_history_source(evidence: dict) -> bool:
+    section=str((evidence.get('locator') or {}).get('section') or '').upper()
+    return section.startswith('EMAIL > QUOTED HISTORY')
+
+
 def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[str,dict] | None = None,
                                 ) -> tuple[dict,list[str]]:
     """Remove only structurally clear false positives; never invent or reassign facts."""
@@ -177,6 +182,9 @@ def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[
         category=atom.get('category')
         direct=[records[eid] for eid in atom.get('evidence_ids') or [] if eid in records]
         direct_roles={_workflow_source_role(record) for record in direct}
+        if category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct and all(
+                _email_quoted_history_source(record) for record in direct):
+            flags.append('EMAIL_QUOTED_HISTORY_SOURCE');continue
         if category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct and all(
                 _email_header_source(record) for record in direct):
             flags.append('EMAIL_HEADER_SOURCE');continue
@@ -196,6 +204,18 @@ def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[
         for prop in atom.get('properties') or []:
             normalized=re.sub(r'[^a-z0-9]+','_',str(prop.get('name','')).casefold()).strip('_')
             prop_ids=set(prop.get('evidence_ids') or [])
+            prop_records=[records[eid] for eid in prop_ids if eid in records]
+            if prop_records and all(_email_quoted_history_source(record) for record in prop_records):
+                flags.append('EMAIL_QUOTED_HISTORY_PROPERTY');continue
+            if prop_records and all(_email_header_source(record) for record in prop_records):
+                flags.append('EMAIL_HEADER_PROPERTY');continue
+            if prop_records and all(_rejected_submittal_source(record) for record in prop_records):
+                flags.append('REJECTED_SUBMITTAL_PROPERTY');continue
+            prop_roles={_workflow_source_role(record) for record in prop_records}
+            if (category in ('MATERIAL','INSPECTION','TEST','REPORT') and prop_roles
+                    and 'RFI_RESPONSE' not in prop_roles
+                    and prop_roles.intersection({'RFI_QUESTION','RFI_UNKNOWN'})):
+                flags.append('RFI_QUESTION_PROPERTY');continue
             if not prop_ids.issubset(scope):
                 flags.append('PROPERTY_SCOPE');continue
             primary_ids=set(atom.get('evidence_ids') or [])
@@ -205,16 +225,6 @@ def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[
                             for right in prop_ids if right in records)
                 if not related:
                     flags.append('PROPERTY_RELATION');continue
-            prop_roles={_workflow_source_role(records[eid]) for eid in prop_ids if eid in records}
-            prop_records=[records[eid] for eid in prop_ids if eid in records]
-            if prop_records and all(_email_header_source(record) for record in prop_records):
-                flags.append('EMAIL_HEADER_PROPERTY');continue
-            if prop_records and all(_rejected_submittal_source(record) for record in prop_records):
-                flags.append('REJECTED_SUBMITTAL_PROPERTY');continue
-            if (category in ('MATERIAL','INSPECTION','TEST','REPORT') and prop_roles
-                    and 'RFI_RESPONSE' not in prop_roles
-                    and prop_roles.intersection({'RFI_QUESTION','RFI_UNKNOWN'})):
-                flags.append('RFI_QUESTION_PROPERTY');continue
             if category=='MATERIAL' and normalized in _ENTITY_PROPERTY:
                 flags.append('PROPERTY_ROLE');continue
             identity=(normalized,str(prop.get('value')),prop.get('unit'),tuple(sorted(prop.get('evidence_ids') or [])))

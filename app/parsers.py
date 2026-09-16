@@ -1,6 +1,7 @@
 """有限资源文本解析。未处理的图形、扫描件和CAD显式进入Coverage。"""
 from __future__ import annotations
 import codecs
+import hashlib
 import re
 import zipfile
 from concurrent.futures import ProcessPoolExecutor
@@ -18,7 +19,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-6'
+PARSER_VERSION='multisource-7'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -53,6 +54,13 @@ _EMAIL_RFI_SUBJECT=re.compile(
 _EMAIL_SUBMITTAL_SUBJECT=re.compile(
     r'(?im)^Subject:\s*(?:Re:\s*)?(?:SUBMITTAL|SUBMISSION)'
     r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})?')
+_WORKFLOW_REFERENCES={
+    'RFI':re.compile(r'(?i)\bRFI(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})'),
+    'SUBMITTAL':re.compile(r'(?i)\bSUBMITTAL(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{0,30})'),
+}
+_HTML_QUOTE_MARKER='\x00CIRP-QUOTED-HISTORY\x00'
+_EMAIL_HISTORY_START=re.compile(
+    r'(?i)^\s*(?:On .{1,240} wrote:|-{2,}\s*(?:Original Message|Forwarded message)\s*-{2,})\s*$')
 
 @dataclass
 class Fragment:
@@ -108,8 +116,22 @@ def split_lines(lines: list[str], loc: dict, method: str, rev: tuple,
 def _clean_identifier(value: str | None, prefix: str) -> str | None:
     if not value:return None
     value=value.strip().upper()
-    if value in {'QUESTION','REQUEST','RESPONSE','ANSWER','REPLY','NO','NUMBER'}:return None
+    if value in {'QUESTION','REQUEST','RESPONSE','ANSWER','REPLY','NO','NUMBER','STATUS',
+                 'PENDING','REVIEWED','APPROVED','REJECTED'}:return None
     return value.removeprefix(prefix).lstrip(' #:-') or None
+
+
+def workflow_references(text: str) -> list[dict]:
+    """Extract exact workflow identifiers only; this does not assert a relationship."""
+    found=[];seen=set()
+    for workflow,pattern in _WORKFLOW_REFERENCES.items():
+        for match in pattern.finditer(text[:200_000]):
+            identifier=_clean_identifier(match.group(1),workflow)
+            if not identifier:continue
+            identity=(workflow,identifier.casefold())
+            if identity in seen:continue
+            seen.add(identity);found.append({'workflow_type':workflow,'identifier':identifier})
+    return found
 
 
 def document_context(text: str, original_name: str = '') -> dict:
@@ -200,6 +222,7 @@ class _PlainHTML(HTMLParser):
     def handle_starttag(self,tag,attrs):
         tag=tag.casefold()
         if tag in {'script','style','noscript'}:self.hidden+=1
+        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_MARKER+'\n')
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_endtag(self,tag):
         tag=tag.casefold()
@@ -220,6 +243,42 @@ def _email_part_text(part) -> tuple[str,str] | None:
     if content_type=='text/html':
         parser=_PlainHTML();parser.feed(value);parser.close();value=parser.text()
     return content_type,value
+
+
+def split_email_history(text: str) -> tuple[str,str]:
+    """Separate current message text from explicit quoted history conservatively."""
+    current=[];quoted=[];history=False;lines=text.splitlines()
+    for index,line in enumerate(lines):
+        stripped=line.strip()
+        following='\n'.join(lines[index+1:index+6])
+        header_block=(bool(re.match(r'(?i)^From\s*:',stripped)) and
+                      bool(re.search(r'(?im)^\s*(?:Sent|Date|To|Subject)\s*:',following)))
+        if stripped==_HTML_QUOTE_MARKER or _EMAIL_HISTORY_START.match(stripped) or header_block:
+            history=True
+            if stripped!=_HTML_QUOTE_MARKER:quoted.append(line)
+            continue
+        if history or stripped.startswith('>'):quoted.append(line)
+        else:current.append(line)
+    return ('\n'.join(current).strip(),'\n'.join(quoted).strip())
+
+
+def _email_message_key(value: object) -> str | None:
+    if value is None:return None
+    normalized=str(value).strip().casefold()
+    if not normalized:return None
+    return 'MSG-'+hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:24]
+
+
+def _email_thread_metadata(message) -> dict:
+    references=[]
+    for raw in message.get_all('References',[]):
+        values=re.findall(r'<[^<>]{1,998}>',str(raw)) or str(raw).split()
+        for value in values:
+            key=_email_message_key(value)
+            if key and key not in references:references.append(key)
+    return {'message_key':_email_message_key(message.get('Message-ID')),
+            'parent_message_key':_email_message_key(message.get('In-Reply-To')),
+            'reference_keys':references}
 
 
 def _parse_email(path: Path, original_name: str) -> dict:
@@ -246,25 +305,37 @@ def _parse_email(path: Path, original_name: str) -> dict:
             (plain if parsed[0]=='text/plain' else html).append(parsed[1])
     body='\n\n'.join(value for value in (plain or html) if value.strip())
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
-    full='\n'.join(headers+[body]);rev=revision(full);fragments=[]
-    context=document_context(full,original_name)
+    current_body,quoted_body=split_email_history(body)
+    current_source='\n'.join(headers+[current_body]);current_rev=revision(current_source);fragments=[]
+    context=document_context(current_source,original_name)
     if headers:
         header_section=' > '.join(value for value in ('EMAIL > HEADERS',_workflow_label(context,context.get('role'))) if value)
         fragments.extend(split_lines(headers,locator(section=header_section,native_element_id='email-headers'),
-                                     'EMAIL',rev))
-    if body:
+                                     'EMAIL',current_rev))
+    if current_body:
         body_fragments,context=split_workflow_lines(
-            body.splitlines(),locator(native_element_id='email-body'),'EMAIL',rev,full,original_name,
+            current_body.splitlines(),locator(native_element_id='email-body'),'EMAIL',current_rev,
+            current_source,original_name,
             prefix='EMAIL > BODY')
         fragments.extend(body_fragments)
-    else:context=document_context(full,original_name)
+    if quoted_body:
+        quoted_fragments,_=split_workflow_lines(
+            quoted_body.splitlines(),locator(native_element_id='email-quoted-history'),'EMAIL',revision(quoted_body),
+            quoted_body,'',prefix='EMAIL > QUOTED HISTORY')
+        fragments.extend(quoted_fragments)
     warnings=[]
     if attachments:warnings.append('Email attachments were inventoried but not analyzed; upload each attachment separately.')
-    if not body:warnings.append('Email has no supported plain-text or HTML body.')
-    pages=[{'page':None,'status':'EMAIL_BODY_EXTRACTED' if body else 'EMAIL_HEADERS_ONLY'}]
+    if not current_body and quoted_body:warnings.append('Email has quoted history but no distinct current body text.')
+    elif not body:warnings.append('Email has no supported plain-text or HTML body.')
+    pages=[{'page':None,'status':'EMAIL_BODY_EXTRACTED' if current_body else
+            'EMAIL_QUOTED_HISTORY_ONLY' if quoted_body else 'EMAIL_HEADERS_ONLY'}]
+    contexts=[context] if context.get('workflow_type') else []
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,
                           document_type='EMAIL',workflow_type=context.get('workflow_type'),
                           document_identifier=context.get('identifier'),workflow_status=context.get('status'),
+                          workflow_contexts=contexts,workflow_references=workflow_references(current_source+'\n'+quoted_body),
+                          email_thread=_email_thread_metadata(message),
+                          email_content={'current_body_chars':len(current_body),'quoted_history_chars':len(quoted_body)},
                           attachments=attachments,active_content_processed=False)
 
 
@@ -498,7 +569,9 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
         return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
                                               'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables),
                                               'document_type':page_context.get('document_type','UNKNOWN')},'warnings':warnings,
-                'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars}
+                'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars,
+                'workflow_context':page_context if page_context.get('workflow_type') else None,
+                'workflow_references':workflow_references(page_source)}
     finally:
         page.close()
 
@@ -515,7 +588,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                workers: int = 1) -> dict:
     if workers not in (1,2,4):raise ValueError('本地PDF工作进程数必须为1、2或4')
     ext=Path(original_name).suffix.lower(); fragments=[]; warnings=[]; pages=[];page_count=None
-    visual_tasks=[];geometry=[]
+    visual_tasks=[];geometry=[];workflow_contexts=[];workflow_refs=[]
     if ext in IMAGE_SUFFIXES:
         from PIL import Image
         with Image.open(path) as im:
@@ -547,6 +620,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                     'warnings':['文本编码不是受支持的UTF-8或带BOM的UTF-16；需转换，不猜编码。'],'parser_version':PARSER_VERSION}
         if len(text)>MAX_CHARS: text=text[:MAX_CHARS];warnings.append('字符上限后的内容未处理。')
         fragments,context=split_workflow_lines(text.splitlines(),locator(),'TXT',revision(text),text,original_name)
+        if context.get('workflow_type'):workflow_contexts.append(context)
+        workflow_refs.extend(workflow_references(text))
         pages=[{'page':1,'status':'TEXT_EXTRACTED','document_type':context['document_type']}]
     elif ext=='.docx':
         with zipfile.ZipFile(path) as z:
@@ -574,6 +649,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             if any(re.match(r'word/(header|footer|comments|footnotes|endnotes)',m.filename) for m in members):warnings.append('DOCX页眉/页脚/批注/注脚等附属内容未提取。')
             warnings.append('DOCX仅正文与表格文字；表格合并关系和父条款继承未完成。')
             context=annotate_workflow_fragments(fragments,full,original_name)
+            if context.get('workflow_type'):workflow_contexts.append(context)
+            workflow_refs.extend(workflow_references(full))
             pages=[{'page':None,'status':'BODY_TEXT_EXTRACTED','document_type':context['document_type']}]
     elif ext=='.pdf':
         import pdfplumber
@@ -584,7 +661,9 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             now=monotonic()
             if progress is not None and now-last_progress>=PROGRESS_INTERVAL_SECONDS:
                 progress(result_payload('PARTIAL',fragments,pages,warnings,page_count,
-                                        visual_tasks=visual_tasks,geometry_summaries=geometry))
+                                        visual_tasks=visual_tasks,geometry_summaries=geometry,
+                                        workflow_contexts=workflow_contexts,
+                                        workflow_references=workflow_refs))
                 last_progress=now
         with pdfplumber.open(path) as pdf:page_count=len(pdf.pages)
         total=0;limit_reached=False
@@ -597,7 +676,9 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 limit_reached=True;return
             fragments.extend(result['fragments']);pages.append(result['page'])
             warnings.extend(result['warnings']);visual_tasks.extend(result['visual_tasks'])
-            geometry.extend(result['geometry_summaries']);total+=result['text_chars'];save_progress()
+            geometry.extend(result['geometry_summaries']);total+=result['text_chars']
+            if result.get('workflow_context'):workflow_contexts.append(result['workflow_context'])
+            workflow_refs.extend(result.get('workflow_references',[]));save_progress()
         if workers==1:
             with pdfplumber.open(path) as pdf:
                 for index,page in enumerate(pdf.pages,1):
@@ -622,11 +703,21 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 'warnings':[f'格式{ext or "无扩展名"}尚未支持，未调用模型。'],'parser_version':PARSER_VERSION}
     if not fragments:warnings.append('没有可用于文本模型的内容，不代表文件没有要求。')
     document_types={page.get('document_type') for page in pages if page.get('document_type') not in (None,'UNKNOWN')}
-    document_type=(next(iter(document_types)) if len(document_types)==1 else
-                   'UNKNOWN' if not document_types else 'OTHER')
+    if 'RFI_RESPONSE' in document_types:document_type='RFI_RESPONSE'
+    elif len(document_types)==1:document_type=next(iter(document_types))
+    else:document_type='UNKNOWN' if not document_types else 'OTHER'
+    unique_contexts=[];seen_contexts=set()
+    for context in workflow_contexts:
+        identity=tuple(context.get(name) for name in ('workflow_type','identifier','role','status'))
+        if identity not in seen_contexts:seen_contexts.add(identity);unique_contexts.append(context)
+    unique_refs=[];seen_refs=set()
+    for reference in workflow_refs:
+        identity=(reference.get('workflow_type'),str(reference.get('identifier') or '').casefold())
+        if identity not in seen_refs:seen_refs.add(identity);unique_refs.append(reference)
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,page_count,
                           visual_tasks=visual_tasks,geometry_summaries=geometry,
-                          document_type=document_type)
+                          document_type=document_type,workflow_contexts=unique_contexts,
+                          workflow_references=unique_refs)
 
 def pdf_fragment(words, page, rev, cropbox=(0.0, 0.0, 0.0, 0.0), **location):
     text=' '.join(w['text'] for w in words)

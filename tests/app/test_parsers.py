@@ -96,6 +96,43 @@ def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_
     assert 'ACTIVE-CONTENT' not in text and 'tracker.png' not in text
     assert result['workflow_type']=='SUBMITTAL' and result['active_content_processed'] is False
 
+
+def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 009';message['Message-ID']='<reply@example.test>'
+    message['In-Reply-To']='<question@example.test>';message['References']='<question@example.test>'
+    message.set_content('Response:\nUse Type L copper.\n\nOn Monday, Pat wrote:\n'
+                        '> Revision Date: 2025-01-01\n> Question: May PVC be used?')
+    path=tmp_path/'reply.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name);serialized=str(result)
+    current=next(item for item in result['fragments'] if item['locator']['native_element_id']=='email-body')
+    quoted=next(item for item in result['fragments'] if item['locator']['native_element_id']=='email-quoted-history')
+
+    assert 'Type L copper' in current['text'] and current['internal_revision_date'] is None
+    assert 'Revision Date' in quoted['text'] and quoted['internal_revision_date']=='2025-01-01'
+    assert 'EMAIL > QUOTED HISTORY' in quoted['locator']['section']
+    assert result['email_content']['quoted_history_chars']>0
+    assert result['email_thread']['message_key'].startswith('MSG-')
+    assert result['email_thread']['parent_message_key'] in result['email_thread']['reference_keys']
+    assert 'reply@example.test' not in serialized and 'question@example.test' not in serialized
+
+
+def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
+    message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
+        '<html><body><p>Status: Pending</p><p>Current note.</p>'
+        '<blockquote><p>Status: Approved</p><p>Old note.</p></blockquote></body></html>',subtype='html')
+    path=tmp_path/'thread.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    current='\n'.join(item['text'] for item in result['fragments']
+                      if item['locator']['native_element_id']=='email-body')
+    quoted='\n'.join(item['text'] for item in result['fragments']
+                     if item['locator']['native_element_id']=='email-quoted-history')
+
+    assert 'Current note.' in current and 'Approved' not in current
+    assert 'Approved' in quoted and 'Old note.' in quoted
+    assert result['workflow_status']=='PENDING'
+
 def test_docx_minimal(tmp_path):
     p=tmp_path/'x.docx'
     xml='''<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Material alpha</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Quantity 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>'''

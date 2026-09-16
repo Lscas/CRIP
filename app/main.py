@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 from fastapi import FastAPI,Request,Query
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse,JSONResponse,Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -22,6 +23,8 @@ from app.runner import Runner
 from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
                           reviewer_record_is_visible)
 from app.remote_access import PreviewAccess
+from app.workflows import build_workflow_index
+from app.connectors import ExternalConnectors
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -32,6 +35,16 @@ class BudgetInput(Input):
     limit_cny:Decimal=Field(ge=Decimal('0.01'),le=1000000,max_digits=13,decimal_places=6)
 class RunInput(Input):local_workers:Literal[1,2,4]=2
 class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Field(ge=0)
+class ConnectorInput(Input):
+    access_token:str=Field(min_length=1,max_length=16384,repr=False)
+    project_id:str=Field(min_length=1,max_length=2048)
+    hub_id:str=Field(default='',max_length=2048)
+    company_id:str=Field(default='',max_length=64)
+    folder_id:str=Field(default='',max_length=2048)
+    remember:bool=True
+class ConnectorImportInput(Input):
+    provider:Literal['autodesk','procore']
+    remote_id:str=Field(min_length=1,max_length=2048)
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
     semantic:bool=False
@@ -53,6 +66,7 @@ class ReviewInput(Input):
 def create_app(settings:Settings|None=None)->FastAPI:
     s=settings or Settings.from_env();s.data_dir.mkdir(parents=True,exist_ok=True)
     db=Database(s.data_dir/'cirp.sqlite3');uploads=Uploads(db,s);gateway=Gateway(s,db);runner=Runner(db,s,uploads,gateway)
+    connectors=ExternalConnectors(s,uploads)
     @asynccontextmanager
     async def lifespan(app):
         lock=FileLock(str(s.data_dir/'server.lock'))
@@ -62,13 +76,14 @@ def create_app(settings:Settings|None=None)->FastAPI:
             if s.start_worker:runner.start()
             yield
         finally:
-            runner.close();gateway.close();lock.release()
+            runner.close();gateway.close();connectors.close();lock.release()
     app=FastAPI(title='CIRP 开发原型',version=VERSION,lifespan=lifespan,
                 docs_url=None if s.remote_enabled else '/docs',
                 redoc_url=None if s.remote_enabled else '/redoc',
                 openapi_url=None if s.remote_enabled else '/openapi.json')
     access=PreviewAccess(s)
-    app.state.db=db;app.state.runner=runner;app.state.gateway=gateway;app.state.uploads=uploads;app.state.settings=s
+    app.state.db=db;app.state.runner=runner;app.state.gateway=gateway;app.state.uploads=uploads
+    app.state.connectors=connectors;app.state.settings=s
     app.add_middleware(TrustedHostMiddleware,allowed_hosts=list(s.allowed_hosts))
     @app.middleware('http')
     async def guard(request,call_next):
@@ -106,6 +121,11 @@ def create_app(settings:Settings|None=None)->FastAPI:
         return response
     @app.exception_handler(DomainError)
     async def domain_handler(request,exc):return JSONResponse({'detail':str(exc)},status_code=exc.code)
+    @app.exception_handler(RequestValidationError)
+    async def validation_handler(request,exc):
+        # FastAPI's default includes the rejected input, which could echo a malformed access token.
+        errors=[{key:value for key,value in item.items() if key not in {'input','ctx'}} for item in exc.errors()]
+        return JSONResponse({'detail':errors},status_code=422)
 
     @app.get('/api/health/version')
     def health():return {'app_version':VERSION,'spec_version':VERSION,'schema_version':'0.2.0','provider':s.provider}
@@ -133,6 +153,20 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def project_budget(pid:str):return db.cost(pid)
     @app.put('/api/projects/{pid}/budget')
     def project_budget_update(pid:str,data:BudgetInput):return db.set_budget_limit(pid,data.limit_cny)
+    @app.get('/api/connectors')
+    def connector_status():return connectors.status()
+    @app.post('/api/connectors/{provider}')
+    def connector_configure(provider:Literal['autodesk','procore'],data:ConnectorInput):
+        return connectors.configure(provider,data.access_token,data.model_dump(exclude={'access_token','remember'}),data.remember)
+    @app.delete('/api/connectors/{provider}')
+    def connector_disconnect(provider:Literal['autodesk','procore']):return connectors.disconnect(provider)
+    @app.get('/api/connectors/{provider}/items')
+    def connector_items(provider:Literal['autodesk','procore'],folder_id:str|None=Query(None,max_length=2048)):
+        return connectors.items(provider,folder_id)
+    @app.post('/api/projects/{pid}/connector-imports',status_code=201)
+    def connector_import(pid:str,data:ConnectorImportInput):
+        db.one('SELECT id FROM projects WHERE id=?',(pid,))
+        return connectors.import_file(data.provider,data.remote_id,pid)
     @app.post('/api/projects/{pid}/uploads',status_code=201)
     def upload_create(pid:str,data:UploadInput):return uploads.create(pid,data.name,data.size)
     @app.get('/api/uploads/{upload_id}')
@@ -179,6 +213,16 @@ def create_app(settings:Settings|None=None)->FastAPI:
                         'takeoffs':summary.get('takeoffs',[]),
                         'geometry_summaries':summary.get('geometry_summaries',[])})
         return out
+    @app.get('/api/analysis-runs/{rid}/workflows')
+    def run_workflows(rid:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
+        """Read-only deterministic workflow relationships; never calls a model."""
+        runner.get(rid)
+        rows=db.all('''SELECT r.document_id,r.summary,d.name FROM document_results r
+                       JOIN documents d ON d.id=r.document_id WHERE r.run_id=? ORDER BY d.name''',(rid,))
+        result=build_workflow_index(rows);items=result['items'];page=items[offset:offset+limit]
+        return {'items':page,'summary':result['summary'],
+                'pagination':{'offset':offset,'limit':limit,'total':len(items),
+                              'next_offset':offset+len(page) if offset+len(page)<len(items) else None}}
     @app.get('/api/analysis-runs/{rid}/documents/{did}/pages/{page}/image')
     def run_page_image(rid:str,did:str,page:int,x0:float|None=None,y0:float|None=None,
                        x1:float|None=None,y1:float|None=None):

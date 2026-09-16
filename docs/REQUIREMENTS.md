@@ -122,7 +122,32 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
 - Attachments are inventoried as not processed and cannot silently contribute evidence unless uploaded and analyzed separately.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
-- MSG, mailbox synchronization, attachment recursion and cross-message thread reconstruction remain unsupported and are reported as such.
+- Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
+- Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
+- MSG, mailbox synchronization, attachment recursion and semantic thread inference remain unsupported and are reported as such.
+
+## FR-WORKFLOW-001 · Deterministic workflow relationships
+
+优先级：P0；状态：implemented
+
+Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
+
+- RFI numeric identifiers are normalized and question/response sources are linked while duplicate roles remain ambiguous.
+- Submittals with the same exact identifier retain source statuses and conflicting statuses remain ambiguous.
+- Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
+- The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
+
+## FR-INGEST-005 · Read-only Autodesk and Procore import
+
+优先级：P0；状态：implemented
+
+Allow a customer-configured read-only Autodesk APS or Procore connection to browse and selectively import project documents into the existing immutable upload pipeline.
+
+- Only fixed official API bases are called with the configured bearer token; the token is never returned by CIRP and optional persistence uses Windows current-user DPAPI.
+- The connector lists remote folders/files and imports only a user-selected file; it does not create, update or delete remote content.
+- Imported bytes pass through the existing project capacity, 4 MiB chunk, SHA-256 and duplicate-content controls.
+- Only trusted HTTPS download hosts are accepted and a bearer token is not forwarded to a different signed-storage host.
+- All automated validation uses synthetic httpx MockTransport responses and makes no live Autodesk or Procore request.
 
 ## FR-DATA-001 · 统一文档模型
 

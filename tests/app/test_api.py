@@ -90,6 +90,27 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
     assert summary['attachments']==[{'file_name':'detail.pdf','content_type':'application/pdf',
                                      'status':'NOT_PROCESSED'}]
 
+
+def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project):
+    for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
+                      ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.')]:
+        upload(client,project['id'],name,text.encode())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    for did in run['document_ids']:runner.parse_one(run,did)
+
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    response=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    repeated=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    after=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+
+    assert response.status_code==200 and response.json()==repeated.json()
+    result=response.json();assert result['pagination']['limit']==1
+    assert result['items'][0]['kind']=='RFI' and result['items'][0]['state']=='LINKED'
+    assert result['summary']['rfi_groups']==1 and before==after
+
 def test_chunk_limit(client,project):
     u=client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'x.txt','size':6000000}).json()
     assert client.put(f'/api/uploads/{u["id"]}/chunk',content=b'x'*(4*1024*1024+1)).status_code==413

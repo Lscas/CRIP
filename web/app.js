@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const I = window.CIRPI18n;
 I.init();
 document.querySelectorAll('[data-i18n-initial]').forEach(node=>I.bindText(node,node.dataset.i18nInitial));
-const state = {project:null,run:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,uploading:false};
+const state = {project:null,run:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,workflows:[],workflowsRun:null,connectorStatuses:[],connectorItems:[],refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,uploading:false};
 const labels = {MATERIAL:'kind.MATERIAL',INSPECTION:'kind.INSPECTION'};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function elT(tag,key,params={},cls){return I.bindText(el(tag,null,cls),key,params);}
@@ -35,8 +35,9 @@ async function projects(selected){
  all.forEach(p=>$('project-select').append(new Option(p.name,p.id)));
  if(selected||all.length){$('project-select').value=selected||all[0].id;await selectProject($('project-select').value);}
 }
-async function selectProject(id){state.project=id;state.run=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
- if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;$('save-budget').disabled=true;renderRecords();renderTakeoffs();return;}
+async function selectProject(id){state.project=id;state.run=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
+ renderConnectorItems();
+ if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;$('save-budget').disabled=true;renderRecords();renderTakeoffs();renderWorkflows();return;}
  const p=await api('/projects/'+id);I.bindText($('project-name'),()=>p.name);
  const budget=await api(`/projects/${id}/budget`);$('budget-limit').value=Number(budget.limit_cny);$('save-budget').disabled=false;
  await refresh();
@@ -49,7 +50,7 @@ async function refresh(){
  const runs=await api(`/projects/${state.project}/analysis-runs`);$('run-select').replaceChildren(optionT('run.select'));
  runs.forEach(r=>$('run-select').append(I.bindText(new Option('',r.id),()=>r.created_at.slice(0,19).replace('T',' ')+' · '+I.status(r.status))));
  if(!state.run&&runs.length)state.run=runs[0].id;
- if(state.run){$('run-select').value=state.run;await refreshRun();}else{renderRecords();renderTakeoffs();I.bindText($('run-state'),'run.notStarted');}
+ if(state.run){$('run-select').value=state.run;await refreshRun();}else{renderRecords();renderTakeoffs();renderWorkflows();I.bindText($('run-state'),'run.notStarted');}
  $('start').disabled=state.uploading||!manifest.documents.length||state.unresolvedCalls.length>0;
 }
 async function refreshRun(forceRecords=false){
@@ -73,6 +74,9 @@ async function refreshRun(forceRecords=false){
   if(forceRecords||(!active&&state.takeoffsRun!==rid)){
    state.takeoffs=await api(`/analysis-runs/${rid}/takeoffs`);state.takeoffsRun=rid;
   }
+  if(forceRecords||(!active&&state.workflowsRun!==rid)){
+   state.workflows=(await api(`/analysis-runs/${rid}/workflows?limit=500`)).items;state.workflowsRun=rid;
+  }
   state.unresolvedCalls=await api(`/projects/${state.project}/unresolved-model-calls`);
   I.bindStatus($('run-state'),run.status);I.bindText($('run-message'),()=>I.t('run.message',{stage:I.message(run.stage),message:I.message(run.message)}));
   const c=run.coverage;const done=(c.fragments_extracted||0)+(c.fragments_need_review||0);
@@ -88,7 +92,7 @@ async function refreshRun(forceRecords=false){
   renderReconciliation(state.unresolvedCalls);
   if(state.unresolvedCalls.length)$('start').disabled=true;
   $('resume').disabled=!['PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED'].includes(run.status)||state.unresolvedCalls.length>0;
-  $('export-json').disabled=active;$('export-xlsx').disabled=active;renderRecords();renderTakeoffs();
+  $('export-json').disabled=active;$('export-xlsx').disabled=active;renderRecords();renderTakeoffs();renderWorkflows();
  })();
  state.refreshPromise=task;
  try{await task;}finally{if(state.refreshPromise===task)state.refreshPromise=null;}
@@ -173,6 +177,34 @@ function renderTakeoffs(){
  });
  if(geometry.length)I.bindText($('geometry-detail'),()=>JSON.stringify(geometry,null,2));
  else I.bindText($('geometry-detail'),'takeoff.geometryEmpty');
+}
+function renderWorkflows(){
+ const rows=state.workflows||[];I.bindText($('workflow-total'),'workflow.total',{count:rows.length});$('workflow-body').replaceChildren();
+ if(!rows.length){const tr=el('tr');const td=elT('td','workflow.empty',{},'muted');td.colSpan=4;tr.append(td);$('workflow-body').append(tr);return;}
+ rows.forEach(item=>{const tr=el('tr');const title=el('td');title.append(el('strong',item.kind+(item.identifier?' '+item.identifier:'')));
+  const documents=el('td');(item.members||[]).forEach(member=>{const a=el('a',member.file_name,'link evidence-button');a.href='/api/documents/'+member.document_id+'/file';a.target='_blank';a.rel='noopener';documents.append(a);if(member.role||member.status)documents.append(el('small',[member.role,member.status,member.source].filter(Boolean).join(' · ')));});
+  tr.append(title,I.bindStatus(el('td',null,'badge '+(item.state==='AMBIGUOUS'?'warn':'')),item.state),documents,el('td',(item.warnings||[]).join(' ')));$('workflow-body').append(tr);
+ });
+}
+function selectedConnector(){return $('connector-provider').value;}
+async function loadConnectorStatus(){
+ state.connectorStatuses=await api('/connectors');const provider=selectedConnector();const current=state.connectorStatuses.find(item=>item.provider===provider);
+ I.bindText($('connector-status'),current?.configured?'connector.connected':'connector.disconnected',{provider:current?.label||provider});
+ $('connector-root').disabled=!current?.configured;$('connector-disconnect').disabled=!current?.configured;
+}
+async function listConnectorItems(folderId=''){
+ const provider=selectedConnector();const suffix=folderId?'?folder_id='+encodeURIComponent(folderId):'';
+ state.connectorItems=await api(`/connectors/${provider}/items${suffix}`);renderConnectorItems();
+}
+function renderConnectorItems(){
+ const body=$('connector-body');body.replaceChildren();
+ if(!state.connectorItems.length){const tr=el('tr');const td=elT('td','connector.empty',{},'muted');td.colSpan=4;tr.append(td);body.append(tr);return;}
+ state.connectorItems.forEach(item=>{const tr=el('tr');const action=el('td');const button=elT('button',item.kind==='FOLDER'?'connector.browse':'connector.import',{},'outline');
+  button.disabled=item.kind==='FILE'&&!state.project;
+  button.onclick=error(async()=>{if(item.kind==='FOLDER')await listConnectorItems(item.remote_id);else{button.disabled=true;await api(`/projects/${state.project}/connector-imports`,'POST',{provider:selectedConnector(),remote_id:item.remote_id});toast(I.t('connector.imported',{name:item.name}));await refresh();}});action.append(button);
+  const hasSize=item.size!==null&&item.size!==undefined&&Number.isFinite(Number(item.size));
+  tr.append(el('td',item.name),I.bindStatus(el('td'),item.kind),el('td',hasSize?(Number(item.size)/1024/1024).toFixed(2)+' MB':'—'),action);body.append(tr);
+ });
 }
 async function showRecord(row){
   const listDisplay=row.record.display;
@@ -293,12 +325,18 @@ $('reconcile-form').onsubmit=error(async e=>{e.preventDefault();const resolution
 $('project-form').onsubmit=error(async e=>{e.preventDefault();const p=await api('/projects','POST',{name:$('project-input').value,budget_cny:$('project-budget').value});$('project-dialog').close();$('project-input').value='';$('project-budget').value='300';await projects(p.id);});
 $('save-budget').onclick=error(async()=>{if(!state.project)return;const cost=await api(`/projects/${state.project}/budget`,'PUT',{limit_cny:$('budget-limit').value});$('budget-limit').value=Number(cost.limit_cny);toast(I.t('budget.saved',{limit:Number(cost.limit_cny).toFixed(2)}));if(state.run)await refreshRun();});
 $('project-select').onchange=error(()=>selectProject($('project-select').value));
-$('run-select').onchange=error(async()=>{state.run=$('run-select').value;state.records=[];state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.kindTouched=false;await refreshRun();});
-$('start').onclick=error(async()=>{if(!state.project)return;const run=await api(`/projects/${state.project}/analysis-runs`,'POST',{local_workers:Number($('local-workers').value)});state.run=run.id;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.kindTouched=false;await refresh();});
+$('run-select').onchange=error(async()=>{state.run=$('run-select').value;state.records=[];state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowsRun=null;state.kindTouched=false;await refreshRun();});
+$('start').onclick=error(async()=>{if(!state.project)return;const run=await api(`/projects/${state.project}/analysis-runs`,'POST',{local_workers:Number($('local-workers').value)});state.run=run.id;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowsRun=null;state.kindTouched=false;await refresh();});
 $('pause').onclick=error(async()=>{await api(`/analysis-runs/${state.run}/pause`,'POST');await refreshRun();});
-$('resume').onclick=error(async()=>{await api(`/analysis-runs/${state.run}/resume`,'POST');state.records=[];state.recordPagination=null;state.recordsRun=null;state.takeoffsRun=null;await refreshRun();});
+$('resume').onclick=error(async()=>{await api(`/analysis-runs/${state.run}/resume`,'POST');state.records=[];state.recordPagination=null;state.recordsRun=null;state.takeoffsRun=null;state.workflowsRun=null;await refreshRun();});
 $('file-input').onchange=error(async e=>{await uploadFiles([...e.target.files]);e.target.value='';});
 $('folder-input').onchange=error(async e=>{await uploadFiles([...e.target.files]);e.target.value='';});
+$('connector-provider').onchange=error(async()=>{state.connectorItems=[];renderConnectorItems();await loadConnectorStatus();});
+$('connector-form').onsubmit=error(async e=>{e.preventDefault();const provider=selectedConnector(),account=$('connector-account').value.trim();
+ await api(`/connectors/${provider}`,'POST',{access_token:$('connector-token').value,project_id:$('connector-project').value.trim(),hub_id:provider==='autodesk'?account:'',company_id:provider==='procore'?account:'',folder_id:$('connector-folder').value.trim(),remember:$('connector-remember').checked});
+ $('connector-token').value='';await loadConnectorStatus();await listConnectorItems();});
+$('connector-root').onclick=error(()=>listConnectorItems());
+$('connector-disconnect').onclick=error(async()=>{const provider=selectedConnector();await api(`/connectors/${provider}`,'DELETE');state.connectorItems=[];renderConnectorItems();await loadConnectorStatus();});
 $('drop-zone').ondragover=e=>{e.preventDefault();$('drop-zone').classList.add('drag');};
 $('drop-zone').ondragleave=()=>{$('drop-zone').classList.remove('drag');};
 $('drop-zone').ondrop=error(async e=>{e.preventDefault();$('drop-zone').classList.remove('drag');await uploadFiles([...e.dataTransfer.files]);});
@@ -312,5 +350,5 @@ for(const fmt of ['json','xlsx'])$('export-'+fmt).onclick=()=>{if(state.run)loca
   (state.settings.live_ready?I.t('notice.live'):I.t('notice.blocked',{reasons:state.settings.live_blockers.map(I.message).join('; ')})));
  $('vision-disclosure').hidden=!(state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready);
  if(state.settings.storage_warning){I.bindMessage($('environment-warning'),state.settings.storage_warning);$('environment-warning').hidden=false;}
- await projects();setInterval(()=>{if(state.run)refreshRun().catch(()=>{});},2500);
+ await loadConnectorStatus();renderConnectorItems();await projects();setInterval(()=>{if(state.run)refreshRun().catch(()=>{});},2500);
 })().catch(e=>toast(e.message));

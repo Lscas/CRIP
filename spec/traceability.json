@@ -218,12 +218,58 @@
       "implemented_product_paths": [
         "app/parsers.py",
         "app/assemble.py",
+        "app/workflows.py",
         "prompts/joint-extraction/system.md",
         "spec/schemas/classification.schema.json",
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML headers and safe visible body text are locally parsed; active HTML and remote resources are not executed or fetched. Attachments are inventory-only. RFI question/response and Submittal status locators feed deterministic output guards. MSG, mailbox sync, attachment recursion and thread reconstruction remain planned."
+      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; active HTML and remote resources are not executed or fetched. Attachments are inventory-only. RFI question/response and Submittal status locators feed deterministic output guards. Exact email header relationships use hashes only. MSG, mailbox sync, attachment recursion and semantic thread inference remain planned."
+    },
+    {
+      "requirement_id": "FR-WORKFLOW-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/workflow"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_workflows.py",
+        "tests/app/test_api.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_deterministic_synthetic_workflow_documents",
+      "implemented_product_paths": [
+        "app/workflows.py",
+        "app/parsers.py",
+        "app/main.py",
+        "app/runner.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Exact RFI, Submittal and hashed email relationships are available in a bounded read-only reviewer index. Ambiguous duplicates and conflicting statuses remain explicit; no model call is made."
+    },
+    {
+      "requirement_id": "FR-INGEST-005",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_connectors.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_httpx_mocktransport_only",
+      "implemented_product_paths": [
+        "app/connectors.py",
+        "app/local_credentials.py",
+        "app/main.py",
+        "app/uploads.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Customer-configured Autodesk APS and Procore bearer connections browse and selectively import remote documents without remote writes. Imports reuse project limits, chunks, hashes and deduplication; live tenant validation and interactive OAuth remain planned."
     },
     {
       "requirement_id": "FR-DATA-001",

@@ -2,6 +2,13 @@
 **规格版本：** 0.2.6
 当前 `app/gateway.py` 已实现OpenAI风格chat/completions HTTP接口；不包含秘密。文本使用`deepseek-v4-flash`，页面视觉只允许`deepseek-v4-flash-vision-exp`，不自动升级到其他模型。
 
+## Autodesk and Procore document sources
+These are read-only document sources, not model providers. The local Files panel accepts a customer-generated bearer token, lists project folders and imports only a selected file through the existing project-capacity, 4 MiB chunk, SHA-256 and deduplication path. CIRP never returns the token in status responses, optionally stores it with Windows current-user DPAPI, sends it only to the fixed official API host, and removes it before following a cross-host signed download. Forgetting the connection deletes only CIRP's local copy; it does not revoke the token at the provider.
+
+The Autodesk implementation follows the official [Data Management API](https://aps.autodesk.com/data-management-api), Autodesk's [three-legged authentication guidance](https://get-started.aps.autodesk.com/tutorials/hubs-browser/auth/) and the documented [BIM 360/Autodesk Docs storage URN download pattern](https://aps.autodesk.com/blog/best-practice-uploading-and-downloading-files-bim360-docs). The Procore implementation follows the official [OAuth authorization-code documentation](https://procore.github.io/documentation/oauth-auth-grant-flow) and [Project Folders and Files API](https://developers.procore.com/reference/rest/project-folders-and-files?version=1.0). Autodesk publishes official Node/.NET SDKs and OpenAPI definitions, but adding another runtime for two bounded read paths would increase deployment work; this increment therefore reuses the project's installed open-source `httpx` client instead of adding an SDK.
+
+Interactive OAuth, automatic refresh, provider-side revocation, recursive bulk import, change polling, continuous synchronization and live-tenant validation are not implemented. Automated validation uses synthetic `httpx.MockTransport` responses only; it makes no live Autodesk/Procore request and never performs a remote write or delete.
+
 ## DeepSeek V4 Flash（当前选择）
 Windows运行`start-deepseek-live.ps1`；需要网页输入时运行`scripts/deepseek_local_setup.py`。两种入口都固定官方基址`https://api.deepseek.com`与模型`deepseek-v4-flash`，显式发送`thinking={"type":"disabled"}`。用户选择保存后，Key使用Windows DPAPI当前用户加密文件保存并在后续启动时自动加载；不写明文`.env`、网址、命令行、日志或Git。可用`--replace-key`强制重新输入、`--forget-key`删除。启动本身不调用API，只有用户点击“开始分析”后才可能计费。
 
