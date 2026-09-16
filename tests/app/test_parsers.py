@@ -71,6 +71,14 @@ def test_workflow_identifiers_require_digits_and_preserve_uncertain_roles():
         {'workflow_type':'RFI','identifier':'42'},
         {'workflow_type':'SUBMITTAL','identifier':'23 05 00-01'},
     ]
+    assert workflow_references('Coordinate RFI 42 and RFI 43 before release.')==[
+        {'workflow_type':'RFI','identifier':'42'},
+        {'workflow_type':'RFI','identifier':'43'},
+    ]
+    assert workflow_references('Compare Submittal 23-01 with Submittal 23-02.')==[
+        {'workflow_type':'SUBMITTAL','identifier':'23-01'},
+        {'workflow_type':'SUBMITTAL','identifier':'23-02'},
+    ]
     assert document_context('RFI 42')=={
         'document_type':'OTHER','workflow_type':'RFI','identifier':'42','role':'UNKNOWN','status':None}
 

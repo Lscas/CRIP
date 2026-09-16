@@ -9,7 +9,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - Workflow routing uses an explicit email Subject first only when it contains a valid digit-bearing RFI or Submittal ID; otherwise the earliest supported body heading becomes primary and later identifiers remain references.
 - Email addresses in headers, current body, or quoted history cannot create RFI or Submittal workflow groups; routing headers remain visible evidence.
 - RFI roles require a standalone `Question`/`Response`/`Official Response` heading or an explicit separator. Exact known `Status`/`RFI Status` values remain reviewer metadata; status-like prose stays neutral and never creates a role.
-- `Request for Information No. 0042`/`RFI 0042` and `Submission 23-01`/`Submittal 23-01` create the same exact relationships. Compact digit-bearing prefixes such as `ARC-0042`, `MEP-023` and `SUB-001` are preserved without fuzzy matching or cross-prefix merging.
+- `Request for Information No. 0042`/`RFI 0042` and `Submission 23-01`/`Submittal 23-01` create the same exact relationships. Every distinct exact marker on one line is retained; canonical duplicates collapse. Compact digit-bearing prefixes such as `ARC-0042`, `MEP-023` and `SUB-001` are preserved without fuzzy matching or cross-prefix merging.
 - The same full-name aliases work in bounded filename fallback for scanned or otherwise textless files.
 - One TXT, Email or multi-page Submittal retains every distinct explicit status and becomes ambiguous when those statuses conflict. Exact `Status`, `Review Response`, `Final Response` and `Submittal Response` labels accept only the existing known disposition phrases, reuse canonical groups and never infer authority or winning precedence from prose.
 - Materials and equipment, with the item name, quantity, unit, design properties, specification section, location, status, and evidence separated into readable fields.
@@ -82,7 +82,7 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 632 Python tests passed.
+- 633 Python tests passed.
 - 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.

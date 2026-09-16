@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-37'
+PARSER_VERSION='multisource-38'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -204,7 +204,9 @@ def workflow_references(text: str) -> list[dict]:
     if '@' in searchable:searchable=_EMAIL_ADDRESS.sub('',searchable)
     found=[];seen=set()
     for workflow,pattern in _WORKFLOW_REFERENCES.items():
-        for match in pattern.finditer(searchable):
+        offset=0
+        while match:=pattern.search(searchable,offset):
+            offset=match.start()+1
             identifier=normalize_identifier(workflow,match.group(1))
             if not identifier:continue
             identity=(workflow,identifier.casefold())

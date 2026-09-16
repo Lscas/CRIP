@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "The current exact-reference patterns consume the remainder of a line, so a second RFI or Submittal marker on that line is never scanned.",
+    "Offline examples lose RFI 43, Submittal 23-02 and the final RFI in a mixed RFI/Submittal line.",
+    "Reuse the existing patterns, digit-bearing normalizer and deduplication; continue searching after each marker start instead of adding semantic parsing.",
+    "No fuzzy matching, relationship inference, mailbox access or model call is permitted.",
+    "633 Python, 24 UI and 11 deployment-boundary tests passed offline; parser and API regressions retain two same-line RFIs plus a same-line Submittal with zero model calls."
+  ],
+  "task_id": "DEV-048",
+  "title": "Preserve multiple workflow references per line",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-048.json",
+    "changes/CR-0063.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Retain every distinct exact RFI and Submittal reference on one source line without weakening identifier validation or inferring relationships."
+}
