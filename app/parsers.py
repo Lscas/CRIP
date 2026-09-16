@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-12'
+PARSER_VERSION='multisource-13'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -274,7 +274,8 @@ def split_email_history(text: str) -> tuple[str,str]:
             html_quote_depth=max(0,html_quote_depth-1);continue
         following='\n'.join(lines[index+1:index+6])
         header_block=(bool(re.match(r'(?i)^From\s*:',stripped)) and
-                      bool(re.search(r'(?im)^\s*(?:Sent|Date|To|Subject)\s*:',following)))
+                      bool(re.search(r'(?i)\b(?:Sent|Date|To|Subject)\s*:',stripped) or
+                           re.search(r'(?im)^\s*(?:Sent|Date|To|Subject)\s*:',following)))
         if _EMAIL_HISTORY_START.match(stripped) or header_block:
             if not html_quote_depth:history=True
             quoted.append(line)

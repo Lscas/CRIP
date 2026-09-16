@@ -74,7 +74,9 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
     message=EmailMessage();message['Subject']='RFI 101';message['From']='contractor@example.test'
     message['To']='engineer@example.test';message.set_content('   \n')
     message.add_alternative(
-        '<html><body><p>Response:</p><p>Provide Type L copper pipe.</p></body></html>',subtype='html')
+        '<html><body><p>Response:</p><p>Provide Type L copper pipe.</p>'
+        '<p>From: Architect &lt;a@example.test&gt; Sent: Monday To: Contractor Subject: RFI 101</p>'
+        '<p>Question: May PVC be used?</p></body></html>',subtype='html')
     message.add_attachment(b'ATTACHMENT-ONLY MATERIAL',maintype='application',subtype='pdf',filename='detail.pdf')
     document=upload(client,project['id'],'rfi-response.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
@@ -89,6 +91,11 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
     assert any('Type L copper pipe' in item['raw_text'] for item in evidence)
     assert all('ATTACHMENT-ONLY MATERIAL' not in item['raw_text'] for item in evidence)
     assert any('EMAIL > BODY > RFI 101 > RESPONSE' in (item['locator']['section'] or '') for item in evidence)
+    assert any('May PVC be used?' in item['raw_text'] and
+               'EMAIL > QUOTED HISTORY' in (item['locator']['section'] or '') for item in evidence)
+    assert all('May PVC be used?' not in item['raw_text'] for item in evidence
+               if 'EMAIL > BODY' in (item['locator']['section'] or ''))
+    assert summary['workflow_contexts'][0]['role']=='RESPONSE'
     assert summary['attachments']==[{'file_name':'detail.pdf','content_type':'application/pdf',
                                      'status':'NOT_PROCESSED'}]
 

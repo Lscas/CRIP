@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0036",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Recognize explicit Outlook-style quoted headers when From and the secondary mail labels share one visible HTML line, preserving the current RFI response role.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy and adaptability across RFI, Submittal and email content",
+    "Confirmed synthetic reproduction where a single-line Outlook quoted header changed an RFI response role to MIXED"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-021.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0036.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued email and workflow adaptability improvements.",
+  "known_limitations": [
+    "The boundary is intentionally conservative: From must start the visible line and at least one explicit Sent, Date, To or Subject label must also be present.",
+    "MSG, mailbox synchronization, malformed MIME recovery and semantic thread inference remain unsupported.",
+    "Validation is synthetic and offline; no mailbox, model or external provider request is used."
+  ]
+}

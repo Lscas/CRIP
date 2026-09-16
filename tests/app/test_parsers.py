@@ -5,7 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from PIL import Image,ImageDraw
-from app.parsers import MAX_FRAGMENT_BYTES,document_context,parse_file,revision,workflow_references
+from app.parsers import (MAX_FRAGMENT_BYTES,document_context,parse_file,revision,
+                         split_email_history,workflow_references)
 from app.parser_worker import save_result
 from app.visual_pipeline import (PDF_CROP_COORDINATE_SYSTEM, ocr_pdf_page,
                                  render_pdf_page, render_visual_png)
@@ -175,6 +176,27 @@ def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):
     assert result['email_thread']['message_key'].startswith('MSG-')
     assert result['email_thread']['parent_message_key'] in result['email_thread']['reference_keys']
     assert 'reply@example.test' not in serialized and 'question@example.test' not in serialized
+
+
+def test_eml_outlook_inline_header_starts_quoted_history_without_mixing_rfi_role(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 088';message.set_content(
+        '<html><body><p>Response:</p><p>Use Type L copper.</p>'
+        '<p>From: Contractor &lt;c@example.test&gt; Sent: Monday To: Engineer Subject: RFI 088</p>'
+        '<p>Question: May PVC be used?</p></body></html>',subtype='html')
+    path=tmp_path/'outlook-reply.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    current=next(item for item in result['fragments'] if item['locator']['native_element_id']=='email-body')
+    quoted=next(item for item in result['fragments']
+                if item['locator']['native_element_id']=='email-quoted-history')
+
+    assert 'Type L copper' in current['text'] and 'May PVC' not in current['text']
+    assert 'From: Contractor' in quoted['text'] and 'May PVC be used?' in quoted['text']
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert result['email_content']['quoted_history_chars']>0
+    ordinary,history=split_email_history(
+        'From: the site team\nThe note mentions subject: coordination but is current text.')
+    assert 'subject: coordination' in ordinary and history==''
 
 
 def test_eml_multiple_in_reply_to_ids_link_one_exact_hashed_thread(tmp_path):
