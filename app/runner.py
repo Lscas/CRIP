@@ -28,6 +28,12 @@ ACTIVE=('QUEUED','RUNNING')
 EXTRACTION_BATCH_SIZE=4
 EXTRACTION_BATCH_BYTES=8800
 
+def deterministic_extraction_skip_reason(evidence: dict) -> str | None:
+    section=str((evidence.get('locator') or {}).get('section') or '').upper()
+    if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
+        return 'ROUTING_ONLY_EMAIL_EVIDENCE'
+    return None
+
 def _adjacent_evidence(left: dict, right: dict) -> bool:
     if left.get('document_id')!=right.get('document_id'):return False
     a=left.get('locator') or {};b=right.get('locator') or {}
@@ -228,6 +234,22 @@ class Runner:
             with self.timed(rid,'stage.extract'):
                 todo=self.db.all("SELECT rowid AS sequence,* FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY document_id,sequence",(rid,))
                 pending=[(row,json.loads(row['payload'])) for row in todo]
+                eligible=[];skipped=[]
+                for item in pending:
+                    reason=deterministic_extraction_skip_reason(item[1])
+                    (skipped if reason else eligible).append((*item,reason))
+                if skipped:
+                    data={'disposition':'NO_REQUIREMENTS','requirements':[],
+                          'reason':'Email routing or quoted-history evidence was retained locally and excluded from current requirement extraction.'}
+                    with self.db.connect(True) as connection:
+                        for row,evidence,reason in skipped:
+                            extraction={'data':data,'request_id':None,'cached':False,
+                                        'batch_primary_evidence_id':evidence['evidence_id'],
+                                        'deterministic_skip_reason':reason}
+                            connection.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
+                                               (dumps(extraction),'EXTRACTED','',row['id']))
+                    self.update_coverage(rid)
+                pending=[(row,evidence) for row,evidence,_ in eligible]
                 families={paid_task_family(row['task_key']) for row in self.db.all(
                     'SELECT task_key FROM model_calls WHERE run_id=?',(rid,))}
                 forced_single={family for family in families if family.startswith('EV-')}
@@ -516,7 +538,7 @@ class Runner:
         run=self.get(rid)
         docs=self.db.all('''SELECT r.status,r.summary,r.document_id,d.name FROM document_results r
                             JOIN documents d ON d.id=r.document_id WHERE r.run_id=?''',(rid,))
-        evidence=self.db.all('SELECT status,payload FROM evidence WHERE run_id=?',(rid,))
+        evidence=self.db.all('SELECT status,payload,extraction FROM evidence WHERE run_id=?',(rid,))
         summaries=[json.loads(d['summary']) for d in docs]
         pages=[page for summary in summaries for page in summary.get('pages',[])]
         methods=[json.loads(e['payload']).get('extraction_method') for e in evidence]
@@ -537,6 +559,8 @@ class Runner:
                  'fragments_total':len(evidence),'fragments_extracted':sum(e['status']=='EXTRACTED' for e in evidence),
                  'fragments_need_review':sum(e['status']=='NEEDS_REVIEW' for e in evidence),
                  'fragments_pending':sum(e['status']=='PENDING' for e in evidence),
+                 'fragments_model_skipped':sum(bool(e['extraction'] and json.loads(e['extraction']).get(
+                     'deterministic_skip_reason')) for e in evidence),
                  'ocr_fragments':sum(method=='OCR' for method in methods),
                  'vision_fragments':sum(method=='VISION' for method in methods),
                   'cad_fragments':sum(method=='CAD_OBJECT' for method in methods),

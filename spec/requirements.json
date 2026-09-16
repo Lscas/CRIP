@@ -179,7 +179,7 @@
         "Workflow IDs require digits; aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.",
         "Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.",
         "Up to six bounded reply, forward or bracketed enterprise labels may precede an explicit workflow Subject without weakening identifier rules.",
-        "Current body and quoted history stay separate; addresses never create workflow groups, routing headers remain evidence, and history cannot create current requirements or properties.",
+        "Current body/history stay separate; addresses cannot create groups, while routing/history evidence remains reviewable but skips model extraction and cannot create current requirements or properties.",
         "An Outlook-style From block with Sent, Date, To or Subject starts quoted history whether labels share a line or use adjacent lines.",
         "Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.",
         "Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.",
@@ -673,7 +673,7 @@
       "acceptance_criteria": [
         "A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.",
         "A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.",
-        "Up to four adjacent evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family.",
+        "Up to four adjacent eligible evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family; routing-only email evidence closes locally before batching.",
         "Paid model calls remain serial and every call is recorded in the project ledger."
       ],
       "decision_source": "Approved product objective; D-27 and D-28 implement bounded local concurrency and adjacent extraction batching while broader task orchestration remains planned.",

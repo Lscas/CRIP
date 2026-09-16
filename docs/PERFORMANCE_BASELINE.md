@@ -54,3 +54,7 @@ Reproduce locally:
 ```powershell
 .venv\Scripts\python.exe scripts\benchmark_workflow_read.py --pages 2000 --iterations 300
 ```
+
+## CR-0052 routing-only email extraction baseline
+
+A synthetic RFI reply produces three retained evidence scopes: routing headers, current response body, and quoted question history. Before the shared extraction filter, all three became separate extraction batches. The deterministic filter now completes the routing headers and quoted history locally as `NO_REQUIREMENTS`, while retaining their text and locators for review and exact workflow relationships; only the current response body enters extraction. The fixture therefore changes from three extraction batches to one, a 66.7% request-count reduction for that email shape, without changing the published material candidate. This is an offline mock fixture, not a claim about every email, live-model latency, billing, or semantic accuracy.

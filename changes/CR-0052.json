@@ -1,0 +1,39 @@
+{
+  "change_id": "CR-0052",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-API-005"
+  ],
+  "summary": "Retain email headers and quoted history as reviewable evidence while completing them locally before extraction batching so only eligible current email content reaches the model.",
+  "decision_refs": [
+    "Active user goal to improve efficiency and accuracy for RFI, Submittal and Email content",
+    "Measured synthetic baseline where one RFI reply produced separate header, current-body and quoted-history extraction batches",
+    "Existing deterministic publication rule that rejects email headers and quoted history as current material or QA evidence"
+  ],
+  "affected_paths": [
+    "app/runner.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-037.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0052.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requires continued efficiency and accuracy improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "The measured three-to-one reduction applies to the tested reply shape and is not a universal email reduction ratio.",
+    "Current body evidence still uses the normal model path and remains subject to provider latency, cost and contract validation.",
+    "Mailbox synchronization, semantic thread inference and automatic attachment recursion remain unsupported.",
+    "Validation is synthetic and offline; no customer email or paid provider was used."
+  ]
+}

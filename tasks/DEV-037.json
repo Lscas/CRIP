@@ -1,0 +1,41 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency and accuracy improvements for RFI, Submittal and Email content under persistent /ponytail constraints.",
+  "notes": [
+    "A synthetic RFI reply currently creates three extraction batches: headers, current body and quoted history.",
+    "Existing deterministic publication checks already reject email headers and quoted history as current material or QA sources.",
+    "Retain every evidence fragment for review and workflow relationships, but close routing-only fragments locally before model batching.",
+    "Reuse existing evidence status and extraction payload fields; add no dependency, queue, model call or database migration.",
+    "The synthetic reply reduced extraction batches from three to one while retaining all evidence and the same published material; 600 Python tests and every specification, manifest and JavaScript check passed."
+  ],
+  "task_id": "DEV-037",
+  "title": "Skip routing-only email evidence before model extraction",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-API-005"
+  ],
+  "allowed_paths": [
+    "app/runner.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-037.json",
+    "changes/CR-0052.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Retain email headers and quoted history as reviewable evidence while preventing them from consuming extraction requests or creating current material and QA candidates."
+}

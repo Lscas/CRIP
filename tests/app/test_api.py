@@ -100,6 +100,37 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
                                      'status':'NOT_PROCESSED'}]
 
 
+def test_email_routing_evidence_stays_reviewable_without_model_extraction(client,project,monkeypatch):
+    message=EmailMessage();message['Subject']='RFI 42';message['From']='contractor@example.test'
+    message['To']='engineer@example.test';message.set_content(
+        'Response:\nDEMO_MATERIAL|PIPE|Type L Copper Pipe|-|diameter=2 in\n\n'
+        'On Monday, Pat wrote:\n> Question: May PVC be used?')
+    upload(client,project['id'],'rfi-42-reply.eml',message.as_bytes())
+    runner=client.app.state.runner;seen=[];original_many=runner.gateway.extract_many
+    def many(run,evidences):
+        seen.extend(item['locator']['section'] for item in evidences);return original_many(run,evidences)
+    monkeypatch.setattr(runner.gateway,'extract_many',many)
+    run=runner.create(project['id'])
+
+    runner.process(run['id'])
+
+    rows=client.app.state.db.all('SELECT payload,extraction FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))
+    routing=[]
+    for row in rows:
+        evidence=json.loads(row['payload']);section=evidence['locator']['section'] or ''
+        if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
+            routing.append((evidence,json.loads(row['extraction'])))
+    records=client.get(f'/api/analysis-runs/{run["id"]}/records').json()
+
+    assert seen==['EMAIL > BODY > RFI 42 > RESPONSE']
+    assert len(routing)==2 and all(item[1]['deterministic_skip_reason']=='ROUTING_ONLY_EMAIL_EVIDENCE'
+                                   for item in routing)
+    assert any('Subject: RFI 42' in item[0]['raw_text'] for item in routing)
+    assert any('May PVC be used?' in item[0]['raw_text'] for item in routing)
+    assert len(records)==1 and records[0]['record']['candidate']['name']=='Type L Copper Pipe'
+    assert runner.get(run['id'])['coverage']['fragments_model_skipped']==2
+
+
 def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,project):
     nested=EmailMessage();nested['Subject']='RFI 901';nested.set_content(
         'Question:\nATTACHMENT-ONLY: May PVC be used?')

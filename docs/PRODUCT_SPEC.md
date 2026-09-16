@@ -38,6 +38,8 @@ EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；�
 
 Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode the OLE container. CIRP then applies the existing Email, RFI, Submittal, quoted-history, hash-only thread, active-content, and attachment boundaries. MSG files over 8 MB fail locally before model work.
 
+Email routing headers and quoted history remain stored and reviewable for exact relationships, but they are deterministically completed as no-current-requirement before extraction batching. Only eligible current evidence reaches the model; Coverage reports how many fragments were skipped locally.
+
 没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。
 
 `Request for Information`完整名称与`RFI`缩写采用同一含数字编号规则并形成相同精确引用关系。

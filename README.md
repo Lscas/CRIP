@@ -24,6 +24,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - Local `.eml` parsing for safe headers and visible body text, with RFI question/response and Submittal status evidence boundaries. Non-empty plain text is preferred; whitespace-only plain alternatives fall back to non-empty safe HTML. Paired HTML blockquotes and explicit Outlook-style `From` plus `Sent`/`Date`/`To`/`Subject` headers keep quoted history separate, including when those visible header labels share one line. Spaced CSI-style Submittal identifiers are normalized from explicit body, subject, or filename metadata. MIME parsing stops at attachment boundaries, so an attached email body and its nested files stay out of parent evidence and workflow roles until explicitly imported through the normal capacity, hash and deduplication controls. The parent email and selected attachment then appear together in workflow review without inheriting approval or authority. HTML active content and remote resources are not executed or fetched.
 - Local Outlook `.msg` parsing reuses the same Email/RFI/Submittal evidence and selected-attachment paths. The pinned MIT-licensed `python-oxmsg` package decodes the bounded binary container; CIRP does not implement a second semantic parser or connect to a mailbox.
 - Current email text and explicit quoted history are separated; exact RFI, Submittal, hash-only email-thread, and selected-attachment relationships appear in one bounded reviewer workflow view without a model call. Primary workflow routing uses explicit email Subject before explicit body heading before filename; different exact identifiers remain references and cannot donate their RFI role or Submittal status to the primary identifier. Each explicit body section keeps its own identifier, role or status in the evidence locator. A bounded mix of reply/forward prefixes and bracketed enterprise labels such as `[EXTERNAL]` or `[External Email]` may precede an otherwise explicit workflow Subject. UNKNOWN RFI page contexts stay neutral instead of manufacturing a missing Question or Response. Exact Submittal references link to their primary source; conflicting explicit statuses remain ambiguous. Every identifier in a multi-value `In-Reply-To` header is hashed separately. Exact local ancestors appear before replies; self-references, parent/reference cycles and multiple distinct Message-ID values in one email are ambiguous and retain all messages. Raw message identifiers are not persisted, while a missing Message-ID remains a valid standalone item. Attachment provenance is shown only for a parsed email parent.
+- Email headers and quoted history remain visible evidence for review and exact relationships, but close locally before extraction batching. Only eligible current email evidence reaches the model, and Coverage reports the locally skipped fragment count.
 - Customer-configured read-only Autodesk Construction Cloud or Procore browsing and selected-file import, reusing project capacity checks, 4 MiB chunks, SHA-256, deduplication, and optional Windows current-user DPAPI storage.
 - Reproducible offline PDF performance measurement in `scripts/benchmark_local_parse.py`; see `docs/PERFORMANCE_BASELINE.md` for the measured fixture and limits.
 
@@ -80,12 +81,12 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 599 Python tests passed.
+- 600 Python tests passed.
 - 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.
 - Requirements/specification synchronization passed.
-- The source bundle manifest passed for 327 files.
+- The source bundle manifest passed for 329 files.
 
 No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
 
