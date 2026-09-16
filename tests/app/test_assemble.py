@@ -2,6 +2,7 @@ from app.assemble import (
     SUPPORT_NOTE_MAX_LENGTH,
     SUPPORT_NOTE_TRUNCATION,
     bounded_support_note,
+    envelopes,
     inspection,
     material,
     _inspection_atom_allowed,
@@ -231,3 +232,72 @@ def test_email_quoted_history_cannot_become_current_requirement_or_property():
     checked,flags=apply_deterministic_quality(
         {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[current,quoted])
     assert checked['requirements']==[] and flags==['EMAIL_QUOTED_HISTORY_SOURCE']
+
+
+def test_mixed_workflow_evidence_keeps_only_valid_direct_support():
+    atom={'candidate_key':'R9','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-SPEC','EV-REJECTED'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[
+              {'name':'diameter','value':'2','unit':'inches','evidence_ids':['EV-SPEC','EV-QUOTED']}]}
+    spec={'evidence_id':'EV-SPEC','document_id':'DOC-SPEC','raw_text':'Provide 2 inch copper pipe.',
+          'locator':{'section':'SECTION 22 11 16 > PART 2 - PRODUCTS'}}
+    rejected={'evidence_id':'EV-REJECTED','document_id':'DOC-S','raw_text':'Copper pipe product data.',
+              'locator':{'section':'SUBMITTAL 22-01 > STATUS: REJECTED'}}
+    quoted={'evidence_id':'EV-QUOTED','document_id':'DOC-SPEC','raw_text':'Earlier message: use copper pipe.',
+            'locator':{'section':'EMAIL > QUOTED HISTORY'}}
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},
+        [spec,rejected,quoted])
+
+    kept=checked['requirements'][0]
+    assert kept['evidence_ids']==['EV-SPEC']
+    assert kept['properties'][0]['evidence_ids']==['EV-SPEC']
+    assert flags==['EMAIL_QUOTED_HISTORY_PROPERTY','REJECTED_SUBMITTAL_SOURCE']
+    assert material(kept,spec,[spec])['requirement_status']=='CONFIRMED'
+    validate_schema('extraction-result',checked)
+
+
+def test_mixed_rfi_question_and_response_keeps_only_response():
+    atom={'candidate_key':'R10','category':'MATERIAL','subject':'Copper Pipe','action':'Provide',
+          'object':'Copper Pipe','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-Q','EV-R'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[]}
+    question={'evidence_id':'EV-Q','document_id':'DOC-RFI','raw_text':'May PVC pipe be used?',
+              'locator':{'section':'RFI 042 > QUESTION'}}
+    response={'evidence_id':'EV-R','document_id':'DOC-RFI','raw_text':'Provide Type L copper pipe.',
+              'locator':{'section':'RFI 042 > RESPONSE'}}
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[question,response])
+
+    assert checked['requirements'][0]['evidence_ids']==['EV-R']
+    assert flags==['RFI_QUESTION_SOURCE']
+    candidate=material(checked['requirements'][0],response,[response])
+    assert candidate['requirement_status']=='CONDITIONAL'
+    assert candidate['condition']=='RFI response source; contractual effect requires review.'
+
+
+def test_any_remaining_workflow_source_makes_candidate_conditional():
+    atom={'candidate_key':'R11','category':'MATERIAL','subject':'Air Handling Unit','action':'Provide',
+          'object':'Air Handling Unit','condition':None,'exception':None,'parent_requirement_key':None,
+          'option_group_key':None,'option_relation':'NONE','evidence_ids':['EV-SPEC','EV-S'],
+          'context_evidence_ids':[],'needs_context':False,'properties':[]}
+    spec={'evidence_id':'EV-SPEC','document_id':'DOC-SPEC','raw_text':'Provide air handling unit.',
+          'locator':{'section':'SECTION 23 73 00 > PART 2 - PRODUCTS'}}
+    pending={'evidence_id':'EV-S','document_id':'DOC-S','raw_text':'AHU-1 product data.',
+             'locator':{'section':'SUBMITTAL 23-09-23 > STATUS: PENDING'}}
+    for source in (spec,pending):
+        source.update(tenant_id='local',project_id='P1',input_snapshot_id='S1',internal_revision_date=None)
+
+    checked,flags=apply_deterministic_quality(
+        {'disposition':'CANDIDATES','requirements':[atom],'reason':'Source extraction.'},[spec,pending])
+    records={source['evidence_id']:source for source in (spec,pending)}
+    run={'id':'RUN-1','project_id':'P1','snapshot_id':'S1','provider':'mock','model':'mock-no-network'}
+    candidate=list(envelopes(run,records,[(spec,checked)],[]))[0]['candidate']
+
+    assert flags==[]
+    assert candidate['requirement_status']=='CONDITIONAL'
+    assert candidate['condition']=='Submittal status: PENDING.'
+    assert candidate['csi_sections']==['23 73 00']

@@ -172,6 +172,26 @@ def _email_quoted_history_source(evidence: dict) -> bool:
     return section.startswith('EMAIL > QUOTED HISTORY')
 
 
+def _ineligible_workflow_evidence(evidence: dict, *, block_rfi_question: bool) -> str | None:
+    if _email_quoted_history_source(evidence):return 'EMAIL_QUOTED_HISTORY'
+    if _email_header_source(evidence):return 'EMAIL_HEADER'
+    if _rejected_submittal_source(evidence):return 'REJECTED_SUBMITTAL'
+    if block_rfi_question and _workflow_source_role(evidence) in {'RFI_QUESTION','RFI_UNKNOWN'}:
+        return 'RFI_QUESTION'
+    return None
+
+
+def _filter_workflow_evidence(evidence_ids: list[str], records: dict[str,dict], suffix: str,
+                              *, block_rfi_question: bool) -> tuple[list[str],list[str]]:
+    kept=[];flags=[]
+    for evidence_id in evidence_ids:
+        reason=(_ineligible_workflow_evidence(records[evidence_id],block_rfi_question=block_rfi_question)
+                if evidence_id in records else None)
+        if reason:flags.append(reason+'_'+suffix)
+        else:kept.append(evidence_id)
+    return kept,flags
+
+
 def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[str,dict] | None = None,
                                 ) -> tuple[dict,list[str]]:
     """Remove only structurally clear false positives; never invent or reassign facts."""
@@ -180,21 +200,13 @@ def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[
     checked=deepcopy(data);kept=[];flags=[]
     for atom in checked.get('requirements',[]):
         category=atom.get('category')
-        direct=[records[eid] for eid in atom.get('evidence_ids') or [] if eid in records]
-        direct_roles={_workflow_source_role(record) for record in direct}
-        if category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct and all(
-                _email_quoted_history_source(record) for record in direct):
-            flags.append('EMAIL_QUOTED_HISTORY_SOURCE');continue
-        if category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct and all(
-                _email_header_source(record) for record in direct):
-            flags.append('EMAIL_HEADER_SOURCE');continue
-        if category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct and all(
-                _rejected_submittal_source(record) for record in direct):
-            flags.append('REJECTED_SUBMITTAL_SOURCE');continue
-        if (category in ('MATERIAL','INSPECTION','TEST','REPORT') and direct_roles
-                and 'RFI_RESPONSE' not in direct_roles
-                and direct_roles.intersection({'RFI_QUESTION','RFI_UNKNOWN'})):
-            flags.append('RFI_QUESTION_SOURCE');continue
+        target=category in ('MATERIAL','INSPECTION','TEST','REPORT')
+        if target:
+            evidence_ids,rejected=_filter_workflow_evidence(
+                atom.get('evidence_ids') or [],records,'SOURCE',block_rfi_question=True)
+            if rejected:
+                flags.extend(rejected);atom['evidence_ids']=evidence_ids
+                if not evidence_ids:continue
         if category=='MATERIAL' and not _material_atom_allowed(atom):
             flags.append('MATERIAL_NAME');continue
         if category in ('INSPECTION','TEST','REPORT') and not _inspection_atom_allowed(atom):
@@ -203,19 +215,12 @@ def apply_deterministic_quality(data: dict, evidence_records: list[dict] | dict[
         properties=[];seen=set()
         for prop in atom.get('properties') or []:
             normalized=re.sub(r'[^a-z0-9]+','_',str(prop.get('name','')).casefold()).strip('_')
-            prop_ids=set(prop.get('evidence_ids') or [])
-            prop_records=[records[eid] for eid in prop_ids if eid in records]
-            if prop_records and all(_email_quoted_history_source(record) for record in prop_records):
-                flags.append('EMAIL_QUOTED_HISTORY_PROPERTY');continue
-            if prop_records and all(_email_header_source(record) for record in prop_records):
-                flags.append('EMAIL_HEADER_PROPERTY');continue
-            if prop_records and all(_rejected_submittal_source(record) for record in prop_records):
-                flags.append('REJECTED_SUBMITTAL_PROPERTY');continue
-            prop_roles={_workflow_source_role(record) for record in prop_records}
-            if (category in ('MATERIAL','INSPECTION','TEST','REPORT') and prop_roles
-                    and 'RFI_RESPONSE' not in prop_roles
-                    and prop_roles.intersection({'RFI_QUESTION','RFI_UNKNOWN'})):
-                flags.append('RFI_QUESTION_PROPERTY');continue
+            prop_evidence,rejected=_filter_workflow_evidence(
+                prop.get('evidence_ids') or [],records,'PROPERTY',block_rfi_question=target)
+            if rejected:
+                flags.extend(rejected);prop['evidence_ids']=prop_evidence
+                if not prop_evidence:continue
+            prop_ids=set(prop_evidence)
             if not prop_ids.issubset(scope):
                 flags.append('PROPERTY_SCOPE');continue
             primary_ids=set(atom.get('evidence_ids') or [])
@@ -269,25 +274,38 @@ def missing(subject: str, reason: str, code: str, evidence_ids=None, target=None
             'affected_output_keys':[target or subject],'search_state':'PARSE_UNAVAILABLE' if code=='PARSE_FAILED' else 'AMBIGUOUS',
             'recommended_action':reason}
 
-def base(atom: dict, evidence: dict):
+def base(atom: dict, evidence: dict, sources: list[dict] | None = None):
+    sources=sources or [evidence]
     condition=atom['condition']
     if atom['exception']: condition=(condition+'；' if condition else '')+'例外：'+atom['exception']
-    locator_section=str((evidence.get('locator') or {}).get('section') or '')
-    sections=re.findall(r'\b\d{2} \d{2} \d{2}\b',evidence['raw_text']+'\n'+locator_section)
-    source_note=''
-    section_upper=locator_section.upper()
-    if 'SUBMITTAL' in section_upper:
-        status=re.search(r'STATUS:\s*([^>]+)',locator_section,re.I)
-        source_condition=('Submittal status: '+status.group(1).strip()+'.' if status else
-                          'Submittal source; approval status is not established.')
-        condition=(condition+'; ' if condition else '')+source_condition
-        source_note=' Submittal-source candidate; it does not replace the design requirement without review.'
-    elif 'RFI' in section_upper and '> RESPONSE' in section_upper:
-        condition=(condition+'; ' if condition else '')+'RFI response source; contractual effect requires review.'
-        source_note=' RFI-response candidate; the question itself is not treated as a revision directive.'
-    elif section_upper.startswith('EMAIL >'):
-        condition=(condition+'; ' if condition else '')+'Email source; authority and contractual effect require review.'
-        source_note=' Email-source candidate; attachments are outside this evidence unless separately analyzed.'
+    source_sections=[str((source.get('locator') or {}).get('section') or '') for source in sources]
+    sections=list(dict.fromkeys(section for source,locator in zip(sources,source_sections)
+                                for section in re.findall(r'\b\d{2} \d{2} \d{2}\b',
+                                                          str(source.get('raw_text') or '')+'\n'+locator)))
+    status=[];submittal_without_status=False
+    for locator in source_sections:
+        if 'SUBMITTAL' not in locator.upper():continue
+        match=re.search(r'STATUS:\s*([^>]+)',locator,re.I)
+        if match:status.append(match.group(1).strip())
+        else:submittal_without_status=True
+    status=list(dict.fromkeys(status))
+    source_conditions=[];source_notes=[]
+    if status or submittal_without_status:
+        if len(status)==1 and not submittal_without_status:
+            source_conditions.append('Submittal status: '+status[0]+'.')
+        elif status:
+            source_conditions.append('Submittal statuses: '+'; '.join(status+(['NOT ESTABLISHED'] if submittal_without_status else []))+'.')
+        else:source_conditions.append('Submittal source; approval status is not established.')
+        source_notes.append('Submittal-source candidate; it does not replace the design requirement without review.')
+    if any(_workflow_source_role(source)=='RFI_RESPONSE' for source in sources):
+        source_conditions.append('RFI response source; contractual effect requires review.')
+        source_notes.append('RFI-response candidate; the question itself is not treated as a revision directive.')
+    if any(str((source.get('locator') or {}).get('section') or '').upper().startswith('EMAIL > BODY')
+           for source in sources):
+        source_conditions.append('Email source; authority and contractual effect require review.')
+        source_notes.append('Email-source candidate; attachments are outside this evidence unless separately analyzed.')
+    if source_conditions:condition=(condition+'; ' if condition else '')+'; '.join(source_conditions)
+    source_note=''.join(' '+note for note in source_notes)
     return {'candidate_key':'C-'+key(evidence['evidence_id'],atom['candidate_key']),
             'requirement_status':'CONDITIONAL' if condition else 'CONFIRMED',
             'evidence_ids':atom['evidence_ids'],'inference_rule_id':None,'condition':condition,
@@ -295,8 +313,8 @@ def base(atom: dict, evidence: dict):
             'location':None,'field_evidence':{},
             'support_note':'Text-extraction candidate; engineer review and independent source verification are required.'+source_note}
 
-def material(atom: dict,evidence: dict):
-    c=base(atom,evidence)
+def material(atom: dict,evidence: dict,sources: list[dict] | None = None):
+    c=base(atom,evidence,sources)
     properties=deepcopy(atom['properties'])
     explicit_kind=next((p['value'].upper() for p in properties if p['name']=='material_kind'),None)
     temporary=explicit_kind=='TEMPORARY' or bool(re.search(r'formwork|shoring|temporary|模板|临时',atom['object'],re.I))
@@ -328,8 +346,8 @@ def material(atom: dict,evidence: dict):
     c['field_evidence']['name']=atom['evidence_ids']
     return c
 
-def inspection(atom: dict,evidence: dict):
-    c=base(atom,evidence)
+def inspection(atom: dict,evidence: dict,sources: list[dict] | None = None):
+    c=base(atom,evidence,sources)
     props={p['name']:p for p in atom['properties']}
     qa=props.get('qa_type',{}).get('value')
     allowed=json.loads((ROOT/'spec/schemas/inspection-item.schema.json').read_text(encoding="utf-8"))['properties']['qa_type']['enum']
@@ -363,15 +381,17 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
         for atom in result['requirements']:
             if atom['needs_context'] or atom['parent_requirement_key'] or atom['option_relation']!='NONE':
                 continue
-            source=evidence_records.get(atom['evidence_ids'][0],evidence)
+            sources=[evidence_records[evidence_id] for evidence_id in atom['evidence_ids']
+                     if evidence_id in evidence_records]
+            source=sources[0] if sources else evidence
             if atom['category']=='MATERIAL' and _material_atom_allowed(atom):
-                mat=material(atom,source)
+                mat=material(atom,source,sources)
                 # 只有显式设备Tag式主体可以尝试跨文档合并；普通名称不代表同一安装实例。
                 tag=bool(re.fullmatch(TAG_PATTERN,atom['subject']))
                 group=('TAG',atom['subject'].casefold(),atom['object'].casefold(),mat['condition']) if tag else ('EVIDENCE',source['evidence_id'],atom['candidate_key'])
                 material_groups[group].append((mat,source))
             elif atom['category'] in ('INSPECTION','TEST','REPORT') and _inspection_atom_allowed(atom):
-                candidates.append(('INSPECTION',inspection(atom,source)))
+                candidates.append(('INSPECTION',inspection(atom,source,sources)))
     for group,items in material_groups.items():
         merged=deepcopy(items[0][0]); by_property=defaultdict(list)
         # A tagged cross-evidence material is one logical record.  Derive its

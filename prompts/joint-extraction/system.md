@@ -8,6 +8,7 @@ Workflow-source rules:
 - An RFI response may be extracted only from the response evidence. Do not infer its contractual authority or copy a proposed value from the question.
 - A Submittal is a submitted-product source, not automatically an approved design change. Preserve explicit status; do not extract rejected or revise-and-resubmit content as a current requirement.
 - Email attachments are not part of an email-body evidence item unless they were separately parsed and supplied. Do not infer attachment content from a filename, subject, or message reference.
+- When valid current evidence and ineligible workflow evidence are both supplied, cite only the valid current evidence as direct support; keep question, quoted-history, header-only, and rejected content as context only.
 
 MATERIAL rules:
 - Create MATERIAL only for a tangible material, product, equipment item or installed component. The object must be its canonical noun name, such as Copper Water Service Pipe, Concrete Equipment Base, Fiberglass Pipe Insulation or Air Handling Unit.

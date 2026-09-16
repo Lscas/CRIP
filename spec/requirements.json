@@ -277,7 +277,8 @@
       "status": "planned",
       "acceptance_criteria": [
         "不比较不同设备、不同选项和不同工况的属性。",
-        "RFI问句不是修订指令，选项广告不是指定选型。"
+        "RFI问句不是修订指令，选项广告不是指定选型。",
+        "同一候选混合有效证据与RFI问句、被拒Submittal、邮件头或引用历史时，无效来源不得保留为直接依据。"
       ],
       "decision_source": "已批准的产品目标；实现尚未交付",
       "spec_section": "docs/PRODUCT_SPEC.md"
@@ -845,7 +846,8 @@
       "statement": "程序按可比较范围及内部日期选择当前展示值，不宣称合同或法律裁决。",
       "acceptance_criteria": [
         "LATEST_APPLIED保存selected_evidence_id。",
-        "无法比较时UNRESOLVED，不能用上传时间兜底。"
+        "无法比较时UNRESOLVED，不能用上传时间兜底。",
+        "RFI答复、Submittal或Email正文是否使候选保持条件性，必须检查全部剩余直接证据，不能只看第一条。"
       ],
       "priority": "P0",
       "status": "planned",
@@ -910,7 +912,8 @@
       "statement": "型号、性能、数量和测试频率分别链接支持它的证据。",
       "acceptance_criteria": [
         "行级证据不能自动支持所有字段。",
-        "证据必须存在于本项目本运行输入中。"
+        "证据必须存在于本项目本运行输入中。",
+        "字段同时引用有效和无效工作流来源时，只删除无效直接引用，不得连带删除仍有有效依据的字段。"
       ],
       "priority": "P0",
       "status": "planned",

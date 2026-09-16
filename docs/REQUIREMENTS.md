@@ -198,6 +198,7 @@ Let a reviewer inspect inert EML attachments and explicitly import one selected 
 
 - 不比较不同设备、不同选项和不同工况的属性。
 - RFI问句不是修订指令，选项广告不是指定选型。
+- 同一候选混合有效证据与RFI问句、被拒Submittal、邮件头或引用历史时，无效来源不得保留为直接依据。
 
 ## FR-REVISION-003 · Submittal 不自动覆盖设计
 
@@ -582,6 +583,7 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 - LATEST_APPLIED保存selected_evidence_id。
 - 无法比较时UNRESOLVED，不能用上传时间兜底。
+- RFI答复、Submittal或Email正文是否使候选保持条件性，必须检查全部剩余直接证据，不能只看第一条。
 
 ## PRD-PROTOTYPE-001 · 网页可运行原型
 
@@ -626,6 +628,7 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 - 行级证据不能自动支持所有字段。
 - 证据必须存在于本项目本运行输入中。
+- 字段同时引用有效和无效工作流来源时，只删除无效直接引用，不得连带删除仍有有效依据的字段。
 
 ## FR-SCHEMA-001 · 模型候选与服务端记录分层
 

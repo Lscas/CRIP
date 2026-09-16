@@ -336,11 +336,16 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_policies.py"
+        "tests/test_policies.py",
+        "tests/app/test_assemble.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Mixed valid and ineligible workflow citations are filtered per evidence ID: RFI questions, rejected Submittals, email headers and quoted history cannot remain as direct material or QA support. Full revision-scope comparison remains planned."
     },
     {
       "requirement_id": "FR-REVISION-002",
@@ -350,11 +355,16 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_policies.py"
+        "tests/test_policies.py",
+        "tests/app/test_assemble.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Candidate conditions now inspect every remaining direct source, so a later RFI response, Submittal or current email body cannot be hidden by an earlier specification citation. Full cross-document latest-value selection remains planned."
     },
     {
       "requirement_id": "FR-REVISION-003",
@@ -427,11 +437,16 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_contracts.py"
+        "tests/test_contracts.py",
+        "tests/app/test_assemble.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Mixed-source requirement and property citations are pruned per evidence ID while a field with valid direct support is preserved. Complete field-level evidence coverage across every output remains planned."
     },
     {
       "requirement_id": "FR-MATERIAL-003",
