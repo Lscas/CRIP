@@ -1,0 +1,44 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "Exact identifiers with alphabetic discipline or project prefixes currently normalize to null even when they contain a digit.",
+    "RFI ARC-0042, Submittal MEP-023 and matching filenames therefore lose deterministic workflow relationships.",
+    "Extend the existing bounded normalizer only; keep digit requirements, email-address rejection, exact matching and distinct prefixes.",
+    "TXT question and Email response fixtures link as ARC-0042 while MEP-0042 remains distinct; 608 Python tests and all specification, manifest and JavaScript checks passed."
+  ],
+  "task_id": "DEV-040",
+  "title": "Preserve prefixed RFI and Submittal identifiers",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/workflows.py",
+    "app/parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-040.json",
+    "changes/CR-0055.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Preserve exact digit-bearing RFI and Submittal identifiers with alphabetic project or discipline prefixes across body, filename and workflow indexing without fuzzy matching."
+}

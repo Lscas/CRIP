@@ -182,6 +182,24 @@ def test_email_subject_routes_primary_workflow_while_body_identifier_stays_refer
     assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
 
 
+def test_prefixed_rfi_links_text_question_and_email_response(client,project):
+    question=upload(client,project['id'],'RFI-ARC-0042.txt',
+                    b'RFI No. ARC-0042\nQuestion:\nConfirm pipe material.')
+    message=EmailMessage();message['Subject']='Re: RFI ARC-0042';message.set_content(
+        'Response:\nProvide Type L copper pipe.')
+    response=upload(client,project['id'],'ARC-0042-response.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,));run=runner.get(rid);run['model']='mock'
+    runner.parse_one(run,question['document_id']);runner.parse_one(run,response['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    group=next(item for item in items if item['kind']=='RFI' and item['identifier']=='ARC-0042')
+
+    assert group['state']=='LINKED' and len(group['members'])==2
+    assert {member['role'] for member in group['members']}=={'QUESTION','RESPONSE'}
+
+
 def test_email_submittal_status_does_not_cross_to_different_subject_identifier(client,project):
     message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
         'Submittal 23-02\nStatus: Rejected\nPump P-2 does not comply.')

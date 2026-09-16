@@ -15,6 +15,29 @@ def test_workflow_identifiers_reject_email_address_suffixes():
     assert normalize_identifier('RFI','42')=='42'
 
 
+def test_prefixed_workflow_identifiers_remain_exact_and_distinct():
+    assert normalize_identifier('RFI','ARC-0042')=='ARC-0042'
+    assert normalize_identifier('SUBMITTAL','MEP-023')=='MEP-023'
+    assert normalize_identifier('SUBMITTAL','SUB-001')=='SUB-001'
+    assert normalize_identifier('RFI','ARC') is None
+    assert normalize_identifier('RFI','ARC--0042') is None
+    assert normalize_identifier('RFI','RESPONSE TIME 10 DAYS') is None
+    assert normalize_identifier('RFI','ARC-0042@example.test') is None
+
+    result=build_workflow_index([
+        row('D1','arc-question.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'ARC-0042','role':'QUESTION','status':None}]),
+        row('D2','arc-response.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'arc-0042','role':'RESPONSE','status':None}]),
+        row('D3','mep-response.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'MEP-0042','role':'RESPONSE','status':None}]),
+    ])
+    groups={item['identifier']:item for item in result['items']}
+    assert set(groups)=={'ARC-0042','MEP-0042'}
+    assert groups['ARC-0042']['state']=='LINKED' and len(groups['ARC-0042']['members'])==2
+    assert groups['MEP-0042']['state']=='OPEN' and len(groups['MEP-0042']['members'])==1
+
+
 def test_projected_summary_preserves_legacy_workflow_fields():
     summary=projected_workflow_summary(json.dumps([
         'RFI_RESPONSE',None,None,None,None,'RFI','0042','RESPONSE',None]))

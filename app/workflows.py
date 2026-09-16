@@ -9,7 +9,7 @@ from collections import defaultdict
 
 _SPACED_SUBMITTAL_ID=re.compile(
     r'^\d{1,2}\s+\d{2}\s+\d{2}(?:\s*[-./]\s*[A-Z0-9][A-Z0-9._/-]{0,20})?')
-_COMPACT_ID=re.compile(r'^[A-Z0-9]*\d[A-Z0-9]*(?:[._/-][A-Z0-9]+)*')
+_COMPACT_ID=re.compile(r'^(?=[A-Z0-9._/-]*\d)[A-Z0-9]+(?:[._/-][A-Z0-9]+)*')
 WORKFLOW_SUMMARY_KEYS=('document_type','workflow_contexts','workflow_references','email_content','email_thread',
                        'workflow_type','document_identifier','workflow_role','workflow_status')
 WORKFLOW_SUMMARY_SQL_PATHS=','.join(repr(f'$.{key}') for key in WORKFLOW_SUMMARY_KEYS)
@@ -39,6 +39,7 @@ def normalize_identifier(workflow: str, value: object) -> str | None:
         match=_COMPACT_ID.match(normalized)
         if not match:return None
         identifier=match.group(0)
+    if not re.search(r'\d',identifier):return None
     if re.match(r'[A-Z0-9._%+-]*@',normalized[match.end():]):return None
     identifier=identifier.rstrip('._/-')
     if not identifier:return None

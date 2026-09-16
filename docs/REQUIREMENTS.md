@@ -124,7 +124,7 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 - Attachments are inventoried, cannot contribute evidence before explicit import, and stay inert until a reviewer starts a new analysis run.
 - EML traversal stops at attachment boundaries; attached-email bodies and nested files cannot enter parent evidence, inventory or workflow roles before import.
 - Only exact RFI role headings and Submittal statuses enter evidence locators; ordinary word prefixes and RFI questions cannot become material or QA candidates.
-- Workflow IDs require digits; aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
+- Workflow IDs require digits; alphabetic project or discipline prefixes and aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
 - Up to six bounded reply, forward or bracketed enterprise labels may precede an explicit workflow Subject without weakening identifier rules.
 - Current body/history stay separate; addresses cannot create groups, while routing/history evidence remains reviewable but skips model extraction and cannot create current requirements or properties.
@@ -143,7 +143,7 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
-- Digit-bearing RFI/Request for Information and Submittal/Submission references normalize identically; only exact headings link RFI roles, while duplicates and unknown roles stay ambiguous.
+- Digit-bearing RFI/Request for Information and Submittal/Submission references normalize identically, including exact alphabetic project or discipline prefixes; only exact headings link RFI roles, while duplicates and unknown roles stay ambiguous.
 - Submittals with the same exact identifier retain every explicit source status; exact references link to the primary, while conflicts across documents or within one source remain ambiguous.
 - Email routing ranks Subject, earliest body heading, then filename; other content IDs are reference-only, while addresses and From, To, Cc and Date cannot create groups or donate role/status.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.

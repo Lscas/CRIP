@@ -195,6 +195,17 @@ def test_full_name_workflow_filenames_use_the_existing_fallback():
         'SUBMITTAL','23-01',None)
 
 
+def test_prefixed_workflow_identifiers_survive_references_and_filename_fallback():
+    assert workflow_references('See RFI No. ARC-0042 and Submittal MEP-023.')==[
+        {'workflow_type':'RFI','identifier':'ARC-0042'},
+        {'workflow_type':'SUBMITTAL','identifier':'MEP-023'},
+    ]
+    rfi=document_context('', 'RFI-ARC-0042.pdf')
+    submittal=document_context('', 'Submittal-MEP-023.pdf')
+    assert (rfi['workflow_type'],rfi['identifier'])==('RFI','ARC-0042')
+    assert (submittal['workflow_type'],submittal['identifier'])==('SUBMITTAL','MEP-023')
+
+
 def test_rfi_role_words_require_an_explicit_heading_boundary(tmp_path):
     full_name=tmp_path/'full-name-rfi.txt';full_name.write_text(
         'Request for Information No. 42\nClarification is pending.',encoding='utf-8')
