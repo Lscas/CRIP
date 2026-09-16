@@ -75,6 +75,8 @@ def test_spaced_submittal_identifier_and_common_status_are_canonical():
     context=document_context('Submittal No: 23 05 00 - 01\nStatus: Approved with comments')
     assert context=={'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',
                      'identifier':'23 05 00-01','role':'SUBMITTAL','status':'APPROVED AS NOTED'}
+    filename_context=document_context('', 'Submittal 23 05 00 - 01 Pump Data.pdf')
+    assert filename_context['identifier']=='23 05 00-01' and filename_context['status'] is None
 
 
 def test_forwarded_email_subject_keeps_exact_workflow_identifier():

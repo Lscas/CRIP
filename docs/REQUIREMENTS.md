@@ -122,7 +122,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
 - Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
-- Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized, and roleless RFI references remain unknown rather than becoming questions.
+- Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.

@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-10'
+PARSER_VERSION='multisource-11'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -166,7 +166,7 @@ def document_context(text: str, original_name: str = '') -> dict:
                 'workflow_type':'RFI','identifier':identifier,'role':role,'status':None}
     submittal=_SUBMITTAL_HEADER.search(searchable) or _EMAIL_SUBMITTAL_SUBJECT.search(searchable)
     if not submittal:
-        submittal=re.search(r'(?i)(?:^|[\s_.-])SUBMITTAL(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',
+        submittal=re.search(r'(?i)(?:^|[\s_.-])SUBMITTAL(?:[\s_.#-]+([A-Z0-9][A-Z0-9\s._/-]{0,80}))?',
                             Path(original_name).stem)
     if submittal is not None:
         identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
