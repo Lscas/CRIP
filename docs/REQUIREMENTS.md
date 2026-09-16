@@ -124,7 +124,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
 - Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
-- Workflow IDs require a digit; full-name or abbreviated RFI references and spaced CSI-style Submittal IDs normalize deterministically, while roleless RFI stays unknown.
+- Workflow IDs require a digit; RFI/Request for Information and Submittal/Submission references normalize deterministically; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
 - Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
@@ -142,7 +142,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
-- Digit-bearing full-name or abbreviated RFI IDs normalize identically; question/response sources link, while duplicates and roleless or UNKNOWN contexts stay ambiguous.
+- Digit-bearing RFI/Request for Information and Submittal/Submission references normalize identically; RFI roles link while duplicates and unknown roles stay ambiguous.
 - Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
 - Email routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay reference-only and cannot donate role/status.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.

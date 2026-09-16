@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-20'
+PARSER_VERSION='multisource-21'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -62,7 +62,8 @@ _EMAIL_SUBMITTAL_SUBJECT=re.compile(
 _WORKFLOW_REFERENCES={
     'RFI':re.compile(r'(?im)\b(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
                      r'(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,80})'),
-    'SUBMITTAL':re.compile(r'(?im)\bSUBMITTAL(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,100})'),
+    'SUBMITTAL':re.compile(r'(?im)\b(?:SUBMITTAL|SUBMISSION)'
+                           r'(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,100})'),
 }
 _SUBMITTAL_STATUS_MAP={
     'APPROVED AS SUBMITTED':'APPROVED','NO EXCEPTIONS TAKEN':'APPROVED',

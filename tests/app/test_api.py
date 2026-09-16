@@ -202,6 +202,24 @@ def test_full_request_for_information_name_reaches_workflow_index(client,project
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_submission_alias_reaches_submittal_workflow_index(client,project):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response:\nCoordinate with Submission No. 23-01 before release.')
+    document=upload(client,project['id'],'rfi-submission-reference.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('RFI','42')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
     raw=(b'Subject: Coordination\r\n'
          b'Message-ID: <first@example.test>\r\n'
