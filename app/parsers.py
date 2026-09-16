@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-38'
+PARSER_VERSION='multisource-39'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -371,14 +371,18 @@ def _email_part_text(part) -> tuple[str,str] | None:
 
 
 def _email_attachment_boundary(part) -> bool:
-    return part.get_content_disposition()=='attachment' or bool(part.get_filename())
+    return (part.get_content_disposition()=='attachment' or bool(part.get_filename()) or
+            part.get_content_maintype()=='message')
 
 
 def _inventory_email_attachments(part,attachments: list[dict]) -> None:
     """Inventory top-level MIME attachments without entering attached messages or files."""
     if _email_attachment_boundary(part):
-        attachments.append({'file_name':str(part.get_filename() or 'unnamed attachment')[:240],
-                            'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
+        content_type=part.get_content_type()
+        fallback=(f'attached-message-{len(attachments)+1}.eml'
+                  if content_type=='message/rfc822' else 'unnamed attachment')
+        attachments.append({'file_name':str(part.get_filename() or fallback)[:240],
+                            'content_type':content_type,'status':'NOT_PROCESSED'})
         return
     if part.is_multipart():
         for child in part.iter_parts():_inventory_email_attachments(child,attachments)

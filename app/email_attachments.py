@@ -41,7 +41,8 @@ def _safe_name(value: object,index: int,content_type: str) -> str:
 
 
 def _attachment_parts(part):
-    if part.get_content_disposition()=='attachment' or part.get_filename():
+    if (part.get_content_disposition()=='attachment' or part.get_filename() or
+            part.get_content_maintype()=='message'):
         yield part
         return
     if part.is_multipart():

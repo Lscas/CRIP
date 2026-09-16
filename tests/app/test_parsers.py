@@ -1,6 +1,7 @@
 """FR-PARSE-001/003/004，基础文字解析，不是施工视觉评测。"""
 import io,json,sys,zipfile
 from email.message import EmailMessage
+from email.mime.message import MIMEMessage
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
@@ -422,6 +423,23 @@ def test_eml_attached_message_and_its_nested_files_stay_out_of_parent_evidence(t
     assert result['workflow_contexts'][0]['role']=='RESPONSE'
     assert result['attachments']==[{'file_name':'forwarded.eml','content_type':'message/rfc822',
                                     'status':'NOT_PROCESSED'}]
+
+
+def test_eml_unmarked_forwarded_message_stays_out_of_parent_evidence(tmp_path):
+    nested=EmailMessage();nested['Subject']='RFI 901';nested.set_content(
+        'Question:\nATTACHMENT-ONLY: May PVC be used?')
+    outer=EmailMessage();outer['Subject']='RFI 901';outer.set_content(
+        'Response:\nUse Type L copper.')
+    outer.make_mixed();outer.attach(MIMEMessage(nested))
+    path=tmp_path/'unmarked-forward.eml';path.write_bytes(outer.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert 'Use Type L copper' in text and 'ATTACHMENT-ONLY' not in text
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert result['attachments']==[{'file_name':'attached-message-1.eml',
+                                    'content_type':'message/rfc822','status':'NOT_PROCESSED'}]
 
 
 def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_path):

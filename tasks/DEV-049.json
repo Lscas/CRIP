@@ -1,0 +1,46 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "A nested message/rfc822 part without filename or Content-Disposition currently enters the parent body and is absent from attachment inventory.",
+    "The leaked forwarded question changes a current RFI response to MIXED and can reach evidence extraction.",
+    "Use the standard-library MIME maintype as an attachment boundary in both parsing and reviewer-selected import paths.",
+    "No automatic attachment analysis, recursion, mailbox access or model call is permitted.",
+    "635 Python, 24 UI and 11 deployment-boundary tests passed offline; unmarked forwarded messages stay outside parent evidence and remain available for explicit selected import."
+  ],
+  "task_id": "DEV-049",
+  "title": "Stop unmarked forwarded-message leakage",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "app/email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_email_attachments.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-049.json",
+    "changes/CR-0064.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_email_attachments.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Treat nested message MIME parts as inert, reviewable attachments even when filename and Content-Disposition are absent, preventing forwarded content from changing the parent Email/RFI/Submittal result."
+}

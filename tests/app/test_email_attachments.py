@@ -2,6 +2,7 @@
 import hashlib
 import sys
 from email.message import EmailMessage
+from email.mime.message import MIMEMessage
 from types import SimpleNamespace
 
 from tests.app.conftest import upload
@@ -101,6 +102,24 @@ def test_attached_email_requires_explicit_second_import_before_nested_attachment
 
     assert [item['name'] for item in first]==['forwarded.eml']
     assert [item['name'] for item in second]==['inner.pdf']
+
+
+def test_unmarked_forwarded_message_is_listed_and_requires_explicit_import(client,project):
+    nested=EmailMessage();nested['Subject']='Nested response';nested.set_content('Nested body')
+    outer=EmailMessage();outer['Subject']='Forwarded package';outer.set_content('Outer body')
+    outer.make_mixed();outer.attach(MIMEMessage(nested))
+    source=upload(client,project['id'],'unmarked-forward.eml',outer.as_bytes())
+
+    attachments=client.get(
+        f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments']
+    item=attachments[0]
+    imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
+        'document_id':source['document_id'],'attachment_index':0,
+        'expected_sha256':item['sha256']})
+
+    assert item['name']=='attached-message-1.eml' and item['content_type']=='message/rfc822'
+    assert item['importable'] is True and imported.status_code==201
+    assert imported.json()['name']=='attached-message-1.eml'
 
 
 def test_analysis_workflow_shows_selected_attachment_without_inheriting_email_authority(client,project):

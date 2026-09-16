@@ -1,0 +1,45 @@
+{
+  "change_id": "CR-0064",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "summary": "Treat nested message MIME parts as attachment boundaries even when filename and Content-Disposition metadata are absent.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "FR-PARSE-007 forbids attached-email bodies from entering parent evidence before explicit import",
+    "Offline reproduction showed an unmarked message/rfc822 question changing a parent RFI response to MIXED"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-049.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0064.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Nested message content remains inert until a reviewer explicitly imports it; automatic recursion is not added.",
+    "The generated fallback name identifies an unnamed attached email but does not infer an original filename.",
+    "Other unsupported or malformed non-message MIME parts retain existing behavior.",
+    "Validation is synthetic and offline; no customer email, mailbox or provider API is used."
+  ]
+}
