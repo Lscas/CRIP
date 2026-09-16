@@ -17,12 +17,14 @@ from pathlib import Path
 from time import monotonic
 from defusedxml import ElementTree as ET
 from app.cad import parse_cad
+from app.email_mime import (email_body_parts, is_email_attachment,
+                            iter_email_attachments, safe_attachment_name)
 from app.workflows import normalize_identifier
 from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_file,
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-39'
+PARSER_VERSION='multisource-40'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -370,31 +372,22 @@ def _email_part_text(part) -> tuple[str,str] | None:
     return content_type,value
 
 
-def _email_attachment_boundary(part) -> bool:
-    return (part.get_content_disposition()=='attachment' or bool(part.get_filename()) or
-            part.get_content_maintype()=='message')
-
-
 def _inventory_email_attachments(part,attachments: list[dict]) -> None:
     """Inventory top-level MIME attachments without entering attached messages or files."""
-    if _email_attachment_boundary(part):
-        content_type=part.get_content_type()
-        fallback=(f'attached-message-{len(attachments)+1}.eml'
-                  if content_type=='message/rfc822' else 'unnamed attachment')
-        attachments.append({'file_name':str(part.get_filename() or fallback)[:240],
+    for attachment in iter_email_attachments(part):
+        content_type=attachment.get_content_type();index=len(attachments)
+        attachments.append({'file_name':safe_attachment_name(
+                                attachment.get_filename(),index,content_type),
                             'content_type':content_type,'status':'NOT_PROCESSED'})
-        return
-    if part.is_multipart():
-        for child in part.iter_parts():_inventory_email_attachments(child,attachments)
 
 
 def _select_email_body(part) -> tuple[str | None,str,list[str]]:
     """Select one candidate per multipart/alternative; concatenate only real body segments."""
-    if _email_attachment_boundary(part):return None,'',[]
+    if is_email_attachment(part):return None,'',[]
     if not part.is_multipart():
         parsed=_email_part_text(part)
         return (parsed[0],parsed[1],[]) if parsed and parsed[1].strip() else (None,'',[])
-    candidates=[_select_email_body(child) for child in part.iter_parts()]
+    candidates=[_select_email_body(child) for child in email_body_parts(part)]
     candidates=[candidate for candidate in candidates if candidate[1].strip()]
     if not candidates:return None,'',[]
     if part.get_content_type()=='multipart/alternative':

@@ -173,7 +173,7 @@
       "acceptance_criteria": [
         "EML and MSG headers plus preferred visible body text become separately locatable evidence without active-content execution or remote fetches.",
         "A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.",
-        "Attachments are inventoried, cannot contribute evidence before explicit import, and stay inert until a reviewer starts a new analysis run.",
+        "Attachments, nested messages and non-root multipart/related resources are inventoried and inert before explicit import; related selects matched start/Content-ID or first child as its sole body.",
         "EML traversal stops at attachment boundaries; attached-email bodies and nested files cannot enter parent evidence, inventory or workflow roles before import.",
         "Only exact labels enter locators: Official Response sets an RFI response; known RFI Status and Submittal response/status values are preserved; prose stays neutral.",
         "Workflow IDs require digits; alphabetic project or discipline prefixes and aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.",
@@ -237,7 +237,7 @@
       "priority": "P0",
       "status": "implemented",
       "acceptance_criteria": [
-        "Attachment listing returns only bounded metadata and a SHA-256 identity; raw attachment bytes are not returned by the listing endpoint.",
+        "Attachment listing, including non-root multipart/related resources without filenames or disposition, returns only bounded metadata and SHA-256; raw bytes are not returned.",
         "The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.",
         "Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.",
         "Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review; a relationship is displayed only when its parent document parsed as email.",

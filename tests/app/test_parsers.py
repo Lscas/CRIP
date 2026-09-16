@@ -2,6 +2,8 @@
 import io,json,sys,zipfile
 from email.message import EmailMessage
 from email.mime.message import MIMEMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
@@ -440,6 +442,45 @@ def test_eml_unmarked_forwarded_message_stays_out_of_parent_evidence(tmp_path):
     assert result['workflow_contexts'][0]['role']=='RESPONSE'
     assert result['attachments']==[{'file_name':'attached-message-1.eml',
                                     'content_type':'message/rfc822','status':'NOT_PROCESSED'}]
+
+
+def test_eml_related_non_root_resource_stays_out_of_parent_evidence(tmp_path):
+    message=MIMEMultipart('related',start='<body@example.test>')
+    message['Subject']='RFI 903'
+    resource=MIMEText('Question:\nRELATED-RESOURCE-ONLY: May PVC be used?','plain')
+    resource['Content-ID']='<resource@example.test>'
+    body=MIMEText('<p>Response:</p><p>Use Type L copper.</p>','html')
+    body['Content-ID']='<body@example.test>'
+    message.attach(resource);message.attach(body)
+    path=tmp_path/'related-resource.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert 'Use Type L copper' in text and 'RELATED-RESOURCE-ONLY' not in text
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert result['attachments']==[{'file_name':'attachment-1','content_type':'text/plain',
+                                    'status':'NOT_PROCESSED'}]
+
+
+@pytest.mark.parametrize('start',[None,'<missing@example.test>'])
+def test_eml_related_without_usable_start_uses_first_child_as_body(tmp_path,start):
+    message=MIMEMultipart('related',**({'start':start} if start else {}))
+    message['Subject']='RFI 904'
+    body=MIMEText('Response:\nUse Type L copper.','plain')
+    body['Content-ID']='<body@example.test>'
+    resource=MIMEText('Question:\nRELATED-FALLBACK-ONLY: May PVC be used?','plain')
+    resource['Content-ID']='<resource@example.test>'
+    message.attach(body);message.attach(resource)
+    path=tmp_path/'related-fallback.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert 'Use Type L copper' in text and 'RELATED-FALLBACK-ONLY' not in text
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert result['attachments']==[{'file_name':'attachment-1','content_type':'text/plain',
+                                    'status':'NOT_PROCESSED'}]
 
 
 def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_path):

@@ -3,6 +3,8 @@ import hashlib
 import sys
 from email.message import EmailMessage
 from email.mime.message import MIMEMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from types import SimpleNamespace
 
 from tests.app.conftest import upload
@@ -120,6 +122,28 @@ def test_unmarked_forwarded_message_is_listed_and_requires_explicit_import(clien
     assert item['name']=='attached-message-1.eml' and item['content_type']=='message/rfc822'
     assert item['importable'] is True and imported.status_code==201
     assert imported.json()['name']=='attached-message-1.eml'
+
+
+def test_related_non_root_resource_is_listed_and_requires_explicit_import(client,project):
+    message=MIMEMultipart('related',start='<body@example.test>')
+    message['Subject']='Submittal 23 09 23'
+    resource=MIMEText('RESOURCE-ONLY supporting note','plain')
+    resource['Content-ID']='<resource@example.test>'
+    body=MIMEText('<p>Status: Approved as Noted</p>','html')
+    body['Content-ID']='<body@example.test>'
+    message.attach(resource);message.attach(body)
+    source=upload(client,project['id'],'related-resource.eml',message.as_bytes())
+
+    attachments=client.get(
+        f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments']
+    item=attachments[0]
+    imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
+        'document_id':source['document_id'],'attachment_index':0,
+        'expected_sha256':item['sha256']})
+
+    assert item['name']=='attachment-1' and item['content_type']=='text/plain'
+    assert item['importable'] is True and imported.status_code==201
+    assert imported.json()['name']=='attachment-1'
 
 
 def test_analysis_workflow_shows_selected_attachment_without_inheriting_email_authority(client,project):

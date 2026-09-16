@@ -8,6 +8,7 @@ from email.parser import BytesParser
 from pathlib import Path
 
 from app.db import DomainError
+from app.email_mime import iter_email_attachments,safe_attachment_name
 
 
 MAX_EMAIL_BYTES=8_000_000
@@ -33,27 +34,11 @@ def _attachment_bytes(part) -> bytes | None:
     return None
 
 
-def _safe_name(value: object,index: int,content_type: str) -> str:
-    raw=str(value or '').replace('\\','/').split('/')[-1]
-    raw=''.join(char for char in raw if ord(char)>=32).strip()
-    if not raw:raw=f'attached-message-{index+1}.eml' if content_type=='message/rfc822' else f'attachment-{index+1}'
-    return raw[:240]
-
-
-def _attachment_parts(part):
-    if (part.get_content_disposition()=='attachment' or part.get_filename() or
-            part.get_content_maintype()=='message'):
-        yield part
-        return
-    if part.is_multipart():
-        for child in part.iter_parts():yield from _attachment_parts(child)
-
-
 def _eml_records(path: Path) -> list[tuple[dict,bytes | None]]:
     result=[]
-    for part in _attachment_parts(_message(path)):
+    for part in iter_email_attachments(_message(path)):
         data=_attachment_bytes(part);index=len(result);content_type=part.get_content_type()
-        name=_safe_name(part.get_filename(),index,content_type)
+        name=safe_attachment_name(part.get_filename(),index,content_type)
         result.append(({'attachment_index':index,'name':name,'content_type':content_type,
                         'size':len(data) if data is not None else None,
                         'sha256':hashlib.sha256(data).hexdigest() if data is not None else None,
@@ -69,7 +54,7 @@ def _msg_records(path: Path) -> list[tuple[dict,bytes | None]]:
         for item in attachments:
             index=len(result);raw=item.file_bytes;data=raw if isinstance(raw,bytes) else None
             content_type=str(item.mime_type or 'application/octet-stream')
-            name=_safe_name(item.file_name,index,content_type)
+            name=safe_attachment_name(item.file_name,index,content_type)
             result.append(({'attachment_index':index,'name':name,'content_type':content_type,
                             'size':len(data) if data is not None else None,
                             'sha256':hashlib.sha256(data).hexdigest() if data is not None else None,
