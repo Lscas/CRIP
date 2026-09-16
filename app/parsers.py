@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-31'
+PARSER_VERSION='multisource-32'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -48,7 +48,8 @@ _SUBMITTAL_HEADER=re.compile(
     r'(?im)^\s*(?:SUBMITTAL|SUBMISSION)(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
     r'([^\r\n]{0,100})\s*$')
 _RFI_ROLE=re.compile(
-    r'(?im)^[ \t]*(QUESTION|REQUEST|RESPONSE|ANSWER|REPLY)(?:[ \t]*[:#-][ \t]*|[ \t]*$)')
+    r'(?im)^[ \t]*(OFFICIAL\s+RESPONSE|QUESTION|REQUEST|RESPONSE|ANSWER|REPLY)'
+    r'(?:[ \t]*[:#-][ \t]*|[ \t]*$)')
 _SUBMITTAL_STATUS=re.compile(
     r'(?im)^\s*(?:SUBMITTAL\s+)?STATUS\s*[:#-]\s*'
     r'(FURNISH\s+AS\s+SUBMITTED|FURNISH\s+AS\s+CORRECTED|AMEND\s+AND\s+RESUBMIT|'
@@ -147,6 +148,11 @@ def _submittal_status(value: str) -> str:
     return _SUBMITTAL_STATUS_MAP.get(normalized,normalized)
 
 
+def _rfi_role(value: str) -> str:
+    normalized=' '.join(value.upper().split())
+    return 'RESPONSE' if normalized in {'RESPONSE','OFFICIAL RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+
+
 def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int) -> str:
     """Stop role/status inheritance when a different exact same-type identifier starts."""
     pattern=_RFI_HEADER if workflow=='RFI' else _SUBMITTAL_HEADER
@@ -214,10 +220,8 @@ def document_context(text: str, original_name: str = '') -> dict:
     if rfi is not None:
         identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
         scope=_workflow_scope(searchable,'RFI',identifier,rfi.end()) if rfi_in_text else searchable
-        roles={value.upper() for value in _RFI_ROLE.findall(scope)}
-        role=('MIXED' if {'QUESTION','REQUEST'} & roles and {'RESPONSE','ANSWER','REPLY'} & roles else
-              'RESPONSE' if {'RESPONSE','ANSWER','REPLY'} & roles else
-              'QUESTION' if {'QUESTION','REQUEST'} & roles else 'UNKNOWN')
+        roles={_rfi_role(value) for value in _RFI_ROLE.findall(scope)}
+        role='MIXED' if len(roles)>1 else next(iter(roles),'UNKNOWN')
         document_type=('RFI_RESPONSE' if role in {'RESPONSE','MIXED'} else
                        'RFI_QUESTION' if role=='QUESTION' else 'OTHER')
         return {'document_type':document_type,
@@ -256,8 +260,7 @@ def annotate_workflow_fragments(fragments: list[Fragment], text: str, original_n
             if explicit:active=explicit
             role=_RFI_ROLE.match(line)
             if role and active.get('workflow_type')=='RFI':
-                value=role.group(1).upper()
-                active['role']='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+                active['role']=_rfi_role(role.group(1))
             status=_SUBMITTAL_STATUS.match(line)
             if status and active.get('workflow_type')=='SUBMITTAL':
                 active['status']=_submittal_status(status.group(1))
@@ -280,9 +283,7 @@ def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
         if (explicit or role or status) and buffer:
             groups.append((start,buffer,{**active}));buffer=[];start=index
         if explicit:active=explicit
-        if role:
-            value=role.group(1).upper()
-            active['role']='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+        if role:active['role']=_rfi_role(role.group(1))
         if status:active['status']=_submittal_status(status.group(1))
         if not buffer:start=index
         buffer.append(line)
@@ -748,10 +749,10 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
         if not page_context.get('workflow_type') and default_context and default_context.get('workflow_type'):
             current=default_context.get('role')
             for fragment in fragments:
-                matches={value.upper() for value in _RFI_ROLE.findall(fragment.text)}
-                if {'QUESTION','REQUEST'} & matches and {'RESPONSE','ANSWER','REPLY'} & matches:current='MIXED'
-                elif {'QUESTION','REQUEST'} & matches:current='QUESTION'
-                elif {'RESPONSE','ANSWER','REPLY'} & matches:current='RESPONSE'
+                matches={_rfi_role(value) for value in _RFI_ROLE.findall(fragment.text)}
+                if {'QUESTION','RESPONSE'}<=matches:current='MIXED'
+                elif 'QUESTION' in matches:current='QUESTION'
+                elif 'RESPONSE' in matches:current='RESPONSE'
                 existing=fragment.locator.get('section')
                 workflow=_workflow_label(default_context,current)
                 fragment.locator['section']=' > '.join(value for value in (workflow,existing) if value) or None

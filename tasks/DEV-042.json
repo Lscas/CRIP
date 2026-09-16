@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires continued accuracy and adaptability improvements for RFI, Submittal and Email content under ponytail reuse constraints.",
+  "notes": [
+    "Autodesk and Procore document Official Response as a distinct RFI field, but the current exact role parser recognizes only Response, Answer and Reply.",
+    "Reuse the existing heading-boundary regular expression and workflow index; do not add a vendor status engine or dependency.",
+    "Official Response Date and Suggested Answer are not official-response headings and must remain neutral.",
+    "612 Python tests, 24 UI JavaScript tests, 11 deployment-boundary tests, specification sync and the 339-file manifest passed offline; no customer document, credential or provider call was used."
+  ],
+  "task_id": "DEV-042",
+  "title": "Recognize explicit RFI Official Response headings",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-042.json",
+    "changes/CR-0057.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Treat an exact Official Response heading as an RFI response across local text/email parsing and the existing reviewer workflow without matching similar metadata or draft-answer fields."
+}

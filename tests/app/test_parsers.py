@@ -211,9 +211,13 @@ def test_rfi_role_words_require_an_explicit_heading_boundary(tmp_path):
         'Request for Information No. 42\nClarification is pending.',encoding='utf-8')
     timing=tmp_path/'response-time-rfi.txt';timing.write_text(
         'RFI 43\nResponse time: 10 days.\nQuestionnaire attached.',encoding='utf-8')
+    metadata=tmp_path/'official-response-metadata.txt';metadata.write_text(
+        'RFI 44\nOfficial Response Date: 2026-09-16\nSuggested Answer: Coordinate in field.',
+        encoding='utf-8')
 
     full_name_result=parse_file(full_name,full_name.name)
     timing_result=parse_file(timing,timing.name)
+    metadata_result=parse_file(metadata,metadata.name)
 
     assert full_name_result['workflow_contexts'][0]['role']=='UNKNOWN'
     assert all('RFI 42 > UNKNOWN' in item['locator']['section']
@@ -221,6 +225,21 @@ def test_rfi_role_words_require_an_explicit_heading_boundary(tmp_path):
     assert timing_result['workflow_contexts'][0]['role']=='UNKNOWN'
     assert all('RFI 43 > UNKNOWN' in item['locator']['section']
                for item in timing_result['fragments'])
+    assert metadata_result['workflow_contexts'][0]['role']=='UNKNOWN'
+    assert all('RFI 44 > UNKNOWN' in item['locator']['section']
+               for item in metadata_result['fragments'])
+
+
+def test_rfi_official_response_heading_is_an_explicit_response(tmp_path):
+    path=tmp_path/'RFI-45.txt';path.write_text(
+        'RFI 45\nOfficial Response:\nProvide Type L copper pipe.',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['document_type']=='RFI_RESPONSE'
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert any('RFI 45 > RESPONSE' in item['locator']['section']
+               for item in result['fragments'] if 'Provide Type L' in item['text'])
 
 
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):

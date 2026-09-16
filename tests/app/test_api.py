@@ -186,7 +186,7 @@ def test_prefixed_rfi_links_text_question_and_email_response(client,project):
     question=upload(client,project['id'],'RFI-ARC-0042.txt',
                     b'RFI No. ARC-0042\nQuestion:\nConfirm pipe material.')
     message=EmailMessage();message['Subject']='Re: RFI ARC-0042';message.set_content(
-        'Response:\nProvide Type L copper pipe.')
+        'Official Response:\nProvide Type L copper pipe.')
     response=upload(client,project['id'],'ARC-0042-response.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
