@@ -69,7 +69,7 @@ def _contexts(summary: dict) -> list[dict]:
         workflow=raw['workflow_type'];identifier=_identifier(workflow,raw.get('identifier'))
         if not identifier:continue
         statuses=[raw.get('status')]
-        if workflow=='SUBMITTAL' and isinstance(statuses[0],str):
+        if isinstance(statuses[0],str):
             statuses=[value.strip() for value in statuses[0].split(' / ') if value.strip()] or [None]
         for status in statuses:
             value={'workflow_type':workflow,'identifier':identifier,
@@ -99,8 +99,14 @@ def _workflow_state(workflow: str, members: list[dict], source_status_conflict: 
         questions=[member for member in primary if member.get('role') in {'QUESTION','MIXED'}]
         responses=[member for member in primary if member.get('role') in {'RESPONSE','MIXED'}]
         unknown=[member for member in primary if member.get('role') not in {'QUESTION','RESPONSE','MIXED'}]
+        warnings=[];statuses={str(member['status']).upper() for member in primary if member.get('status')}
+        if source_status_conflict:
+            warnings.append('One RFI source contains multiple explicit statuses; compare the original source sections.')
+        elif len(statuses)>1:
+            warnings.append('RFI sources with this identifier have different explicit statuses.')
         if len(questions)>1 or len(responses)>1:
-            return 'AMBIGUOUS',['Multiple question or response sources share this RFI identifier; compare the originals.']
+            warnings.append('Multiple question or response sources share this RFI identifier; compare the originals.')
+        if warnings:return 'AMBIGUOUS',warnings
         if questions and responses:
             return 'LINKED',(['Other sources with this identifier have no explicit Question/Response role.'] if unknown else [])
         if questions:return 'OPEN',['No explicit response document with this identifier was found in the run.']

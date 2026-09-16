@@ -38,6 +38,31 @@ def test_prefixed_workflow_identifiers_remain_exact_and_distinct():
     assert groups['MEP-0042']['state']=='OPEN' and len(groups['MEP-0042']['members'])==1
 
 
+def test_conflicting_explicit_rfi_statuses_are_ambiguous_without_precedence():
+    result=build_workflow_index([
+        row('D1','RFI-42-question.txt',document_type='RFI_QUESTION',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]),
+        row('D2','RFI-42-response.txt',document_type='RFI_RESPONSE',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'CLOSED'}]),
+    ])
+
+    group=next(item for item in result['items'] if item['kind']=='RFI')
+    assert group['state']=='AMBIGUOUS'
+    assert {member['status'] for member in group['members']}=={'OPEN','CLOSED'}
+    assert any('different explicit statuses' in warning for warning in group['warnings'])
+
+
+def test_one_rfi_source_with_combined_statuses_is_ambiguous():
+    result=build_workflow_index([row(
+        'D1','RFI-42.pdf',document_type='RFI_RESPONSE',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'42','role':'MIXED','status':'OPEN / CLOSED'}])])
+
+    group=next(item for item in result['items'] if item['kind']=='RFI')
+    assert group['state']=='AMBIGUOUS'
+    assert group['members'][0]['status']=='CLOSED / OPEN'
+    assert any('One RFI source' in warning for warning in group['warnings'])
+
+
 def test_projected_summary_preserves_legacy_workflow_fields():
     summary=projected_workflow_summary(json.dumps([
         'RFI_RESPONSE',None,None,None,None,'RFI','0042','RESPONSE',None]))

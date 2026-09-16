@@ -242,6 +242,37 @@ def test_rfi_official_response_heading_is_an_explicit_response(tmp_path):
                for item in result['fragments'] if 'Provide Type L' in item['text'])
 
 
+@pytest.mark.parametrize(('source_status','expected_status'),[
+    ('Draft','DRAFT'),
+    ('Open In Review','OPEN IN REVIEW'),
+    ('Closed - Revised','CLOSED-REVISED'),
+    ('Voided','VOID'),
+])
+def test_exact_rfi_status_is_preserved_without_manufacturing_a_role(
+        tmp_path,source_status,expected_status):
+    path=tmp_path/'RFI-46.txt';path.write_text(
+        f'RFI 46\nRFI Status: {source_status}\nCoordination record.',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status']==expected_status
+    assert result['workflow_contexts'][0]['role']=='UNKNOWN'
+    assert any(f'RFI 46 > UNKNOWN > STATUS: {expected_status}' in item['locator']['section']
+               for item in result['fragments'])
+
+
+def test_rfi_status_metadata_and_status_prefixed_prose_remain_neutral(tmp_path):
+    path=tmp_path/'RFI-47.txt';path.write_text(
+        'RFI 47\nStatus Date: 2026-09-16\nRFI Status Update: Closed\n'
+        'Status: Open items remain for coordination.',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status'] is None
+    assert all('STATUS:' not in item['locator']['section'] for item in result['fragments'])
+    assert document_context('RFI Status: Closed')['workflow_type'] is None
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)
@@ -635,6 +666,20 @@ def test_rfi_pdf_filename_context_still_respects_explicit_response_heading(tmp_p
 
     assert result['document_type']=='RFI_RESPONSE'
     assert all('RFI 109 > RESPONSE' in (item['locator']['section'] or '') for item in result['fragments'])
+
+
+def test_rfi_pdf_filename_context_preserves_exact_status_without_role_inference(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'RFI-110.pdf';drawing=canvas.Canvas(str(path))
+    drawing.drawString(72,700,'RFI Status: Closed')
+    drawing.drawString(72,675,'Coordination record.');drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['role']=='UNKNOWN'
+    assert result['workflow_contexts'][0]['status']=='CLOSED'
+    assert all('RFI 110 > UNKNOWN > STATUS: CLOSED' in (item['locator']['section'] or '')
+               for item in result['fragments'])
 
 
 def test_single_pdf_page_workers_preserve_order_and_content(tmp_path):

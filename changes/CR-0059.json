@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0059",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Preserve exact known RFI Status fields in evidence and the reviewer workflow without inferring a Question or Response role.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "Autodesk official RFI reports include Status, Question and Official Response fields and document explicit workflow statuses",
+    "Procore official RFI documentation exposes Draft, Open, Closed and Closed-Draft statuses"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "tasks/DEV-044.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0059.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only an explicit allowlist of documented common statuses is structured; project-specific values remain source text.",
+    "Status never proves that the Question or Official Response is present and never establishes contractual authority.",
+    "Conflicting statuses remain ambiguous because no timestamp or latest-version precedence is inferred.",
+    "Validation is synthetic and offline; no customer document, mailbox or provider tenant is used."
+  ]
+}

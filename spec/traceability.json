@@ -228,7 +228,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence and workflow path. Exact Gmail/Outlook history and signature boundaries retain non-current evidence outside extraction. Exact Official Response headings map to RFI responses; exact Review Response, Final Response and Submittal Response labels accept only known disposition phrases through existing groups. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Exact history/signature boundaries stay outside extraction. Official Response maps to an RFI response; exact known RFI Status and Submittal response/status values reach evidence without inferring authority. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -254,7 +254,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact digit-bearing RFI/Submittal aliases and workflow labels normalize across body, Subject and filename into one bounded read-only reviewer index. Known Review/Final/Submittal Response dispositions reuse existing groups without precedence; different prefixes remain distinct, weaker identifiers remain references, and routing headers cannot create groups. Ambiguity, hash-only email threads, selected attachments, nine-field SQLite projection and reviewer-requested pagination remain deterministic and model-free."
+      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across body, Subject and filename into one bounded read-only index. Known RFI statuses remain metadata; conflicting values are ambiguous without precedence. Known Submittal responses reuse existing groups; weaker IDs remain references. Hash-only email threads, selected attachments, SQLite projection and reviewer-requested pagination remain deterministic and model-free."
     },
     {
       "requirement_id": "FR-INGEST-005",
