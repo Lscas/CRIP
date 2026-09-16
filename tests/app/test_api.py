@@ -100,6 +100,30 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
                                      'status':'NOT_PROCESSED'}]
 
 
+def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,project):
+    nested=EmailMessage();nested['Subject']='RFI 901';nested.set_content(
+        'Question:\nATTACHMENT-ONLY: May PVC be used?')
+    nested.add_attachment(b'INNER-ONLY',maintype='application',subtype='pdf',filename='inner.pdf')
+    outer=EmailMessage();outer['Subject']='RFI 901';outer.set_content('Response:\nUse Type L copper.')
+    outer.add_attachment(nested,filename='forwarded.eml')
+    document=upload(client,project['id'],'outer.eml',outer.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+    summary=json.loads(db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary'])
+
+    assert any('Use Type L copper' in item['raw_text'] for item in evidence)
+    assert all('ATTACHMENT-ONLY' not in item['raw_text'] and 'INNER-ONLY' not in item['raw_text']
+               for item in evidence)
+    assert summary['workflow_contexts'][0]['role']=='RESPONSE'
+    assert summary['attachments']==[{'file_name':'forwarded.eml','content_type':'message/rfc822',
+                                     'status':'NOT_PROCESSED'}]
+
+
 def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
     for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
                       ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.')]:

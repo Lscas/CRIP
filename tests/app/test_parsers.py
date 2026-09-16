@@ -122,6 +122,23 @@ def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tm
     assert any('not analyzed' in warning for warning in result['warnings'])
 
 
+def test_eml_attached_message_and_its_nested_files_stay_out_of_parent_evidence(tmp_path):
+    nested=EmailMessage();nested['Subject']='RFI 901';nested.set_content(
+        'Question:\nATTACHMENT-ONLY: May PVC be used?')
+    nested.add_attachment(b'INNER-ONLY',maintype='application',subtype='pdf',filename='inner.pdf')
+    outer=EmailMessage();outer['Subject']='RFI 901';outer.set_content('Response:\nUse Type L copper.')
+    outer.add_attachment(nested,filename='forwarded.eml')
+    path=tmp_path/'outer.eml';path.write_bytes(outer.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert 'Use Type L copper' in text and 'ATTACHMENT-ONLY' not in text and 'INNER-ONLY' not in text
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert result['attachments']==[{'file_name':'forwarded.eml','content_type':'message/rfc822',
+                                    'status':'NOT_PROCESSED'}]
+
+
 def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_path):
     message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
         '<html><style>.hidden{display:none}</style><body><p>Status: Reviewed</p>'

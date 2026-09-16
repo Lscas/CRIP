@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-13'
+PARSER_VERSION='multisource-14'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -323,17 +323,19 @@ def _parse_email(path: Path, original_name: str) -> dict:
         value=message.get(name)
         if value is not None:headers.append(f'{name}: {str(value)[:4000]}')
     attachments=[];plain=[];html=[]
-    parts=message.walk() if message.is_multipart() else [message]
-    for part in parts:
+    def collect(part):
         disposition=part.get_content_disposition();filename=part.get_filename()
         if disposition=='attachment' or filename:
             attachments.append({'file_name':str(filename or 'unnamed attachment')[:240],
                                 'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
-            continue
-        if part.is_multipart():continue
+            return
+        if part.is_multipart():
+            for child in part.iter_parts():collect(child)
+            return
         parsed=_email_part_text(part)
         if parsed:
             (plain if parsed[0]=='text/plain' else html).append(parsed[1])
+    collect(message)
     plain=[value for value in plain if value.strip()];html=[value for value in html if value.strip()]
     body='\n\n'.join(plain or html)
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]

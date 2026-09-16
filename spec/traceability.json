@@ -226,7 +226,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; paired HTML blockquote boundaries preserve current text after a closed quote. Explicit Outlook From plus Sent, Date, To or Subject header blocks start quoted history whether those labels appear on one visible line or adjacent lines. Non-empty plain text remains preferred, while blank plain alternatives safely fall back to non-empty visible HTML. Active HTML and remote resources are not executed or fetched. Attachments remain inert until explicitly imported. Workflow IDs must contain digits; exact hashed email relationships order local ancestors before replies and mark cycles ambiguous without dropping members. MSG, mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; paired HTML blockquote boundaries preserve current text after a closed quote. Explicit Outlook From plus Sent, Date, To or Subject header blocks start quoted history whether those labels appear on one visible line or adjacent lines. Non-empty plain text remains preferred, while blank plain alternatives safely fall back to non-empty visible HTML. Active HTML and remote resources are not executed or fetched. MIME traversal stops at every attachment boundary, so attached-message bodies and descendants remain inert until explicitly imported. Workflow IDs must contain digits; exact hashed email relationships order local ancestors before replies and mark cycles ambiguous without dropping members. MSG, mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -297,7 +297,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained per import and displayed only when the source document parsed as email; repeated identical relationships collapse visually with an import count and never inherit authority. Nested attachments require another explicit import; no analysis or model call starts automatically."
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained per import and displayed only when the source document parsed as email; repeated identical relationships collapse visually with an import count and never inherit authority. Parent parsing stops at the attached-message boundary, so its body and nested files require another explicit import and cannot change parent evidence or workflow role. No analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",

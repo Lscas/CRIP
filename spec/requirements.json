@@ -174,6 +174,7 @@
         "EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.",
         "A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.",
         "Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.",
+        "Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.",
         "Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.",
         "Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.",
         "Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.",
@@ -233,7 +234,7 @@
         "The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.",
         "Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.",
         "Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review; a relationship is displayed only when its parent document parsed as email.",
-        "Attached emails require another explicit selection before nested attachments are visible; active content and remote resources remain inert."
+        "Attached emails require another explicit selection before their body or nested attachments are visible; neither may contribute to the parent email analysis, and active content and remote resources remain inert."
       ],
       "decision_source": "The user requested broader email support and /ponytail-minimal reuse; implemented with the Python standard library and the existing upload path on 2026-09-15.",
       "spec_section": "docs/PRODUCT_SPEC.md"
