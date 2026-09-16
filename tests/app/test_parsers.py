@@ -169,6 +169,23 @@ def test_submission_alias_is_an_exact_submittal_reference(tmp_path):
     assert {'workflow_type':'SUBMITTAL','identifier':'23-01'} in result['workflow_references']
 
 
+def test_rfi_role_words_require_an_explicit_heading_boundary(tmp_path):
+    full_name=tmp_path/'full-name-rfi.txt';full_name.write_text(
+        'Request for Information No. 42\nClarification is pending.',encoding='utf-8')
+    timing=tmp_path/'response-time-rfi.txt';timing.write_text(
+        'RFI 43\nResponse time: 10 days.\nQuestionnaire attached.',encoding='utf-8')
+
+    full_name_result=parse_file(full_name,full_name.name)
+    timing_result=parse_file(timing,timing.name)
+
+    assert full_name_result['workflow_contexts'][0]['role']=='UNKNOWN'
+    assert all('RFI 42 > UNKNOWN' in item['locator']['section']
+               for item in full_name_result['fragments'])
+    assert timing_result['workflow_contexts'][0]['role']=='UNKNOWN'
+    assert all('RFI 43 > UNKNOWN' in item['locator']['section']
+               for item in timing_result['fragments'])
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)

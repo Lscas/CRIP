@@ -220,6 +220,28 @@ def test_submission_alias_reaches_submittal_workflow_index(client,project):
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_email_rfi_role_requires_an_explicit_heading_boundary(client,project):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response time: 10 days.\nQuestionnaire attached.')
+    document=upload(client,project['id'],'rfi-response-time.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='RFI' and item['identifier']=='42')
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+
+    assert group['members'][0]['role']=='UNKNOWN'
+    assert group['state']=='OPEN'
+    assert all('RFI 42 > UNKNOWN' in (item['locator']['section'] or '')
+               for item in evidence if item['locator']['native_element_id']=='email-body')
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
     raw=(b'Subject: Coordination\r\n'
          b'Message-ID: <first@example.test>\r\n'
