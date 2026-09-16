@@ -1,8 +1,13 @@
 """Shared standard-library MIME body and attachment boundaries."""
 from __future__ import annotations
 
+import mimetypes
 from collections.abc import Iterator
 from email.message import Message
+
+
+_MIME_TYPES=mimetypes.MimeTypes()
+_ANALYZABLE_MIME_EXTENSIONS={'.txt','.pdf','.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
 
 
 def is_email_attachment(part: Message) -> bool:
@@ -47,6 +52,9 @@ def safe_attachment_name(value: object,index: int,content_type: str) -> str:
     raw=str(value or '').replace('\\','/').split('/')[-1]
     raw=''.join(char for char in raw if ord(char)>=32).strip()
     if not raw:
-        raw=(f'attached-message-{index+1}.eml' if content_type=='message/rfc822'
-             else f'attachment-{index+1}')
+        normalized=str(content_type or '').split(';',1)[0].strip().casefold()
+        extension=_MIME_TYPES.guess_extension(normalized,strict=False) or ''
+        if extension not in _ANALYZABLE_MIME_EXTENSIONS:extension=''
+        raw=(f'attached-message-{index+1}.eml' if normalized=='message/rfc822'
+             else f'attachment-{index+1}{extension}')
     return raw[:240]

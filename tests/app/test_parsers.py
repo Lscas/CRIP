@@ -459,7 +459,7 @@ def test_eml_related_non_root_resource_stays_out_of_parent_evidence(tmp_path):
 
     assert 'Use Type L copper' in text and 'RELATED-RESOURCE-ONLY' not in text
     assert result['workflow_contexts'][0]['role']=='RESPONSE'
-    assert result['attachments']==[{'file_name':'attachment-1','content_type':'text/plain',
+    assert result['attachments']==[{'file_name':'attachment-1.txt','content_type':'text/plain',
                                     'status':'NOT_PROCESSED'}]
 
 
@@ -479,7 +479,7 @@ def test_eml_related_without_usable_start_uses_first_child_as_body(tmp_path,star
 
     assert 'Use Type L copper' in text and 'RELATED-FALLBACK-ONLY' not in text
     assert result['workflow_contexts'][0]['role']=='RESPONSE'
-    assert result['attachments']==[{'file_name':'attachment-1','content_type':'text/plain',
+    assert result['attachments']==[{'file_name':'attachment-1.txt','content_type':'text/plain',
                                     'status':'NOT_PROCESSED'}]
 
 

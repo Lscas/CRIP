@@ -1,0 +1,45 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 16000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "An unnamed text/plain related resource is listed as importable but receives attachment-1 with no extension.",
+    "The imported document then routes to UNSUPPORTED instead of the TXT parser, breaking explicit attachment analysis.",
+    "Reuse Python's deterministic built-in MIME mapping for fallback extensions; do not infer or replace a supplied filename.",
+    "Unknown types may retain a non-analyzable extension and must not be treated as supported content.",
+    "640 Python, 24 UI and 11 deployment-boundary tests passed offline; an unnamed text/plain resource imports as attachment-1.txt and succeeds through the existing TXT parser."
+  ],
+  "task_id": "DEV-051",
+  "title": "Keep unnamed MIME imports analyzable",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/email_mime.py",
+    "app/parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-051.json",
+    "changes/CR-0066.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_email_attachments.py tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Give unnamed MIME attachments a stable safe extension derived from their declared content type so explicitly imported supported resources can enter the existing parser without guessing unsupported content."
+}

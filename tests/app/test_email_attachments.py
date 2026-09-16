@@ -7,6 +7,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from types import SimpleNamespace
 
+from app.email_mime import safe_attachment_name
+from app.parsers import parse_file
 from tests.app.conftest import upload
 
 
@@ -140,10 +142,25 @@ def test_related_non_root_resource_is_listed_and_requires_explicit_import(client
     imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
         'document_id':source['document_id'],'attachment_index':0,
         'expected_sha256':item['sha256']})
+    imported_document=client.app.state.db.one(
+        'SELECT * FROM documents WHERE id=?',(imported.json()['document_id'],))
+    parsed=parse_file(client.app.state.uploads.object_path(imported_document),
+                      imported_document['name'])
 
-    assert item['name']=='attachment-1' and item['content_type']=='text/plain'
+    assert item['name']=='attachment-1.txt' and item['content_type']=='text/plain'
     assert item['importable'] is True and imported.status_code==201
-    assert imported.json()['name']=='attachment-1'
+    assert imported.json()['name']=='attachment-1.txt'
+    assert parsed['status']=='SUCCESS'
+    assert any('RESOURCE-ONLY supporting note' in row['text'] for row in parsed['fragments'])
+
+
+def test_fallback_attachment_extensions_are_standard_and_supplied_names_are_preserved():
+    assert safe_attachment_name(None,0,'text/plain')=='attachment-1.txt'
+    assert safe_attachment_name(None,1,'application/pdf')=='attachment-2.pdf'
+    assert safe_attachment_name(None,2,'image/jpeg')=='attachment-3.jpg'
+    assert safe_attachment_name(None,3,'application/x-cirp-unknown')=='attachment-4'
+    assert safe_attachment_name(None,4,'application/x-sh')=='attachment-5'
+    assert safe_attachment_name('supplied-name',5,'text/plain')=='supplied-name'
 
 
 def test_analysis_workflow_shows_selected_attachment_without_inheriting_email_authority(client,project):
