@@ -73,6 +73,28 @@ def test_roleless_rfi_is_open_and_spaced_submittal_ids_link_exactly():
     assert submittal['identifier']=='23 05 00-01' and len(submittal['members'])==2
 
 
+def test_unknown_pages_do_not_manufacture_the_missing_rfi_role():
+    result=build_workflow_index([
+        row('D1','question.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'1','role':'UNKNOWN','status':None},
+            {'workflow_type':'RFI','identifier':'1','role':'QUESTION','status':None}]),
+        row('D2','response.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'2','role':'UNKNOWN','status':None},
+            {'workflow_type':'RFI','identifier':'2','role':'RESPONSE','status':None}]),
+        row('D3','combined.pdf',workflow_contexts=[
+            {'workflow_type':'RFI','identifier':'3','role':'UNKNOWN','status':None},
+            {'workflow_type':'RFI','identifier':'3','role':'QUESTION','status':None},
+            {'workflow_type':'RFI','identifier':'3','role':'RESPONSE','status':None}]),
+    ])
+    question,response,combined=result['items']
+
+    assert (question['members'][0]['role'],question['state'])==('QUESTION','OPEN')
+    assert 'No explicit response' in question['warnings'][0]
+    assert (response['members'][0]['role'],response['state'])==('RESPONSE','OPEN')
+    assert 'No explicit question' in response['warnings'][0]
+    assert (combined['members'][0]['role'],combined['state'])==('MIXED','LINKED')
+
+
 def test_email_threads_link_only_hashed_exact_headers_and_count_external_references():
     parent='MSG-'+'a'*24;child='MSG-'+'b'*24;missing='MSG-'+'c'*24
     result=build_workflow_index([

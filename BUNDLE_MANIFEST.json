@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 284,
+  "file_count_excluding_manifest": 286,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -47,13 +47,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 16321,
-      "sha256": "1e379f3119c3f894136a0e3489103ebe0ace7f16a14eb8c697ac5f06f7c4367b"
+      "bytes": 16739,
+      "sha256": "79c96e514732cc7cadbe2deaba6f6ff6e9c30e6399281511b02ac5f86923dc93"
     },
     {
       "path": "README.md",
-      "bytes": 8894,
-      "sha256": "7f76bcc3118f687567d4faedfe1e73bd5b79d5ed601761961227269c5c391250"
+      "bytes": 8990,
+      "sha256": "2f25cfc988360539106cedc92e4f36c63cb78da18f60a05eca3d4bf765fa5fff"
     },
     {
       "path": "VERSION",
@@ -177,8 +177,8 @@
     },
     {
       "path": "app/workflows.py",
-      "bytes": 13782,
-      "sha256": "b56bf58b3813220cf7b066c2af0179bd710933dbd462ab62f9b752701a5603f4"
+      "bytes": 14128,
+      "sha256": "9fd85b01aa2fec498889834f2c04ae8885faec0212666e2856136ab8a4139684"
     },
     {
       "path": "baseline/requirements.v0.1.0.json",
@@ -336,6 +336,11 @@
       "sha256": "e1e2cade95de1437bee4c4475c4538204f1febd574daecf508eb729e9e819464"
     },
     {
+      "path": "changes/CR-0031.json",
+      "bytes": 1393,
+      "sha256": "36163d4c05b76d4390fadbebe9217b87859ec0237567ba15bf3a12c1e828e95e"
+    },
+    {
       "path": "config/assembly_rules.json",
       "bytes": 1239,
       "sha256": "60011fb0cd460307099ddba8327ebf2858908e061d9d41668f8a8bf6b52ba8a6"
@@ -382,8 +387,8 @@
     },
     {
       "path": "docs/ARCHITECTURE.md",
-      "bytes": 5647,
-      "sha256": "7583758f534700434dd4468e31b75d6b438afee9e2fb170d705e54ae1d31d95d"
+      "bytes": 5814,
+      "sha256": "90408622214131f0d6967acbcffb245fcb3435adfc81570f9190a584622ffa45"
     },
     {
       "path": "docs/CLOUDFLARE_DEPLOY.md",
@@ -437,8 +442,8 @@
     },
     {
       "path": "docs/IMPLEMENTATION_STATUS.md",
-      "bytes": 14514,
-      "sha256": "5cf221e0b657d9711a9f2eb1c829285ac0e32cf2faaa541c0e7062dc536c623e"
+      "bytes": 14653,
+      "sha256": "600354e89488de9a49cfc2ad80de435998958e4d48e78fccf18d3f559d5eb69e"
     },
     {
       "path": "docs/LOCAL_DEPLOY.md",
@@ -472,8 +477,8 @@
     },
     {
       "path": "docs/PRODUCT_SPEC.md",
-      "bytes": 22032,
-      "sha256": "c5446d20fb7a35757179f4df783a93b51b5c63127b21c3d715cbecaee2fd9335"
+      "bytes": 22243,
+      "sha256": "889ddd3a365ff649b7a99637a9fa66a5680a5e80f61e384171047fea33ec3005"
     },
     {
       "path": "docs/PROVIDER_INTEGRATION.md",
@@ -492,8 +497,8 @@
     },
     {
       "path": "docs/REQUIREMENTS.md",
-      "bytes": 37832,
-      "sha256": "6a809c3d90241ead1efc047076a5b7b2af76bb7ae2255898a0b535e0fd611cb4"
+      "bytes": 37910,
+      "sha256": "7bc63f821ddcb8f88524d33358636af63dd1361d20c8f630bf3be4db632bf02b"
     },
     {
       "path": "docs/REVIEW_RESOLUTION.md",
@@ -1052,8 +1057,8 @@
     },
     {
       "path": "spec/requirements.json",
-      "bytes": 66257,
-      "sha256": "c3dc450f830d9b5e07a59970fa59a00e5a4530fb7c1550402574b0548e12e375"
+      "bytes": 66335,
+      "sha256": "7aabe0525b02d593fc456e9411833b9e7bb7dcf23515ffe45224d6fb0bdd80f4"
     },
     {
       "path": "spec/schemas/change-record.schema.json",
@@ -1132,8 +1137,8 @@
     },
     {
       "path": "spec/traceability.json",
-      "bytes": 59123,
-      "sha256": "e140a272f64c6989f7eca23608fab3807f88fa9398c84f67c3f0cb724e72ec9d"
+      "bytes": 59224,
+      "sha256": "0c63eb3cb206bdce7692fb5159e2afa2dbda3723fddf37cdc1e37aae281889b6"
     },
     {
       "path": "start-custom-model.ps1",
@@ -1251,6 +1256,11 @@
       "sha256": "4e20ce415af80a5e55d0d4446f3ac39a6b002fc4c2bc9c5ba1c99965b9ff2daa"
     },
     {
+      "path": "tasks/DEV-016.json",
+      "bytes": 1448,
+      "sha256": "ede2cb2604a8ab23d77b1da1d8e92c817fe67d183852750d27d76940e194f030"
+    },
+    {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",
       "bytes": 833224,
       "sha256": "8cded5162ea2b5d851dde61fbd24806dd9137d6af4a6e31d1ef1a346541a3fc3"
@@ -1362,8 +1372,8 @@
     },
     {
       "path": "tests/app/test_workflows.py",
-      "bytes": 6023,
-      "sha256": "91fc9c4a2345514dc3d35cf54d5941084d8ff7e6630a249c30a4cf0a99933a47"
+      "bytes": 7311,
+      "sha256": "d3e5ae67a16b246ad151ee65f9b05db263b1642bd3bc7ef5f822cc238939b661"
     },
     {
       "path": "tests/deploy/worker.test.mjs",

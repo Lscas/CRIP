@@ -135,7 +135,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
-- RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous.
+- RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous; UNKNOWN page contexts do not manufacture a missing Question or Response role.
 - Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized, and conflicts across documents or within one multi-page source remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.

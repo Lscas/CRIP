@@ -252,7 +252,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact digit-bearing RFI, normalized Submittal, hashed email-thread and persisted selected-attachment relationships are available in one bounded read-only reviewer index. Spaced CSI-style Submittal IDs from filenames join exact matching body references instead of being truncated to the first number. Distinct explicit statuses across documents or inside one multi-page source remain ambiguous. Multi-value In-Reply-To identifiers link through their individual exact hashes rather than a combined false key. Imported attachments do not inherit workflow role, approval or authority. Keyword-only matches are rejected; ambiguous roles and duplicates remain explicit; no model call is made."
+      "progress_note": "Exact digit-bearing RFI, normalized Submittal, hashed email-thread and persisted selected-attachment relationships are available in one bounded read-only reviewer index. UNKNOWN page contexts remain neutral and cannot manufacture a missing RFI Question or Response role. Spaced CSI-style Submittal IDs from filenames join exact matching body references instead of being truncated to the first number. Distinct explicit statuses across documents or inside one multi-page source remain ambiguous. Multi-value In-Reply-To identifiers link through their individual exact hashes rather than a combined false key. Imported attachments do not inherit workflow role, approval or authority. Keyword-only matches are rejected; ambiguous roles and duplicates remain explicit; no model call is made."
     },
     {
       "requirement_id": "FR-INGEST-005",

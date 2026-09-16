@@ -201,7 +201,12 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
         for member in sorted(raw_members.values(),key=lambda value:(value['file_name'].casefold(),value['document_id'])):
             roles=member.pop('roles');statuses=member.pop('statuses')
             source_status_conflict=source_status_conflict or len(statuses)>1
-            member['role']='MIXED' if len(roles)>1 else next(iter(roles),None)
+            if workflow=='RFI':
+                has_question=bool(roles & {'QUESTION','MIXED'})
+                has_response=bool(roles & {'RESPONSE','MIXED'})
+                member['role']='MIXED' if has_question and has_response else 'QUESTION' if has_question else 'RESPONSE' if has_response else next(iter(roles),None)
+            else:
+                member['role']='MIXED' if len(roles)>1 else next(iter(roles),None)
             member['status']=' / '.join(sorted(statuses)) or None
             members.append(member);workflow_documents.add(member['document_id'])
         state,warnings=_workflow_state(workflow,members,source_status_conflict)
