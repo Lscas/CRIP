@@ -70,7 +70,8 @@ def _references(summary: dict) -> list[dict]:
     return out
 
 
-def _workflow_state(workflow: str, members: list[dict]) -> tuple[str,list[str]]:
+def _workflow_state(workflow: str, members: list[dict], source_status_conflict: bool = False,
+                    ) -> tuple[str,list[str]]:
     primary=[member for member in members if member['source']=='PRIMARY']
     if not primary:
         return 'OPEN',[f'Only references to this {workflow} identifier were found; upload or locate the primary document.']
@@ -86,6 +87,8 @@ def _workflow_state(workflow: str, members: list[dict]) -> tuple[str,list[str]]:
         if responses:return 'OPEN',['No explicit question document with this identifier was found in the run.']
         return 'OPEN',['This RFI identifier has no explicit Question or Response role; review the source.']
     else:
+        if source_status_conflict:
+            return 'AMBIGUOUS',['One Submittal source contains multiple explicit statuses; compare the original pages.']
         statuses={str(member['status']).upper() for member in primary if member.get('status')}
         if len(statuses)>1:return 'AMBIGUOUS',['Submittal sources with this identifier have different explicit statuses.']
         if len(primary)>1:return 'LINKED',[]
@@ -194,13 +197,14 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
                 'document_type':document['document_type'],'roles':set(),'statuses':set(),'source':'REFERENCE'})
     items=[];workflow_documents=set()
     for (workflow,identifier),raw_members in sorted(groups.items()):
-        members=[]
+        members=[];source_status_conflict=False
         for member in sorted(raw_members.values(),key=lambda value:(value['file_name'].casefold(),value['document_id'])):
             roles=member.pop('roles');statuses=member.pop('statuses')
+            source_status_conflict=source_status_conflict or len(statuses)>1
             member['role']='MIXED' if len(roles)>1 else next(iter(roles),None)
             member['status']=' / '.join(sorted(statuses)) or None
             members.append(member);workflow_documents.add(member['document_id'])
-        state,warnings=_workflow_state(workflow,members)
+        state,warnings=_workflow_state(workflow,members,source_status_conflict)
         items.append({'group_id':_key('WF',workflow,identifier),'kind':workflow,'identifier':identifier,
                       'state':state,'members':members,'warnings':warnings,'external_reference_count':0})
     threads,thread_documents=_email_threads(documents);workflow_documents.update(thread_documents);items.extend(threads)

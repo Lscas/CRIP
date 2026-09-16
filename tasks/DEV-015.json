@@ -1,0 +1,41 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "A single document can contribute multiple page-level contexts for the same Submittal identifier; distinct explicit statuses must remain ambiguous.",
+    "Reuse the existing per-document status set and reviewer warning; do not select a winning status or infer contractual effect."
+  ],
+  "task_id": "DEV-015",
+  "title": "Intra-document Submittal status conflicts",
+  "requirement_ids": [
+    "FR-WORKFLOW-001",
+    "FR-REVISION-004"
+  ],
+  "allowed_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-015.json",
+    "changes/CR-0030.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Mark a Submittal workflow group ambiguous when one source document contains multiple distinct explicit statuses for the same normalized identifier."
+}

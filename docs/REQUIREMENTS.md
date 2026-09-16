@@ -136,7 +136,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
 - RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous.
-- Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized and conflicting statuses remain ambiguous.
+- Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized, and conflicts across documents or within one multi-page source remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
@@ -586,6 +586,7 @@ App、Spec、Schema 和 Prompt bundle 版本可查询。
 
 - LATEST_APPLIED保存selected_evidence_id。
 - 无法比较时UNRESOLVED，不能用上传时间兜底。
+- 同一来源对同一Submittal编号保存多个不同显式状态时必须保持歧义并供人工比对，不能自动选择其中之一。
 - RFI答复、Submittal或Email正文是否使候选保持条件性，必须检查全部剩余直接证据，不能只看第一条。
 
 ## PRD-PROTOTYPE-001 · 网页可运行原型

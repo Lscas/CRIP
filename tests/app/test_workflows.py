@@ -38,6 +38,17 @@ def test_workflow_index_flags_duplicate_rfi_and_conflicting_submittal_status():
     assert result['summary']['ambiguous']==2
 
 
+def test_one_submittal_source_with_conflicting_page_statuses_is_ambiguous():
+    result=build_workflow_index([row('D1','submittal.pdf',document_type='SUBMITTAL',workflow_contexts=[
+        {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+        {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'APPROVED'},
+    ])])
+    item=result['items'][0]
+
+    assert item['state']=='AMBIGUOUS' and item['members'][0]['status']=='APPROVED / PENDING'
+    assert 'One Submittal source' in item['warnings'][0]
+
+
 def test_reference_without_primary_document_remains_open():
     result=build_workflow_index([row('D1','meeting-minutes.txt',workflow_references=[
         {'workflow_type':'SUBMITTAL','identifier':'23-09-23'}])])
