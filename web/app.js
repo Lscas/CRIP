@@ -17,14 +17,28 @@ async function api(path,method='GET',body){
  return r.json();
 }
 function error(fn){return async(...args)=>{try{await fn(...args);}catch(e){toast(e.message);}};}
+function remainingText(seconds){const minutes=Math.max(1,Math.round(seconds/60));return minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} hr ${minutes%60} min`;}
+function renderProgress(run){
+ const progress=run.progress||{percent:0},percent=Math.max(0,Math.min(100,Number(progress.percent)||0));
+ $('progress-bar').style.width=percent+'%';$('analysis-progress').setAttribute('aria-valuenow',String(percent));
+ const active=['QUEUED','RUNNING'].includes(run.status);
+ if(active&&progress.estimated_finish_epoch){
+  const finish=new Date(progress.estimated_finish_epoch*1000).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  I.bindText($('progress-summary'),'run.progressActive',{percent,finish,remaining:remainingText(progress.remaining_seconds)});
+ }else if(active)I.bindText($('progress-summary'),'run.progressEstimating',{percent});
+ else if(percent===100)I.bindText($('progress-summary'),'run.progressFinished',{percent});
+ else I.bindText($('progress-summary'),'run.progressStopped',{percent});
+ $('analysis-progress').setAttribute('aria-valuetext',$('progress-summary').textContent);
+}
 async function projects(selected){
  const all=await api('/projects');$('project-select').replaceChildren(optionT('project.select'));
  all.forEach(p=>$('project-select').append(new Option(p.name,p.id)));
  if(selected||all.length){$('project-select').value=selected||all[0].id;await selectProject($('project-select').value);}
 }
 async function selectProject(id){state.project=id;state.run=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
- if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;renderRecords();renderTakeoffs();return;}
+ if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;$('save-budget').disabled=true;renderRecords();renderTakeoffs();return;}
  const p=await api('/projects/'+id);I.bindText($('project-name'),()=>p.name);
+ const budget=await api(`/projects/${id}/budget`);$('budget-limit').value=Number(budget.limit_cny);$('save-budget').disabled=false;
  await refresh();
 }
 async function refresh(){
@@ -62,11 +76,14 @@ async function refreshRun(forceRecords=false){
   state.unresolvedCalls=await api(`/projects/${state.project}/unresolved-model-calls`);
   I.bindStatus($('run-state'),run.status);I.bindText($('run-message'),()=>I.t('run.message',{stage:I.message(run.stage),message:I.message(run.message)}));
   const c=run.coverage;const done=(c.fragments_extracted||0)+(c.fragments_need_review||0);
-  const ratio=c.fragments_total?Math.round(done/c.fragments_total*100):0;
-  $('progress-bar').style.width=ratio+'%';
+  renderProgress(run);
   I.bindText($('coverage'),'run.coverage',{processed:c.files_processed||0,total:c.files_total||0,done,fragments:c.fragments_total||0,review:c.fragments_need_review||0});
-  I.bindText($('cost'),'run.cost',{spent:Number(cost.spent_cny).toFixed(4),reserved:Number(cost.reserved_cny).toFixed(4)});
-  I.bindText($('coverage-detail'),()=>JSON.stringify({coverage:c,cost,capabilities:run.capabilities},null,2));
+   I.bindText($('cost'),'run.cost',{spent:Number(cost.spent_cny).toFixed(4),reserved:Number(cost.reserved_cny).toFixed(4),limit:Number(cost.limit_cny).toFixed(2)});
+   if(document.activeElement!==$('budget-limit'))$('budget-limit').value=Number(cost.limit_cny);
+   const perf=run.performance||{},stages=Object.entries(perf).filter(([name])=>name.startsWith('stage.'));
+   const elapsed=stages.reduce((sum,[,value])=>sum+value.total_ms,0)/1000,responses=perf['model.response']||{samples:0,average_ms:0};
+   I.bindText($('performance'),'run.performance',{elapsed:elapsed.toFixed(1),requests:responses.samples,average:(responses.average_ms/1000).toFixed(2)});
+   I.bindText($('coverage-detail'),()=>JSON.stringify({coverage:c,performance:perf,cost,capabilities:run.capabilities},null,2));
   $('pause').disabled=!active;
   renderReconciliation(state.unresolvedCalls);
   if(state.unresolvedCalls.length)$('start').disabled=true;
@@ -273,10 +290,11 @@ $('reconcile-form').onsubmit=error(async e=>{e.preventDefault();const resolution
  await api(`/model-calls/${$('reconcile-call-id').value}/reconcile`,'POST',{resolution,actual_cny:resolution==='BILLED'?$('reconcile-amount').value:'0',confirmation:'PROVIDER_BILLING_CHECKED',note:$('reconcile-note').value});
  $('reconcile-dialog').close();await refresh();toast(I.t(resolution==='BILLED'?'reconcile.savedBilled':'reconcile.savedNotBilled'));
 });
-$('project-form').onsubmit=error(async e=>{e.preventDefault();const p=await api('/projects','POST',{name:$('project-input').value});$('project-dialog').close();$('project-input').value='';await projects(p.id);});
+$('project-form').onsubmit=error(async e=>{e.preventDefault();const p=await api('/projects','POST',{name:$('project-input').value,budget_cny:$('project-budget').value});$('project-dialog').close();$('project-input').value='';$('project-budget').value='300';await projects(p.id);});
+$('save-budget').onclick=error(async()=>{if(!state.project)return;const cost=await api(`/projects/${state.project}/budget`,'PUT',{limit_cny:$('budget-limit').value});$('budget-limit').value=Number(cost.limit_cny);toast(I.t('budget.saved',{limit:Number(cost.limit_cny).toFixed(2)}));if(state.run)await refreshRun();});
 $('project-select').onchange=error(()=>selectProject($('project-select').value));
 $('run-select').onchange=error(async()=>{state.run=$('run-select').value;state.records=[];state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.kindTouched=false;await refreshRun();});
-$('start').onclick=error(async()=>{if(!state.project)return;const run=await api(`/projects/${state.project}/analysis-runs`,'POST');state.run=run.id;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.kindTouched=false;await refresh();});
+$('start').onclick=error(async()=>{if(!state.project)return;const run=await api(`/projects/${state.project}/analysis-runs`,'POST',{local_workers:Number($('local-workers').value)});state.run=run.id;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.kindTouched=false;await refresh();});
 $('pause').onclick=error(async()=>{await api(`/analysis-runs/${state.run}/pause`,'POST');await refreshRun();});
 $('resume').onclick=error(async()=>{await api(`/analysis-runs/${state.run}/resume`,'POST');state.records=[];state.recordPagination=null;state.recordsRun=null;state.takeoffsRun=null;await refreshRun();});
 $('file-input').onchange=error(async e=>{await uploadFiles([...e.target.files]);e.target.value='';});

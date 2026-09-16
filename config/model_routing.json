@@ -89,8 +89,10 @@
   "overflow_action": "SPLIT_SEMANTIC_UNIT",
   "workers": {
     "max_active_projects": 1,
-    "max_text_requests": 4,
-    "max_vision_requests": 1
+    "local_parse_workers_default": 2,
+    "local_parse_worker_choices": [1, 2, 4],
+    "max_paid_text_requests": 1,
+    "max_paid_vision_requests": 1
   },
-  "note": "参数为可调初值，不是已测吞吐；字段改变走受控PR。"
+  "note": "Local workers are user-selectable. Paid requests remain serial. These values are bounded defaults, not measured throughput."
 }

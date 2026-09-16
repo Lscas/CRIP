@@ -1,6 +1,7 @@
 """单进程原型的 SQLite 事务存储；金额使用人民币百万分之一整数。"""
 from __future__ import annotations
 import json
+import math
 import re
 import sqlite3
 import time
@@ -76,6 +77,7 @@ class Database:
             c.executescript((ROOT / 'migrations/001_initial.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/002_verification.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/003_call_reconciliation.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/004_performance_budget.sql').read_text(encoding="utf-8"))
 
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:
@@ -102,12 +104,51 @@ class Database:
     def execute(self, query: str, args=()):
         with self.connect(True) as c: c.execute(query, args)
 
-    def create_project(self, name: str):
+    def create_project(self, name: str, budget_cny: Decimal = Decimal('300')):
         pid = uid('P')
+        limit = units(budget_cny)
+        if limit < units(Decimal('0.01')): raise DomainError('项目预算不得低于0.01元')
         with self.connect(True) as c:
             c.execute('INSERT INTO projects VALUES(?,?,?)', (pid, name, now()))
-            c.execute('INSERT INTO budget_accounts(project_id) VALUES(?)', (pid,))
-        return self.one('SELECT * FROM projects WHERE id=?', (pid,))
+            c.execute('INSERT INTO budget_accounts(project_id,limit_units) VALUES(?,?)', (pid,limit))
+        return {**self.one('SELECT * FROM projects WHERE id=?', (pid,)), 'budget_limit_cny':yuan(limit)}
+
+    def set_budget_limit(self, project_id: str, amount: Decimal, actor: str = 'local-user') -> dict:
+        limit=units(amount)
+        if limit<units(Decimal('0.01')): raise DomainError('项目预算不得低于0.01元')
+        with self.connect(True) as c:
+            account=c.execute('SELECT * FROM budget_accounts WHERE project_id=?',(project_id,)).fetchone()
+            if not account:raise DomainError('未找到项目',404)
+            outstanding=c.execute('''SELECT COALESCE(SUM(reserved_units),0) FROM model_calls
+                                     WHERE project_id=? AND actual_units IS NULL''',(project_id,)).fetchone()[0]
+            committed=account['spent_units']+outstanding
+            if limit<committed:
+                raise BudgetError('项目预算不能低于已支出和未结算预留合计',409)
+            if limit!=account['limit_units']:
+                c.execute('UPDATE budget_accounts SET limit_units=?,frozen=0 WHERE project_id=?',(limit,project_id))
+                c.execute('INSERT INTO budget_limit_events VALUES(?,?,?,?,?,?)',
+                          (uid('BUDGET'),project_id,actor,account['limit_units'],limit,now()))
+        return self.cost(project_id)
+
+    def record_metric(self, run_id: str, metric: str, elapsed_ms: float) -> None:
+        if not isinstance(metric,str) or not re.fullmatch(r'[a-z][a-z0-9_.-]{0,63}',metric):
+            raise DomainError('运行指标名称无效')
+        if not isinstance(elapsed_ms,(int,float)) or not math.isfinite(elapsed_ms) or elapsed_ms<0:
+            raise DomainError('运行指标耗时无效')
+        milliseconds=max(0,round(elapsed_ms))
+        with self.connect(True) as c:
+            c.execute('''INSERT INTO run_metrics(run_id,metric,samples,total_ms,max_ms) VALUES(?,?,?,?,?)
+                         ON CONFLICT(run_id,metric) DO UPDATE SET
+                           samples=samples+1,
+                           total_ms=total_ms+excluded.total_ms,
+                           max_ms=MAX(max_ms,excluded.max_ms)''',
+                      (run_id,metric,1,milliseconds,milliseconds))
+
+    def performance(self, run_id: str) -> dict:
+        rows=self.all('SELECT metric,samples,total_ms,max_ms FROM run_metrics WHERE run_id=? ORDER BY metric',(run_id,))
+        return {row['metric']:{'samples':row['samples'],'total_ms':row['total_ms'],
+                               'average_ms':round(row['total_ms']/row['samples']),
+                               'max_ms':row['max_ms']} for row in rows}
 
     def cost(self, project_id: str) -> dict:
         account = self.one('SELECT * FROM budget_accounts WHERE project_id=?', (project_id,))

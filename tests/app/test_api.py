@@ -1,5 +1,5 @@
 """FR-INGEST-003/004, FR-REVIEW-001/002, FR-EXPORT-001, PRD-PROTOTYPE-001"""
-import io,json,subprocess
+import io,json,subprocess,threading
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +22,21 @@ def test_health_and_no_key_exposed(client):
 def test_invalid_name(client,name):assert client.post('/api/projects',json={'name':name}).status_code in (400,422)
 
 def test_extra_fields_rejected(client):assert client.post('/api/projects',json={'name':'x','admin':True}).status_code==422
+
+
+def test_project_budget_is_user_selected_audited_and_never_below_committed(client):
+    created=client.post('/api/projects',json={'name':'Custom budget','budget_cny':'425.50'})
+    assert created.status_code==201 and created.json()['budget_limit_cny']=='425.500000'
+    pid=created.json()['id'];db=client.app.state.db
+    updated=client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'500.25'})
+    assert updated.status_code==200 and updated.json()['limit_cny']=='500.250000'
+    event=db.one('SELECT previous_units,new_units FROM budget_limit_events WHERE project_id=?',(pid,))
+    assert event=={'previous_units':425500000,'new_units':500250000}
+    db.execute('UPDATE budget_accounts SET spent_units=? WHERE project_id=?',(200000000,pid))
+    blocked=client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'199.99'})
+    assert blocked.status_code==409 and db.cost(pid)['limit_cny']=='500.250000'
+    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'0'}).status_code==422
+    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'0.001'}).status_code==422
 
 def test_cross_origin_blocked(client):
     assert client.post('/api/projects',json={'name':'x'},headers={'Origin':'https://evil.invalid'}).status_code==403
@@ -89,6 +104,45 @@ def test_one_active_project_and_pause(client,project):
     assert client.post(f'/api/analysis-runs/{a["id"]}/pause').json()['status']=='PAUSED'
     assert client.post(f'/api/analysis-runs/{a["id"]}/resume').json()['status']=='QUEUED'
     assert client.post(f'/api/analysis-runs/{a["id"]}/cancel').json()['status']=='CANCELLED'
+
+
+def test_selected_local_workers_parse_two_documents_concurrently(client,project,monkeypatch):
+    upload(client,project['id'],'one.txt',b'one');upload(client,project['id'],'two.txt',b'two')
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs',json={'local_workers':2}).json()
+    assert run['capabilities']['local_workers']==2
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    barrier=threading.Barrier(2);active=0;peak=0;lock=threading.Lock()
+    def parse(run_arg,did):
+        nonlocal active,peak
+        with lock:active+=1;peak=max(peak,active)
+        barrier.wait(timeout=2)
+        with lock:active-=1
+        summary={'status':'SUCCESS','fragments':[],'pages':[{'page':1,'status':'TEXT_EXTRACTED'}],
+                 'warnings':[],'visual_tasks':[],'geometry_summaries':[],'takeoffs':[]}
+        db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(run_arg['id'],did,'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr(runner,'parse_one',parse)
+    runner.parse_documents(run)
+    assert peak==2 and runner.get(run['id'])['coverage']['pages_processed']==2
+
+
+def test_completed_mock_run_records_stage_performance(client,project):
+    rid=run_demo(client,project['id']);run=client.get(f'/api/analysis-runs/{rid}').json()
+    assert {'stage.parse','stage.vision','stage.extract','stage.assemble','stage.verify'}<=set(run['performance'])
+    assert all(value['samples']==1 and value['total_ms']>=0 for value in run['performance'].values())
+    assert run['progress']['percent']==100 and run['progress']['estimated_finish_epoch'] is None
+
+
+def test_running_progress_reports_percentage_and_estimated_finish(client,project):
+    upload(client,project['id'],'a.txt',b'hello')
+    runner=client.app.state.runner;db=client.app.state.db;run=runner.create(project['id'])
+    coverage={'fragments_total':10,'fragments_extracted':4,'fragments_need_review':1}
+    db.execute("UPDATE runs SET status='RUNNING',stage=?,coverage=? WHERE id=?",
+               ('一次读取，联合提取材料与检查要求',json.dumps(coverage),run['id']))
+    current=runner.get(run['id']);progress=runner.progress(current,current['started_epoch']+100)
+    assert progress['percent']==57
+    assert progress['estimate'] and progress['remaining_seconds']>0
+    assert progress['estimated_finish_epoch']>current['started_epoch']+100
 
 def test_failed_local_publish_can_resume_without_repeating_model_work(client,project):
     upload(client,project['id'],'a.txt',b'hello')

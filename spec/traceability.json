@@ -643,7 +643,7 @@
         "web/app.js"
       ],
       "verification_report": null,
-      "progress_note": "已有本地网页第一切片；仅有阻断项时自动显示缺失类别。运行轮询已串行化，活跃运行不重复加载完整记录集，终态只加载一次；完整生产UI与大结果分页仍未实现。"
+      "progress_note": "The local dashboard now shows a stage-weighted analysis percentage, an elapsed-time estimated finish, coverage, cost, and aggregate timing. Polling is serialized and active runs avoid full result loading; the complete production dashboard remains planned."
     },
     {
       "requirement_id": "FR-API-001",
@@ -676,8 +676,13 @@
       "planned_product_tests": [],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/runner.py",
+        "app/parsers.py",
+        "web/app.js"
+      ],
+      "verification_report": null,
+      "progress_note": "D-27 implements user-selectable 1/2/4 local document parsing workers. Paid API requests remain serial; broader queued task orchestration is still planned."
     },
     {
       "requirement_id": "FR-API-003",
@@ -706,8 +711,14 @@
       "planned_product_tests": [],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/gateway.py",
+        "app/runner.py",
+        "web/app.js"
+      ],
+      "verification_report": null,
+      "progress_note": "D-27 adds aggregate stage, provider-wait, and model-response metrics plus processed-page counts. Per-call export and retry summaries remain planned."
     },
     {
       "requirement_id": "FR-API-005",
@@ -1171,7 +1182,7 @@
         "spec/schemas/vision-result.schema.json"
       ],
       "verification_report": null,
-      "progress_note": "整页视觉路由、图片哈希缓存、严格证据Schema和共同预算闸门已实现；真实能力探针与局部裁剪坐标变换尚待本轮live完成。"
+      "progress_note": "Whole-page vision routing now selects only large-format, low-text graphic, or dense-graphic pages. Image cache, strict evidence schema, and the common budget gate are implemented; local high-resolution crops remain planned."
     },
     {
       "requirement_id": "FR-CAPABILITY-001",
@@ -1187,17 +1198,25 @@
     },
     {
       "requirement_id": "FR-BUDGET-001",
-      "implementation_status": "planned",
+      "implementation_status": "implemented",
       "planned_product_modules": [
         "app/budget"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_verification.py"
+      ],
       "contract_tests": [
         "tests/test_policies.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/main.py",
+        "web/app.js",
+        "migrations/004_performance_budget.sql"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     },
     {
       "requirement_id": "FR-BUDGET-002",

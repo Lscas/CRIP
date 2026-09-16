@@ -72,7 +72,7 @@ RapidOCR 3.9.2、ONNX Runtime 1.30.0及ezdxf 1.4.4安装在项目虚拟环境。
 
 指定真实PDF的离线解析输出位于本机临时验证记录：59页、161个证据片段（144文字层、17 OCR）、59个视觉任务、59个矢量审计页；53至58页原文字层不足的缺口已由OCR补出。OCR置信度平均0.925213、最低0.884081。10页检测到唯一比例并计算整页标定后原始线长；由于包含图框、标注和重复视图且未映射材料，`material_quantity`恒为null。该离线阶段没有付费调用。
 
-视觉请求只允许DeepSeek官方基址和精确模型`deepseek-v4-flash-vision-exp`，整页PNG最长边2048，当前官方说明的每图最多384图像token计入同一¥300项目闸门。严格视觉Schema只允许可见文字/观察/图号/限制并强制`needs_review=true`；模型不得自行做几何换算或把图像指令当系统指令。真实59页视觉运行`RUN-8091a26c122b40eeab3a5b4a87a6a5c7`完成59/59页，599次调用账本结算¥8.047433、预留/未知/未决均为0；产生379条待审核记录（79材料、26检查、274缺失）与31/9/13/52/274条`SUPPORTED`/`PARTIAL`/`UNSUPPORTED`/`PENDING`/`NON_DOCUMENT`核验结果。终态仍为`PARTIAL`，不外推为施工准确率。
+视觉请求只允许DeepSeek官方基址和精确模型`deepseek-v4-flash-vision-exp`，整页PNG最长边2048，当前官方说明的每图最多384图像token计入同一用户选择的项目闸门。严格视觉Schema只允许可见文字/观察/图号/限制并强制`needs_review=true`；模型不得自行做几何换算或把图像指令当系统指令。真实59页视觉运行`RUN-8091a26c122b40eeab3a5b4a87a6a5c7`完成59/59页，599次调用账本结算¥8.047433、预留/未知/未决均为0；产生379条待审核记录（79材料、26检查、274缺失）与31/9/13/52/274条`SUPPORTED`/`PARTIAL`/`UNSUPPORTED`/`PENDING`/`NON_DOCUMENT`核验结果。终态仍为`PARTIAL`，不外推为施工准确率。
 
 ## 仍然没有验证或实现
 DeepSeek真实连通、完整文字片段处理、账本计费和本机延迟已经实测，但语义准确率、供应商最终账单和施工适用性尚未评估；同一基础模型的独立Prompt复核仍可能共同犯错。只核查当前记录关联的证据，不提供全项目反证检索或无漏项保证。精确原句引用仅基于文字层/OCR等解析文本；视觉模型输出只标为`MODEL_VISION_OUTPUT`整页上下文，不充当原文支持或反对引用。两者都不证明PDF阅读顺序/OCR绝对正确。
@@ -81,3 +81,6 @@ DeepSeek真实连通、完整文字片段处理、账本计费和本机延迟已
 
 ## 升级与回滚
 先正常停止旧服务，备份整个`.local`（含SQLite辅助文件）与用户自有`.env`，然后更新代码并按原入口启动。新版本自动执行幂等追加迁移，不删除原文件/预算。回滚应用代码至`v0.2.5-ui-language`可保留新增表，但旧UI不显示核验；正式回滚仍应保留备份，避免覆盖后续新数据。
+
+## 2026-09-15 offline performance and budget controls
+Offline regression verifies user-selectable 1/2/4 local document workers, actual overlap between two local parser subprocesses, selective vision-page routing, exact-evidence-scope verification batching, aggregate stage/provider/model timing, processed-page coverage, a stage-weighted percentage with elapsed-time estimated finish, and a user-selected CNY 0.01–1,000,000 project limit. Migration 004 preserves the legacy ledger and adds aggregate run metrics plus budget-limit audit events. A limit below settled plus outstanding cost is rejected; increasing a valid limit does not reset cost. The ETA is explicitly an estimate and remains unavailable until enough progress exists. These are functional checks, not a measured speedup, model-quality comparison, or construction-accuracy claim. No paid API, private document, `.local` data, or credential was used.

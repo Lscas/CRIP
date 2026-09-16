@@ -15,7 +15,7 @@ from openpyxl import load_workbook
 from PIL import Image
 
 from app.db import Database, DomainError, BudgetError, dumps
-from app.gateway import Gateway, InvalidModelOutput, ProviderPaused
+from app.gateway import Gateway, InvalidModelOutput, ModelResult, ProviderPaused
 from app.verification import (VerificationService, citation, exact_quote, anchors, digest, fields_for, summarize, statement_span)
 from app.settings import Settings, ROOT
 from contracts.runtime_rules import validate_schema
@@ -177,6 +177,26 @@ def test_every_output_has_report_no_fake_mock_pass(client,demo):
     assert client.app.state.db.cost(rows[0]['record']['meta']['project_id'])['calls']==0
 
 
+def test_run_verification_batches_fields_from_records_with_the_same_evidence(client,project):
+    rid=run_demo(client,project['id']);db=client.app.state.db
+    rows=client.get(f'/api/analysis-runs/{rid}/records').json()
+    by_scope={}
+    for row in rows:
+        pending=[field for field in row['verification']['fields'] if field['status']=='NEEDS_SEMANTIC']
+        for item in pending:by_scope.setdefault(tuple(sorted(item['evidence_ids'])),set()).add(row['record']['meta']['record_id'])
+    record_ids=next(sorted(ids) for ids in by_scope.values() if len(ids)>1)
+    settings=replace(client.app.state.settings,provider='deepseek',cheap_model='offline-verifier')
+    calls=[]
+    class FakeGateway:
+        def verify_claims(self,run,fields,bundle,job_id=None):
+            calls.append(deepcopy(fields))
+            return ModelResult({'checks':[{'path':item['path'],'status':'NEEDS_CONTEXT','citations':[],
+                                           'reason':'Synthetic offline batch.'} for item in fields]},'CALL-batch')
+    service=VerificationService(db,settings,FakeGateway())
+    reports=service.refresh_many(record_ids,allow_model=True)
+    assert reports and any(len({json.dumps(item['context'],sort_keys=True) for item in batch})>1 for batch in calls)
+
+
 def test_exact_citation_endpoint_and_read_has_no_model_call(client,demo):
     rid,rows=demo
     row=next(r for r in rows if r['record']['kind']=='MATERIAL');report=row['verification']
@@ -270,7 +290,10 @@ def test_additive_migration_keeps_legacy_budget(tmp_path):
     assert db.cost('P')['spent_cny']=='1.000000'
     assert db.one('SELECT version FROM schema_migrations WHERE version=2')['version']==2
     assert db.one('SELECT version FROM schema_migrations WHERE version=3')['version']==3
+    assert db.one('SELECT version FROM schema_migrations WHERE version=4')['version']==4
     assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='call_reconciliation_events'")
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='run_metrics'")
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='budget_limit_events'")
     assert Database(path).cost('P')['spent_cny']=='1.000000'
 
 
@@ -293,6 +316,9 @@ def test_verifier_non_thinking_budget_and_cache(live_context):
     assert len(calls)==1 and calls[0]['thinking']=={'type':'disabled'}
     assert calls[0]['model']==s.cheap_model and calls[0]['max_tokens']==1400
     assert db.cost(run['project_id'])['spent_cny']=='0.000220'
+    performance=db.performance(run['id'])
+    assert performance['model.request_wait']['samples']==1
+    assert performance['model.response']['samples']==1
 
 
 def test_verifier_crash_after_atomic_commit_recovers_without_second_http(live_context,monkeypatch):

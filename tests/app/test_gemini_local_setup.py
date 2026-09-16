@@ -87,7 +87,7 @@ def test_setup_page_uses_password_post_and_no_key_storage_language():
     assert "synthetic-csrf" in rendered
     assert "does not write the key to a URL, application log, or plaintext .env" in rendered
     assert "Windows DPAPI" in rendered and "name=remember" in rendered
-    assert "¥300" in rendered
+    assert "user-selected cumulative limit" in rendered
 
 
 @pytest.mark.parametrize("value", ["80", "1023", "65536"])

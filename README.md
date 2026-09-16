@@ -10,7 +10,8 @@ CIRP is a local construction-document review prototype. It parses project files,
 - Executable inspections and tests, with the QA activity, specification section, performer, witness, timing, frequency, acceptance criteria, and evidence kept with the item.
 - English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.
 - Optional local OCR, full-page visual analysis, DXF/CAD metadata, and review-only quantity candidates.
-- Local human review and a project cost ledger with a CNY 300 dispatch cap.
+- Local human review and a project cost ledger with a user-selected CNY dispatch cap (CNY 300 for new projects by default).
+- User-selectable 1, 2, or 4 local document workers, selective vision routing, evidence-scope verification batching, and visible stage/model timing.
 
 Conflict and Missing Information are not shown as current reviewer categories or export sheets. Legacy stored records are preserved for compatibility. Coverage and partial-processing status remain visible at run level.
 

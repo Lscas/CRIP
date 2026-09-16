@@ -2,6 +2,10 @@
   "version": "0.2.0",
   "currency": "CNY",
   "per_project_limit": "300.00",
+  "per_project_limit_role": "default_for_new_projects",
+  "user_configurable": true,
+  "minimum_project_limit": "0.01",
+  "maximum_project_limit": "1000000.00",
   "target_deadline_hours": 24,
   "input_capacity_target_bytes": 10000000000,
   "input_capacity_type": "target_not_completion_guarantee",
@@ -20,6 +24,6 @@
     "cad_conversion",
     "attributable_compute"
   ],
-  "shared_fixed_infrastructure": "单独展示分摊，非推算为零；投入前由实际部署账单配置",
+  "shared_fixed_infrastructure": "Show allocated shared cost separately; configure it from actual deployment bills rather than assuming zero.",
   "stage_budgets_enforced": false
 }

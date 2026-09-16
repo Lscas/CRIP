@@ -53,7 +53,9 @@ def check(root: Path = ROOT) -> list[str]:
     routing=load('config/model_routing.json');budget=load('config/budget_policy.json')
     if routing['roles']['cheap']['thinking']!='disabled':errors.append('简单任务未关闭思考')
     if routing['roles']['high']['enabled']:errors.append('本基线高价模型不得默认启用')
-    if budget['per_project_limit']!='300.00' or budget['currency']!='CNY':errors.append('本基线预算发生未批准变化')
+    if (budget['per_project_limit']!='300.00' or budget['currency']!='CNY'
+            or not budget.get('user_configurable')):
+        errors.append('项目预算默认值或用户可配置策略不一致')
     if root == ROOT:
         for path in (root/'changes').glob('*.json'):
             try:validate_schema('change-record',json.loads(path.read_text(encoding='utf-8')))

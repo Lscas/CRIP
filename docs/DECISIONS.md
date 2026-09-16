@@ -23,7 +23,7 @@
 | D-16 | 输入PDF、DOCX、TXT、图片、DWG；约10GB设计目标 | 已确认，不擅自重加Excel和邮件 |
 
 ## 工程初值，不是用户验收数字
-文本联合抽取采用32k UTF-8输入字节工程包络/8k输出，页面视觉仍为2k输出、字段核验仍为1.4k输出；关系任务12k/4k；文本4请求并发、视觉1请求；一次局部修复；价格按高峰未命中预留；剩余20%提示。这些配置可以通过PR调整，但不得突破300元和用户范围。
+文本联合抽取采用32k UTF-8输入字节工程包络/8k输出，页面视觉仍为2k输出、字段核验仍为1.4k输出；关系任务12k/4k；付费文本与视觉请求均保持串行；一次局部修复；价格按高峰未命中预留；剩余20%提示。配置可以通过PR调整，但不得突破用户选择的项目上限和产品范围。
 
 ## 本轮执行授权边界
 已获授权生成修订规格、契约参考代码、离线测试和Git模板。未提供可用密钥，未调用付费服务；未操作用户Git仓库，未部署或宣称应用已完成。产品原型是下一开发阶段的交付物。
@@ -54,3 +54,6 @@ On 2026-09-13 the user directed CIRP to assume that all users and developers use
 
 ## D-26 Focused material and QA reviewer scope
 On 2026-09-13 the user required material and equipment names to identify tangible items rather than dimensions, gauges, headings, generic keywords, or descriptive clauses. Stated size, material, rating, specification section, and quantity remain separate properties. Tests and inspections must be executable QA activities, with specification section and stated performer shown when available; shop drawings, wiring diagrams, schedules, ordinary submittals, and unrelated administrative reports are excluded. Conflict and Missing Information are removed from current assembly, reviewer UI, and readable exports. Legacy stored records and source evidence remain untouched for audit and recovery.
+
+## D-27 Bounded local acceleration and user-selected project budget
+On 2026-09-15 the user approved stage timing, two local parser/OCR workers, selective vision pages, exact-evidence-scope verification batching, an in-analysis percentage and estimated finish time, and unlocking the fixed budget so each project can select its own range. CIRP therefore offers 1, 2, or 4 local document workers (default 2), but paid model requests remain serial and ledger-protected. The UI uses a stage-weighted elapsed-time estimate and says Estimating until enough progress exists; it is not a completion guarantee. New projects default to CNY 300; a local user may set CNY 0.01 through CNY 1,000,000. A new limit cannot be below settled plus outstanding cost, every change is audit-recorded, and a valid change may clear a budget freeze without resetting spent, reserved, unknown, or unresolved charges. This supersedes D-10 only for the fixed numeric cap; the cumulative ledger and pre-dispatch gate remain mandatory.

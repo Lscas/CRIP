@@ -518,13 +518,14 @@
     {
       "id": "FR-UI-001",
       "title": "项目 Dashboard",
-      "statement": "展示 Coverage、材料、QA/QC、冲突、缺失和审核进度。",
+      "statement": "Show run coverage, current materials and QA review results, analysis percentage, estimated finish time, and human-review progress.",
       "priority": "P1",
       "status": "planned",
       "acceptance_criteria": [
-        "Dashboard 数据来自 Registers，不由模型另行编造。"
+        "Dashboard data comes from persisted run/register state and is not invented by a model.",
+        "While analysis is active, show a stage-weighted percentage and an elapsed-time ETA; label it as an estimate and show Estimating when there is not enough progress data."
       ],
-      "decision_source": "已批准的产品目标；实现尚未交付",
+      "decision_source": "Approved product objective; D-27 adds percentage and ETA while the complete production dashboard remains planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -584,10 +585,10 @@
       "priority": "P1",
       "status": "planned",
       "acceptance_criteria": [
-        "单项目多个有限并发任务。",
-        "每次调用记入项目累计预算。"
+        "A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.",
+        "Paid model calls remain serial and every call is recorded in the project ledger."
       ],
-      "decision_source": "已批准的产品目标；实现尚未交付",
+      "decision_source": "Approved product objective; D-27 implements bounded local document concurrency while broader task orchestration remains planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -623,9 +624,10 @@
       "priority": "P0",
       "status": "planned",
       "acceptance_criteria": [
-        "每个 Analysis Run 可导出调用摘要。"
+        "Each Analysis Run can export a provider/model/token/cost/latency/retry summary.",
+        "The reviewer UI reports aggregate stage time, provider wait time, model response time, and processed page counts."
       ],
-      "decision_source": "已批准的产品目标；实现尚未交付",
+      "decision_source": "Approved product objective; D-27 adds aggregate timing while per-call export remains planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -966,12 +968,12 @@
       "title": "视觉专用路由",
       "statement": "纯文本模型不得假装读图；数字文字优先，必要图形进入视觉/OCR流程。",
       "acceptance_criteria": [
-        "视觉候选需供应商能力探针。",
-        "高分辨率局部裁剪保留整页坐标和变换。"
+        "Vision candidates require a provider capability probe and are limited to large-format, low-text graphic, or dense-graphic pages.",
+        "High-resolution local crops preserve full-page coordinates and transforms."
       ],
       "priority": "P0",
       "status": "planned",
-      "decision_source": "本轮确认及其工程化约束",
+      "decision_source": "D-27 adds selective whole-page routing; local high-resolution crops remain planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -989,15 +991,16 @@
     },
     {
       "id": "FR-BUDGET-001",
-      "title": "300元项目预算",
-      "statement": "每项目跨重试及运行累计直接处理预算300CNY，触顶前拒发新付费任务。",
+      "title": "User-selected project budget limit",
+      "statement": "Each project has a user-selected cumulative CNY processing limit across runs and retries; new paid work is blocked before the selected limit is exceeded.",
       "acceptance_criteria": [
-        "已结算+未结算预留（含待对账，不重复相加）+新预估不得超预算。",
-        "用户暂停时间不改变已花费用。"
+        "A new project defaults to CNY 300 and accepts a user-selected limit from CNY 0.01 through CNY 1,000,000.",
+        "The limit cannot be set below settled plus outstanding cost; unknown charges remain reserved and retries require a new reservation.",
+        "Every changed limit is audit-recorded, and a valid user change may unlock a budget-frozen project without resetting spent cost."
       ],
       "priority": "P0",
-      "status": "planned",
-      "decision_source": "本轮确认及其工程化约束",
+      "status": "implemented",
+      "decision_source": "D-27: the user explicitly allowed unlocking the fixed budget and selecting the project range on 2026-09-15.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -1276,12 +1279,12 @@
       "priority": "P0",
       "status": "implemented",
       "acceptance_criteria": [
-        "程序校验引用范围、文本片段及数值风险；小模型按每批最多4个字段复核含义。",
-        "语义核验显式使用现有便宜模型的最低可用推理模式，推理token计入原项目300CNY预算。",
+        "Programmatic checks validate citation bounds, text fragments, and numeric risk; the small model verifies at most four fields per request and can combine fields from records with the same exact evidence scope.",
+        "Semantic verification uses the existing cheap model's lowest available reasoning mode and charges reasoning tokens to the user-selected project budget.",
         "无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。",
         "不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。"
       ],
-      "decision_source": "用户确认更新上轮证据核验方案；采用成本优先默认A。",
+      "decision_source": "The user approved the evidence-verification design and D-27 adds exact-evidence-scope batching across records.",
       "spec_section": "docs/EVIDENCE_VERIFICATION.md"
     },
     {

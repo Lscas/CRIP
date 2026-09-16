@@ -7,6 +7,8 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from app.db import Database,DomainError,BudgetError,dumps,now,uid
@@ -29,7 +31,8 @@ class Runner:
         self.verifier=VerificationService(db,settings,gateway)
         self.parse_dir=settings.data_dir/'parsed';self.parse_dir.mkdir(exist_ok=True)
 
-    def create(self,project_id):
+    def create(self,project_id,local_workers=2):
+        if local_workers not in (1,2,4):raise DomainError('本地工作进程数必须为1、2或4')
         self.db.one('SELECT * FROM projects WHERE id=?',(project_id,))
         if self.s.provider!='mock' and not live_provider(self.s.provider):raise DomainError('Provider未支持',409)
         if self.s.provider!='mock' and self.s.live_errors():raise DomainError('；'.join(self.s.live_errors()),409)
@@ -42,16 +45,67 @@ class Runner:
             if not docs:raise DomainError('没有已完成上传的文件',409)
             rid=uid('RUN'); snapshot='SN-'+hashlib.sha256(dumps(docs).encode()).hexdigest()[:32]
             timestamp=time.time()
+            capabilities=self.s.public()['capabilities'];capabilities['local_workers']=local_workers
             c.execute('''INSERT INTO runs(id,project_id,provider,snapshot_id,document_ids,status,stage,created_at,
                          started_epoch,deadline_epoch,capabilities) VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
                       (rid,project_id,self.s.provider,snapshot,dumps([d['id'] for d in docs]),'QUEUED','等待处理',now(),timestamp,
-                       timestamp+self.s.deadline_seconds,dumps(self.s.public()['capabilities'])))
+                       timestamp+self.s.deadline_seconds,dumps(capabilities)))
         return self.get(rid)
 
     def get(self,rid):
         r=self.db.one('SELECT * FROM runs WHERE id=?',(rid,))
         for k in ('document_ids','coverage','capabilities'):r[k]=json.loads(r[k])
+        r['performance']=self.db.performance(rid)
+        r['progress']=self.progress(r)
         return r
+
+    def progress(self,run,at_epoch=None):
+        """Return a conservative UI estimate; it is not a completion guarantee."""
+        current=time.time() if at_epoch is None else at_epoch
+        coverage=run.get('coverage') or {};status=run['status'];stage=run['stage']
+        if status in ('PARTIAL','COMPLETED'):
+            percent=100
+        elif stage=='解析文件':
+            total=max(1,len(run['document_ids']))
+            completed_ids={row['document_id'] for row in self.db.all('SELECT document_id FROM document_results WHERE run_id=?',(run['id'],))}
+            completed=len(completed_ids);partial=0.0
+            for did in run['document_ids']:
+                if did in completed_ids:continue
+                path=self.parse_dir/(run['id']+'-'+did+'.json')
+                try:
+                    payload=json.loads(path.read_text(encoding='utf-8'))
+                    count=payload.get('page_count');pages=payload.get('pages',[])
+                    if type(count) is int and count>0:
+                        partial+=min(1,sum(p.get('status')!='NOT_PROCESSED' for p in pages if isinstance(p,dict))/count)
+                    elif payload.get('status')=='SUCCESS':partial+=1
+                except (OSError,ValueError,TypeError):
+                    pass
+            percent=round(20*min(1,(completed+partial)/total))
+        elif stage=='本机OCR完成，处理图纸视觉页':
+            total=coverage.get('visual_pages_total',0);done=coverage.get('visual_pages_completed',0)
+            percent=20+round(15*(done/total if total else 1))
+        elif stage=='一次读取，联合提取材料与检查要求':
+            total=coverage.get('fragments_total',0)
+            done=coverage.get('fragments_extracted',0)+coverage.get('fragments_need_review',0)
+            percent=35+round(45*(done/total if total else 0))
+        elif stage=='生成可审核记录与设计差异':percent=85
+        elif stage=='逐字段核验原文支持性':percent=92
+        else:percent=0
+        percent=max(0,min(100,percent))
+        remaining=None;finish=None
+        if status in ACTIVE and 0<percent<100:
+            elapsed=max(0,current-run['started_epoch'])
+            remaining=min(max(0,run['deadline_epoch']-current),elapsed*(100-percent)/percent)
+            if elapsed<2:remaining=None
+            elif remaining is not None:finish=current+remaining
+        return {'percent':percent,'estimated_finish_epoch':finish,
+                'remaining_seconds':remaining,'estimate':bool(finish),'method':'stage_weighted_elapsed'}
+
+    @contextmanager
+    def timed(self,rid,metric):
+        started=time.perf_counter()
+        try:yield
+        finally:self.db.record_metric(rid,metric,(time.perf_counter()-started)*1000)
 
     def control(self,rid,action):
         with self.db.connect(True) as c:
@@ -109,7 +163,7 @@ class Runner:
                 if job:self.verifier.process_job(job['id'])
 
     def checkpoint(self,rid):
-        r=self.get(rid)
+        r=self.db.one('SELECT stop_requested,status,deadline_epoch FROM runs WHERE id=?',(rid,))
         if self.stop_event.is_set() or r['stop_requested'] or r['status']!='RUNNING':return False
         if time.time()>=r['deadline_epoch']:
             self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_DEADLINE','到达24小时目标，停止新增任务；未完成范围保留',rid));return False
@@ -130,34 +184,36 @@ class Runner:
             c.execute("UPDATE runs SET status='RUNNING',stage='解析文件' WHERE id=?",(rid,))
         run=self.get(rid);run['model']=self.s.cheap_model
         try:
-            for did in run['document_ids']:
-                if not self.checkpoint(rid):break
-                if self.db.one('SELECT 1 FROM document_results WHERE run_id=? AND document_id=?',(rid,did),False):continue
-                self.parse_one(run,did);self.update_coverage(rid)
+            with self.timed(rid,'stage.parse'):
+                self.parse_documents(run)
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('本机OCR完成，处理图纸视觉页',rid))
-            self.process_visual_tasks(run)
+            with self.timed(rid,'stage.vision'):
+                self.process_visual_tasks(run)
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('一次读取，联合提取材料与检查要求',rid))
-            todo=self.db.all("SELECT * FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY id",(rid,))
-            for e in todo:
-                if not self.checkpoint(rid):break
-                ev=json.loads(e['payload'])
-                try:
-                    result=self.gateway.extract(run,ev)
-                    self.db.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
-                        (dumps({'data':result.data,'request_id':result.request_id,'cached':result.cached}),
-                         'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',e['id']))
-                except InvalidModelOutput as exc:
-                    self.db.execute('UPDATE evidence SET status=?,error=? WHERE id=?',('NEEDS_REVIEW',str(exc),e['id']))
-                self.update_coverage(rid)
+            with self.timed(rid,'stage.extract'):
+                todo=self.db.all("SELECT * FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY id",(rid,))
+                for e in todo:
+                    if not self.checkpoint(rid):break
+                    ev=json.loads(e['payload'])
+                    try:
+                        result=self.gateway.extract(run,ev)
+                        self.db.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
+                            (dumps({'data':result.data,'request_id':result.request_id,'cached':result.cached}),
+                             'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',e['id']))
+                    except InvalidModelOutput as exc:
+                        self.db.execute('UPDATE evidence SET status=?,error=? WHERE id=?',('NEEDS_REVIEW',str(exc),e['id']))
+                    self.update_coverage(rid)
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('生成可审核记录与设计差异',rid))
-            self.publish(run,seed_verifications=False)
+            with self.timed(rid,'stage.assemble'):
+                self.publish(run,seed_verifications=False)
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('逐字段核验原文支持性',rid))
-            for item in self.db.all('SELECT id FROM records WHERE run_id=?',(rid,)):
-                if not self.checkpoint(rid):return
-                self.verifier.refresh(item['id'],allow_model=run['provider']!='mock')
+            with self.timed(rid,'stage.verify'):
+                items=self.db.all('SELECT id FROM records WHERE run_id=? ORDER BY id',(rid,))
+                if items and self.checkpoint(rid):
+                    self.verifier.refresh_many([item['id'] for item in items],allow_model=run['provider']!='mock')
             self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
                 ('PARTIAL','本轮基线任务已结束',
                  '已完成可用文字、本机OCR、已启用页面视觉与可用CAD对象处理；PDF原始矢量审计不等于材料净量，原生DWG取决于本机合法转换器。复杂选项与跨专业关联仍待完善。'
@@ -174,6 +230,22 @@ class Runner:
             if r['status']=='RUNNING' and (r['stop_requested'] or self.stop_event.is_set()):
                 self.db.execute("UPDATE runs SET status='PAUSED',message='服务停止，未完成任务保留' WHERE id=?",(rid,))
             self.update_coverage(rid)
+
+    def parse_documents(self,run):
+        rid=run['id']
+        pending=[did for did in run['document_ids']
+                 if not self.db.one('SELECT 1 FROM document_results WHERE run_id=? AND document_id=?',(rid,did),False)]
+        workers=run.get('capabilities',{}).get('local_workers',2)
+        for offset in range(0,len(pending),workers):
+            if not self.checkpoint(rid):return
+            batch=pending[offset:offset+workers]
+            if len(batch)==1:
+                self.parse_one(run,batch[0]);self.update_coverage(rid);continue
+            # ponytail: one small batch bounds memory; add a persistent local queue only after measured demand.
+            with ThreadPoolExecutor(max_workers=len(batch),thread_name_prefix='cirp-parser') as pool:
+                futures=[pool.submit(self.parse_one,run,did) for did in batch]
+                for future in futures:
+                    future.result();self.update_coverage(rid)
 
     def parse_one(self,run,did):
         doc=self.db.one('SELECT * FROM documents WHERE id=?',(did,))
@@ -390,6 +462,7 @@ class Runner:
         docs=self.db.all('SELECT status,summary FROM document_results WHERE run_id=?',(rid,))
         evidence=self.db.all('SELECT status,payload FROM evidence WHERE run_id=?',(rid,))
         summaries=[json.loads(d['summary']) for d in docs]
+        pages=[page for summary in summaries for page in summary.get('pages',[])]
         methods=[json.loads(e['payload']).get('extraction_method') for e in evidence]
         visual_tasks=[task for summary in summaries for task in summary.get('visual_tasks',[])]
         geometry=[item for summary in summaries for item in summary.get('geometry_summaries',[])]
@@ -409,7 +482,9 @@ class Runner:
                  'fragments_pending':sum(e['status']=='PENDING' for e in evidence),
                  'ocr_fragments':sum(method=='OCR' for method in methods),
                  'vision_fragments':sum(method=='VISION' for method in methods),
-                 'cad_fragments':sum(method=='CAD_OBJECT' for method in methods),
+                  'cad_fragments':sum(method=='CAD_OBJECT' for method in methods),
+                  'pages_total':len(pages),
+                  'pages_processed':sum(page.get('status')!='NOT_PROCESSED' for page in pages),
                  'visual_pages_total':len(visual_tasks),
                  'visual_pages_completed':sum(task.get('status')=='VISION_EXTRACTED' for task in visual_tasks),
                  'geometry_pages':len(geometry),

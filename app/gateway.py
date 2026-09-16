@@ -359,6 +359,16 @@ class Gateway:
             if delay:time.sleep(delay)
             self._last_request_started=time.monotonic()
 
+    def _wait_and_record(self, run_id: str) -> None:
+        started=time.perf_counter()
+        self._wait_for_request_slot()
+        self.db.record_metric(run_id,'model.request_wait',(time.perf_counter()-started)*1000)
+
+    def _request_timed(self, run_id: str, attempt: str, payload: dict, purpose: str) -> dict:
+        started=time.perf_counter()
+        try:return self._request_json(attempt,payload,purpose)
+        finally:self.db.record_metric(run_id,'model.response',(time.perf_counter()-started)*1000)
+
     def _contains_api_key(self, value: str) -> bool:
         return bool(self.s.api_key and self.s.api_key in value)
 
@@ -637,11 +647,11 @@ class Gateway:
             self.validate(cached,evidence)
             return ModelResult(cached,None,True,self.s.provider)
         amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
-        self._wait_for_request_slot()
+        self._wait_and_record(run['id'])
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.cheap_model,
                                 hashlib.sha256(dumps(payload).encode()).hexdigest(),self.s.input_rate,self.s.output_rate,
                                 allow_zero=self.s.is_local_model())
-        body=self._request_json(attempt,payload,'提取')
+        body=self._request_timed(run['id'],attempt,payload,'提取')
         try:
             usage=self.billed_usage(body)
         except ValueError:
@@ -724,11 +734,11 @@ class Gateway:
                                  (run['project_id'],task),False)
             return ModelResult(cached,original['id'] if original else None,True,self.s.provider)
         amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
-        self._wait_for_request_slot()
+        self._wait_and_record(run['id'])
         request_hash=hashlib.sha256(dumps([self.s.vision_model,self.vision_prompt_hash,image_hash,safe_metadata,limit]).encode()).hexdigest()
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.vision_model,
                                 request_hash,self.s.input_rate,self.s.output_rate)
-        body=self._request_json(attempt,payload,'视觉')
+        body=self._request_timed(run['id'],attempt,payload,'视觉')
         try:
             usage=self.billed_usage(body)
         except ValueError:
@@ -801,12 +811,12 @@ class Gateway:
         if self.db.one('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (run['project_id'],), False):
             raise ProviderPaused('项目有未对账调用，暂停核验', 409)
         amount = quote_tokens(upper, limit, self.s.input_rate, self.s.output_rate)
-        self._wait_for_request_slot()
+        self._wait_and_record(run['id'])
         attempt = self.db.reserve(run['project_id'], run['id'], task, amount, self.s.cheap_model,
                                   hashlib.sha256(dumps(payload).encode()).hexdigest(), self.s.input_rate,
                                   self.s.output_rate, verification_job_id=job_id,
                                   allow_zero=self.s.is_local_model())
-        body = self._request_json(attempt, payload, '核验')
+        body = self._request_timed(run['id'], attempt, payload, '核验')
         try:
             usage = self.billed_usage(body)
         except ValueError:

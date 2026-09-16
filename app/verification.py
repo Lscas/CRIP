@@ -349,6 +349,54 @@ class VerificationService:
                 return self.get(record_id)
         return report
 
+    def refresh_many(self, record_ids: list[str], allow_model=False) -> dict[str,dict]:
+        """Verify fresh run output in evidence-scoped batches without changing paid recovery keys."""
+        record_ids=sorted(dict.fromkeys(record_ids))
+        if not record_ids:return {}
+        first=self.db.one('SELECT run_id FROM records WHERE id=?',(record_ids[0],))
+        prior=self.db.one("SELECT id FROM model_calls WHERE run_id=? AND task_key LIKE 'verify:%' LIMIT 1",
+                          (first['run_id'],),False)
+        if allow_model and prior:
+            # A resumed run may have committed an older per-record response just before interruption.
+            # Preserve that exact recovery key instead of regrouping and risking a second paid call.
+            return {record_id:self.refresh(record_id,allow_model=True) for record_id in record_ids}
+
+        reports={record_id:self.refresh(record_id,allow_model=False) for record_id in record_ids}
+        if not allow_model or self.s.provider=='mock':return reports
+        contexts={};run_ids=set();groups={}
+        for record_id in record_ids:
+            row,record,evs=self.load(record_id);run_ids.add(row['run_id']);contexts[record_id]=(row,record,evs)
+            for item in reports[record_id]['fields']:
+                if item['status']=='NEEDS_SEMANTIC':
+                    groups.setdefault(tuple(sorted(item['evidence_ids'])),[]).append((record_id,item))
+        if len(run_ids)!=1:raise DomainError('批量核验必须属于同一运行')
+        run=self.db.one('SELECT * FROM runs WHERE id=?',(run_ids.pop(),))
+        for evidence_ids,entries in sorted(groups.items()):
+            entries.sort(key=lambda pair:(pair[1]['path'],pair[0]))
+            for offset in range(0,len(entries),MAX_BATCH_FIELDS):
+                chunk=entries[offset:offset+MAX_BATCH_FIELDS]
+                if any(digest(json.loads(self.db.one('SELECT envelope FROM records WHERE id=?',(record_id,))['envelope'])['candidate'])
+                       != reports[record_id]['candidate_hash'] for record_id,_ in chunk):
+                    raise ProviderPaused('核验候选已变化；停止发送新请求',409)
+                wire=[];bundle={}
+                for number,(record_id,item) in enumerate(chunk):
+                    sent=deepcopy(item);sent['path']=f'/batch/{number}';wire.append(sent)
+                    bundle.update({eid:contexts[record_id][2][eid] for eid in evidence_ids})
+                try:
+                    result=self.gateway.verify_claims(run,wire,bundle)
+                    self.apply_model(wire,result.data,bundle,result.request_id)
+                    for sent,(record_id,item) in zip(wire,chunk):
+                        original_path=item['path'];item.clear();item.update(sent);item['path']=original_path
+                except InvalidModelOutput:
+                    for record_id,item in chunk:
+                        item.update(status='NEEDS_CONTEXT',method='MODEL_OUTPUT_REJECTED')
+                        item['issues'].append('模型核验响应不完整、过长或引用不精确；不标记通过。')
+                touched={record_id for record_id,_ in chunk}
+                for record_id in touched:
+                    report=reports[record_id];report['checked_at']=now();summarize(report)
+                    if not self.save(report):reports[record_id]=self.get(record_id)
+        return reports
+
     @staticmethod
     def apply_model(fields: list[dict], data: dict, evs: dict, request_id):
         validate_schema('claim-check-batch', data)

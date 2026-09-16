@@ -25,7 +25,12 @@ from app.remote_access import PreviewAccess
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
-class ProjectInput(Input):name:str=Field(min_length=1,max_length=150)
+class ProjectInput(Input):
+    name:str=Field(min_length=1,max_length=150)
+    budget_cny:Decimal=Field(default=Decimal('300'),ge=Decimal('0.01'),le=1000000,max_digits=13,decimal_places=6)
+class BudgetInput(Input):
+    limit_cny:Decimal=Field(ge=Decimal('0.01'),le=1000000,max_digits=13,decimal_places=6)
+class RunInput(Input):local_workers:Literal[1,2,4]=2
 class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Field(ge=0)
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
@@ -116,7 +121,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
     @app.post('/api/projects',status_code=201)
     def project_create(data:ProjectInput):
         if not data.name.strip():raise DomainError('项目名不能为空')
-        return db.create_project(data.name.strip())
+        return db.create_project(data.name.strip(),data.budget_cny)
     @app.get('/api/projects/{pid}')
     def project_get(pid:str):return db.one('SELECT * FROM projects WHERE id=?',(pid,))
     @app.get('/api/projects/{pid}/manifest')
@@ -124,6 +129,10 @@ def create_app(settings:Settings|None=None)->FastAPI:
         db.one('SELECT * FROM projects WHERE id=?',(pid,))
         return {'uploads':db.all('SELECT * FROM uploads WHERE project_id=? ORDER BY created_at',(pid,)),
                 'documents':db.all('SELECT id,project_id,name,size,sha256,created_at FROM documents WHERE project_id=? ORDER BY created_at',(pid,))}
+    @app.get('/api/projects/{pid}/budget')
+    def project_budget(pid:str):return db.cost(pid)
+    @app.put('/api/projects/{pid}/budget')
+    def project_budget_update(pid:str,data:BudgetInput):return db.set_budget_limit(pid,data.limit_cny)
     @app.post('/api/projects/{pid}/uploads',status_code=201)
     def upload_create(pid:str,data:UploadInput):return uploads.create(pid,data.name,data.size)
     @app.get('/api/uploads/{upload_id}')
@@ -148,7 +157,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
         doc=db.one('SELECT * FROM documents WHERE id=?',(did,))
         return FileResponse(uploads.object_path(doc),filename=doc['name'],media_type='application/octet-stream')
     @app.post('/api/projects/{pid}/analysis-runs',status_code=202)
-    def run_create(pid:str):return runner.create(pid)
+    def run_create(pid:str,data:RunInput|None=None):return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')
     def runs_get(pid:str):return [runner.get(x['id']) for x in db.all('SELECT id FROM runs WHERE project_id=? ORDER BY created_at DESC',(pid,))]
     @app.get('/api/analysis-runs/{rid}')

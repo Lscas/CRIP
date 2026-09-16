@@ -173,15 +173,19 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                     visible_page=page.crop(page.cropbox)
                     words=visible_page.extract_words()
                     page_text=visible_page.extract_text() or ''
-                    visual=bool(visible_page.images or visible_page.lines or visible_page.curves or visible_page.rects
-                                or visible_page.width>1000 or visible_page.height>1400)
-                    low_text_density=bool(words) and visual and (
+                    graphics=len(visible_page.images)+len(visible_page.lines)+len(visible_page.curves)+len(visible_page.rects)
+                    large_format=visible_page.width>1000 or visible_page.height>1400
+                    low_text_density=bool(words) and graphics>0 and (
                         len(words)<LOW_TEXT_WORDS or len(page_text.strip())<LOW_TEXT_CHARS)
+                    # Rich specification pages often contain a few decorative rules or table borders.
+                    # Send only large sheets, image/vector pages without useful text, or dense graphics to vision.
+                    visual=large_format or (graphics>0 and (not words or low_text_density or graphics>=40))
                     summary=pdf_geometry_summary(visible_page,index,page_text)
                     if any(summary['primitive_counts'].values()):
                         geometry.append(summary)
                     if visual:
-                        visual_tasks.append({'page':index,'reason':'PDF_GRAPHICS','status':'PENDING'})
+                        reason='LARGE_FORMAT' if large_format else 'LOW_TEXT_GRAPHICS' if low_text_density or not words else 'DENSE_GRAPHICS'
+                        visual_tasks.append({'page':index,'reason':reason,'status':'PENDING'})
                     ocr=[]
                     if (not words or low_text_density) and local_ocr_available():
                         ocr=ocr_pdf_page(path,index)
@@ -191,8 +195,6 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                             if ocr_compact==layer_compact:
                                 ocr=[]
                     if not words:
-                        if not visual:
-                            visual_tasks.append({'page':index,'reason':'NO_TEXT_LAYER','status':'PENDING'})
                         if ocr:
                             ocr_rev=revision('\n'.join(item['text'] for item in ocr))
                             for item in ocr:
@@ -201,8 +203,9 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                             pages.append({'page':index,'status':'OCR_EXTRACTED_VISUAL_PENDING'})
                             warnings.append(f'PDF第{index}页没有文字层；已用本机{OCR_VERSION}提取，需对照图面审核。')
                         else:
-                            pages.append({'page':index,'status':'NEEDS_VISION'})
-                            warnings.append(f'PDF第{index}页没有可用文字层，本地OCR也未得到文字；需要视觉或人工检查。')
+                            pages.append({'page':index,'status':'NEEDS_VISION' if visual else 'NO_CONTENT'})
+                            warnings.append(f'PDF第{index}页没有可用文字层，本地OCR也未得到文字；'
+                                            +('已排入视觉或人工检查。' if visual else '未发现值得发送的图形内容，需人工确认空白页。'))
                     else:
                         text=' '.join(w['text'] for w in words);rev=revision(page_text or text)
                         pages.append({'page':index,'status':('TEXT_AND_OCR_VISUAL_PENDING' if ocr else

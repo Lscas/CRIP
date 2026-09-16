@@ -7,7 +7,7 @@
 ## 1. 产品目标与用户体验
 工程师一次上传尽可能完整的商业新建项目资料，不需要提前按专业整理或逐一问答。系统逐文件、逐页面／视图审查，以全部专业为分析目标，生成材料、检查／测试／报告、设计冲突和独立缺失信息四类结果。核心价值是减少阅读与整理，而不是替代工程判断。
 
-原型必须有网页：项目创建、批量上传、分析进度、四类清单、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控并行任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB在300元内全部完成。
+原型必须有网页：项目创建、批量上传、分析进度、四类清单、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控并行任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB在用户选择的预算内全部完成。
 
 不能将“全部专业能上传”写成“全部专业已正确分析”。每专业、文件、页面和任务均显示未处理、完成、部分、失败或能力缺失。内部原型可以逐模块交付，但不能擅自把总目标缩为混凝土专项。
 
@@ -93,7 +93,7 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 低价模型降低每token成本；减少实际token靠零调用、短输入、缓存复用、最低推理、短JSON及有限重试。没有可用更小模型时可以多个任务共享Flash，不能把不同Prompt伪装成多个不同尺寸模型。
 
 ## 13. 预算、时间和状态
-每项目300CNY是累计直接处理上限，包括重试及后续运行；基于已结算+未结算预留（其中包含计费未决请求，不重复计算），下一次调用发送前检查。模型/OCR/CAD/直接计算分别核算。共享基础设施费用单独记录分摊，不伪称免费。
+每项目采用用户选择的累计直接处理上限，包括重试及后续运行；新项目默认300CNY，可在0.01至1,000,000CNY范围内修改。上限不能低于已结算+未结算预留（其中包含计费未决请求，不重复计算），每次修改留审计记录；下一次调用发送前仍检查原子预留。模型/OCR/CAD/直接计算分别核算。共享基础设施费用单独记录分摊，不伪称免费。
 
 24小时从Analyze启动计时，上传时长另列；初期单活跃项目。预算或目标时限到达，停止新增收费任务并显示剩余范围；在途任务仍计费且对账，不能回滚已经产生的供应商费用。暂停不代表所有远端请求立即停止。
 
@@ -130,7 +130,7 @@ Cloudflare账户资源实际创建与公网验证是独立待完成需求，不�
 用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；不修改300CNY预算、Revision规则、业务范围或工程精度承诺。Windows入口提供但无实机验证；首次依赖安装与实际HTTP验证分别报告。见docs/LOCAL_DEPLOY.md。
 
 ## English-only presentation (FR-UI-002)
-Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, cost descriptions, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. This presentation change does not add a network or model call and does not change project data, review history, API paths, canonical status codes, algorithms, provider configuration, or the ¥300 budget. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
+Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, cost descriptions, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. This presentation change does not add a network or model call and does not change project data, review history, API paths, canonical status codes, algorithms, provider configuration, or budget state. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
 
 ## 24. 本轮增量：原文引用与独立核验
 采用成本优先方案A。新增逐字段citation、独立verification报告与付费重验任务，保留原始业务候选和人工审核状态。材料/检查/冲突字段关联原句；推导、计算、缺失报告仅标示其真实依据，不制造设计原句。

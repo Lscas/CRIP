@@ -138,7 +138,7 @@ def page(
                         + '</label></p>')
     key_required = "" if custom else " required"
     approval_text = ("I confirm the configured endpoint, model, rates, data transfer, and possible API charges after Start analysis is clicked" if custom else
-                     "I confirm the budget upper bounds and authorize the stated text/image transfer and API charges after Start analysis is clicked")
+                     "I confirm the provider rates and authorize the stated text/image transfer and API charges up to each project's user-selected budget limit")
     return f"""<!doctype html>
 <html lang=en><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
@@ -146,7 +146,7 @@ def page(
   <h1>Secure CIRP {profile.display_name} startup</h1>
   <p>This tool listens only on local address 127.0.0.1 and does not write the key to a URL, application log, or plaintext .env. Do not let the browser save the key.</p>
   {'' if custom else '<p>When Save is selected, the key is written only to a Windows DPAPI current-user encrypted file. Other Windows users and copies moved to another computer cannot decrypt it directly.</p>'}
-  {'' if custom else f'<p>The budget ledger uses conservative upper-bound rates: input ¥{profile.input_rate}/million tokens and output ¥{profile.output_rate}/million tokens. The cumulative project limit remains ¥300.</p>'}
+  {'' if custom else f'<p>The budget ledger uses conservative upper-bound rates: input ¥{profile.input_rate}/million tokens and output ¥{profile.output_rate}/million tokens. Each project keeps its user-selected cumulative limit.</p>'}
   {"<p><strong>Data disclosure:</strong> After Start analysis is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API. Page images and text calls share the same cumulative budget gate.</p>" if profile.provider == "deepseek" else ""}
 {notice}
 <form method=post action=/start autocomplete=off>
@@ -267,7 +267,7 @@ class SetupHandler(BaseHTTPRequestHandler):
             fields["api_key"] = [""]
             api_key = ""
             self._send(400, page(
-                self.server.csrf_token, message="Enter a new key and confirm the budget.",
+                self.server.csrf_token, message="Enter a new key and confirm the provider terms.",
                 profile=self.server.profile, remember=self.server.remember,
             ))
             return

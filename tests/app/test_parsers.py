@@ -81,6 +81,17 @@ def test_pdf_text_and_bbox(tmp_path):
     assert 'Provide' in r['fragments'][0]['text']
 
 
+def test_rich_text_page_with_decorative_rule_skips_vision_but_large_sheet_keeps_it(tmp_path):
+    from reportlab.pdfgen import canvas
+    text='Provide materials and execute inspections in accordance with the project specifications.'
+    ordinary=tmp_path/'ordinary.pdf';drawing=canvas.Canvas(str(ordinary))
+    drawing.drawString(72,700,text);drawing.line(72,680,500,680);drawing.save()
+    assert parse_file(ordinary,ordinary.name)['visual_tasks']==[]
+    large=tmp_path/'large.pdf';drawing=canvas.Canvas(str(large),pagesize=(1600,1000))
+    drawing.drawString(72,900,text);drawing.line(72,880,1500,880);drawing.save()
+    assert parse_file(large,large.name)['visual_tasks']==[{'page':1,'reason':'LARGE_FORMAT','status':'PENDING'}]
+
+
 def test_pdf_cropbox_is_the_only_rendered_and_analyzed_region(tmp_path,monkeypatch):
     """All page-derived locators are local to the same visible CropBox PNG."""
     from reportlab.pdfgen import canvas

@@ -350,9 +350,10 @@ Material Register 主要按 CSI Division/Section 组织。
 
 优先级：P1；状态：planned
 
-展示 Coverage、材料、QA/QC、冲突、缺失和审核进度。
+Show run coverage, current materials and QA review results, analysis percentage, estimated finish time, and human-review progress.
 
-- Dashboard 数据来自 Registers，不由模型另行编造。
+- Dashboard data comes from persisted run/register state and is not invented by a model.
+- While analysis is active, show a stage-weighted percentage and an elapsed-time ETA; label it as an estimate and show Estimating when there is not enough progress data.
 
 ## FR-API-001 · Provider abstraction
 
@@ -394,8 +395,8 @@ Material Register 主要按 CSI Division/Section 组织。
 
 产品端排队、分批和限流；不假定供应商具有Batch、background或文件检索能力。
 
-- 单项目多个有限并发任务。
-- 每次调用记入项目累计预算。
+- A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.
+- Paid model calls remain serial and every call is recorded in the project ledger.
 
 ## FR-API-006 · Customer-configurable OpenAI-compatible model
 
@@ -421,7 +422,8 @@ A local customer can start CIRP with a customer-selected OpenAI-compatible text 
 
 记录 provider、model、token、cost、latency、retry。
 
-- 每个 Analysis Run 可导出调用摘要。
+- Each Analysis Run can export a provider/model/token/cost/latency/retry summary.
+- The reviewer UI reports aggregate stage time, provider wait time, model response time, and processed page counts.
 
 ## NFR-SECURITY-001 · 基础安全
 
@@ -657,8 +659,8 @@ cheap角色默认使用deepseek-v4-flash且thinking disabled；用户明确选�
 
 纯文本模型不得假装读图；数字文字优先，必要图形进入视觉/OCR流程。
 
-- 视觉候选需供应商能力探针。
-- 高分辨率局部裁剪保留整页坐标和变换。
+- Vision candidates require a provider capability probe and are limited to large-format, low-text graphic, or dense-graphic pages.
+- High-resolution local crops preserve full-page coordinates and transforms.
 
 ## FR-CAPABILITY-001 · 实际API能力验证
 
@@ -669,14 +671,15 @@ cheap角色默认使用deepseek-v4-flash且thinking disabled；用户明确选�
 - 文档支持不等于用户密钥已开通。
 - 无视觉时未读图区域明确标记。
 
-## FR-BUDGET-001 · 300元项目预算
+## FR-BUDGET-001 · User-selected project budget limit
 
-优先级：P0；状态：planned
+优先级：P0；状态：implemented
 
-每项目跨重试及运行累计直接处理预算300CNY，触顶前拒发新付费任务。
+Each project has a user-selected cumulative CNY processing limit across runs and retries; new paid work is blocked before the selected limit is exceeded.
 
-- 已结算+未结算预留（含待对账，不重复相加）+新预估不得超预算。
-- 用户暂停时间不改变已花费用。
+- A new project defaults to CNY 300 and accepts a user-selected limit from CNY 0.01 through CNY 1,000,000.
+- The limit cannot be set below settled plus outstanding cost; unknown charges remain reserved and retries require a new reservation.
+- Every changed limit is audit-recorded, and a valid user change may unlock a budget-frozen project without resetting spent cost.
 
 ## FR-BUDGET-002 · 先预留再调用
 
@@ -873,8 +876,8 @@ Assume users and developers work in English. The application, setup flow, launch
 
 新增独立核验状态，与项目要求状态和人工批准状态分离。
 
-- 程序校验引用范围、文本片段及数值风险；小模型按每批最多4个字段复核含义。
-- 语义核验显式使用现有便宜模型的最低可用推理模式，推理token计入原项目300CNY预算。
+- Programmatic checks validate citation bounds, text fragments, and numeric risk; the small model verifies at most four fields per request and can combine fields from records with the same exact evidence scope.
+- Semantic verification uses the existing cheap model's lowest available reasoning mode and charges reasoning tokens to the user-selected project budget.
 - 无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。
 - 不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。
 

@@ -55,7 +55,9 @@ def test_original_actions_and_input_constraints_remain_present():
     expected = ('project-select', 'new-project', 'start', 'pause', 'resume', 'file-input', 'folder-input',
                 'filter', 'run-select', 'export-json', 'export-xlsx', 'drawer', 'project-form',
                 'reconciliation-panel', 'unresolved-calls', 'reconcile-dialog', 'reconcile-form',
-                'reconcile-resolution', 'reconcile-amount', 'reconcile-confirm')
+                'reconcile-resolution', 'reconcile-amount', 'reconcile-confirm', 'local-workers',
+                'budget-limit', 'save-budget', 'project-budget', 'performance',
+                'analysis-progress', 'progress-bar', 'progress-summary')
     assert all(id_ in byid for id_ in expected)
     assert byid['project-input'][1]['maxlength'] == '150'
     assert byid['file-input'][1]['type'] == 'file' and 'multiple' in byid['file-input'][1]
@@ -64,6 +66,10 @@ def test_original_actions_and_input_constraints_remain_present():
     assert byid['reconcile-confirm'][1]['required'] == ''
     assert byid['reconcile-note'][1]['maxlength'] == '1000'
     assert byid['resume'][1]['data-i18n-title'] == 'reconcile.resumePolicy'
+    assert byid['local-workers'][0] == 'select'
+    assert byid['budget-limit'][1]['max'] == byid['project-budget'][1]['max'] == '1000000'
+    assert byid['analysis-progress'][1]['role'] == 'progressbar'
+    assert byid['analysis-progress'][1]['aria-valuemax'] == '100'
 
 
 def test_reconciliation_ui_requires_provider_check_and_never_inserts_diagnostic_html():
