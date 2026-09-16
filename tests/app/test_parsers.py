@@ -289,6 +289,57 @@ def test_rfi_official_response_heading_is_an_explicit_response(tmp_path):
                for item in result['fragments'] if 'Provide Type L' in item['text'])
 
 
+def test_same_line_rfi_role_and_submittal_status_are_exact_metadata(tmp_path):
+    rfi_path=tmp_path/'coordination.txt'
+    rfi_path.write_text('RFI 42 - Response\nProvide Type L copper pipe.',encoding='utf-8')
+    rfi=parse_file(rfi_path,rfi_path.name)
+
+    message=EmailMessage();message['Subject']='Submittal 23-01 - Approved as Noted'
+    message.set_content('Pump P-1 product data follows.')
+    submittal_path=tmp_path/'coordination.eml';submittal_path.write_bytes(message.as_bytes())
+    submittal=parse_file(submittal_path,submittal_path.name)
+
+    repeated=EmailMessage();repeated['Subject']='RFI 43'
+    repeated.set_content('RFI-43-Official-Response\nCoordinate pipe supports.')
+    repeated_path=tmp_path/'repeated.eml';repeated_path.write_bytes(repeated.as_bytes())
+    repeated_rfi=parse_file(repeated_path,repeated_path.name)
+
+    assert (rfi['workflow_contexts'][0]['identifier'],rfi['workflow_contexts'][0]['role'])==(
+        '42','RESPONSE')
+    assert any('RFI 42 > RESPONSE' in item['locator']['section'] for item in rfi['fragments'])
+    assert (submittal['workflow_contexts'][0]['identifier'],
+            submittal['workflow_contexts'][0]['status'])==(
+        '23-01','APPROVED AS NOTED')
+    assert any('SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED' in item['locator']['section']
+               for item in submittal['fragments'] if item['locator']['native_element_id']=='email-body')
+    assert repeated_rfi['workflow_contexts'][0]['role']=='RESPONSE'
+    assert any('RFI 43 > RESPONSE' in item['locator']['section']
+               for item in repeated_rfi['fragments']
+               if item['locator']['native_element_id']=='email-body')
+
+
+def test_compact_filename_metadata_is_not_absorbed_into_workflow_identifier():
+    rfi=document_context('', 'RFI-42-Response.pdf')
+    submittal=document_context('', 'Submittal-23-01-Approved-As-Noted.pdf')
+    labeled=document_context('', 'Submittal-23-02-Status-Approved.pdf')
+
+    assert (rfi['identifier'],rfi['role'])==('42','RESPONSE')
+    assert (submittal['identifier'],submittal['status'])==('23-01','APPROVED AS NOTED')
+    assert (labeled['identifier'],labeled['status'])==('23-02','APPROVED')
+    assert workflow_references('RFI-42-Response\nSubmittal-23-01-Approved-As-Noted')==[
+        {'workflow_type':'RFI','identifier':'42'},
+        {'workflow_type':'SUBMITTAL','identifier':'23-01'},
+    ]
+
+
+def test_descriptive_same_line_workflow_titles_remain_neutral():
+    rfi=document_context('RFI 42 - Door Response Time 10 Days')
+    submittal=document_context('Submittal 23-01 - Pump Approved Alternate')
+
+    assert (rfi['identifier'],rfi['role'])==('42','UNKNOWN')
+    assert (submittal['identifier'],submittal['status'])==('23-01',None)
+
+
 @pytest.mark.parametrize(('source_status','expected_status'),[
     ('Draft','DRAFT'),
     ('Open In Review','OPEN IN REVIEW'),

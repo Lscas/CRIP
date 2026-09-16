@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-44'
+PARSER_VERSION='multisource-45'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -90,6 +90,11 @@ _SUBMITTAL_STATUS_MAP={
     'RETURNED FOR CORRECTION':'REVISE AND RESUBMIT','REVISE/RESUBMIT':'REVISE AND RESUBMIT',
     'SUBMITTED':'PENDING','FOR REVIEW':'PENDING','UNDER REVIEW':'PENDING',
 }
+_HEADER_COMPACT_ID=re.compile(r'(?=[A-Z0-9._/-]*\d)[A-Z0-9]+(?:[._/-][A-Z0-9]+)*',re.I)
+_HEADER_SPACED_SUBMITTAL_ID=re.compile(
+    r'\d{1,2}\s+\d{2}\s+\d{2}(?:\s*[-./]\s*[A-Z0-9][A-Z0-9._/-]{0,20})?',re.I)
+_HEADER_METADATA_SEPARATOR=re.compile(r'[\s._:/#-]+')
+_RFI_ROLE_LABELS={'OFFICIAL RESPONSE','QUESTION','REQUEST','RESPONSE','ANSWER','REPLY'}
 _HTML_QUOTE_START='\x00CIRP-QUOTED-HISTORY-START\x00'
 _HTML_QUOTE_END='\x00CIRP-QUOTED-HISTORY-END\x00'
 _HTML_SIGNATURE_START='\x00CIRP-EMAIL-SIGNATURE-START\x00'
@@ -169,13 +174,53 @@ def _rfi_status(value: str) -> str:
     return 'VOID' if normalized=='VOIDED' else normalized
 
 
+def _exact_header_identifier(workflow: str,value: str) -> str | None:
+    """Normalize only when the complete prefix is one exact workflow identifier."""
+    candidate=' '.join(value.upper().translate(str.maketrans({'–':'-','—':'-'})).strip().split())
+    valid=bool(_HEADER_COMPACT_ID.fullmatch(candidate))
+    if workflow=='SUBMITTAL':valid=valid or bool(_HEADER_SPACED_SUBMITTAL_ID.fullmatch(candidate))
+    return normalize_identifier(workflow,candidate) if valid else None
+
+
+def _workflow_header_context(workflow: str,value: str) -> dict | None:
+    """Separate an allowlisted trailing role/status from one exact header identifier."""
+    source=' '.join(str(value).translate(str.maketrans({'–':'-','—':'-'})).strip().split())
+    matches=[]
+    for separator in reversed(list(_HEADER_METADATA_SEPARATOR.finditer(source))):
+        identifier=_exact_header_identifier(workflow,source[:separator.start()])
+        if not identifier:continue
+        label=' '.join(re.sub(r'[._:/#-]+',' ',source[separator.end():]).upper().split())
+        score=len(label.split())
+        if workflow=='RFI' and label in _RFI_ROLE_LABELS:
+            role=_rfi_role(label)
+            matches.append((score,
+                {'document_type':'RFI_RESPONSE' if role=='RESPONSE' else 'RFI_QUESTION',
+                 'workflow_type':'RFI','identifier':identifier,'role':role,'status':None}))
+        if workflow=='SUBMITTAL':
+            label=re.sub(r'^(?:STATUS|SUBMITTAL (?:STATUS|RESPONSE)|REVIEW RESPONSE|FINAL RESPONSE)\s+',
+                         '',label)
+            status=_SUBMITTAL_STATUS.fullmatch('Status: '+label)
+            if status:
+                matches.append((score,
+                    {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',
+                     'identifier':identifier,'role':'SUBMITTAL',
+                     'status':_submittal_status(status.group(1))}))
+    if matches:return max(matches,key=lambda item:item[0])[1]
+    identifier=normalize_identifier(workflow,source)
+    if not identifier:return None
+    return {'document_type':'OTHER' if workflow=='RFI' else 'SUBMITTAL',
+            'workflow_type':workflow,'identifier':identifier,
+            'role':'UNKNOWN' if workflow=='RFI' else 'SUBMITTAL','status':None}
+
+
 def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int,
                     *, stop_cross_type: bool = True) -> str:
     """Stop inheritance at a different exact section; a valid Subject may own cross-type body fields."""
     boundaries=[]
     for other_workflow,pattern in (('RFI',_RFI_HEADER),('SUBMITTAL',_SUBMITTAL_HEADER)):
         for match in pattern.finditer(text,start):
-            other=normalize_identifier(other_workflow,match.group(1))
+            other_context=_workflow_header_context(other_workflow,match.group(1))
+            other=other_context.get('identifier') if other_context else None
             different=(other_workflow==workflow and other!=identifier)
             cross_type=(stop_cross_type and other_workflow!=workflow)
             if other and (different or cross_type):
@@ -186,14 +231,10 @@ def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int
 def _explicit_line_context(line: str) -> dict | None:
     rfi=_RFI_HEADER.match(line)
     if rfi:
-        identifier=normalize_identifier('RFI',rfi.group(1))
-        if identifier:return {'document_type':'OTHER','workflow_type':'RFI','identifier':identifier,
-                              'role':'UNKNOWN','status':None}
+        if context:=_workflow_header_context('RFI',rfi.group(1)):return context
     submittal=_SUBMITTAL_HEADER.match(line)
     if submittal:
-        identifier=normalize_identifier('SUBMITTAL',submittal.group(1))
-        if identifier:return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',
-                              'identifier':identifier,'role':'SUBMITTAL','status':None}
+        if context:=_workflow_header_context('SUBMITTAL',submittal.group(1)):return context
     return None
 
 
@@ -214,7 +255,8 @@ def workflow_references(text: str) -> list[dict]:
         offset=0
         while match:=pattern.search(searchable,offset):
             offset=match.start()+1
-            identifier=normalize_identifier(workflow,match.group(1))
+            context=_workflow_header_context(workflow,match.group(1))
+            identifier=context.get('identifier') if context else None
             if not identifier:continue
             identity=(workflow,identifier.casefold())
             if identity in seen:continue
@@ -243,11 +285,17 @@ def document_context(text: str, original_name: str = '') -> dict:
                       r'(?:[\s_.#-]+(?:NO\.?|NUMBER))?[\s_.#-]*([A-Z0-9][A-Z0-9._/-]{0,30})?',
                       Path(original_name).stem)
     if rfi is not None:
-        identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
+        header=_workflow_header_context('RFI',rfi.group(1) if rfi.lastindex else '')
+        identifier=header.get('identifier') if header else None
         scope=(_workflow_scope(searchable,'RFI',identifier,rfi.end(),
                                stop_cross_type=not primary_from_subject)
                if rfi_in_text else searchable)
         roles={_rfi_role(value) for value in _RFI_ROLE.findall(scope)}
+        if header and header.get('role')!='UNKNOWN':roles.add(header['role'])
+        for match in _RFI_HEADER.finditer(scope):
+            repeated=_workflow_header_context('RFI',match.group(1))
+            if repeated and repeated.get('identifier')==identifier and repeated.get('role')!='UNKNOWN':
+                roles.add(repeated['role'])
         statuses=sorted({_rfi_status(value) for value in _RFI_STATUS.findall(scope)})
         role='MIXED' if len(roles)>1 else next(iter(roles),'UNKNOWN')
         document_type=('RFI_RESPONSE' if role in {'RESPONSE','MIXED'} else
@@ -261,11 +309,18 @@ def document_context(text: str, original_name: str = '') -> dict:
                             r'([A-Z0-9][A-Z0-9\s._/-]{0,80})?',
                             Path(original_name).stem)
     if submittal is not None:
-        identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
+        header=_workflow_header_context('SUBMITTAL',submittal.group(1) if submittal.lastindex else '')
+        identifier=header.get('identifier') if header else None
         scope=(_workflow_scope(searchable,'SUBMITTAL',identifier,submittal.end(),
                                stop_cross_type=not primary_from_subject)
                if submittal_in_text else searchable)
         statuses=sorted({_submittal_status(value) for value in _SUBMITTAL_STATUS.findall(scope)})
+        if header and header.get('status'):statuses.append(header['status'])
+        for match in _SUBMITTAL_HEADER.finditer(scope):
+            repeated=_workflow_header_context('SUBMITTAL',match.group(1))
+            if repeated and repeated.get('identifier')==identifier and repeated.get('status'):
+                statuses.append(repeated['status'])
+        statuses=sorted(set(statuses))
         return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,
                 'role':'SUBMITTAL','status':' / '.join(statuses) or None}
     return {'document_type':'UNKNOWN','workflow_type':None,'identifier':None,'role':None,'status':None}

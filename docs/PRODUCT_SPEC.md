@@ -40,7 +40,7 @@ Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode t
 
 Email routing headers, quoted history and recognized signatures remain stored and reviewable, but they complete as no-current-requirement before extraction batching. Different exact RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the adjacent batch so they cannot share one extraction prompt. Only eligible current evidence reaches the model; Coverage reports locally skipped fragments.
 
-没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。
+没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。紧邻精确编号的现有白名单RFI角色或Submittal状态从编号中分离并进入locator；额外描述和未知标签保持中性。
 
 `Request for Information`完整名称与`RFI`缩写采用同一含数字编号规则并形成相同精确引用关系。
 

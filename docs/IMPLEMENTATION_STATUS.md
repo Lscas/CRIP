@@ -3,18 +3,18 @@
 
 | 模块 | 当前实际行为 | 未完成 |
 |---|---|---|
-| Upload | Browser files/folders; customer-configured read-only Autodesk APS/Procore selected-file import; reviewer-selected EML/MSG attachment import with parent provenance; 4 MiB chunks, project capacity, SHA-256 and content deduplication | 10 GB stress test, interrupted-upload cleanup, cloud object storage, virus scanning, automatic/recursive email attachment import, interactive OAuth/refresh, change polling and live-tenant acceptance |
-| 项目/任务 | SQLite WAL、事务、单运行锁、输入快照、暂停/恢复/取消/中断状态；每个运行可选1/2/4个本地worker并记录阶段耗时、已处理页数和模型等待/响应汇总 | 多租户/生产任务队列、进程级资源隔离；真实客户文件吞吐仍需逐项目基准 |
-| Parsing | TXT/DOCX; EML/MSG body/history/signature, headers, exact Gmail/Outlook wrappers, shared MIME-derived attachment names, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, bounded splitting/progress, exact sequential workflow scope and equivalent 1/2/4-worker page chunks | Mailbox sync, recursive attachments, semantic threads, unknown quote/signature wrappers, borderless/cross-page tables, multi-column order, revision/comments, footnotes and graphic semantics |
+| Upload | Browser files/folders; read-only Autodesk/Procore selected imports; selected EML/MSG attachments with parent provenance; 4 MiB chunks, capacity, SHA-256 and deduplication | 10 GB stress, cleanup, object storage, virus scan, recursive email imports, OAuth/refresh, polling and live-tenant acceptance |
+| 项目/任务 | SQLite WAL/事务/单运行锁/输入快照；暂停/恢复/取消/中断；运行可选1/2/4 workers并记录页数和阶段/模型耗时 | 多租户队列、进程隔离；真实文件吞吐基准 |
+| Parsing | TXT/DOCX; EML/MSG headers/body/history/signature, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, bounded progress, sequential workflow scope and equivalent 1/2/4-worker chunks | Mailbox/recursive attachments/semantic threads, unknown wrappers, borderless/cross-page tables, multi-column order, revisions/comments, graphic semantics |
 
-EML: one plain/HTML body and related root. Resources/history/signatures/nested messages stay inert; unnamed imports use MIME extensions. Different exact workflow scopes neither cross-donate fields nor share a prompt; valid Subject priority remains.
+EML: one plain/HTML body and related root; resources/history/signatures/nested messages stay inert. Same-line allowlisted metadata stays outside IDs; descriptions stay neutral. Exact scopes do not cross-donate fields or prompts; valid Subject priority remains.
 | 图片/DWG | 常见图片本机OCR并建立视觉任务；DXF对象元数据；GNU LibreDWG本机DWG→DXF后按对象解析，转换和对象解析均成功时标记`OBJECT_METADATA`，否则`UNAVAILABLE`；原文件不改 | DWG Xref/自定义对象/字体完整恢复、复杂Layout；真实用户DWG仍需样本验收 |
 | Model | Mock; DeepSeek text/selective vision; Gemini text; configurable OpenAI-compatible or loopback local text model; extraction batches ≤4 fragments/8.8 KB inside one ordinary/exact workflow scope; routing-only Email closes locally; verification ≤4 fields per exact evidence scope | Generic-adapter vendor parameters/vision, model discovery, non-loopback LAN, drawing-region detection, live crop/batch comparison, construction benchmark and L2 escalation |
-| 材料/QA | 原子文本要求到受控候选；同明确Tag属性比较；字段证据；Spec locator可补充CSI Section；发布前确定性逐条排除属性标题/泛称材料名、非执行QA、重复属性、证据范围错挂、跨文档/非相邻属性引用、RFI问句、被拒Submittal、邮件头和引用历史直接证据，混合来源中仍有有效依据的候选/属性予以保留；全部剩余RFI答复、Submittal与Email正文来源共同决定条件性和人工审核，不只读取第一条证据 | 完整产品选项、实体多视图归并、结构化数量映射、复杂条件和广义语义质量评估；RFI/Submittal审批权限及语义关系裁决 |
+| 材料/QA | 原子要求、Tag属性、字段证据、CSI locator；发布前排除泛称、非执行QA、重复/错挂证据、RFI问句、被拒Submittal、邮件头/历史，保留混合来源中的有效依据；全部有效RFI答复/Submittal/Email正文决定条件性和人工审核 | 完整选项、实体归并、结构化数量、复杂条件/广义语义评估；审批权限和语义关系裁决 |
 | 冲突 | 同Tag/属性/单位的不同值；按可用内部日期采用新值并保留差异 | 单位等值、广义跨专业冲突和设计状态解释 |
 | 缺失 | 未解析/未分析/关联上下文缺失明确列出 | 自动判断所有设计缺失的完整性 |
 | 审核/导出 | 来源原文/定位及页面图；接受/编辑/拒绝、CAS冲突检测、历史；固定英文JSON/XLSX工程审核视图，名称/数量/单位分列、证据随项、冲突双方原文来源并排；已保存CAD量算按需显示 | 量算候选的专用接受/驳回事件、全套专业交互、跨Run编辑继承（已暂缓） |
-| 成本 | 原子预留/核销；未知费用暂停；人工核对与审计；预算超额冻结；项目上限¥0.01–1,000,000，默认¥300且不低于承诺金额；DeepSeek ¥107.047278已结清，Gemini ¥0.237238保留；DPAPI保存live密钥 | 自动供应商账单、外部OCR/CAD费用；DPAPI密文不可迁移 |
+| 成本 | 原子预留/核销、未知费用暂停、超额冻结；项目上限¥0.01–1,000,000，默认¥300且不低于承诺；已记录DeepSeek/Gemini账本；DPAPI保存live密钥 | 自动供应商账单、外部OCR/CAD费用；DPAPI密文不可迁移 |
 | Codex | 小AGENTS、分目录规则、任务包、定向测试、有界摘要 | 不控制账户实际模型价格/总token，无实际子模型委派 |
 
 RFI角色只由明确Question/Response形成，UNKNOWN保持中性。Submittal正文与精确引用为LINKED；邮件自引用为AMBIGUOUS；附件关系只来自EMAIL父文档。

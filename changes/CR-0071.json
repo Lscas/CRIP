@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0071",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-001",
+    "FR-PARSE-007",
+    "FR-CLASS-001",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Separate exact same-line RFI roles and Submittal statuses from their workflow identifiers across supported local content.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "Offline reproductions lose same-line workflow metadata and absorb compact filename suffixes into identifiers",
+    "Existing exact identifier normalization and role/status allowlists define a conservative reusable boundary"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-056.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0071.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only an existing allowlisted role or status immediately following an exact identifier is separated.",
+    "Free-form descriptions and unknown provider-specific status labels remain unchanged and require review.",
+    "The change does not infer approval authority, precedence or relationships between documents.",
+    "Validation is synthetic and offline; no customer document, external provider or paid model is used."
+  ]
+}

@@ -74,3 +74,7 @@ Adjacent `RFI 42 > QUESTION` and `SUBMITTAL 23-01 > STATUS: APPROVED` fragments 
 ## CR-0070 multi-page workflow-scope fixture
 
 A six-page generic-name PDF previously lost `RFI 42 > RESPONSE` on continuation pages 2–5. Ordered merge now carries the scope, adds `STATUS: CLOSED` on page 5 and replaces it with exact `Submittal 23-01` on page 6; 1/2/4-worker locators match without rereading the PDF. This is a synthetic structural check.
+
+## CR-0071 same-line workflow metadata fixture
+
+Synthetic text, Email and compact filenames previously lost same-line role/status or absorbed it into the identifier. Existing allowlists now separate exact metadata while descriptive titles stay neutral. This is an offline parser check, not semantic or live-provider validation.
