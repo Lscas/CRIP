@@ -36,8 +36,24 @@ def deterministic_extraction_skip_reason(evidence: dict) -> str | None:
         return 'EMAIL_SIGNATURE_EVIDENCE'
     return None
 
+def _workflow_batch_scope(evidence: dict) -> str | None:
+    parts=[' '.join(part.upper().split()) for part in
+           str((evidence.get('locator') or {}).get('section') or '').split(' > ')]
+    for index,part in enumerate(parts):
+        workflow=next((name for name in ('RFI','SUBMITTAL')
+                       if part.startswith(name+' ') and any(char.isdigit() for char in part)),None)
+        if not workflow:continue
+        scope=[part];following=parts[index+1:]
+        if workflow=='RFI' and following and following[0] in {'QUESTION','RESPONSE','UNKNOWN','MIXED'}:
+            scope.append(following.pop(0))
+        if following and following[0].startswith('STATUS: '):scope.append(following[0])
+        return ' > '.join(scope)
+    return None
+
 def _adjacent_evidence(left: dict, right: dict) -> bool:
     if left.get('document_id')!=right.get('document_id'):return False
+    left_scope=_workflow_batch_scope(left);right_scope=_workflow_batch_scope(right)
+    if (left_scope or right_scope) and left_scope!=right_scope:return False
     a=left.get('locator') or {};b=right.get('locator') or {}
     ap=a.get('page_number');bp=b.get('page_number')
     if type(ap) is int and type(bp) is int:return 0<=bp-ap<=1

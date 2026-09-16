@@ -585,15 +585,28 @@ def test_selected_local_workers_parse_two_documents_concurrently(client,project,
 
 
 def test_adjacent_extraction_batching_is_bounded_and_respects_legacy_single_tasks():
-    def evidence(number,page,text='x'):
+    def evidence(number,page,text='x',section=None):
         return {'evidence_id':f'EV-{number}','document_id':'DOC-1','raw_text':text,
-                'locator':{'page_number':page}}
+                'locator':{'page_number':page,'section':section}}
     items=[(None,evidence(number,page)) for number,page in enumerate((1,1,2,3,4),1)]
 
     assert [len(batch) for batch in adjacent_extraction_batches(items)]==[4,1]
     assert [len(batch) for batch in adjacent_extraction_batches(items,{'EV-2'})]==[1,1,3]
     assert [len(batch) for batch in adjacent_extraction_batches([
         (None,evidence(1,1,'x'*5000)),(None,evidence(2,1,'y'*5000))])]==[1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='EMAIL > BODY > RFI 42 > RESPONSE')),
+        (None,evidence(2,1,section='EMAIL > BODY > RFI 42 > RESPONSE'))])]==[2]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='EMAIL > BODY > RFI 42 > QUESTION')),
+        (None,evidence(2,1,section='EMAIL > BODY > RFI 42 > RESPONSE')),
+        (None,evidence(3,1,section='EMAIL > BODY > SUBMITTAL 23-01 > STATUS: APPROVED'))])]==[1,1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='SUBMITTAL 23-01 > STATUS: APPROVED')),
+        (None,evidence(2,1,section='SUBMITTAL 23-01 > STATUS: REJECTED'))])]==[1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='RFI 42 > RESPONSE')),
+        (None,evidence(2,1,section='23 00 00 > PART 2'))])]==[1,1]
 
 
 def test_mock_run_combines_adjacent_text_fragments_once(client,project,monkeypatch):

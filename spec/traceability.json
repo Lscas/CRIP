@@ -880,7 +880,7 @@
         "scripts/benchmark_local_parse.py"
       ],
       "verification_report": "docs/PERFORMANCE_BASELINE.md",
-      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family; email headers, recognized history and signatures close locally before batching, and a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
+      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally, and a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
     },
     {
       "requirement_id": "FR-API-006",

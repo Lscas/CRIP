@@ -66,3 +66,7 @@ Two synthetic Submittal emails exercise a nested Gmail quote class and Outlook `
 ## CR-0054 signature-boundary accuracy fixture
 
 A synthetic RFI reply contains one valid current material and one equipment-like company name inside a Gmail signature. Before separation, both lines reached extraction and the mock contract published two material candidates. The signature now remains reviewable evidence, is counted as locally skipped, cannot add an `RFI 999` relationship, and never enters extraction; the valid current material remains the sole record. A second fixture covers the strict plain-text `-- ` delimiter, and HTML text after a closed signature resumes as current. This measures a deterministic boundary, not universal signature detection, live-model accuracy, latency or billing.
+
+## CR-0068 workflow extraction-scope fixture
+
+Two physically adjacent synthetic fragments with `RFI 42 > QUESTION` and `SUBMITTAL 23-01 > STATUS: APPROVED` locators previously formed one extraction batch. The shared adjacency check now closes the batch when the exact RFI/Submittal identifier, role, status or family differs. A matching `RFI 42 > RESPONSE` pair still forms one batch, and ordinary PDF/spec evidence retains the existing four-fragment/8.8 KB limits. This is an offline deterministic prompt-boundary check, not a live-model accuracy or latency benchmark.

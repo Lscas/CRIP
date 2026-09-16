@@ -17,7 +17,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.
 - Optional local OCR, selective full-page or high-resolution schedule-table visual analysis, DXF/CAD metadata, and review-only quantity candidates.
 - Local human review and a project cost ledger with a user-selected CNY dispatch cap (CNY 300 for new projects by default).
-- User-selectable 1, 2, or 4 local workers across documents or bounded page chunks inside one PDF, selective vision routing, adjacent-evidence extraction batching, evidence-scope verification batching, and visible stage/model timing.
+- User-selectable 1, 2, or 4 local workers across documents or bounded page chunks inside one PDF, selective vision routing, adjacent-evidence extraction batching inside one ordinary or exact RFI/Submittal scope, evidence-scope verification batching, and visible stage/model timing.
 - The workflow reviewer reads only nine relationship fields from each parser summary through SQLite's bundled JSON projection; large page, vision, CAD and geometry arrays are not transferred to Python for RFI/Submittal/Email indexing. The browser shows loaded/total workflow groups and appends reviewer-requested 500-group pages without duplicate group IDs instead of silently treating the first 500 as complete.
 - Deterministic pre-publication checks for clear material-name, QA-activity, duplicate-property, evidence-scope, and mixed workflow-source errors. Invalid RFI-question, rejected-Submittal, email-header, or quoted-history citations are removed individually while valid direct support is preserved; every remaining workflow source contributes to the visible conditional status.
 - Native PDF page routing with specification Section/Part/clause locators and bordered table rows kept as coordinate-backed evidence. Borderless and cross-page tables still require review.
@@ -87,7 +87,7 @@ The publication recovery was validated from a clean local environment with:
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.
 - Requirements/specification synchronization passed.
-- The source bundle manifest passed for 360 files.
+- The source bundle manifest passed for 362 files.
 
 No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
 

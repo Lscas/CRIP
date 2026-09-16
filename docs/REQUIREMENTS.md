@@ -468,7 +468,7 @@ Show run coverage, current materials and QA review results, analysis percentage,
 
 - A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.
 - A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.
-- Up to four adjacent eligible evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family; email headers, recognized history and signatures close locally before batching.
+- Up to four adjacent fragments/8.8 KB batch only inside one ordinary or exact workflow scope; an RFI/Submittal ID, role, status or family change closes the batch, and routing-only Email evidence closes locally.
 - Paid model calls remain serial and every call is recorded in the project ledger.
 
 ## FR-API-006 · Customer-configurable OpenAI-compatible model
