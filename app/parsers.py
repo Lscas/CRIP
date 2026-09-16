@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-46'
+PARSER_VERSION='multisource-47'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -360,13 +360,13 @@ def annotate_workflow_fragments(fragments: list[Fragment], text: str, original_n
     return context
 
 
-def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
-                         text: str, original_name: str, *, prefix: str | None = None
-                         ) -> tuple[list[Fragment],dict]:
-    """Split explicit workflow sections before ordinary size batching."""
-    context=document_context(text,original_name);active={**context};groups=[];start=0;buffer=[]
+def _split_workflow_groups(lines: list[str],loc: dict,method: str,rev: tuple,
+                           primary: dict,active: dict,*,prefix: str | None = None
+                           ) -> tuple[list[Fragment],dict]:
+    """Split exact workflow boundaries and return the state for the next native element."""
+    groups=[];start=0;buffer=[]
     for index,line in enumerate(lines):
-        explicit=_preserve_primary_fields(_explicit_line_context(line),context);prospective=explicit or active
+        explicit=_preserve_primary_fields(_explicit_line_context(line),primary);prospective=explicit or active
         role=_RFI_ROLE.match(line) if prospective.get('workflow_type')=='RFI' else None
         workflow=prospective.get('workflow_type')
         status=(_RFI_STATUS.match(line) if workflow=='RFI' else
@@ -386,6 +386,15 @@ def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
         section=' > '.join(value for value in
                            (prefix,_workflow_label(local_context),loc.get('section')) if value)
         fragments.extend(split_lines(group,{**loc,'section':section or None},method,rev,offset))
+    return fragments,active
+
+
+def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
+                         text: str, original_name: str, *, prefix: str | None = None
+                         ) -> tuple[list[Fragment],dict]:
+    """Split explicit workflow sections before ordinary size batching."""
+    context=document_context(text,original_name)
+    fragments,_=_split_workflow_groups(lines,loc,method,rev,context,{**context},prefix=prefix)
     return fragments,context
 
 
@@ -978,7 +987,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
             body=root.find('w:body',ns)
             if body is None: raise ValueError('缺少DOCX正文')
             full='\n'.join(root.itertext());rev=revision(full)
-            count=0
+            context=document_context(full,original_name);active={**context};count=0
             for n,element in enumerate(body,1):
                 lines=[]
                 for p in element.findall('.//w:p',ns) if element.tag.endswith('}tbl') else [element]:
@@ -988,12 +997,14 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 if not lines:continue
                 count+=sum(map(len,lines))
                 if count>MAX_CHARS:warnings.append('DOCX超出解析字符限额，后续内容未处理。');break
-                fragments.extend(split_lines(lines,locator(native_element_id=f'body-element-{n}'), 'DOCX',rev))
+                grouped,active=_split_workflow_groups(
+                    lines,locator(native_element_id=f'body-element-{n}'),'DOCX',rev,
+                    context,active)
+                fragments.extend(grouped)
             if any(m.filename.startswith('word/media/') for m in members): warnings.append('DOCX内嵌图片未分析。')
             if root.findall('.//w:ins',ns) or root.findall('.//w:del',ns):warnings.append('DOCX含修订痕迹，接受状态未判定，需人工检查原件。')
             if any(re.match(r'word/(header|footer|comments|footnotes|endnotes)',m.filename) for m in members):warnings.append('DOCX页眉/页脚/批注/注脚等附属内容未提取。')
             warnings.append('DOCX仅正文与表格文字；表格合并关系和父条款继承未完成。')
-            context=annotate_workflow_fragments(fragments,full,original_name)
             if context.get('workflow_type'):workflow_contexts.append(context)
             workflow_refs.extend(workflow_references(full))
             pages=[{'page':None,'status':'BODY_TEXT_EXTRACTED','document_type':context['document_type']}]

@@ -86,3 +86,7 @@ Three synthetic Email status lines beginning with Approved, Pending or Rejected 
 ## CR-0073 selected Email attachment batch fixture
 
 A synthetic EML with two supported attachments now needs one parse and one explicit import request instead of two parses and two requests. Both attachment identities are prevalidated before upload creation; an invalid hash or duplicate index leaves the manifest unchanged. This is a structural offline fixture, not a mailbox, customer-file, storage-throughput or live-provider benchmark.
+
+## CR-0074 DOCX workflow-table accuracy fixture
+
+One synthetic Word table containing `RFI 42 > QUESTION` followed by `SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED` previously produced one fragment labeled entirely as the Submittal. It now produces separate evidence scopes with the original native table element and non-overlapping line ranges. This is an offline boundary check, not a complete Word-structure or construction-accuracy benchmark.

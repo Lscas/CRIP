@@ -5,7 +5,7 @@
 |---|---|---|
 | Upload | Browser files/folders; Autodesk/Procore selected imports; selected/batched EML/MSG attachments with prevalidation and parent provenance; 4 MiB chunks, capacity, SHA-256 and deduplication | 10 GB stress, cleanup, object storage, virus scan, recursive email imports, OAuth/refresh, polling and live-tenant acceptance |
 | 项目/任务 | SQLite WAL/事务/单运行锁/输入快照；暂停/恢复/取消/中断；运行可选1/2/4 workers并记录页数和阶段/模型耗时 | 多租户队列、进程隔离；真实文件吞吐基准 |
-| Parsing | TXT/DOCX; EML/MSG headers/body/history/signature, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, bounded progress, sequential workflow scope and equivalent 1/2/4-worker chunks | Mailbox/recursive attachments/semantic threads, unknown wrappers, borderless/cross-page tables, multi-column order, revisions/comments, graphic semantics |
+| Parsing | TXT; scoped DOCX text/tables; EML/MSG body/history/signature, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, progress, sequential workflow scope and equivalent 1/2/4 workers | Mailbox/recursive attachments/semantic threads, unknown wrappers, borderless/cross-page tables, multi-column order, revisions/comments, graphic semantics |
 
 EML: one body/related root; resources/history/signatures/nested messages stay inert. Same-line metadata stays outside IDs; statuses require complete allowlisted values and descriptions stay neutral. Exact scopes do not cross-donate fields/prompts; valid Subject priority remains.
 | 图片/DWG | 常见图片本机OCR并建立视觉任务；DXF对象元数据；GNU LibreDWG本机DWG→DXF后按对象解析，转换和对象解析均成功时标记`OBJECT_METADATA`，否则`UNAVAILABLE`；原文件不改 | DWG Xref/自定义对象/字体完整恢复、复杂Layout；真实用户DWG仍需样本验收 |

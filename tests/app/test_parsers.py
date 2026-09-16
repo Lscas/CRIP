@@ -833,6 +833,57 @@ def test_docx_minimal(tmp_path):
     r=parse_file(p,p.name);assert len(r['fragments'])==2 and r['status']=='PARTIAL'
     assert r['fragments'][1]['locator']['native_element_id']=='body-element-2'
 
+
+@pytest.mark.parametrize('paragraphs,expected_type,expected_context,section',[
+    ([['RFI ','42'],['Official ','Response:'],['Use Type L copper.']],
+     'RFI_RESPONSE',{'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None},
+     'RFI 42 > RESPONSE'),
+    ([['Submittal ','23-01'],['Status: ','Approved as Noted'],['Pump P-1 data.']],
+     'SUBMITTAL',{'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL',
+                  'status':'APPROVED AS NOTED'},'SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED'),
+])
+def test_docx_styled_runs_share_one_logical_workflow_text(
+        tmp_path,paragraphs,expected_type,expected_context,section):
+    paragraphs=[*paragraphs,['Revision ','Date: ','2026-09-16']]
+    body=''.join('<w:p>'+''.join(
+        f'<w:r><w:t xml:space="preserve">{text}</w:t></w:r>' for text in runs)+'</w:p>'
+                 for runs in paragraphs)
+    xml=('''<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'''
+         f'<w:body>{body}</w:body></w:document>')
+    path=tmp_path/'styled.docx'
+    with zipfile.ZipFile(path,'w') as archive:archive.writestr('word/document.xml',xml)
+
+    result=parse_file(path,path.name)
+
+    assert result['document_type']==expected_type
+    assert [{key:item.get(key) for key in expected_context}
+            for item in result['workflow_contexts']]==[expected_context]
+    assert {'workflow_type':expected_context['workflow_type'],
+            'identifier':expected_context['identifier']} in result['workflow_references']
+    assert any(section in (item['locator']['section'] or '') for item in result['fragments'])
+    assert all(item['internal_revision_date']=='2026-09-16' for item in result['fragments'])
+
+
+def test_docx_table_splits_rfi_and_submittal_evidence_scopes(tmp_path):
+    lines=['RFI 42','Question:','May PVC be used?','Submittal 23-01',
+           'Status: Approved as Noted','Pump P-1 product data.']
+    rows=''.join('<w:tr><w:tc><w:p><w:r><w:t>'+text+'</w:t></w:r></w:p></w:tc></w:tr>'
+                 for text in lines)
+    xml=('''<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'''
+         f'<w:body><w:tbl>{rows}</w:tbl></w:body></w:document>')
+    path=tmp_path/'workflow-table.docx'
+    with zipfile.ZipFile(path,'w') as archive:archive.writestr('word/document.xml',xml)
+
+    result=parse_file(path,path.name)
+    question=next(item for item in result['fragments'] if 'May PVC be used?' in item['text'])
+    product=next(item for item in result['fragments'] if 'Pump P-1 product data.' in item['text'])
+
+    assert 'RFI 42 > QUESTION' in question['locator']['section']
+    assert 'SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED' in product['locator']['section']
+    assert question['locator']['native_element_id']==product['locator']['native_element_id']=='body-element-1'
+    assert question['locator']['text_line_end']<product['locator']['text_line_start']
+
+
 def test_docx_entity_rejected(tmp_path):
     p=tmp_path/'x.docx'
     with zipfile.ZipFile(p,'w') as z:z.writestr('word/document.xml','<!DOCTYPE x [<!ENTITY y SYSTEM "file:///etc/passwd">]><x>&y;</x>')

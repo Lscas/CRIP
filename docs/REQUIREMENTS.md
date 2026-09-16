@@ -88,6 +88,7 @@
 保留 DOCX 标题、段落、列表、表格和图片关系。
 
 - 输出 Canonical fragments 具有结构 metadata。
+- A DOCX table containing consecutive exact RFI/Submittal sections splits role and status boundaries into separate evidence fragments while retaining native element and line locators.
 
 ## FR-PARSE-004 · TXT 解析
 

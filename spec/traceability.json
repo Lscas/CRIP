@@ -142,11 +142,16 @@
       "planned_product_modules": [
         "app/parse"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "partial_offline_synthetic_docx",
+      "implemented_product_paths": [
+        "app/parsers.py"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "DOCX body paragraphs and table text retain native element and line locators. Exact RFI/Submittal identifier, role and status changes now split one table into separate evidence fragments while workflow state continues across body elements. Complete heading, list, merged-table, image, header/footer, revision and comment structure remains planned."
     },
     {
       "requirement_id": "FR-PARSE-004",
