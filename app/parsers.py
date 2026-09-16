@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-14'
+PARSER_VERSION='multisource-15'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -150,8 +150,14 @@ def workflow_references(text: str) -> list[dict]:
 def document_context(text: str, original_name: str = '') -> dict:
     """Return a conservative workflow label; it is routing metadata, not approval."""
     searchable=text[:80_000]
-    rfi=_RFI_HEADER.search(searchable) or _EMAIL_RFI_SUBJECT.search(searchable)
-    if not rfi:
+    rfi_subject=_EMAIL_RFI_SUBJECT.search(searchable)
+    submittal_subject=_EMAIL_SUBMITTAL_SUBJECT.search(searchable)
+    if rfi_subject:rfi=rfi_subject;submittal=None
+    elif submittal_subject:rfi=None;submittal=submittal_subject
+    else:
+        rfi=_RFI_HEADER.search(searchable)
+        submittal=None if rfi else _SUBMITTAL_HEADER.search(searchable)
+    if not rfi and not submittal:
         rfi=re.search(r'(?i)(?:^|[\s_.-])RFI(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',
                       Path(original_name).stem)
     if rfi is not None:
@@ -164,7 +170,6 @@ def document_context(text: str, original_name: str = '') -> dict:
                        'RFI_QUESTION' if role=='QUESTION' else 'OTHER')
         return {'document_type':document_type,
                 'workflow_type':'RFI','identifier':identifier,'role':role,'status':None}
-    submittal=_SUBMITTAL_HEADER.search(searchable) or _EMAIL_SUBMITTAL_SUBJECT.search(searchable)
     if not submittal:
         submittal=re.search(r'(?i)(?:^|[\s_.-])SUBMITTAL(?:[\s_.#-]+([A-Z0-9][A-Z0-9\s._/-]{0,80}))?',
                             Path(original_name).stem)

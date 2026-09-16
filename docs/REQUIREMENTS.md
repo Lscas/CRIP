@@ -125,6 +125,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
 - Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.
+- Primary workflow routing uses explicit email Subject before explicit body heading before filename; different exact identifiers remain references instead of overriding a stronger source.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
 - An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
@@ -141,6 +142,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 
 - RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous; UNKNOWN page contexts do not manufacture a missing Question or Response role.
 - Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
+- For email documents, stronger Subject or body routing metadata forms the primary workflow group while different exact identifiers from weaker body or filename metadata form reference-only groups.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.

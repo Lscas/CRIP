@@ -85,6 +85,23 @@ def test_forwarded_email_subject_keeps_exact_workflow_identifier():
     assert context['identifier']=='9' and context['role']=='RESPONSE'
 
 
+def test_explicit_submittal_subject_wins_over_body_rfi_reference(tmp_path):
+    message=EmailMessage();message['Subject']='Submittal 23 05 00-01';message.set_content(
+        'RFI 42\nStatus: Approved as noted\nResponse package attached separately.')
+    path=tmp_path/'RFI-42.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+
+    assert (result['workflow_type'],result['document_identifier'],result['workflow_status'])==(
+        'SUBMITTAL','23 05 00-01','APPROVED AS NOTED')
+    assert result['workflow_contexts'][0]['role']=='SUBMITTAL'
+    assert {'workflow_type':'RFI','identifier':'42'} in result['workflow_references']
+    rfi=document_context('Subject: RFI 9\nSubmittal 23 05 00-01\nQuestion: Confirm clearance.')
+    assert (rfi['workflow_type'],rfi['identifier'],rfi['role'])==('RFI','9','QUESTION')
+    body=document_context('Submittal 23 05 00-01\nStatus: Pending','RFI-42.txt')
+    assert (body['workflow_type'],body['identifier'])==('SUBMITTAL','23 05 00-01')
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)

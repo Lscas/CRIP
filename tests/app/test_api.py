@@ -124,6 +124,23 @@ def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,proje
                                      'status':'NOT_PROCESSED'}]
 
 
+def test_email_subject_routes_primary_workflow_while_body_identifier_stays_reference(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23 05 00-01';message.set_content(
+        'RFI 42\nStatus: Approved as noted\nResponse package attached separately.')
+    document=upload(client,project['id'],'RFI-42.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    groups={(item['kind'],item['identifier']):item for item in items}
+
+    assert groups[('SUBMITTAL','23 05 00-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23 05 00-01')]['members'][0]['status']=='APPROVED AS NOTED'
+    assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
+
+
 def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
     for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
                       ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.')]:
