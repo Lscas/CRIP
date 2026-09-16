@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-27'
+PARSER_VERSION='multisource-28'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -78,6 +78,7 @@ _SUBMITTAL_STATUS_MAP={
 }
 _HTML_QUOTE_START='\x00CIRP-QUOTED-HISTORY-START\x00'
 _HTML_QUOTE_END='\x00CIRP-QUOTED-HISTORY-END\x00'
+_HTML_VOID_TAGS={'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
 _EMAIL_HISTORY_START=re.compile(
     r'(?i)^\s*(?:On .{1,240} wrote:|-{2,}\s*(?:Original Message|Forwarded message)\s*-{2,})\s*$')
 
@@ -293,16 +294,25 @@ class _PlainHTML(HTMLParser):
     """Extract visible HTML text without executing or fetching active content."""
     _BLOCKS={'address','article','br','div','h1','h2','h3','h4','h5','h6','li','p','section','table','tr'}
     def __init__(self):
-        super().__init__(convert_charrefs=True);self.parts=[];self.hidden=0
+        super().__init__(convert_charrefs=True);self.parts=[];self.hidden=0;self.tags=[]
     def handle_starttag(self,tag,attrs):
-        tag=tag.casefold()
+        tag=tag.casefold();values={str(key).casefold():str(value or '') for key,value in attrs}
+        classes={value.casefold() for value in values.get('class','').split()}
+        quoted=(tag=='blockquote' or (tag=='div' and
+                (bool(classes & {'gmail_quote','gmail_quote_container'}) or
+                 values.get('id','').casefold()=='divrplyfwdmsg')))
         if tag in {'script','style','noscript'}:self.hidden+=1
-        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_START+'\n')
+        if tag not in _HTML_VOID_TAGS:self.tags.append((tag,quoted and not self.hidden))
+        if not self.hidden and quoted:self.parts.append('\n'+_HTML_QUOTE_START+'\n')
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_endtag(self,tag):
-        tag=tag.casefold()
+        tag=tag.casefold();closed=[]
+        for index in range(len(self.tags)-1,-1,-1):
+            if self.tags[index][0]==tag:
+                closed=self.tags[index:];del self.tags[index:];break
         if tag in {'script','style','noscript'} and self.hidden:self.hidden-=1
-        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_END+'\n')
+        if not self.hidden and any(quoted for _,quoted in closed):
+            self.parts.extend('\n'+_HTML_QUOTE_END+'\n' for _,quoted in reversed(closed) if quoted)
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_data(self,data):
         if not self.hidden:self.parts.append(data)

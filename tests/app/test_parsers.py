@@ -438,6 +438,28 @@ def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
     assert 'Approved' in quoted and 'Old note.' in quoted and 'Current after quote.' not in quoted
     assert result['workflow_status']=='PENDING'
 
+
+@pytest.mark.parametrize('wrapper',['class="gmail_quote gmail_quote_container"',
+                                    'id="divRplyFwdMsg"'])
+def test_eml_common_html_reply_wrappers_are_history_and_current_text_resumes(tmp_path,wrapper):
+    message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
+        '<html><body><p>Status: Pending</p><p>Current note.</p>'
+        f'<div {wrapper}><p>From: Reviewer</p><div><p>Status: Approved</p>'
+        '<p>Old note.</p></div></div>'
+        '<p>Current after quote.</p></body></html>',subtype='html')
+    path=tmp_path/'wrapped-thread.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    current='\n'.join(item['text'] for item in result['fragments']
+                      if item['locator']['native_element_id']=='email-body')
+    quoted='\n'.join(item['text'] for item in result['fragments']
+                     if item['locator']['native_element_id']=='email-quoted-history')
+
+    assert 'Current note.' in current and 'Current after quote.' in current
+    assert 'Approved' not in current and 'Old note.' not in current
+    assert 'Approved' in quoted and 'Old note.' in quoted and 'Current after quote.' not in quoted
+    assert result['workflow_status']=='PENDING'
+
 def test_docx_minimal(tmp_path):
     p=tmp_path/'x.docx'
     xml='''<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Material alpha</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Quantity 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>'''

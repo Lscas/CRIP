@@ -103,12 +103,15 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
 def test_email_routing_evidence_stays_reviewable_without_model_extraction(client,project,monkeypatch):
     message=EmailMessage();message['Subject']='RFI 42';message['From']='contractor@example.test'
     message['To']='engineer@example.test';message.set_content(
-        'Response:\nDEMO_MATERIAL|PIPE|Type L Copper Pipe|-|diameter=2 in\n\n'
-        'On Monday, Pat wrote:\n> Question: May PVC be used?')
+        '<html><body><p>Response:</p>'
+        '<p>DEMO_MATERIAL|PIPE|Type L Copper Pipe|-|diameter=2 in</p>'
+        '<div class="gmail_quote"><p>On Monday, Pat wrote:</p>'
+        '<p>Question: May PVC be used?</p></div></body></html>',subtype='html')
     upload(client,project['id'],'rfi-42-reply.eml',message.as_bytes())
-    runner=client.app.state.runner;seen=[];original_many=runner.gateway.extract_many
+    runner=client.app.state.runner;seen=[];seen_text=[];original_many=runner.gateway.extract_many
     def many(run,evidences):
-        seen.extend(item['locator']['section'] for item in evidences);return original_many(run,evidences)
+        seen.extend(item['locator']['section'] for item in evidences)
+        seen_text.extend(item['raw_text'] for item in evidences);return original_many(run,evidences)
     monkeypatch.setattr(runner.gateway,'extract_many',many)
     run=runner.create(project['id'])
 
@@ -123,6 +126,7 @@ def test_email_routing_evidence_stays_reviewable_without_model_extraction(client
     records=client.get(f'/api/analysis-runs/{run["id"]}/records').json()
 
     assert seen==['EMAIL > BODY > RFI 42 > RESPONSE']
+    assert all('May PVC be used?' not in text for text in seen_text)
     assert len(routing)==2 and all(item[1]['deterministic_skip_reason']=='ROUTING_ONLY_EMAIL_EVIDENCE'
                                    for item in routing)
     assert any('Subject: RFI 42' in item[0]['raw_text'] for item in routing)

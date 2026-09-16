@@ -58,3 +58,7 @@ Reproduce locally:
 ## CR-0052 routing-only email extraction baseline
 
 A synthetic RFI reply produces three retained evidence scopes: routing headers, current response body, and quoted question history. Before the shared extraction filter, all three became separate extraction batches. The deterministic filter now completes the routing headers and quoted history locally as `NO_REQUIREMENTS`, while retaining their text and locators for review and exact workflow relationships; only the current response body enters extraction. The fixture therefore changes from three extraction batches to one, a 66.7% request-count reduction for that email shape, without changing the published material candidate. This is an offline mock fixture, not a claim about every email, live-model latency, billing, or semantic accuracy.
+
+## CR-0053 HTML reply-wrapper accuracy fixture
+
+Two synthetic Submittal emails exercise a nested Gmail quote class and Outlook `divRplyFwdMsg` wrapper. Before the parser fix, an historical `Approved` status and old note remained in current-body evidence beside the actual `Pending` status. Both wrappers now create reviewable quoted-history evidence, text after their matching close resumes as current, and current workflow status remains `Pending`. The API regression also proves wrapped RFI history is absent from extraction input and counted among locally skipped fragments. These are offline structural fixtures, not mailbox compatibility, semantic-thread inference, live-model quality or universal email-token savings measurements.
