@@ -81,12 +81,15 @@ def test_spaced_submittal_identifier_and_common_status_are_canonical():
 
 
 def test_forwarded_email_subject_keeps_exact_workflow_identifier():
-    context=document_context('Subject: Fwd: Re: RFI No. 0009 - Door hardware\nResponse:\nApproved as noted.')
+    context=document_context(
+        'Subject: [EXTERNAL] Fwd: Re: RFI No. 0009 - Door hardware\nResponse:\nApproved as noted.')
     assert context['identifier']=='9' and context['role']=='RESPONSE'
+    overflow=document_context('Subject: '+'[EXTERNAL] '*7+'RFI 9\nResponse: Approved.')
+    assert overflow['workflow_type'] is None
 
 
 def test_explicit_submittal_subject_wins_over_body_rfi_reference(tmp_path):
-    message=EmailMessage();message['Subject']='Submittal 23 05 00-01';message.set_content(
+    message=EmailMessage();message['Subject']='Re: [External Email] Submittal 23 05 00-01';message.set_content(
         'RFI 42\nStatus: Approved as noted\nResponse package attached separately.')
     path=tmp_path/'RFI-42.eml';path.write_bytes(message.as_bytes())
 

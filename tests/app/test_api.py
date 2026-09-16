@@ -125,7 +125,7 @@ def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,proje
 
 
 def test_email_subject_routes_primary_workflow_while_body_identifier_stays_reference(client,project):
-    message=EmailMessage();message['Subject']='Submittal 23 05 00-01';message.set_content(
+    message=EmailMessage();message['Subject']='Re: [External Email] Submittal 23 05 00-01';message.set_content(
         'RFI 42\nStatus: Approved as noted\nResponse package attached separately.')
     document=upload(client,project['id'],'RFI-42.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']

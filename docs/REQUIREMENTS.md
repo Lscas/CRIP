@@ -126,6 +126,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
 - Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.
 - Primary workflow routing uses explicit email Subject before explicit body heading before filename; different exact identifiers remain references instead of overriding a stronger source.
+- Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
 - An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.

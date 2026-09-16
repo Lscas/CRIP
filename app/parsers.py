@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-15'
+PARSER_VERSION='multisource-16'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -52,11 +52,12 @@ _SUBMITTAL_STATUS=re.compile(
     r'NO\s+EXCEPTIONS\s+TAKEN|MAKE\s+CORRECTIONS\s+NOTED|REVIEWED\s+AS\s+NOTED|'
     r'REVISE\s*(?:AND|/)\s*RESUBMIT|RETURNED\s+FOR\s+CORRECTION|NOT\s+APPROVED|'
     r'REJECTED|APPROVED|REVIEWED|PENDING|SUBMITTED|FOR\s+REVIEW|UNDER\s+REVIEW)\b')
+_EMAIL_SUBJECT_PREFIX=r'(?:(?:(?:RE|FW|FWD)\s*:\s*)|(?:\[[^\[\]\r\n]{1,40}\]\s*)){0,6}'
 _EMAIL_RFI_SUBJECT=re.compile(
-    r'(?im)^Subject:\s*(?:(?:RE|FW|FWD)\s*:\s*)*(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
+    rf'(?im)^Subject:\s*{_EMAIL_SUBJECT_PREFIX}(?:REQUEST\s+FOR\s+INFORMATION|RFI)'
     r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([^\r\n]{0,100})')
 _EMAIL_SUBMITTAL_SUBJECT=re.compile(
-    r'(?im)^Subject:\s*(?:(?:RE|FW|FWD)\s*:\s*)*(?:SUBMITTAL|SUBMISSION)'
+    rf'(?im)^Subject:\s*{_EMAIL_SUBJECT_PREFIX}(?:SUBMITTAL|SUBMISSION)'
     r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*([^\r\n]{0,120})')
 _WORKFLOW_REFERENCES={
     'RFI':re.compile(r'(?im)\bRFI(?:\s+(?:NO\.?|NUMBER))?\s*[:#-]?\s*([^\r\n]{1,80})'),
