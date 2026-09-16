@@ -129,6 +129,24 @@ def test_email_role_and_status_stay_with_their_exact_body_identifier(tmp_path):
     assert {'workflow_type':'SUBMITTAL','identifier':'23-02'} in submittal_result['workflow_references']
 
 
+def test_generic_email_uses_first_explicit_body_workflow_heading(tmp_path):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'Submittal 23-01\nStatus: Pending\nPump P-1 data.\n'
+        'RFI 42\nQuestion:\nConfirm clearance.')
+    path=tmp_path/'coordination.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    context=result['workflow_contexts'][0]
+    pump=next(item for item in result['fragments'] if 'Pump P-1' in item['text'])
+    clearance=next(item for item in result['fragments'] if 'Confirm clearance' in item['text'])
+
+    assert (context['workflow_type'],context['identifier'],context['status'])==(
+        'SUBMITTAL','23-01','PENDING')
+    assert 'EMAIL > BODY > SUBMITTAL 23-01 > STATUS: PENDING' in pump['locator']['section']
+    assert 'EMAIL > BODY > RFI 42 > QUESTION' in clearance['locator']['section']
+    assert {'workflow_type':'RFI','identifier':'42'} in result['workflow_references']
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)

@@ -177,7 +177,7 @@
         "Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.",
         "Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.",
         "Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.",
-        "Primary workflow routing ranks explicit Subject, body heading, then filename; other exact identifiers stay references and cannot donate role or status.",
+        "Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.",
         "Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.",
         "Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.",
         "An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.",
@@ -200,7 +200,7 @@
       "acceptance_criteria": [
         "RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous; UNKNOWN page contexts do not manufacture a missing Question or Response role.",
         "Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.",
-        "For email documents, Subject outranks body heading and filename; other exact identifiers remain reference-only and cannot donate role or status.",
+        "Email routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay reference-only and cannot donate role/status.",
         "Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.",
         "An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.",
         "A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.",

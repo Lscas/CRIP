@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-18'
+PARSER_VERSION='multisource-19'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -188,7 +188,10 @@ def document_context(text: str, original_name: str = '') -> dict:
     elif submittal_subject:rfi=None;submittal=submittal_subject;submittal_in_text=True
     else:
         rfi=_RFI_HEADER.search(searchable)
-        submittal=None if rfi else _SUBMITTAL_HEADER.search(searchable)
+        submittal=_SUBMITTAL_HEADER.search(searchable)
+        if rfi and submittal:
+            if rfi.start()<submittal.start():submittal=None
+            else:rfi=None
         rfi_in_text=bool(rfi);submittal_in_text=bool(submittal)
     if not rfi and not submittal:
         rfi=re.search(r'(?i)(?:^|[\s_.-])RFI(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',

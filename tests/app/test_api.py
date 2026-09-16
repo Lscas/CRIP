@@ -164,6 +164,26 @@ def test_email_submittal_status_does_not_cross_to_different_subject_identifier(c
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_generic_email_routes_by_first_explicit_body_workflow_heading(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'Submittal 23-01\nStatus: Pending\nPump P-1 data.\n'
+        'RFI 42\nQuestion:\nConfirm clearance.')
+    document=upload(client,project['id'],'coordination.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status']=='PENDING'
+    assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
     raw=(b'Subject: Coordination\r\n'
          b'Message-ID: <first@example.test>\r\n'
