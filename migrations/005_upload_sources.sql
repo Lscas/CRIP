@@ -7,4 +7,6 @@ CREATE TABLE IF NOT EXISTS upload_sources (
 );
 CREATE INDEX IF NOT EXISTS ix_upload_sources_document
  ON upload_sources(source_document_id);
+CREATE INDEX IF NOT EXISTS ix_uploads_document
+ ON uploads(document_id);
 INSERT OR IGNORE INTO schema_migrations VALUES(5,datetime('now'));

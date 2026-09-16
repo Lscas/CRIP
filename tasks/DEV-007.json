@@ -33,8 +33,7 @@
     "BUNDLE_MANIFEST.json"
   ],
   "context_files": [
-    "docs/PRODUCT_SPEC.md",
-    "docs/IMPLEMENTATION_STATUS.md"
+    "docs/PRODUCT_SPEC.md"
   ],
   "acceptance_tests": [
     "python scripts/run_checks.py --area parsers",

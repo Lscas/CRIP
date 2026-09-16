@@ -236,10 +236,20 @@ def create_app(settings:Settings|None=None)->FastAPI:
     @app.get('/api/analysis-runs/{rid}/workflows')
     def run_workflows(rid:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
         """Read-only deterministic workflow relationships; never calls a model."""
-        runner.get(rid)
+        run=runner.get(rid)
         rows=db.all('''SELECT r.document_id,r.summary,d.name FROM document_results r
                        JOIN documents d ON d.id=r.document_id WHERE r.run_id=? ORDER BY d.name''',(rid,))
-        result=build_workflow_index(rows);items=result['items'];page=items[offset:offset+limit]
+        links=db.all('''SELECT s.source_kind,s.source_document_id,u.document_id,s.source_detail
+                        FROM upload_sources s JOIN uploads u ON u.id=s.upload_id
+                        JOIN document_results child ON child.run_id=? AND child.document_id=u.document_id
+                        JOIN document_results parent ON parent.run_id=? AND parent.document_id=s.source_document_id
+                        WHERE u.project_id=? AND s.source_kind='EMAIL_ATTACHMENT'
+                        ORDER BY s.source_document_id,u.document_id,s.upload_id''',(rid,rid,run['project_id']))
+        for link in links:
+            detail=json.loads(link.pop('source_detail'));link.update({
+                'attachment_index':detail.get('attachment_index'),
+                'content_type':detail.get('content_type')})
+        result=build_workflow_index(rows,links);items=result['items'];page=items[offset:offset+limit]
         return {'items':page,'summary':result['summary'],
                 'pagination':{'offset':offset,'limit':limit,'total':len(items),
                               'next_offset':offset+len(page) if offset+len(page)<len(items) else None}}

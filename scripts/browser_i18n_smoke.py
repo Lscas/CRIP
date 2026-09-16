@@ -201,6 +201,9 @@ def main():
                 wait_until(lambda:'4 unique-content files' in (page.locator('#file-total').text_content() or ''),'selected attachment import did not complete')
                 assert page.locator('#files-body tr').count()==4 and page.locator('#drawer').evaluate('(n)=>n.hidden')
                 assert 'Email attachment from response.eml' in page.locator('#files-body').inner_text()
+                page.get_by_role('button',name='Review email attachments',exact=True).click()
+                page.locator('#drawer-body').get_by_role('button',name='Import into this project',exact=True).click()
+                wait_until(lambda:page.locator('#files-body tr').count()==5,'duplicate attachment import was not retained')
                 passed('A selected EML attachment imports locally with source provenance and without automatic recursive analysis')
 
                 page.locator('#start').click()
@@ -209,6 +212,10 @@ def main():
                 counts = {kind: int(page.locator('#count-'+kind).inner_text()) for kind in ('MATERIAL', 'INSPECTION')}
                 assert counts == {'MATERIAL': 2, 'INSPECTION': 2}, counts
                 assert page.locator('#run-message').inner_text().strip()
+                workflow_text=page.locator('#workflow-body').inner_text()
+                assert 'Email attachment' in workflow_text and 'response.eml' in workflow_text and 'attachment.txt' in workflow_text
+                assert 'Parent email' in workflow_text and 'Selected attachment' in workflow_text
+                assert 'Explicitly imported 2 times' in workflow_text
                 states_before = {id_: page.locator('#'+id_).is_disabled() for id_ in ('start', 'pause', 'resume', 'export-json', 'export-xlsx')}
                 assert {id_: page.locator('#'+id_).is_disabled() for id_ in states_before} == states_before
                 passed('Run selection, PARTIAL status, candidates, numbers, cost and button enablement are unchanged')

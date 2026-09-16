@@ -137,7 +137,34 @@ def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
     return items,linked
 
 
-def build_workflow_index(rows: list[dict]) -> dict:
+def _email_attachments(documents: list[dict],links: list[dict]) -> tuple[list[dict],set[str]]:
+    by_id={document['document_id']:document for document in documents};grouped={}
+    for raw in links:
+        if not isinstance(raw,dict) or raw.get('source_kind')!='EMAIL_ATTACHMENT':continue
+        parent_id=raw.get('source_document_id');child_id=raw.get('document_id');index=raw.get('attachment_index')
+        if (parent_id not in by_id or child_id not in by_id or parent_id==child_id
+                or type(index) is not int or index<0):continue
+        identity=(parent_id,child_id,index)
+        if identity in grouped:
+            grouped[identity]['import_count']+=1
+            continue
+        parent=by_id[parent_id];child=by_id[child_id]
+        grouped[identity]={'group_id':_key('ATTACHMENT',parent_id,child_id,str(index)),
+            'kind':'EMAIL_ATTACHMENT','identifier':None,'state':'LINKED',
+            'members':[
+                {'document_id':parent_id,'file_name':parent['file_name'],
+                 'document_type':parent['document_type'],'role':'MESSAGE','status':None,
+                 'source':'PARENT_EMAIL'},
+                {'document_id':child_id,'file_name':child['file_name'],
+                 'document_type':child['document_type'],'role':'ATTACHMENT','status':None,
+                 'source':'SELECTED_ATTACHMENT'}],
+            'warnings':['This is an explicit import relationship only; workflow role, approval and authority are not inherited.'],
+            'external_reference_count':0,'attachment_index':index,
+            'content_type':raw.get('content_type'),'import_count':1}
+    return list(grouped.values()),{value for identity in grouped for value in identity[:2]}
+
+
+def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None) -> dict:
     documents=[]
     for row in rows:
         summary=row.get('summary',{})
@@ -177,6 +204,8 @@ def build_workflow_index(rows: list[dict]) -> dict:
         items.append({'group_id':_key('WF',workflow,identifier),'kind':workflow,'identifier':identifier,
                       'state':state,'members':members,'warnings':warnings,'external_reference_count':0})
     threads,thread_documents=_email_threads(documents);workflow_documents.update(thread_documents);items.extend(threads)
+    attachments,attachment_documents=_email_attachments(documents,attachment_links or [])
+    workflow_documents.update(attachment_documents);items.extend(attachments)
     for document in documents:
         if document['document_type']=='EMAIL' and document['document_id'] not in workflow_documents:
             items.append({'group_id':_key('EMAIL',document['document_id']),'kind':'EMAIL','identifier':None,
@@ -184,12 +213,13 @@ def build_workflow_index(rows: list[dict]) -> dict:
                           'file_name':document['file_name'],'document_type':'EMAIL','role':'MESSAGE',
                           'status':None,'source':'PRIMARY'}],'warnings':[],'external_reference_count':0})
             workflow_documents.add(document['document_id'])
-    order={'RFI':0,'SUBMITTAL':1,'EMAIL_THREAD':2,'EMAIL':3}
+    order={'RFI':0,'SUBMITTAL':1,'EMAIL_THREAD':2,'EMAIL_ATTACHMENT':3,'EMAIL':4}
     items.sort(key=lambda item:(order[item['kind']],item.get('identifier') or '',item['group_id']))
     return {'items':items,'summary':{
         'documents':len(workflow_documents),'groups':len(items),
         'rfi_groups':sum(item['kind']=='RFI' for item in items),
         'submittal_groups':sum(item['kind']=='SUBMITTAL' for item in items),
         'email_threads':sum(item['kind']=='EMAIL_THREAD' for item in items),
+        'email_attachment_links':sum(item['kind']=='EMAIL_ATTACHMENT' for item in items),
         'ambiguous':sum(item['state']=='AMBIGUOUS' for item in items),
         'quoted_email_documents':sum(bool(document['email_content'].get('quoted_history_chars')) for document in documents)}}

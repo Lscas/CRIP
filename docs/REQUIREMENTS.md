@@ -136,6 +136,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous.
 - Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized and conflicting statuses remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
+- An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import
@@ -159,6 +160,7 @@ Let a reviewer inspect inert EML attachments and explicitly import one selected 
 - Attachment listing returns only bounded metadata and a SHA-256 identity; raw attachment bytes are not returned by the listing endpoint.
 - The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
 - Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.
+- Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review.
 - Attached emails require another explicit selection before nested attachments are visible; active content and remote resources remain inert.
 
 ## FR-DATA-001 · 统一文档模型

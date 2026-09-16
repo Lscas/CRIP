@@ -292,6 +292,7 @@ def test_additive_migration_keeps_legacy_budget(tmp_path):
     assert db.one('SELECT version FROM schema_migrations WHERE version=3')['version']==3
     assert db.one('SELECT version FROM schema_migrations WHERE version=4')['version']==4
     assert db.one('SELECT version FROM schema_migrations WHERE version=5')['version']==5
+    assert any(row['name']=='ix_uploads_document' for row in db.all("PRAGMA index_list('uploads')"))
     assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='call_reconciliation_events'")
     assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='run_metrics'")
     assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='budget_limit_events'")

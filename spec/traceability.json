@@ -236,7 +236,9 @@
       ],
       "planned_product_tests": [
         "tests/app/test_workflows.py",
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_email_attachments.py",
+        "scripts/browser_i18n_smoke.py"
       ],
       "contract_tests": [],
       "test_scope": "local_offline_deterministic_synthetic_workflow_documents",
@@ -245,11 +247,12 @@
         "app/parsers.py",
         "app/main.py",
         "app/runner.py",
+        "migrations/005_upload_sources.sql",
         "web/index.html",
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact digit-bearing RFI, normalized Submittal and hashed email relationships are available in a bounded read-only reviewer index. Keyword-only matches are rejected; ambiguous roles, duplicates and conflicting statuses remain explicit; no model call is made."
+      "progress_note": "Exact digit-bearing RFI, normalized Submittal, hashed email-thread and persisted selected-attachment relationships are available in one bounded read-only reviewer index. Imported attachments do not inherit workflow role, approval or authority. Keyword-only matches are rejected; ambiguous roles, duplicates and conflicting statuses remain explicit; no model call is made."
     },
     {
       "requirement_id": "FR-INGEST-005",
@@ -287,13 +290,14 @@
       "test_scope": "local_offline_synthetic_eml_only",
       "implemented_product_paths": [
         "app/email_attachments.py",
+        "app/workflows.py",
         "app/uploads.py",
         "app/main.py",
         "migrations/005_upload_sources.sql",
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained per import. Nested attachments require another explicit import; no analysis or model call starts automatically."
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained per import and displayed in analysis-run workflow review; repeated identical relationships collapse visually with an import count and never inherit authority. Nested attachments require another explicit import; no analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",

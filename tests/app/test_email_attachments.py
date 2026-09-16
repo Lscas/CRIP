@@ -79,3 +79,31 @@ def test_attached_email_requires_explicit_second_import_before_nested_attachment
 
     assert [item['name'] for item in first]==['forwarded.eml']
     assert [item['name'] for item in second]==['inner.pdf']
+
+
+def test_analysis_workflow_shows_selected_attachment_without_inheriting_email_authority(client,project):
+    message=EmailMessage();message['Subject']='RFI 77 response package'
+    message.set_content('Response:\nSee the selected attachment.')
+    message.add_attachment('Attachment content',subtype='plain',filename='response-note.txt')
+    source=upload(client,project['id'],'rfi-77.eml',message.as_bytes())
+    attachment=client.get(f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments'][0]
+    imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
+        'document_id':source['document_id'],'attachment_index':0,
+        'expected_sha256':attachment['sha256']})
+    assert imported.status_code==201
+
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    for document_id in run['document_ids']:runner.parse_one(run,document_id)
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    response=client.get(f'/api/analysis-runs/{rid}/workflows')
+    after=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+
+    item=next(value for value in response.json()['items'] if value['kind']=='EMAIL_ATTACHMENT')
+    assert response.status_code==200 and before==after
+    assert item['state']=='LINKED' and item['identifier'] is None
+    assert [member['file_name'] for member in item['members']]==['rfi-77.eml','response-note.txt']
+    assert all(member['status'] is None for member in item['members'])
+    assert response.json()['summary']['email_attachment_links']==1

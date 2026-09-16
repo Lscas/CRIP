@@ -29,7 +29,6 @@
     "changes/CR-0004.json"
   ],
   "context_files": [
-    "docs/DEV_STATE.md",
     "docs/DATA_CONTRACTS.md"
   ],
   "source_hints": [

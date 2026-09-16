@@ -1,0 +1,48 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements across RFI, Submittal and email content.",
+  "notes": [
+    "Expose only persisted selected-attachment provenance; do not infer semantic authority or inherit parent workflow status.",
+    "Reuse the existing workflow endpoint and page; do not add a second relationship UI or any model call."
+  ],
+  "task_id": "DEV-010",
+  "title": "Email attachment relationships in workflow review",
+  "requirement_ids": [
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/**",
+    "migrations/**",
+    "scripts/browser_i18n_smoke.py",
+    "tests/**",
+    "spec/**",
+    "docs/**",
+    "web/**",
+    "tasks/DEV-010.json",
+    "tasks/DEV-002.json",
+    "tasks/DEV-007.json",
+    "changes/CR-0025.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/ARCHITECTURE.md",
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py tests/app/test_api.py tests/app/test_email_attachments.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area ui",
+    "python scripts/browser_i18n_smoke.py --offline-dom",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Show deterministic parent-email to selected-attachment relationships inside each analysis run without semantic inference, status inheritance or provider calls."
+}

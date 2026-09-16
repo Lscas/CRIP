@@ -184,12 +184,17 @@ function renderTakeoffs(){
  if(geometry.length)I.bindText($('geometry-detail'),()=>JSON.stringify(geometry,null,2));
  else I.bindText($('geometry-detail'),'takeoff.geometryEmpty');
 }
+function workflowCodeLabel(section,value){
+ const key=`workflow.${section}.${value}`,label=I.t(key);
+ return label===key?String(value??'').toLowerCase().replaceAll('_',' ').replace(/(^|[ /-])\w/g,match=>match.toUpperCase()):label;
+}
 function renderWorkflows(){
  const rows=state.workflows||[];I.bindText($('workflow-total'),'workflow.total',{count:rows.length});$('workflow-body').replaceChildren();
  if(!rows.length){const tr=el('tr');const td=elT('td','workflow.empty',{},'muted');td.colSpan=4;tr.append(td);$('workflow-body').append(tr);return;}
- rows.forEach(item=>{const tr=el('tr');const title=el('td');title.append(el('strong',item.kind+(item.identifier?' '+item.identifier:'')));
-  const documents=el('td');(item.members||[]).forEach(member=>{const a=el('a',member.file_name,'link evidence-button');a.href='/api/documents/'+member.document_id+'/file';a.target='_blank';a.rel='noopener';documents.append(a);if(member.role||member.status)documents.append(el('small',[member.role,member.status,member.source].filter(Boolean).join(' · ')));});
-  tr.append(title,I.bindStatus(el('td',null,'badge '+(item.state==='AMBIGUOUS'?'warn':'')),item.state),documents,el('td',(item.warnings||[]).join(' ')));$('workflow-body').append(tr);
+ rows.forEach(item=>{const tr=el('tr');const title=el('td');title.append(el('strong',workflowCodeLabel('kind',item.kind)+(item.identifier?' '+item.identifier:'')));if(item.kind==='EMAIL_ATTACHMENT'&&item.import_count>1)title.append(elT('small','workflow.importCount',{count:item.import_count}));
+  const documents=el('td');(item.members||[]).forEach(member=>{const a=el('a',member.file_name,'link evidence-button');a.href='/api/documents/'+member.document_id+'/file';a.target='_blank';a.rel='noopener';documents.append(a);const details=[member.role&&workflowCodeLabel('role',member.role),member.status&&workflowCodeLabel('status',member.status),member.source&&workflowCodeLabel('source',member.source)].filter(Boolean);if(details.length)documents.append(el('small',details.join(' · ')));});
+  const status=el('td',workflowCodeLabel('state',item.state),'badge '+(item.state==='AMBIGUOUS'?'warn':''));status.dataset.code=item.state;
+  tr.append(title,status,documents,el('td',(item.warnings||[]).join(' ')));$('workflow-body').append(tr);
  });
 }
 function selectedConnector(){return $('connector-provider').value;}

@@ -78,3 +78,19 @@ def test_email_threads_link_only_hashed_exact_headers_and_count_external_referen
     assert thread['state']=='LINKED' and thread['external_reference_count']==1
     assert standalone['state']=='SINGLE'
     assert result['summary']['email_threads']==2 and result['summary']['quoted_email_documents']==1
+
+
+def test_selected_email_attachment_relationship_is_deduplicated_without_inheriting_authority():
+    rows=[row('MAIL','rfi-42.eml',document_type='EMAIL'),
+          row('ATT','response.pdf',document_type='OTHER')]
+    link={'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL','document_id':'ATT',
+          'attachment_index':0,'content_type':'application/pdf'}
+    result=build_workflow_index(rows,[link,link])
+    item=next(value for value in result['items'] if value['kind']=='EMAIL_ATTACHMENT')
+
+    assert item['state']=='LINKED' and item['import_count']==2 and item['attachment_index']==0
+    assert [(member['role'],member['source'],member['status']) for member in item['members']]==[
+        ('MESSAGE','PARENT_EMAIL',None),('ATTACHMENT','SELECTED_ATTACHMENT',None)]
+    assert 'not inherited' in item['warnings'][0]
+    assert result['summary']['email_attachment_links']==1 and result['summary']['documents']==2
+    assert not build_workflow_index(rows,[{**link,'document_id':'MAIL'}])['summary']['email_attachment_links']
