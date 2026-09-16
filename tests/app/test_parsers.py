@@ -386,6 +386,32 @@ def test_not_approved_submittal_status_is_canonical_rejected(tmp_path):
     assert all('STATUS: REJECTED' in item['locator']['section'] for item in result['fragments'])
 
 
+@pytest.mark.parametrize('description',[
+    'Approved alternate pump requested.',
+    'Pending delivery expected Friday.',
+    'Rejected material shall be replaced.',
+])
+def test_submittal_status_keyword_prefix_does_not_promote_descriptive_prose(tmp_path,description):
+    message=EmailMessage();message['Subject']='Submittal 23-04'
+    message.set_content(f'Status: {description}\nCoordination note.')
+    path=tmp_path/'descriptive-status.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status'] is None
+    assert all('STATUS:' not in (item['locator']['section'] or '') for item in result['fragments'])
+
+
+@pytest.mark.parametrize(('source','expected'),[
+    ('Status: Approved as Noted.','APPROVED AS NOTED'),
+    ('Review Response: Pending;','PENDING'),
+])
+def test_exact_submittal_status_allows_terminal_punctuation(source,expected):
+    context=document_context(f'Submittal 23-05\n{source}')
+
+    assert context['status']==expected
+
+
 @pytest.mark.parametrize(('label','source_status','expected_status'),[
     ('Status','Furnish as Submitted','APPROVED'),
     ('Status','Furnish as Corrected','APPROVED AS NOTED'),

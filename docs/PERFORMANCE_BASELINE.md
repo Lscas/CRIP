@@ -78,3 +78,7 @@ A six-page generic-name PDF previously lost `RFI 42 > RESPONSE` on continuation 
 ## CR-0071 same-line workflow metadata fixture
 
 Synthetic text, Email and compact filenames previously lost same-line role/status or absorbed it into the identifier. Existing allowlists now separate exact metadata while descriptive titles stay neutral. This is an offline parser check, not semantic or live-provider validation.
+
+## CR-0072 exact Submittal status fixture
+
+Three synthetic Email status lines beginning with Approved, Pending or Rejected previously became formal dispositions despite trailing prose. Complete allowlisted values still pass with terminal punctuation; longer prose stays neutral. This is an offline boundary check.

@@ -124,7 +124,7 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 - A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.
 - Attachments, nested messages and non-root multipart/related resources are inventoried and inert before explicit import; related selects matched start/Content-ID or first child as its sole body.
 - EML traversal stops at attachment boundaries; attached-email bodies and nested files cannot enter parent evidence, inventory or workflow roles before import.
-- Only exact labels enter locators: Official Response sets an RFI response; known RFI Status and Submittal response/status values are preserved; prose stays neutral.
+- Only complete exact labels enter locators: Official Response sets an RFI response; known RFI Status and Submittal response/status values allow terminal punctuation, while longer prose stays neutral.
 - An allowlisted RFI role or Submittal status immediately following an exact same-line identifier is separated from that identifier across body, Subject and filename fallback.
 - Workflow IDs require digits; alphabetic project or discipline prefixes and aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks an explicit Subject only when it contains a valid digit-bearing workflow ID, then the earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
@@ -146,7 +146,7 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
 - Digit-bearing RFI/Submittal aliases normalize identically; exact headings assign RFI roles, including an allowlisted same-line suffix; known statuses stay reviewer metadata and uncertainty stays ambiguous.
-- Each exact Submittal ID retains all known explicit dispositions from Status, Review Response, Final Response or Submittal Response labels; references link to the primary, conflicts remain ambiguous, and no final-response precedence is inferred.
+- Each exact Submittal ID retains complete known dispositions from Status, Review Response, Final Response or Submittal Response labels; keyword-prefixed prose stays neutral, references link to the primary, conflicts remain ambiguous, and no final-response precedence is inferred.
 - Email routing ranks a Subject only when it contains a valid digit-bearing workflow ID, then the earliest body heading, then filename; other content IDs are reference-only, while addresses and From, To, Cc and Date cannot create groups or donate role/status.
 - Email threads link only exact hashed relationships from bounded RFC-style angle-bracketed Message-ID tokens; arbitrary header words cannot link messages, external references do not expose raw identifiers, and a message that references its own exact ID is ambiguous.
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
