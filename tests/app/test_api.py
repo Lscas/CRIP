@@ -184,6 +184,24 @@ def test_generic_email_routes_by_first_explicit_body_workflow_heading(client,pro
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_email_addresses_do_not_create_workflow_groups(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message['From']='rfi42@example.test'
+    message['To']='submittal23@example.test';message['Cc']='submission24@example.test'
+    message.set_content('General coordination note.')
+    document=upload(client,project['id'],'address-only.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+
+    assert all(item['kind'] not in {'RFI','SUBMITTAL'} for item in items)
+    assert any(member['document_id']==document['document_id'] for item in items for member in item['members'])
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_full_request_for_information_name_reaches_workflow_index(client,project):
     message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
         'Status: Pending\nSee Request for Information No. 0042 before release.')

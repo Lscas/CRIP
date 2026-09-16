@@ -127,7 +127,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Workflow IDs require a digit; RFI/Request for Information and Submittal/Submission aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
 - Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.
-- Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
+- Current body and quoted history stay separate; From, To, Cc and Date remain evidence but cannot create workflow references, and quoted history cannot create a current requirement or property.
 - An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
@@ -144,7 +144,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 
 - Digit-bearing RFI/Request for Information and Submittal/Submission references normalize identically; only exact headings link RFI roles, while duplicates and unknown roles stay ambiguous.
 - Submittals with the same exact identifier retain every explicit source status; exact references link to the primary, while conflicts across documents or within one source remain ambiguous.
-- Email routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay reference-only and cannot donate role/status.
+- Email routing ranks explicit Subject, earliest body heading, then filename; other content identifiers stay reference-only and cannot donate role/status, while From, To, Cc and Date never create references.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.

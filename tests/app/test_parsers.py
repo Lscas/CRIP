@@ -72,6 +72,19 @@ def test_workflow_identifiers_require_digits_and_preserve_uncertain_roles():
         'document_type':'OTHER','workflow_type':'RFI','identifier':'42','role':'UNKNOWN','status':None}
 
 
+def test_email_address_headers_do_not_create_workflow_references(tmp_path):
+    message=EmailMessage();message['Subject']='Coordination';message['From']='rfi42@example.test'
+    message['To']='submittal23@example.test';message['Cc']='submission24@example.test'
+    message.set_content('General coordination note.')
+    path=tmp_path/'address-only.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert result['workflow_contexts']==[] and result['workflow_references']==[]
+    assert 'From: rfi42@example.test' in text and 'To: submittal23@example.test' in text
+
+
 def test_spaced_submittal_identifier_and_common_status_are_canonical():
     context=document_context('Submittal No: 23 05 00 - 01\nStatus: Approved with comments')
     assert context=={'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',

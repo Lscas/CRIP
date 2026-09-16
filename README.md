@@ -7,6 +7,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 ## Current reviewer scope
 
 - Workflow routing uses an explicit email Subject first; without one, the earliest supported RFI or Submittal body heading becomes primary and later identifiers remain references.
+- From, To, Cc, and Date remain visible email evidence but cannot create RFI or Submittal workflow references.
 - RFI roles require a standalone `Question`/`Response` heading or an explicit `:`, `#`, or `-` separator; prefixes such as `Questionnaire` and `Response time` remain neutral.
 - `Request for Information No. 0042`/`RFI 0042` and `Submission 23-01`/`Submittal 23-01` create the same exact reference relationships.
 - The same full-name aliases work in bounded filename fallback for scanned or otherwise textless files.
@@ -78,12 +79,12 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 545 Python tests passed.
+- 595 Python tests passed.
 - 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.
 - Requirements/specification synchronization passed.
-- The source bundle manifest passed for 261 files.
+- The source bundle manifest passed for 323 files.
 
 No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
 

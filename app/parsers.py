@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-24'
+PARSER_VERSION='multisource-25'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -395,6 +395,7 @@ def _parse_email(path: Path, original_name: str) -> dict:
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
     current_body,quoted_body=split_email_history(body)
     current_source='\n'.join(headers+[current_body]);current_rev=revision(current_source);fragments=[]
+    reference_source='\n'.join((str(message.get('Subject') or '')[:4000],current_body,quoted_body))
     context=document_context(current_source,original_name)
     if headers:
         header_section=' > '.join(value for value in ('EMAIL > HEADERS',_workflow_label(context,context.get('role'))) if value)
@@ -421,7 +422,7 @@ def _parse_email(path: Path, original_name: str) -> dict:
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,
                           document_type='EMAIL',workflow_type=context.get('workflow_type'),
                           document_identifier=context.get('identifier'),workflow_status=context.get('status'),
-                          workflow_contexts=contexts,workflow_references=workflow_references(current_source+'\n'+quoted_body),
+                          workflow_contexts=contexts,workflow_references=workflow_references(reference_source),
                           email_thread=_email_thread_metadata(message),
                           email_content={'current_body_chars':len(current_body),'quoted_history_chars':len(quoted_body)},
                           attachments=attachments,active_content_processed=False)
