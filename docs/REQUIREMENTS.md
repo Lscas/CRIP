@@ -125,6 +125,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized, and roleless RFI references remain unknown rather than becoming questions.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
+- Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
 - MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
 
 ## FR-WORKFLOW-001 · Deterministic workflow relationships
@@ -136,6 +137,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous.
 - Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized and conflicting statuses remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
+- A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
 

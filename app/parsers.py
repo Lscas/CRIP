@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-8'
+PARSER_VERSION='multisource-9'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -285,15 +285,23 @@ def _email_message_key(value: object) -> str | None:
     return 'MSG-'+hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:24]
 
 
-def _email_thread_metadata(message) -> dict:
-    references=[]
-    for raw in message.get_all('References',[]):
-        values=re.findall(r'<[^<>]{1,998}>',str(raw)) or str(raw).split()
-        for value in values:
+def _email_header_keys(message, name: str) -> list[str]:
+    keys=[]
+    for raw in message.get_all(name,[]):
+        for value in re.findall(r'<[^<>]{1,998}>',str(raw)) or str(raw).split():
             key=_email_message_key(value)
-            if key and key not in references:references.append(key)
-    return {'message_key':_email_message_key(message.get('Message-ID')),
-            'parent_message_key':_email_message_key(message.get('In-Reply-To')),
+            if key and key not in keys:keys.append(key)
+    return keys
+
+
+def _email_thread_metadata(message) -> dict:
+    messages=_email_header_keys(message,'Message-ID')
+    parents=_email_header_keys(message,'In-Reply-To')
+    references=_email_header_keys(message,'References')
+    for key in parents[:-1]:
+        if key not in references:references.append(key)
+    return {'message_key':messages[0] if len(messages)==1 else None,
+            'parent_message_key':parents[-1] if parents else None,
             'reference_keys':references}
 
 

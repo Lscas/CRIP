@@ -1,5 +1,5 @@
 """FR-PARSE-001/003/004，基础文字解析，不是施工视觉评测。"""
-import io,zipfile
+import io,json,zipfile
 from email.message import EmailMessage
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +9,7 @@ from app.parsers import MAX_FRAGMENT_BYTES,document_context,parse_file,revision,
 from app.parser_worker import save_result
 from app.visual_pipeline import (PDF_CROP_COORDINATE_SYSTEM, ocr_pdf_page,
                                  render_pdf_page, render_visual_png)
+from app.workflows import build_workflow_index
 
 @pytest.mark.parametrize('text,expected',[
  ('Revision Date: 2026-08-01','2026-08-01'),('Upload Date: 2026-08-01',None),
@@ -151,6 +152,30 @@ def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):
     assert result['email_thread']['message_key'].startswith('MSG-')
     assert result['email_thread']['parent_message_key'] in result['email_thread']['reference_keys']
     assert 'reply@example.test' not in serialized and 'question@example.test' not in serialized
+
+
+def test_eml_multiple_in_reply_to_ids_link_one_exact_hashed_thread(tmp_path):
+    def parse(name,message_id,in_reply_to=None):
+        message=EmailMessage();message['Subject']='Coordination note';message['Message-ID']=message_id
+        if in_reply_to:message['In-Reply-To']=in_reply_to
+        message.set_content('Current coordination text.')
+        path=tmp_path/name;path.write_bytes(message.as_bytes())
+        return parse_file(path,path.name)
+
+    root=parse('root.eml','<root@example.test>')
+    branch=parse('branch.eml','<branch@example.test>')
+    child=parse('child.eml','<child@example.test>',
+                '<root@example.test> <branch@example.test>')
+    thread=child['email_thread']
+
+    assert thread['parent_message_key']==branch['email_thread']['message_key']
+    assert thread['reference_keys']==[root['email_thread']['message_key']]
+    assert 'example.test' not in str(thread)
+    rows=[{'document_id':name,'name':name+'.eml','summary':json.dumps(result)}
+          for name,result in [('D1',root),('D2',branch),('D3',child)]]
+    index=build_workflow_index(rows)
+    threads=[item for item in index['items'] if item['kind']=='EMAIL_THREAD']
+    assert len(threads)==1 and threads[0]['state']=='LINKED' and len(threads[0]['members'])==3
 
 
 def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
