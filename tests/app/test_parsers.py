@@ -169,6 +169,15 @@ def test_submission_alias_is_an_exact_submittal_reference(tmp_path):
     assert {'workflow_type':'SUBMITTAL','identifier':'23-01'} in result['workflow_references']
 
 
+def test_full_name_workflow_filenames_use_the_existing_fallback():
+    rfi=document_context('', 'Request_for_Information_No_0042.pdf')
+    submittal=document_context('', 'Submission No. 23-01.pdf')
+
+    assert (rfi['workflow_type'],rfi['identifier'],rfi['role'])==('RFI','42','UNKNOWN')
+    assert (submittal['workflow_type'],submittal['identifier'],submittal['status'])==(
+        'SUBMITTAL','23-01',None)
+
+
 def test_rfi_role_words_require_an_explicit_heading_boundary(tmp_path):
     full_name=tmp_path/'full-name-rfi.txt';full_name.write_text(
         'Request for Information No. 42\nClarification is pending.',encoding='utf-8')

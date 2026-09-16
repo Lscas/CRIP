@@ -40,6 +40,8 @@ EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；�
 
 `Submission`与`Submittal`采用同一含数字编号规则并形成相同精确引用关系。
 
+扫描件或无可用正文的文件名回退同样接受`Request for Information`/`RFI`与`Submission`/`Submittal`，但文件名不产生角色、状态或审批权威。
+
 RFI角色词必须独立成标题，或紧跟`:`、`#`、`-`分隔符；`Request for Information`、`Response time`和`Questionnaire`等普通前缀不得制造Question/Response角色。
 
 RFI角色按同一来源的明确页面语义聚合：只有明确Question和Response同时存在（或解析器已明确给出MIXED）才显示MIXED；UNKNOWN页面保持中性，不能补成缺失的一方。

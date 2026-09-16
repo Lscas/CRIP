@@ -9,6 +9,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - Workflow routing uses an explicit email Subject first; without one, the earliest supported RFI or Submittal body heading becomes primary and later identifiers remain references.
 - RFI roles require a standalone `Question`/`Response` heading or an explicit `:`, `#`, or `-` separator; prefixes such as `Questionnaire` and `Response time` remain neutral.
 - `Request for Information No. 0042`/`RFI 0042` and `Submission 23-01`/`Submittal 23-01` create the same exact reference relationships.
+- The same full-name aliases work in bounded filename fallback for scanned or otherwise textless files.
 - Materials and equipment, with the item name, quantity, unit, design properties, specification section, location, status, and evidence separated into readable fields.
 - Executable inspections and tests, with the QA activity, specification section, performer, witness, timing, frequency, acceptance criteria, and evidence kept with the item.
 - English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.

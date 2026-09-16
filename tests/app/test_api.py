@@ -220,6 +220,22 @@ def test_submission_alias_reaches_submittal_workflow_index(client,project):
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_submission_filename_fallback_reaches_workflow_index(client,project):
+    document=upload(client,project['id'],'Submission No. 23-01.txt',b'Pump package pending review.')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status'] is None
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_email_rfi_role_requires_an_explicit_heading_boundary(client,project):
     message=EmailMessage();message['Subject']='RFI 42';message.set_content(
         'Response time: 10 days.\nQuestionnaire attached.')

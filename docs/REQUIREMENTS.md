@@ -124,7 +124,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
 - Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.
 - Only exact RFI role headings and Submittal statuses enter evidence locators; ordinary word prefixes and RFI questions cannot become material or QA candidates.
-- Workflow IDs require a digit; RFI/Request for Information and Submittal/Submission references normalize deterministically; spaced CSI IDs persist and roleless RFI stays unknown.
+- Workflow IDs require a digit; RFI/Request for Information and Submittal/Submission aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
 - Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
