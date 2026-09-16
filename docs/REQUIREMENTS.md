@@ -173,10 +173,11 @@ Allow a customer-configured read-only Autodesk APS or Procore connection to brow
 
 优先级：P0；状态：implemented
 
-Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly import one selected attachment through the existing immutable upload pipeline.
+Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly import one or more selected attachments through the existing immutable upload pipeline.
 
 - Attachment listing returns only bounded metadata/SHA-256; unnamed parts use a standard MIME extension so supported imports stay analyzable, while raw bytes are never returned.
-- The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
+- One explicit request may import 1 to 100 selected attachments; the email is parsed once and every index and SHA-256 is validated before any upload is created.
+- Every selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
 - Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.
 - Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review; a relationship is displayed only when its parent document parsed as email.
 - Attached emails require another explicit selection before their body or nested attachments are visible; neither may contribute to the parent email analysis, and active content and remote resources remain inert.

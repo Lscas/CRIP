@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 370,
+  "file_count_excluding_manifest": 372,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -47,13 +47,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 33638,
-      "sha256": "ef2b2b260d20f2a20a6247db9325d2494795480b8b7f511c029128844e876e27"
+      "bytes": 34077,
+      "sha256": "702fa1ed86049fd4ee6e531eae92ebc243eb5801fcac22de2e9a84100fd42641"
     },
     {
       "path": "README.md",
-      "bytes": 13264,
-      "sha256": "bba481b19fb9dd2ed78b9d7f94c4cabbe1d9d3167e0f542c925089f423a63ab4"
+      "bytes": 13444,
+      "sha256": "78c515a510f7ef997ea3d21a0d20d7b9f389bb2d90fee2fab892cdcb6f89cb44"
     },
     {
       "path": "VERSION",
@@ -97,8 +97,8 @@
     },
     {
       "path": "app/email_attachments.py",
-      "bytes": 4500,
-      "sha256": "10ebb6a41ec7c9a65e035275a61a3c4d94822832beb3c1b921ad76a328bb40e1"
+      "bytes": 5151,
+      "sha256": "bf7c9a01e64c34a2fa5d8535ce122d722042cedf3c1e2ac1c6a66c3319366628"
     },
     {
       "path": "app/email_mime.py",
@@ -127,8 +127,8 @@
     },
     {
       "path": "app/main.py",
-      "bytes": 30406,
-      "sha256": "f697924021f77f1cba03b40ff09c873e1bb846b9f686e2c456e81bcb61f01cbb"
+      "bytes": 31166,
+      "sha256": "24b2ba098122371e1f837d94cf3a239c7678d028f4d0351416c4a4f51dc2d1e6"
     },
     {
       "path": "app/parser_worker.py",
@@ -551,6 +551,11 @@
       "sha256": "c6d627eaf6a87b04553679b88efd82631480ca60f1003d72f827dbb382551981"
     },
     {
+      "path": "changes/CR-0073.json",
+      "bytes": 1852,
+      "sha256": "e66c9f1eb979c0affc6235e5ab0e6862752124794777436908a43e01e6503986"
+    },
+    {
       "path": "config/assembly_rules.json",
       "bytes": 1239,
       "sha256": "60011fb0cd460307099ddba8327ebf2858908e061d9d41668f8a8bf6b52ba8a6"
@@ -652,8 +657,8 @@
     },
     {
       "path": "docs/IMPLEMENTATION_STATUS.md",
-      "bytes": 13008,
-      "sha256": "4aa51270d56e3e4189ff78bac15c4c70d841d8c7ea0e7a6bd825f352b0bf14c3"
+      "bytes": 13024,
+      "sha256": "1f6d850e9cf053ff2e7b0b19582fa0bf729d6dd67353bab6dfa70339cbb4ffd2"
     },
     {
       "path": "docs/LOCAL_DEPLOY.md",
@@ -682,13 +687,13 @@
     },
     {
       "path": "docs/PERFORMANCE_BASELINE.md",
-      "bytes": 6061,
-      "sha256": "7448c9cbc7e5d54e4d8df4226d38c8d03f11e5cdb70c5dd90dff0d610e30a594"
+      "bytes": 6502,
+      "sha256": "14b29d08213a254bb94be6114556f6c090166c469c6cbd814ad130d400526639"
     },
     {
       "path": "docs/PRODUCT_SPEC.md",
-      "bytes": 26317,
-      "sha256": "77b418f46eeff3a92467bed37d8ffc729f701155e34d69c7581f0c31dfa65292"
+      "bytes": 26488,
+      "sha256": "6e7c53c9375c998637b1d06184b416b7ba72ae1eee0c8046dc7a36dc9e7ff25a"
     },
     {
       "path": "docs/PROVIDER_INTEGRATION.md",
@@ -707,8 +712,8 @@
     },
     {
       "path": "docs/REQUIREMENTS.md",
-      "bytes": 41107,
-      "sha256": "870db49135e3d32c51acfb5ab0422c6004ebdbd8fa77580e58d44286f0ec885f"
+      "bytes": 41280,
+      "sha256": "bb1a1c59c0bd68a7c0df3dd731ccbc4df723f06bc8316e12ea21ae1291ebaa69"
     },
     {
       "path": "docs/REVIEW_RESOLUTION.md",
@@ -1167,8 +1172,8 @@
     },
     {
       "path": "scripts/browser_i18n_smoke.py",
-      "bytes": 21986,
-      "sha256": "2da2a60336b5b54f7e003df64b87991898c68a8f4b27c066241e228904867a0d"
+      "bytes": 22298,
+      "sha256": "056f1f32fb9f1907f14c6a79aeb7c75122942128731b51ded4f3579305488d18"
     },
     {
       "path": "scripts/browser_smoke.py",
@@ -1272,8 +1277,8 @@
     },
     {
       "path": "spec/requirements.json",
-      "bytes": 69652,
-      "sha256": "1e21d324d661910a250478407cef43d34d8af4ffbeb7bd582f761695ae069d28"
+      "bytes": 69833,
+      "sha256": "73a9f78961f4ee291414c992610b98410db78ac6da9f8921a9f30da8ef7e2a2f"
     },
     {
       "path": "spec/schemas/change-record.schema.json",
@@ -1352,8 +1357,8 @@
     },
     {
       "path": "spec/traceability.json",
-      "bytes": 60694,
-      "sha256": "800ade7a03536baa899092d3d0b5893580e0b0e04931cfa4f652824e885afb9c"
+      "bytes": 60839,
+      "sha256": "8a81a8056f7f3ba26efb9fa47286c9a3db8f92ac567b3939e809a914eb50f468"
     },
     {
       "path": "start-custom-model.ps1",
@@ -1681,6 +1686,11 @@
       "sha256": "78f6a377a10d8acbdf5682a51cb5e63480ab1fe755329ca9bb3b1775b4f1925a"
     },
     {
+      "path": "tasks/DEV-058.json",
+      "bytes": 2031,
+      "sha256": "d6e10526fe0c6564e0372bc0cd85fa24c2853299dfc7f24708250e2548b0a864"
+    },
+    {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",
       "bytes": 833224,
       "sha256": "8cded5162ea2b5d851dde61fbd24806dd9137d6af4a6e31d1ef1a346541a3fc3"
@@ -1732,8 +1742,8 @@
     },
     {
       "path": "tests/app/test_email_attachments.py",
-      "bytes": 11212,
-      "sha256": "958aad041a2c9eb39afd09bedf08908dd15135548cbba9953d277d3b525685d2"
+      "bytes": 13877,
+      "sha256": "e2a70e863e62b59e3c216573b217f6cd45a8237994013c8e935b8c212e7f8a85"
     },
     {
       "path": "tests/app/test_export_readability.py",
@@ -1837,13 +1847,13 @@
     },
     {
       "path": "web/app.js",
-      "bytes": 35138,
-      "sha256": "6ac05a954b9a4e57f6427a6847479cf037955cae7b9cc8524b16e4a2b60b7aa3"
+      "bytes": 35822,
+      "sha256": "22b893a33a02c205ceb565d07fb37d6bd2bbf2ebce17157067c9eb6a76552b4b"
     },
     {
       "path": "web/i18n.js",
-      "bytes": 48528,
-      "sha256": "f635047ab03ecbac4a88f5c776fa460e26e217b400b0d83411d9c6d5f774f8e0"
+      "bytes": 48943,
+      "sha256": "4f85eedbe08d7469a15b3779cfd1ea62c414cdc031512121a23d7cd1890a0199"
     },
     {
       "path": "web/index.html",

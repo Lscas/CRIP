@@ -302,7 +302,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML or MSG attachment through project capacity, chunk, SHA-256 and deduplication controls. Nested messages and related non-root resources remain inert; parser inventory and selected import share one standard MIME-derived name for unnamed parts so supported imports remain analyzable. Supplied names and conservative parser validation remain unchanged; no analysis or model call starts automatically."
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one attachment or a batch of up to 100 selected EML or MSG attachments. A batch parses the parent email once and prevalidates every index/SHA-256 before any upload is created, then reuses project capacity, chunk, SHA-256 and deduplication controls. Nested messages and related non-root resources remain inert; parser inventory and selected import share one standard MIME-derived name for unnamed parts so supported imports remain analyzable. Supplied names and conservative parser validation remain unchanged; no analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",

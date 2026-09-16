@@ -3,7 +3,7 @@
 
 | 模块 | 当前实际行为 | 未完成 |
 |---|---|---|
-| Upload | Browser files/folders; read-only Autodesk/Procore selected imports; selected EML/MSG attachments with parent provenance; 4 MiB chunks, capacity, SHA-256 and deduplication | 10 GB stress, cleanup, object storage, virus scan, recursive email imports, OAuth/refresh, polling and live-tenant acceptance |
+| Upload | Browser files/folders; Autodesk/Procore selected imports; selected/batched EML/MSG attachments with prevalidation and parent provenance; 4 MiB chunks, capacity, SHA-256 and deduplication | 10 GB stress, cleanup, object storage, virus scan, recursive email imports, OAuth/refresh, polling and live-tenant acceptance |
 | 项目/任务 | SQLite WAL/事务/单运行锁/输入快照；暂停/恢复/取消/中断；运行可选1/2/4 workers并记录页数和阶段/模型耗时 | 多租户队列、进程隔离；真实文件吞吐基准 |
 | Parsing | TXT/DOCX; EML/MSG headers/body/history/signature, inert attachments and workflow/thread metadata; PDF structure/tables, OCR, bounded progress, sequential workflow scope and equivalent 1/2/4-worker chunks | Mailbox/recursive attachments/semantic threads, unknown wrappers, borderless/cross-page tables, multi-column order, revisions/comments, graphic semantics |
 

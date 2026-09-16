@@ -82,3 +82,7 @@ Synthetic text, Email and compact filenames previously lost same-line role/statu
 ## CR-0072 exact Submittal status fixture
 
 Three synthetic Email status lines beginning with Approved, Pending or Rejected previously became formal dispositions despite trailing prose. Complete allowlisted values still pass with terminal punctuation; longer prose stays neutral. This is an offline boundary check.
+
+## CR-0073 selected Email attachment batch fixture
+
+A synthetic EML with two supported attachments now needs one parse and one explicit import request instead of two parses and two requests. Both attachment identities are prevalidated before upload creation; an invalid hash or duplicate index leaves the manifest unchanged. This is a structural offline fixture, not a mailbox, customer-file, storage-throughput or live-provider benchmark.

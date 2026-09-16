@@ -241,6 +241,12 @@ async function showEmailAttachments(documentId,fileName){
  const listing=await api(`/documents/${documentId}/email-attachments`);$('drawer').hidden=false;I.bindText($('drawer-title'),'emailAttachments.title');const body=$('drawer-body');body.replaceChildren();
  body.append(elT('p','emailAttachments.description',{file:fileName},'muted'));
  if(!listing.attachments.length){body.append(elT('p','emailAttachments.empty',{},'muted'));return;}
+ const importable=listing.attachments.filter(item=>item.importable);
+ if(importable.length>1){
+  const actions=el('div',null,'row');const batch=elT('button','emailAttachments.importAll',{count:importable.length},'primary');batch.disabled=!state.project;
+  batch.onclick=error(async()=>{batch.disabled=true;const result=await api(`/projects/${state.project}/email-attachment-imports/batch`,'POST',{document_id:documentId,attachments:importable.map(item=>({attachment_index:item.attachment_index,expected_sha256:item.sha256}))});$('drawer').hidden=true;toast(I.t('emailAttachments.importedAll',{count:result.count}));await refresh();});
+  actions.append(batch);body.append(actions);
+ }
  listing.attachments.forEach(item=>{const card=el('article',null,'verification-field');card.append(el('strong',item.name),el('small',`${item.content_type} · ${item.size==null?'—':(item.size/1024).toFixed(1)+' KB'}`));
   const button=elT('button','emailAttachments.import',{},'outline');button.disabled=!item.importable||!state.project;
   button.onclick=error(async()=>{button.disabled=true;await api(`/projects/${state.project}/email-attachment-imports`,'POST',{document_id:documentId,attachment_index:item.attachment_index,expected_sha256:item.sha256});$('drawer').hidden=true;toast(I.t('emailAttachments.imported',{name:item.name}));await refresh();});

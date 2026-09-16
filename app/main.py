@@ -26,7 +26,8 @@ from app.remote_access import PreviewAccess
 from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,build_workflow_index,
                            projected_workflow_summary)
 from app.connectors import ExternalConnectors
-from app.email_attachments import import_email_attachment,list_email_attachments
+from app.email_attachments import (import_email_attachment,import_email_attachments,
+                                   list_email_attachments)
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -47,10 +48,14 @@ class ConnectorInput(Input):
 class ConnectorImportInput(Input):
     provider:Literal['autodesk','procore']
     remote_id:str=Field(min_length=1,max_length=2048)
-class EmailAttachmentImportInput(Input):
-    document_id:str=Field(min_length=1,max_length=128)
+class EmailAttachmentSelection(Input):
     attachment_index:int=Field(ge=0,le=10000)
     expected_sha256:str=Field(pattern=r'^[0-9a-f]{64}$')
+class EmailAttachmentImportInput(EmailAttachmentSelection):
+    document_id:str=Field(min_length=1,max_length=128)
+class EmailAttachmentBatchInput(Input):
+    document_id:str=Field(min_length=1,max_length=128)
+    attachments:list[EmailAttachmentSelection]=Field(min_length=1,max_length=100)
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
     semantic:bool=False
@@ -211,6 +216,12 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def email_attachment_import(pid:str,data:EmailAttachmentImportInput):
         doc=db.one('SELECT * FROM documents WHERE id=? AND project_id=?',(data.document_id,pid))
         return import_email_attachment(uploads,doc,data.attachment_index,data.expected_sha256)
+    @app.post('/api/projects/{pid}/email-attachment-imports/batch',status_code=201)
+    def email_attachment_batch_import(pid:str,data:EmailAttachmentBatchInput):
+        doc=db.one('SELECT * FROM documents WHERE id=? AND project_id=?',(data.document_id,pid))
+        imported=import_email_attachments(
+            uploads,doc,[(item.attachment_index,item.expected_sha256) for item in data.attachments])
+        return {'count':len(imported),'imports':imported}
     @app.post('/api/projects/{pid}/analysis-runs',status_code=202)
     def run_create(pid:str,data:RunInput|None=None):return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')

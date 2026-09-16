@@ -12,7 +12,7 @@
 不能将“全部专业能上传”写成“全部专业已正确分析”。每专业、文件、页面和任务均显示未处理、完成、部分、失败或能力缺失。内部原型可以逐模块交付，但不能擅自把总目标缩为混凝土专项。
 
 ## 2. 范围
-The current input slice accepts PDF, DOCX, TXT, RFC-style EML, bounded local Outlook MSG, common PNG/JPEG/TIFF/BMP/WEBP images, DWG, and DXF. EML and MSG expose safe headers and visible body text through the same evidence and workflow path; attachments remain inert until a reviewer explicitly imports one through the ordinary upload controls. Active HTML is not executed, remote resources are not fetched, and nested attachments do not recurse automatically. Autodesk APS and Procore remain read-only selected-file imports. Excel, mailbox connection or synchronization, native BIM, and continuous synchronization are outside this slice.
+The current input slice accepts PDF, DOCX, TXT, RFC-style EML, bounded local Outlook MSG, common PNG/JPEG/TIFF/BMP/WEBP images, DWG, and DXF. EML and MSG expose safe headers and visible body text through the same evidence and workflow path; attachments remain inert until a reviewer explicitly imports one attachment or all supported attachments in a bounded batch through the ordinary upload controls. A batch parses the parent email once and prevalidates every selected index and SHA-256 before creating uploads. Active HTML is not executed, remote resources are not fetched, and nested attachments do not recurse automatically. Autodesk APS and Procore remain read-only selected-file imports. Excel, mailbox connection or synchronization, native BIM, and continuous synchronization are outside this slice.
 
 永久材料列设计要求、类别、厂家、产品、型号、等级、尺寸、安装范围、来源及设计净量；临时材料只要求名称与依据。无指定字段为null。无价格、无采购订单、无供货责任裁定。多个厂家／产品若为互斥选项，全部列在ONE_OF组，不替用户选一个，不合计多倍数量。
 

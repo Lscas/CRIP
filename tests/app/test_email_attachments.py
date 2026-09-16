@@ -7,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from types import SimpleNamespace
 
+import app.email_attachments as email_attachments
 from app.email_mime import safe_attachment_name
 from app.parsers import parse_file
 from tests.app.conftest import upload
@@ -46,6 +47,54 @@ def test_selected_email_attachment_import_reuses_hash_and_dedupe(client,project)
     assert all(item['source_kind']=='EMAIL_ATTACHMENT' for item in imported_uploads)
     assert all(item['source_detail']=={'attachment_index':0,'content_type':'application/pdf',
                                        'sha256':pdf['sha256']} for item in imported_uploads)
+
+
+def test_selected_email_attachment_batch_parses_once_and_preserves_each_source(
+        client,project,monkeypatch):
+    source=upload(client,project['id'],'response.eml',email_with_attachments())
+    attachments=client.get(
+        f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments']
+    original=email_attachments._records;calls=[]
+    def counted(*args):
+        calls.append(args);return original(*args)
+    monkeypatch.setattr(email_attachments,'_records',counted)
+
+    response=client.post(f'/api/projects/{project["id"]}/email-attachment-imports/batch',json={
+        'document_id':source['document_id'],
+        'attachments':[{'attachment_index':item['attachment_index'],
+                        'expected_sha256':item['sha256']} for item in attachments]})
+    manifest=client.get(f'/api/projects/{project["id"]}/manifest').json()
+
+    assert response.status_code==201 and response.json()['count']==2
+    assert [item['name'] for item in response.json()['imports']]==['response.pdf','note.txt']
+    assert len(calls)==1 and len(manifest['documents'])==3
+    sources={item['name']:item['source_detail'] for item in manifest['uploads']
+             if item.get('source_kind')=='EMAIL_ATTACHMENT'}
+    assert sources=={
+        'response.pdf':{'attachment_index':0,'content_type':'application/pdf',
+                        'sha256':attachments[0]['sha256']},
+        'note.txt':{'attachment_index':1,'content_type':'text/plain',
+                    'sha256':attachments[1]['sha256']},
+    }
+    assert client.get(f'/api/projects/{project["id"]}/analysis-runs').json()==[]
+
+
+def test_email_attachment_batch_prevalidates_every_identity_before_import(client,project):
+    source=upload(client,project['id'],'response.eml',email_with_attachments())
+    attachments=client.get(
+        f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments']
+    payload={'document_id':source['document_id'],'attachments':[
+        {'attachment_index':0,'expected_sha256':attachments[0]['sha256']},
+        {'attachment_index':1,'expected_sha256':'0'*64},
+    ]}
+
+    changed=client.post(f'/api/projects/{project["id"]}/email-attachment-imports/batch',json=payload)
+    duplicate=client.post(f'/api/projects/{project["id"]}/email-attachment-imports/batch',json={
+        'document_id':source['document_id'],'attachments':[payload['attachments'][0]]*2})
+    manifest=client.get(f'/api/projects/{project["id"]}/manifest').json()
+
+    assert changed.status_code==409 and duplicate.status_code==422
+    assert [item['name'] for item in manifest['uploads']]==['response.eml']
 
 
 def test_selected_msg_attachment_uses_the_same_bounded_import_path(client,project,monkeypatch):

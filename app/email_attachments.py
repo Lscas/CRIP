@@ -75,15 +75,28 @@ def list_email_attachments(path: Path,original_name: str) -> list[dict]:
     return [metadata for metadata,_ in _records(path,original_name)]
 
 
-def import_email_attachment(uploads,doc: dict,attachment_index: int,expected_sha256: str) -> dict:
+def import_email_attachments(uploads,doc: dict,selections: list[tuple[int,str]]) -> list[dict]:
+    if not selections:raise DomainError('Select at least one email attachment',422)
     records=_records(uploads.object_path(doc),doc['name'])
-    if attachment_index<0 or attachment_index>=len(records):raise DomainError('Email attachment was not found',404)
-    metadata,data=records[attachment_index]
-    if data is None:raise DomainError('This email attachment encoding is not supported',422)
-    if not hmac.compare_digest(expected_sha256,metadata['sha256']):
-        raise DomainError('Email attachment identity changed; refresh the attachment list',409)
-    return uploads.import_bytes(doc['project_id'],metadata['name'],data,
-                                source_document_id=doc['id'],source_kind='EMAIL_ATTACHMENT',
-                                source_detail={'attachment_index':attachment_index,
-                                               'content_type':metadata['content_type'],
-                                               'sha256':metadata['sha256']})
+    selected=[];seen=set()
+    for attachment_index,expected_sha256 in selections:
+        if attachment_index in seen:
+            raise DomainError('Email attachment selection contains a duplicate index',422)
+        seen.add(attachment_index)
+        if attachment_index<0 or attachment_index>=len(records):
+            raise DomainError('Email attachment was not found',404)
+        metadata,data=records[attachment_index]
+        if data is None:raise DomainError('This email attachment encoding is not supported',422)
+        if not hmac.compare_digest(expected_sha256,metadata['sha256']):
+            raise DomainError('Email attachment identity changed; refresh the attachment list',409)
+        selected.append((metadata,data))
+    return [uploads.import_bytes(doc['project_id'],metadata['name'],data,
+                                 source_document_id=doc['id'],source_kind='EMAIL_ATTACHMENT',
+                                 source_detail={'attachment_index':metadata['attachment_index'],
+                                                'content_type':metadata['content_type'],
+                                                'sha256':metadata['sha256']})
+            for metadata,data in selected]
+
+
+def import_email_attachment(uploads,doc: dict,attachment_index: int,expected_sha256: str) -> dict:
+    return import_email_attachments(uploads,doc,[(attachment_index,expected_sha256)])[0]

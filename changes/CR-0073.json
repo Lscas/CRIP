@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0073",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-INGEST-006"
+  ],
+  "summary": "Allow one explicit bounded selection to import several inert email attachments through the existing immutable upload pipeline.",
+  "decision_refs": [
+    "The active goal requires better Email efficiency and adaptability",
+    "The user previously requested reducing manual imports",
+    "Current UI/API reparses and imports every email attachment one at a time"
+  ],
+  "affected_paths": [
+    "app/email_attachments.py",
+    "app/main.py",
+    "web/**",
+    "tests/app/test_email_attachments.py",
+    "tests/web/**",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "tasks/DEV-058.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0073.json"
+  ],
+  "tests": [
+    "tests/app/test_email_attachments.py",
+    "tests/web/i18n.test.mjs",
+    "scripts/browser_i18n_smoke.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued efficiency and adaptability improvements across Email content and prior instructions authorize reducing manual imports.",
+  "known_limitations": [
+    "The batch contains only explicitly selected attachments from one already uploaded email and is capped at 100 selections.",
+    "Nested messages and their attachments still require another explicit review and import action.",
+    "All identities are prevalidated before upload creation, but a later capacity, filesystem or write failure can still leave earlier completed imports visible and the failed upload aborted.",
+    "Validation is synthetic and offline; no customer email, mailbox, provider or paid model is used."
+  ]
+}
