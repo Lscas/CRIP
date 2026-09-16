@@ -23,7 +23,8 @@ from app.runner import Runner
 from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
                           reviewer_record_is_visible)
 from app.remote_access import PreviewAccess
-from app.workflows import build_workflow_index
+from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,build_workflow_index,
+                           projected_workflow_summary)
 from app.connectors import ExternalConnectors
 from app.email_attachments import import_email_attachment,list_email_attachments
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
@@ -237,8 +238,11 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def run_workflows(rid:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
         """Read-only deterministic workflow relationships; never calls a model."""
         run=runner.get(rid)
-        rows=db.all('''SELECT r.document_id,r.summary,d.name FROM document_results r
-                       JOIN documents d ON d.id=r.document_id WHERE r.run_id=? ORDER BY d.name''',(rid,))
+        rows=db.all(f'''SELECT r.document_id,d.name,
+                       json_extract(r.summary,{WORKFLOW_SUMMARY_SQL_PATHS}) AS workflow_values
+                       FROM document_results r JOIN documents d ON d.id=r.document_id
+                       WHERE r.run_id=? ORDER BY d.name''',(rid,))
+        for row in rows:row['summary']=projected_workflow_summary(row.pop('workflow_values'))
         links=db.all('''SELECT s.source_kind,s.source_document_id,u.document_id,s.source_detail
                         FROM upload_sources s JOIN uploads u ON u.id=s.upload_id
                         JOIN document_results child ON child.run_id=? AND child.document_id=u.document_id

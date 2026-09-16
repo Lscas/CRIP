@@ -49,3 +49,11 @@ def test_local_parse_benchmark_is_measured_offline(tmp_path):
     assert report['paid_api_calls']==0 and report['files'][0]['outputs_match']
     assert [run['workers'] for run in report['files'][0]['runs']]==[1,2]
     assert all(run['pages_processed']==4 for run in report['files'][0]['runs'])
+
+
+def test_workflow_read_benchmark_is_bounded_and_offline():
+    completed=subprocess.run([sys.executable,'scripts/benchmark_workflow_read.py','--pages','100',
+                              '--iterations','5'],check=True,capture_output=True,text=True)
+    report=json.loads(completed.stdout)
+    assert report['paid_api_calls']==0 and report['projected_bytes']<report['full_bytes']
+    assert report['byte_reduction_percent']>90

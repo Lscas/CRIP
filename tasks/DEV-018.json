@@ -1,0 +1,45 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "The workflow endpoint needs only nine small fields from each persisted parser summary, not page, vision, CAD or geometry arrays.",
+    "Use Python's bundled SQLite JSON functions and retain legacy top-level workflow fields; add no dependency or cache invalidation path."
+  ],
+  "task_id": "DEV-018",
+  "title": "Bounded workflow summary reads",
+  "requirement_ids": [
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/main.py",
+    "app/workflows.py",
+    "scripts/benchmark_workflow_read.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "tests/test_devtools.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-018.json",
+    "changes/CR-0033.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/PERFORMANCE_BASELINE.md",
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py tests/app/test_api.py tests/test_devtools.py -q",
+    "python scripts/benchmark_workflow_read.py --iterations 50",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Project only workflow-relevant fields from persisted parser summaries before Python decoding, preserve endpoint output and legacy workflow fields, and keep a reproducible offline size/timing benchmark."
+}

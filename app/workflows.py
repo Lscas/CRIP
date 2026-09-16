@@ -9,6 +9,19 @@ from collections import defaultdict
 _SPACED_SUBMITTAL_ID=re.compile(
     r'^\d{1,2}\s+\d{2}\s+\d{2}(?:\s*[-./]\s*[A-Z0-9][A-Z0-9._/-]{0,20})?')
 _COMPACT_ID=re.compile(r'^[A-Z0-9]*\d[A-Z0-9]*(?:[._/-][A-Z0-9]+)*')
+WORKFLOW_SUMMARY_KEYS=('document_type','workflow_contexts','workflow_references','email_content','email_thread',
+                       'workflow_type','document_identifier','workflow_role','workflow_status')
+WORKFLOW_SUMMARY_SQL_PATHS=','.join(repr(f'$.{key}') for key in WORKFLOW_SUMMARY_KEYS)
+
+
+def projected_workflow_summary(value: object) -> dict:
+    """Decode the bounded multi-path SQLite projection used by the workflow endpoint."""
+    values=json.loads(value) if isinstance(value,str) else value
+    if not isinstance(values,list) or len(values)!=len(WORKFLOW_SUMMARY_KEYS):
+        raise ValueError('invalid workflow summary projection')
+    summary=dict(zip(WORKFLOW_SUMMARY_KEYS,values))
+    summary['document_type']=summary.get('document_type') or 'UNKNOWN'
+    return summary
 
 
 def normalize_identifier(workflow: str, value: object) -> str | None:

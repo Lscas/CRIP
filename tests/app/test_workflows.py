@@ -1,11 +1,20 @@
 """Deterministic workflow relationship index; no provider calls."""
 import json
 
-from app.workflows import build_workflow_index
+from app.workflows import build_workflow_index,projected_workflow_summary
 
 
 def row(did,name,**summary):
     return {'document_id':did,'name':name,'summary':json.dumps(summary)}
+
+
+def test_projected_summary_preserves_legacy_workflow_fields():
+    summary=projected_workflow_summary(json.dumps([
+        'RFI_RESPONSE',None,None,None,None,'RFI','0042','RESPONSE',None]))
+    result=build_workflow_index([{'document_id':'D1','name':'legacy.pdf','summary':summary}])
+
+    assert result['items'][0]['identifier']=='42'
+    assert result['items'][0]['members'][0]['role']=='RESPONSE'
 
 
 def test_rfi_links_question_response_and_reference_by_normalized_identifier():

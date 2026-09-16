@@ -91,7 +91,7 @@ def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client
                                      'status':'NOT_PROCESSED'}]
 
 
-def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project):
+def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
     for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
                       ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.')]:
         upload(client,project['id'],name,text.encode())
@@ -100,6 +100,19 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
     run=runner.get(rid);run['model']='mock'
     for did in run['document_ids']:runner.parse_one(run,did)
+
+    stored=db.one('SELECT document_id,summary FROM document_results WHERE run_id=? ORDER BY document_id',(rid,))
+    summary=json.loads(stored['summary']);summary['pages']=[{'payload':'x'*250_000}]
+    full_summary=json.dumps(summary)
+    db.execute('UPDATE document_results SET summary=? WHERE run_id=? AND document_id=?',
+               (full_summary,rid,stored['document_id']))
+    projected_bytes=[];original_all=db.all
+    def measured_all(query,args=()):
+        rows=original_all(query,args)
+        if 'workflow_values' in query:
+            projected_bytes.append(sum(len(json.dumps(row)) for row in rows))
+        return rows
+    monkeypatch.setattr(db,'all',measured_all)
 
     before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
     response=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
@@ -110,6 +123,7 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     result=response.json();assert result['pagination']['limit']==1
     assert result['items'][0]['kind']=='RFI' and result['items'][0]['state']=='LINKED'
     assert result['summary']['rfi_groups']==1 and before==after
+    assert len(full_summary)>250_000 and projected_bytes and max(projected_bytes)<10_000
 
 def test_chunk_limit(client,project):
     u=client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'x.txt','size':6000000}).json()

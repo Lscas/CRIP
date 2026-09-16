@@ -35,3 +35,22 @@ After adding deterministic page routing, specification locators and bordered tab
 | 4 | 8.499 s | 1.22x | yes |
 
 The earlier and later wall-clock values are close enough to include ordinary local variance and process-startup effects. This recheck establishes output/request-count stability, not a speed improvement or a customer-document accuracy result.
+
+## CR-0033 workflow-summary read baseline
+
+The workflow reviewer needs nine relationship fields from each parser summary. It previously transferred and decoded the complete JSON summary, including unrelated page, vision, CAD, takeoff and geometry arrays. The endpoint now uses the SQLite JSON functions bundled with Python to project those nine fields before Python decoding, while preserving legacy top-level workflow fields.
+
+On the same Windows/Python environment, `scripts/benchmark_workflow_read.py` generated a 2,000-page synthetic summary and measured the best of three 300-iteration query-and-decode rounds:
+
+| Read path | Returned JSON | 300 query/decode operations |
+|---|---:|---:|
+| Complete parser summary | 1,112,749 bytes | 599.8 ms |
+| Nine workflow fields | 254 bytes | 255.1 ms |
+
+This is a 99.98% payload reduction and 2.35x synthetic speedup. It is not a browser, network, customer-project or semantic-accuracy benchmark; actual gains depend on document-summary size and local SQLite behavior. No model API or customer file is used.
+
+Reproduce locally:
+
+```powershell
+.venv\Scripts\python.exe scripts\benchmark_workflow_read.py --pages 2000 --iterations 300
+```

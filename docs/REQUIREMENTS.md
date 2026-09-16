@@ -140,6 +140,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
+- The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import

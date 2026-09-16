@@ -252,7 +252,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact digit-bearing RFI, normalized Submittal, hashed email-thread and persisted selected-attachment relationships are available in one bounded read-only reviewer index. UNKNOWN page contexts remain neutral and cannot manufacture a missing RFI Question or Response role. A Submittal primary plus an exact reference is linked, while distinct explicit statuses remain ambiguous. Multi-value In-Reply-To identifiers link through individual exact hashes; a message that references its own ID is ambiguous. Imported attachments do not inherit workflow role, approval or authority. Keyword-only matches are rejected; no model call is made."
+      "progress_note": "Exact digit-bearing RFI, normalized Submittal, hashed email-thread and persisted selected-attachment relationships are available in one bounded read-only reviewer index. UNKNOWN page contexts remain neutral and cannot manufacture a missing RFI Question or Response role. A Submittal primary plus an exact reference is linked, while distinct explicit statuses remain ambiguous. Multi-value In-Reply-To identifiers link through individual exact hashes; a message that references its own ID is ambiguous. The endpoint projects only nine workflow fields from each parser summary before Python decoding; page, vision, CAD and geometry arrays are not loaded. Imported attachments do not inherit authority, and no model call is made."
     },
     {
       "requirement_id": "FR-INGEST-005",
