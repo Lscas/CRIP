@@ -178,6 +178,7 @@ def test_eml_multiple_in_reply_to_ids_link_one_exact_hashed_thread(tmp_path):
     index=build_workflow_index(rows)
     threads=[item for item in index['items'] if item['kind']=='EMAIL_THREAD']
     assert len(threads)==1 and threads[0]['state']=='LINKED' and len(threads[0]['members'])==3
+    assert [member['document_id'] for member in threads[0]['members']]==['D1','D2','D3']
 
 
 def test_eml_html_blockquote_is_history_not_current_body(tmp_path):

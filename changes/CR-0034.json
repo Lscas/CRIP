@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0034",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Order email-thread members from exact hashed local relationships and mark cyclic parent/reference graphs ambiguous without dropping messages.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy and adaptability across RFI, Submittal and email content",
+    "Existing requirement that email relationships remain exact and non-inferential"
+  ],
+  "affected_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-019.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0034.json"
+  ],
+  "tests": [
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued email accuracy and adaptability improvements.",
+  "known_limitations": [
+    "Ordering uses exact locally available hashed Message-ID relationships only; external ancestors cannot be placed in the local member list.",
+    "Sibling messages use deterministic filename/document-ID order rather than an inferred chronological order.",
+    "Validation is synthetic and offline; no mailbox, model or external provider request is used."
+  ]
+}

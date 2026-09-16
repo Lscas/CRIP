@@ -120,9 +120,9 @@ def test_unknown_pages_do_not_manufacture_the_missing_rfi_role():
 def test_email_threads_link_only_hashed_exact_headers_and_count_external_references():
     parent='MSG-'+'a'*24;child='MSG-'+'b'*24;missing='MSG-'+'c'*24
     result=build_workflow_index([
-        row('D1','question.eml',document_type='EMAIL',email_thread={
+        row('D1','z-parent.eml',document_type='EMAIL',email_thread={
             'message_key':parent,'parent_message_key':None,'reference_keys':[]}),
-        row('D2','reply.eml',document_type='EMAIL',email_thread={
+        row('D2','a-reply.eml',document_type='EMAIL',email_thread={
             'message_key':child,'parent_message_key':parent,'reference_keys':[parent,missing]},
             email_content={'quoted_history_chars':42}),
         row('D3','standalone.eml',document_type='EMAIL',email_thread={
@@ -131,6 +131,7 @@ def test_email_threads_link_only_hashed_exact_headers_and_count_external_referen
     thread=next(item for item in result['items'] if item['kind']=='EMAIL_THREAD' and len(item['members'])==2)
     standalone=next(item for item in result['items'] if item['kind']=='EMAIL_THREAD' and len(item['members'])==1)
     assert thread['state']=='LINKED' and thread['external_reference_count']==1
+    assert [member['document_id'] for member in thread['members']]==['D1','D2']
     assert standalone['state']=='SINGLE'
     assert result['summary']['email_threads']==2 and result['summary']['quoted_email_documents']==1
 
@@ -143,6 +144,20 @@ def test_email_self_reference_is_ambiguous():
 
     assert item['state']=='AMBIGUOUS'
     assert 'references its own Message-ID' in item['warnings'][0]
+
+
+def test_email_reference_cycle_is_ambiguous_and_retains_every_member():
+    first='MSG-'+'a'*24;second='MSG-'+'b'*24
+    result=build_workflow_index([
+        row('D1','a.eml',document_type='EMAIL',email_thread={
+            'message_key':first,'parent_message_key':second,'reference_keys':[]}),
+        row('D2','b.eml',document_type='EMAIL',email_thread={
+            'message_key':second,'parent_message_key':first,'reference_keys':[]}),
+    ])
+    item=result['items'][0]
+
+    assert item['state']=='AMBIGUOUS' and len(item['members'])==2
+    assert 'form a cycle' in item['warnings'][0]
 
 
 def test_selected_email_attachment_relationship_is_deduplicated_without_inheriting_authority():

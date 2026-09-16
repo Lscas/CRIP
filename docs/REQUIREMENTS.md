@@ -127,6 +127,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
 - Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
+- Local thread members are ordered parent-before-child from exact hashed header relationships; cyclic relationships remain complete and are marked ambiguous.
 - MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
 
 ## FR-WORKFLOW-001 · Deterministic workflow relationships
@@ -139,6 +140,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
+- Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.

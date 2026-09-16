@@ -1,6 +1,7 @@
 """Deterministic RFI, Submittal and email relationships; no model calls."""
 from __future__ import annotations
 import hashlib
+import heapq
 import json
 import re
 from collections import defaultdict
@@ -107,6 +108,31 @@ def _workflow_state(workflow: str, members: list[dict], source_status_conflict: 
         return ('SINGLE' if len(members)==1 else 'LINKED'),[]
 
 
+def _email_thread_order(values: list[dict],by_key: dict) -> tuple[list[dict],bool]:
+    """Put exact local ancestors before replies; retain every member when headers form a cycle."""
+    by_id={value['document_id']:value for value in values};children=defaultdict(set)
+    indegree={did:0 for did in by_id}
+    for child in values:
+        thread=child['email_thread']
+        for key in [thread.get('parent_message_key'),*(thread.get('reference_keys') or [])]:
+            for parent_id in by_key.get(key,[]):
+                child_id=child['document_id']
+                if parent_id==child_id or parent_id not in by_id or child_id in children[parent_id]:continue
+                children[parent_id].add(child_id);indegree[child_id]+=1
+    order_key=lambda did:(by_id[did]['file_name'].casefold(),did)
+    ready=[order_key(did) for did,count in indegree.items() if count==0];heapq.heapify(ready)
+    ordered=[]
+    while ready:
+        _,did=heapq.heappop(ready);ordered.append(did)
+        for child_id in sorted(children[did],key=order_key):
+            indegree[child_id]-=1
+            if indegree[child_id]==0:heapq.heappush(ready,order_key(child_id))
+    cycle=len(ordered)!=len(values)
+    if cycle:
+        seen=set(ordered);ordered.extend(sorted((did for did in by_id if did not in seen),key=order_key))
+    return [by_id[did] for did in ordered],cycle
+
+
 def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
     email=[document for document in documents if document.get('email_thread')]
     if not email:return [],set()
@@ -134,6 +160,7 @@ def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
     items=[];linked=set()
     for values in components.values():
         values=sorted(values,key=lambda item:(item['file_name'].casefold(),item['document_id']))
+        values,cycle=_email_thread_order(values,by_key)
         keys=[item['email_thread'].get('message_key') for item in values if item['email_thread'].get('message_key')]
         duplicate=len(keys)!=len(set(keys));known=set(keys);external=set();self_reference=False
         for item in values:
@@ -141,10 +168,11 @@ def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
             for key in [thread.get('parent_message_key'),*(thread.get('reference_keys') or [])]:
                 self_reference=self_reference or bool(key and key==thread.get('message_key'))
                 if key and key not in known:external.add(key)
-        state='AMBIGUOUS' if duplicate or self_reference else 'LINKED' if len(values)>1 else 'SINGLE'
+        state='AMBIGUOUS' if duplicate or self_reference or cycle else 'LINKED' if len(values)>1 else 'SINGLE'
         warnings=[]
         if duplicate:warnings.append('Duplicate Message-ID values require review.')
         if self_reference:warnings.append('A message references its own Message-ID; review the malformed thread headers.')
+        if cycle:warnings.append('Email parent/reference headers form a cycle; compare the original messages.')
         item={'group_id':_key('MAIL',*sorted(keys or [value['document_id'] for value in values])),
               'kind':'EMAIL_THREAD','identifier':None,'state':state,
               'members':[{'document_id':value['document_id'],'file_name':value['file_name'],
