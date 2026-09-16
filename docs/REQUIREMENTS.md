@@ -136,8 +136,8 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
 - RFI identifiers containing a digit are normalized and question/response sources are linked while duplicate or roleless sources remain ambiguous; UNKNOWN page contexts do not manufacture a missing Question or Response role.
-- Submittals with the same exact normalized identifier retain source statuses; common explicit review statuses are canonicalized, and conflicts across documents or within one multi-page source remain ambiguous.
-- Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers.
+- Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
+- Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
@@ -163,7 +163,7 @@ Let a reviewer inspect inert EML attachments and explicitly import one selected 
 - Attachment listing returns only bounded metadata and a SHA-256 identity; raw attachment bytes are not returned by the listing endpoint.
 - The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
 - Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.
-- Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review.
+- Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review; a relationship is displayed only when its parent document parsed as email.
 - Attached emails require another explicit selection before nested attachments are visible; active content and remote resources remain inert.
 
 ## FR-DATA-001 · 统一文档模型

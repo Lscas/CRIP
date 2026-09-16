@@ -58,6 +58,19 @@ def test_reference_without_primary_document_remains_open():
     assert 'primary document' in item['warnings'][0]
 
 
+def test_submittal_primary_and_exact_reference_are_linked():
+    result=build_workflow_index([
+        row('D1','submittal.pdf',document_type='SUBMITTAL',workflow_contexts=[
+            {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]),
+        row('D2','minutes.txt',document_type='OTHER',workflow_references=[
+            {'workflow_type':'SUBMITTAL','identifier':'23-01'}]),
+    ])
+    item=result['items'][0]
+
+    assert item['state']=='LINKED' and not item['warnings']
+    assert [member['source'] for member in item['members']]==['REFERENCE','PRIMARY']
+
+
 def test_roleless_rfi_is_open_and_spaced_submittal_ids_link_exactly():
     result=build_workflow_index([
         row('D1','rfi-cover.pdf',workflow_contexts=[
@@ -113,6 +126,16 @@ def test_email_threads_link_only_hashed_exact_headers_and_count_external_referen
     assert result['summary']['email_threads']==2 and result['summary']['quoted_email_documents']==1
 
 
+def test_email_self_reference_is_ambiguous():
+    key='MSG-'+'a'*24
+    result=build_workflow_index([row('D1','mail.eml',document_type='EMAIL',email_thread={
+        'message_key':key,'parent_message_key':key,'reference_keys':[]})])
+    item=result['items'][0]
+
+    assert item['state']=='AMBIGUOUS'
+    assert 'references its own Message-ID' in item['warnings'][0]
+
+
 def test_selected_email_attachment_relationship_is_deduplicated_without_inheriting_authority():
     rows=[row('MAIL','rfi-42.eml',document_type='EMAIL'),
           row('ATT','response.pdf',document_type='OTHER')]
@@ -127,3 +150,12 @@ def test_selected_email_attachment_relationship_is_deduplicated_without_inheriti
     assert 'not inherited' in item['warnings'][0]
     assert result['summary']['email_attachment_links']==1 and result['summary']['documents']==2
     assert not build_workflow_index(rows,[{**link,'document_id':'MAIL'}])['summary']['email_attachment_links']
+
+
+def test_attachment_relationship_requires_an_email_parent():
+    rows=[row('PARENT','drawing.pdf',document_type='OTHER'),
+          row('CHILD','spec.pdf',document_type='OTHER')]
+    link={'source_kind':'EMAIL_ATTACHMENT','source_document_id':'PARENT','document_id':'CHILD',
+          'attachment_index':0,'content_type':'application/pdf'}
+
+    assert not build_workflow_index(rows,[link])['summary']['email_attachment_links']

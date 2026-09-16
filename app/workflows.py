@@ -91,8 +91,7 @@ def _workflow_state(workflow: str, members: list[dict], source_status_conflict: 
             return 'AMBIGUOUS',['One Submittal source contains multiple explicit statuses; compare the original pages.']
         statuses={str(member['status']).upper() for member in primary if member.get('status')}
         if len(statuses)>1:return 'AMBIGUOUS',['Submittal sources with this identifier have different explicit statuses.']
-        if len(primary)>1:return 'LINKED',[]
-    return ('SINGLE' if len(members)==1 else 'OPEN'),[]
+        return ('SINGLE' if len(members)==1 else 'LINKED'),[]
 
 
 def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
@@ -123,18 +122,22 @@ def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
     for values in components.values():
         values=sorted(values,key=lambda item:(item['file_name'].casefold(),item['document_id']))
         keys=[item['email_thread'].get('message_key') for item in values if item['email_thread'].get('message_key')]
-        duplicate=len(keys)!=len(set(keys));state='AMBIGUOUS' if duplicate else 'LINKED' if len(values)>1 else 'SINGLE'
-        known=set(keys);external=set()
+        duplicate=len(keys)!=len(set(keys));known=set(keys);external=set();self_reference=False
         for item in values:
             thread=item['email_thread']
             for key in [thread.get('parent_message_key'),*(thread.get('reference_keys') or [])]:
+                self_reference=self_reference or bool(key and key==thread.get('message_key'))
                 if key and key not in known:external.add(key)
+        state='AMBIGUOUS' if duplicate or self_reference else 'LINKED' if len(values)>1 else 'SINGLE'
+        warnings=[]
+        if duplicate:warnings.append('Duplicate Message-ID values require review.')
+        if self_reference:warnings.append('A message references its own Message-ID; review the malformed thread headers.')
         item={'group_id':_key('MAIL',*sorted(keys or [value['document_id'] for value in values])),
               'kind':'EMAIL_THREAD','identifier':None,'state':state,
               'members':[{'document_id':value['document_id'],'file_name':value['file_name'],
                           'document_type':value['document_type'],'role':'MESSAGE','status':None,
                           'source':'PRIMARY'} for value in values],
-              'warnings':(['Duplicate Message-ID values require review.'] if duplicate else []),
+              'warnings':warnings,
               'external_reference_count':len(external)}
         items.append(item);linked.update(value['document_id'] for value in values)
     return items,linked
@@ -147,6 +150,7 @@ def _email_attachments(documents: list[dict],links: list[dict]) -> tuple[list[di
         parent_id=raw.get('source_document_id');child_id=raw.get('document_id');index=raw.get('attachment_index')
         if (parent_id not in by_id or child_id not in by_id or parent_id==child_id
                 or type(index) is not int or index<0):continue
+        if by_id[parent_id]['document_type']!='EMAIL':continue
         identity=(parent_id,child_id,index)
         if identity in grouped:
             grouped[identity]['import_count']+=1
