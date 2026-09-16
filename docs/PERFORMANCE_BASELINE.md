@@ -57,16 +57,20 @@ Reproduce locally:
 
 ## CR-0052 routing-only email extraction baseline
 
-A synthetic RFI reply produces three retained evidence scopes: routing headers, current response body, and quoted question history. Before the shared extraction filter, all three became separate extraction batches. The deterministic filter now completes the routing headers and quoted history locally as `NO_REQUIREMENTS`, while retaining their text and locators for review and exact workflow relationships; only the current response body enters extraction. The fixture therefore changes from three extraction batches to one, a 66.7% request-count reduction for that email shape, without changing the published material candidate. This is an offline mock fixture, not a claim about every email, live-model latency, billing, or semantic accuracy.
+A synthetic RFI reply retains headers, current body and quoted history but now extracts only the current body; the other scopes close locally as `NO_REQUIREMENTS`. Estimated batches fall 3→1 without changing the mock candidate. This is structural, not a universal latency, cost or accuracy claim.
 
 ## CR-0053 HTML reply-wrapper accuracy fixture
 
-Two synthetic Submittal emails exercise a nested Gmail quote class and Outlook `divRplyFwdMsg` wrapper. Before the parser fix, an historical `Approved` status and old note remained in current-body evidence beside the actual `Pending` status. Both wrappers now create reviewable quoted-history evidence, text after their matching close resumes as current, and current workflow status remains `Pending`. The API regression also proves wrapped RFI history is absent from extraction input and counted among locally skipped fragments. These are offline structural fixtures, not mailbox compatibility, semantic-thread inference, live-model quality or universal email-token savings measurements.
+Synthetic Gmail and Outlook quote wrappers previously leaked historical `Approved` text beside current `Pending`. They now create reviewable history, resume current text after closure and stay outside extraction. This is an offline structural check, not mailbox or live-model validation.
 
 ## CR-0054 signature-boundary accuracy fixture
 
-A synthetic RFI reply contains one valid current material and one equipment-like company name inside a Gmail signature. Before separation, both lines reached extraction and the mock contract published two material candidates. The signature now remains reviewable evidence, is counted as locally skipped, cannot add an `RFI 999` relationship, and never enters extraction; the valid current material remains the sole record. A second fixture covers the strict plain-text `-- ` delimiter, and HTML text after a closed signature resumes as current. This measures a deterministic boundary, not universal signature detection, live-model accuracy, latency or billing.
+A synthetic RFI reply previously extracted both a valid material and a company name inside a Gmail signature. Gmail and strict `-- ` signatures now remain reviewable but local; closed HTML signatures resume current text. This is a deterministic boundary, not universal signature or live-model validation.
 
 ## CR-0068 workflow extraction-scope fixture
 
-Two physically adjacent synthetic fragments with `RFI 42 > QUESTION` and `SUBMITTAL 23-01 > STATUS: APPROVED` locators previously formed one extraction batch. The shared adjacency check now closes the batch when the exact RFI/Submittal identifier, role, status or family differs. A matching `RFI 42 > RESPONSE` pair still forms one batch, and ordinary PDF/spec evidence retains the existing four-fragment/8.8 KB limits. This is an offline deterministic prompt-boundary check, not a live-model accuracy or latency benchmark.
+Adjacent `RFI 42 > QUESTION` and `SUBMITTAL 23-01 > STATUS: APPROVED` fragments previously shared one prompt. Exact workflow differences now close the batch; matching scopes and ordinary evidence retain four-fragment/8.8 KB limits. This is an offline boundary check.
+
+## CR-0070 multi-page workflow-scope fixture
+
+A six-page generic-name PDF previously lost `RFI 42 > RESPONSE` on continuation pages 2–5. Ordered merge now carries the scope, adds `STATUS: CLOSED` on page 5 and replaces it with exact `Submittal 23-01` on page 6; 1/2/4-worker locators match without rereading the PDF. This is a synthetic structural check.

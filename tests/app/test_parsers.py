@@ -841,6 +841,33 @@ def test_single_pdf_page_workers_preserve_order_and_content(tmp_path):
     assert [item['locator']['page_number'] for item in parallel['fragments']]==list(range(1,9))
 
 
+def test_generic_multipage_pdf_preserves_workflow_scope_across_parallel_chunks(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'coordination.pdf';drawing=canvas.Canvas(str(path))
+    pages=(('RFI 42','Response:','Response continues on following pages.'),
+           ('Provide Type L copper pipe.',),('RFI 42','Coordinate pipe supports.'),
+           ('Continue response requirements.',),
+           ('RFI Status: Closed','Perform hydrostatic testing.'),
+           ('Submittal 23-01','Status: Approved as Noted','Pump data follows.'))
+    for lines in pages:
+        for index,line in enumerate(lines):drawing.drawString(72,700-index*25,line)
+        drawing.showPage()
+    drawing.save()
+
+    serial=parse_file(path,path.name,workers=1)
+    serial_sections=[item['locator']['section'] for item in serial['fragments']]
+
+    for workers in (2,4):
+        parallel=parse_file(path,path.name,workers=workers)
+        assert [item['locator']['section'] for item in parallel['fragments']]==serial_sections
+    assert all('RFI 42 > RESPONSE' in (item['locator']['section'] or '')
+               for item in serial['fragments'] if item['locator']['page_number']==3)
+    assert all('RFI 42 > RESPONSE > STATUS: CLOSED' in (item['locator']['section'] or '')
+               for item in serial['fragments'] if item['locator']['page_number']==5)
+    assert all('SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED' in (item['locator']['section'] or '')
+               for item in serial['fragments'] if item['locator']['page_number']==6)
+
+
 def test_rich_text_page_with_decorative_rule_skips_vision_but_large_sheet_keeps_it(tmp_path):
     from reportlab.pdfgen import canvas
     text='Provide materials and execute inspections in accordance with the project specifications.'

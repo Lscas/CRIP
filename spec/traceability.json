@@ -115,7 +115,7 @@
         "app/runner.py"
       ],
       "verification_report": null,
-      "progress_note": "Native PDF pages now retain a deterministic page type, specification section/Part/clause locators, and bordered table rows with bboxes. Text-layer slicing, word coordinates, local OCR fallback and bounded timeout checkpoints remain. Borderless/cross-page tables, multi-column reading order and complete semantic coverage remain planned; see docs/IMPLEMENTATION_STATUS.md."
+      "progress_note": "Native PDF pages retain a deterministic page type, specification section/Part/clause locators, and bordered table rows with bboxes. A generic-name multi-page PDF carries the latest exact digit-bearing RFI/Submittal identifier, role and status through ordered continuation pages until another exact heading replaces it; 1/2/4-worker output remains equivalent without another PDF scan. Text-layer slicing, word coordinates, local OCR fallback and bounded timeout checkpoints remain. Borderless/cross-page tables, multi-column reading order and complete semantic coverage remain planned; see docs/IMPLEMENTATION_STATUS.md."
     },
     {
       "requirement_id": "FR-PARSE-002",
@@ -331,7 +331,7 @@
         "spec/schemas/classification.schema.json"
       ],
       "verification_report": null,
-      "progress_note": "Explicit RFI question/response roles, Submittal status and EML header/body roles are preserved deterministically before extraction. Full semantic classification, discipline/CSI assignment and user correction remain planned."
+      "progress_note": "Explicit RFI question/response roles, Submittal status and EML header/body roles are preserved deterministically before extraction. Exact PDF workflow scope also persists across sequential continuation pages and changes only at another exact digit-bearing heading. Full semantic classification, discipline/CSI assignment and user correction remain planned."
     },
     {
       "requirement_id": "FR-REVISION-001",
@@ -880,7 +880,7 @@
         "scripts/benchmark_local_parse.py"
       ],
       "verification_report": "docs/PERFORMANCE_BASELINE.md",
-      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally, and a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
+      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally. A single PDF uses bounded page chunks whose ordered merge carries exact workflow scope identically for 1/2/4 workers without another PDF scan. Paid calls remain serial and broader distributed orchestration remains planned."
     },
     {
       "requirement_id": "FR-API-006",

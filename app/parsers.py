@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-43'
+PARSER_VERSION='multisource-44'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -754,6 +754,50 @@ def _visual_tasks(page, page_number: int, page_type: str, tables: list,
              'region_id':f'page-{page_number}-overview','region_type':'FULL_PAGE','bbox':None,
              'coordinate_system':PDF_CROP_COORDINATE_SYSTEM,'page_type':page_type}]
 
+def _apply_pdf_workflow_context(fragments: list[Fragment],page_source: str,page_context: dict,
+                                inherited: dict | None) -> dict:
+    """Carry one exact sequential workflow scope without reparsing the PDF."""
+    if not inherited or not inherited.get('workflow_type') or not inherited.get('identifier'):
+        return page_context
+    workflow=inherited['workflow_type'];same=page_context.get('workflow_type')==workflow
+    same_identifier=(same and str(page_context.get('identifier') or '').casefold()==
+                     str(inherited['identifier']).casefold())
+    if page_context.get('identifier') and not same_identifier:return page_context
+    current=(page_context.get('role') if same and page_context.get('role') not in {None,'UNKNOWN'}
+             else inherited.get('role'))
+    statuses={value.strip() for value in
+              str((page_context.get('status') if same else None) or inherited.get('status') or '').split(' / ')
+              if value.strip()}
+    if workflow=='RFI':
+        matches={_rfi_role(value) for value in _RFI_ROLE.findall(page_source)}
+        if {'QUESTION','RESPONSE'}<=matches:current='MIXED'
+        elif 'QUESTION' in matches:current='QUESTION'
+        elif 'RESPONSE' in matches:current='RESPONSE'
+        statuses.update(_rfi_status(value) for value in _RFI_STATUS.findall(page_source))
+    else:
+        statuses.update(_submittal_status(value) for value in _SUBMITTAL_STATUS.findall(page_source))
+    for fragment in fragments:
+        if workflow=='RFI':
+            matches={_rfi_role(value) for value in _RFI_ROLE.findall(fragment.text)}
+            if {'QUESTION','RESPONSE'}<=matches:current='MIXED'
+            elif 'QUESTION' in matches:current='QUESTION'
+            elif 'RESPONSE' in matches:current='RESPONSE'
+            statuses.update(_rfi_status(value) for value in _RFI_STATUS.findall(fragment.text))
+        else:
+            statuses.update(_submittal_status(value) for value in _SUBMITTAL_STATUS.findall(fragment.text))
+        current_status=' / '.join(sorted(statuses)) or None
+        existing=fragment.locator.get('section')
+        old_label=_workflow_label(page_context,page_context.get('role'))
+        if old_label and (existing==old_label or str(existing).startswith(old_label+' > ')):
+            existing=str(existing)[len(old_label):].removeprefix(' > ') or None
+        label=_workflow_label({**inherited,'status':current_status},current)
+        fragment.locator['section']=' > '.join(value for value in (label,existing) if value) or None
+    document_type=('SUBMITTAL' if workflow=='SUBMITTAL' else
+                   'RFI_RESPONSE' if current in {'RESPONSE','MIXED'} else
+                   'RFI_QUESTION' if current=='QUESTION' else 'OTHER')
+    return {**inherited,'role':current,'status':' / '.join(sorted(statuses)) or None,
+            'document_type':document_type}
+
 def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None = None) -> dict:
     fragments=[];warnings=[];visual_tasks=[];geometry=[];text_chars=0
     try:
@@ -807,35 +851,12 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
                 warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
         page_source=page_text or '\n'.join(fragment.text for fragment in fragments)
         page_context=annotate_workflow_fragments(fragments,page_source,str(path))
-        if (default_context and default_context.get('workflow_type') and
-                (not page_context.get('workflow_type') or
-                 (page_context.get('workflow_type')==default_context.get('workflow_type') and
-                  not page_context.get('identifier')))):
-            current=(page_context.get('role') if page_context.get('role') not in {None,'UNKNOWN'} else
-                     default_context.get('role'))
-            statuses={value.strip() for value in
-                      str(page_context.get('status') or default_context.get('status') or '').split(' / ')
-                      if value.strip()}
-            if default_context.get('workflow_type')=='RFI':
-                statuses.update(_rfi_status(value) for value in _RFI_STATUS.findall(page_source))
-            for fragment in fragments:
-                matches={_rfi_role(value) for value in _RFI_ROLE.findall(fragment.text)}
-                if {'QUESTION','RESPONSE'}<=matches:current='MIXED'
-                elif 'QUESTION' in matches:current='QUESTION'
-                elif 'RESPONSE' in matches:current='RESPONSE'
-                statuses.update(_rfi_status(value) for value in _RFI_STATUS.findall(fragment.text))
-                current_status=' / '.join(sorted(statuses)) or None
-                existing=fragment.locator.get('section')
-                workflow=_workflow_label({**default_context,'status':current_status},current)
-                fragment.locator['section']=' > '.join(value for value in (workflow,existing) if value) or None
-            page_context={**default_context,'role':current,
-                          'status':' / '.join(sorted(statuses)) or None,
-                          'document_type':('RFI_RESPONSE' if current in {'RESPONSE','MIXED'} else
-                                           'RFI_QUESTION' if current=='QUESTION' else 'OTHER')}
+        page_context=_apply_pdf_workflow_context(fragments,page_source,page_context,default_context)
         return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
                                               'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables),
                                               'document_type':page_context.get('document_type','UNKNOWN')},'warnings':warnings,
                 'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars,
+                '_workflow_source':page_source,
                 'workflow_context':page_context if page_context.get('workflow_type') else None,
                 'workflow_references':workflow_references(page_source)}
     finally:
@@ -923,6 +944,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
     elif ext=='.pdf':
         import pdfplumber
         default_context=document_context('',original_name)
+        active_context=default_context if default_context.get('identifier') else None
         last_progress=monotonic()-PROGRESS_INTERVAL_SECONDS
         def save_progress():
             nonlocal last_progress
@@ -936,12 +958,19 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         with pdfplumber.open(path) as pdf:page_count=len(pdf.pages)
         total=0;limit_reached=False
         def merge_page(result):
-            nonlocal total,limit_reached
+            nonlocal total,limit_reached,active_context
             number=result['page']['page']
+            page_source=result.pop('_workflow_source','')
             if total>=MAX_CHARS:
                 warnings.append('PDF超过单文件字符资源限额；后续页未处理。')
                 pages.extend({'page':value,'status':'NOT_PROCESSED'} for value in range(number,page_count+1))
                 limit_reached=True;return
+            page_context=_apply_pdf_workflow_context(
+                result['fragments'],page_source,result.get('workflow_context') or {},active_context)
+            if page_context.get('workflow_type'):
+                result['workflow_context']=page_context
+                result['page']['document_type']=page_context.get('document_type','UNKNOWN')
+                if page_context.get('identifier'):active_context=page_context
             fragments.extend(result['fragments']);pages.append(result['page'])
             warnings.extend(result['warnings']);visual_tasks.extend(result['visual_tasks'])
             geometry.extend(result['geometry_summaries']);total+=result['text_chars']

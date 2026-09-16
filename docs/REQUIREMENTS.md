@@ -71,6 +71,7 @@
 
 - Evidence 可定位到页和 bbox。
 - Native PDF pages retain a deterministic page type, specification section or clause context, and detected table-row coordinates when available.
+- A generic-name multi-page PDF carries the latest exact RFI/Submittal scope to continuation pages until another exact workflow heading replaces it.
 
 ## FR-PARSE-002 · OCR fallback
 
