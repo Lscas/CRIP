@@ -153,6 +153,23 @@ def test_record_pagination_has_bilingual_visible_controls_and_kind_reset():
     assert 'state.records=[];state.recordPagination=null;await loadRecordPage(true);' in source
 
 
+def test_workflow_pagination_shows_true_total_and_loads_more_without_duplicates():
+    html=(ROOT/'web/index.html').read_text(encoding='utf-8')
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    style=(ROOT/'web/style.css').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert 'hidden="" id="workflow-load-more"' in html
+    assert '[hidden]{display:none!important}' in style
+    assert '"workflow.loaded": "已加载 {loaded} / {total} 个工作流关系"' in translations
+    assert '"workflow.loaded": "Loaded {loaded} of {total} workflow groups"' in translations
+    assert 'workflowPagination:null,workflowsRun:null,workflowLoadPromise:null' in source
+    assert 'api(`/analysis-runs/${rid}/workflows?offset=${offset}&limit=500`)' in source
+    assert 'state.workflows=previous.concat(page.items.filter(item=>!seen.has(item.group_id)));' in source
+    assert "state.workflowPagination?.total??rows.length" in source
+    assert "$('workflow-load-more').onclick" in source
+    assert 'state.workflows=(await api(`/analysis-runs/${rid}/workflows?limit=500`)).items' not in source
+
+
 def test_live_vision_has_explicit_full_page_data_transfer_disclosure():
     html=(ROOT/'web/index.html').read_text(encoding='utf-8')
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')

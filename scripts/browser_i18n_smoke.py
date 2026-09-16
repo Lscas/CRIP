@@ -216,6 +216,8 @@ def main():
                 assert 'Email attachment' in workflow_text and 'response.eml' in workflow_text and 'attachment.txt' in workflow_text
                 assert 'Parent email' in workflow_text and 'Selected attachment' in workflow_text
                 assert 'Explicitly imported 2 times' in workflow_text
+                assert ' of ' in page.locator('#workflow-total').inner_text()
+                assert page.locator('#workflow-load-more').is_hidden()
                 states_before = {id_: page.locator('#'+id_).is_disabled() for id_ in ('start', 'pause', 'resume', 'export-json', 'export-xlsx')}
                 assert {id_: page.locator('#'+id_).is_disabled() for id_ in states_before} == states_before
                 passed('Run selection, PARTIAL status, candidates, numbers, cost and button enablement are unchanged')

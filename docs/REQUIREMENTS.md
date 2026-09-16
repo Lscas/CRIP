@@ -149,6 +149,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
+- The browser shows loaded and total workflow-group counts, requests subsequent bounded 500-group pages only when the reviewer asks, and appends them without duplicate group identifiers.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import

@@ -143,7 +143,8 @@ def test_email_subject_routes_primary_workflow_while_body_identifier_stays_refer
 
 def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
     for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
-                      ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.')]:
+                      ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.'),
+                      ('Submittal-23-01.txt','Submittal 23-01\nStatus: Pending')]:
         upload(client,project['id'],name,text.encode())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
@@ -167,10 +168,15 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
     response=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
     repeated=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    second=client.get(f'/api/analysis-runs/{rid}/workflows?offset=1&limit=1')
     after=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
 
     assert response.status_code==200 and response.json()==repeated.json()
-    result=response.json();assert result['pagination']['limit']==1
+    assert second.status_code==200
+    result=response.json();second_result=second.json()
+    assert result['pagination']=={'offset':0,'limit':1,'total':2,'next_offset':1}
+    assert second_result['pagination']=={'offset':1,'limit':1,'total':2,'next_offset':None}
+    assert result['items'][0]['group_id']!=second_result['items'][0]['group_id']
     assert result['items'][0]['kind']=='RFI' and result['items'][0]['state']=='LINKED'
     assert result['summary']['rfi_groups']==1 and before==after
     assert len(full_summary)>250_000 and projected_bytes and max(projected_bytes)<10_000
