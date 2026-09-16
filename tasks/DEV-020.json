@@ -1,0 +1,41 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "A whitespace-only text/plain MIME alternative is not usable content and must not suppress a non-empty safe HTML alternative.",
+    "Keep the established preference for non-empty plain text, execute no HTML, fetch no remote resource, and advance the parser version."
+  ],
+  "task_id": "DEV-020",
+  "title": "Blank email plain-part fallback",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-020.json",
+    "changes/CR-0035.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Use a non-empty safe HTML email alternative when all text/plain alternatives are blank, while preserving non-empty plain-text preference and workflow evidence boundaries."
+}

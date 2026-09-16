@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-11'
+PARSER_VERSION='multisource-12'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -333,7 +333,8 @@ def _parse_email(path: Path, original_name: str) -> dict:
         parsed=_email_part_text(part)
         if parsed:
             (plain if parsed[0]=='text/plain' else html).append(parsed[1])
-    body='\n\n'.join(value for value in (plain or html) if value.strip())
+    plain=[value for value in plain if value.strip()];html=[value for value in html if value.strip()]
+    body='\n\n'.join(plain or html)
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
     current_body,quoted_body=split_email_history(body)
     current_source='\n'.join(headers+[current_body]);current_rev=revision(current_source);fragments=[]

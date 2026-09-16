@@ -136,6 +136,27 @@ def test_eml_html_removes_active_content_and_never_fetches_remote_resources(tmp_
     assert result['workflow_type']=='SUBMITTAL' and result['active_content_processed'] is False
 
 
+def test_eml_blank_plain_alternative_falls_back_to_html_but_nonempty_plain_remains_preferred(tmp_path):
+    blank=EmailMessage();blank['Subject']='Project update';blank.set_content('   \n')
+    blank.add_alternative(
+        '<html><body><p>RFI 205</p><p>Response:</p><p>Provide Type L copper.</p></body></html>',
+        subtype='html')
+    blank_path=tmp_path/'blank-plain.eml';blank_path.write_bytes(blank.as_bytes())
+    fallback=parse_file(blank_path,blank_path.name)
+
+    preferred=EmailMessage();preferred['Subject']='Coordination'
+    preferred.set_content('Plain current requirement.')
+    preferred.add_alternative('<html><body><p>HTML-ONLY DIFFERENT TEXT</p></body></html>',subtype='html')
+    preferred_path=tmp_path/'preferred-plain.eml';preferred_path.write_bytes(preferred.as_bytes())
+    plain=parse_file(preferred_path,preferred_path.name)
+
+    fallback_text='\n'.join(item['text'] for item in fallback['fragments'])
+    plain_text='\n'.join(item['text'] for item in plain['fragments'])
+    assert 'Type L copper' in fallback_text and fallback['workflow_contexts'][0]['role']=='RESPONSE'
+    assert fallback['email_content']['current_body_chars']>0
+    assert 'Plain current requirement.' in plain_text and 'HTML-ONLY' not in plain_text
+
+
 def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):
     message=EmailMessage();message['Subject']='RFI 009';message['Message-ID']='<reply@example.test>'
     message['In-Reply-To']='<question@example.test>';message['References']='<question@example.test>'

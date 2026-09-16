@@ -120,6 +120,7 @@ DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解�
 Parse RFC-style EML headers and visible body text locally while preserving RFI, Submittal and attachment boundaries.
 
 - EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
+- A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.
 - Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
 - Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.

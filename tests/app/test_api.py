@@ -72,7 +72,9 @@ def test_upload_limit_and_basename(client,project):
 
 def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client,project):
     message=EmailMessage();message['Subject']='RFI 101';message['From']='contractor@example.test'
-    message['To']='engineer@example.test';message.set_content('Response:\nProvide Type L copper pipe.')
+    message['To']='engineer@example.test';message.set_content('   \n')
+    message.add_alternative(
+        '<html><body><p>Response:</p><p>Provide Type L copper pipe.</p></body></html>',subtype='html')
     message.add_attachment(b'ATTACHMENT-ONLY MATERIAL',maintype='application',subtype='pdf',filename='detail.pdf')
     document=upload(client,project['id'],'rfi-response.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']

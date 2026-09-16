@@ -172,6 +172,7 @@
       "status": "implemented",
       "acceptance_criteria": [
         "EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.",
+        "A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.",
         "Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.",
         "Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.",
         "Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized from explicit body, subject or filename metadata, and roleless RFI references remain unknown rather than becoming questions.",
