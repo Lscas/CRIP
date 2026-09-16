@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-32'
+PARSER_VERSION='multisource-33'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -51,7 +51,8 @@ _RFI_ROLE=re.compile(
     r'(?im)^[ \t]*(OFFICIAL\s+RESPONSE|QUESTION|REQUEST|RESPONSE|ANSWER|REPLY)'
     r'(?:[ \t]*[:#-][ \t]*|[ \t]*$)')
 _SUBMITTAL_STATUS=re.compile(
-    r'(?im)^\s*(?:SUBMITTAL\s+)?STATUS\s*[:#-]\s*'
+    r'(?im)^\s*(?:STATUS|SUBMITTAL\s+(?:STATUS|RESPONSE)|REVIEW\s+RESPONSE|FINAL\s+RESPONSE)'
+    r'\s*[:#-]\s*'
     r'(FURNISH\s+AS\s+SUBMITTED|FURNISH\s+AS\s+CORRECTED|AMEND\s+AND\s+RESUBMIT|'
     r'APPROVED\s+WITH\s+COMMENTS|APPROVED\s+AS\s+SUBMITTED|APPROVED\s+AS\s+NOTED|'
     r'NO\s+EXCEPTIONS\s+TAKEN|MAKE\s+CORRECTIONS\s+NOTED|REVIEWED\s+AS\s+NOTED|'

@@ -257,21 +257,36 @@ def test_not_approved_submittal_status_is_canonical_rejected(tmp_path):
     assert all('STATUS: REJECTED' in item['locator']['section'] for item in result['fragments'])
 
 
-@pytest.mark.parametrize(('source_status','expected_status'),[
-    ('Furnish as Submitted','APPROVED'),
-    ('Furnish as Corrected','APPROVED AS NOTED'),
-    ('Amend and Resubmit','REVISE AND RESUBMIT'),
+@pytest.mark.parametrize(('label','source_status','expected_status'),[
+    ('Status','Furnish as Submitted','APPROVED'),
+    ('Status','Furnish as Corrected','APPROVED AS NOTED'),
+    ('Status','Amend and Resubmit','REVISE AND RESUBMIT'),
+    ('Review Response','Approved as Noted','APPROVED AS NOTED'),
+    ('Final Response','Revise and Resubmit','REVISE AND RESUBMIT'),
+    ('Submittal Response','No Exceptions Taken','APPROVED'),
 ])
 def test_common_submittal_return_statuses_use_existing_canonical_groups(
-        tmp_path,source_status,expected_status):
+        tmp_path,label,source_status,expected_status):
     path=tmp_path/'submittal.txt'
-    path.write_text(f'Submittal No: 23 05 00-03\nStatus: {source_status}\nPump P-2',encoding='utf-8')
+    path.write_text(
+        f'Submittal No: 23 05 00-03\n{label}: {source_status}\nPump P-2',encoding='utf-8')
 
     result=parse_file(path,path.name)
 
     assert result['workflow_contexts'][0]['status']==expected_status
     assert all(f'STATUS: {expected_status}' in item['locator']['section']
                for item in result['fragments'])
+
+
+def test_submittal_response_metadata_is_not_a_disposition(tmp_path):
+    path=tmp_path/'submittal.txt';path.write_text(
+        'Submittal 23-04\nReview Response Time: 5 days\nFinal Response Due: 2026-09-30',
+        encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status'] is None
+    assert all('STATUS:' not in item['locator']['section'] for item in result['fragments'])
 
 
 def test_one_text_submittal_preserves_conflicting_explicit_statuses(tmp_path):

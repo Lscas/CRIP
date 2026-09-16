@@ -202,7 +202,7 @@ def test_prefixed_rfi_links_text_question_and_email_response(client,project):
 
 def test_email_submittal_status_does_not_cross_to_different_subject_identifier(client,project):
     message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
-        'Submittal 23-02\nStatus: Rejected\nPump P-2 does not comply.')
+        'Submittal 23-02\nFinal Response: Rejected\nPump P-2 does not comply.')
     document=upload(client,project['id'],'submittal-scope.eml',message.as_bytes())
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
