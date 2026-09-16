@@ -105,6 +105,30 @@ def test_explicit_submittal_subject_wins_over_body_rfi_reference(tmp_path):
     assert (body['workflow_type'],body['identifier'])==('SUBMITTAL','23 05 00-01')
 
 
+def test_email_role_and_status_stay_with_their_exact_body_identifier(tmp_path):
+    rfi=EmailMessage();rfi['Subject']='RFI 42';rfi.set_content(
+        'RFI 43\nResponse:\nUse Type L copper for RFI 43.')
+    rfi_path=tmp_path/'rfi-scope.eml';rfi_path.write_bytes(rfi.as_bytes())
+    rfi_result=parse_file(rfi_path,rfi_path.name)
+
+    submittal=EmailMessage();submittal['Subject']='Submittal 23-01';submittal.set_content(
+        'Submittal 23-02\nStatus: Rejected\nPump P-2 does not comply.')
+    submittal_path=tmp_path/'submittal-scope.eml';submittal_path.write_bytes(submittal.as_bytes())
+    submittal_result=parse_file(submittal_path,submittal_path.name)
+
+    assert rfi_result['workflow_contexts'][0]['identifier']=='42'
+    assert rfi_result['workflow_contexts'][0]['role']=='UNKNOWN'
+    rfi_evidence=next(item for item in rfi_result['fragments'] if 'Type L copper' in item['text'])
+    assert 'EMAIL > BODY > RFI 43 > RESPONSE' in rfi_evidence['locator']['section']
+    assert {'workflow_type':'RFI','identifier':'43'} in rfi_result['workflow_references']
+
+    assert submittal_result['workflow_contexts'][0]['identifier']=='23-01'
+    assert submittal_result['workflow_contexts'][0]['status'] is None
+    submittal_evidence=next(item for item in submittal_result['fragments'] if 'Pump P-2' in item['text'])
+    assert 'EMAIL > BODY > SUBMITTAL 23-02 > STATUS: REJECTED' in submittal_evidence['locator']['section']
+    assert {'workflow_type':'SUBMITTAL','identifier':'23-02'} in submittal_result['workflow_references']
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)

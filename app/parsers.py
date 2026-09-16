@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-17'
+PARSER_VERSION='multisource-18'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -135,6 +135,37 @@ def _submittal_status(value: str) -> str:
     return _SUBMITTAL_STATUS_MAP.get(normalized,normalized)
 
 
+def _workflow_scope(text: str, workflow: str, identifier: str | None, start: int) -> str:
+    """Stop role/status inheritance when a different exact same-type identifier starts."""
+    pattern=_RFI_HEADER if workflow=='RFI' else _SUBMITTAL_HEADER
+    for match in pattern.finditer(text,start):
+        other=normalize_identifier(workflow,match.group(1))
+        if other and other!=identifier:return text[start:match.start()]
+    return text[start:]
+
+
+def _explicit_line_context(line: str) -> dict | None:
+    rfi=_RFI_HEADER.match(line)
+    if rfi:
+        identifier=normalize_identifier('RFI',rfi.group(1))
+        if identifier:return {'document_type':'OTHER','workflow_type':'RFI','identifier':identifier,
+                              'role':'UNKNOWN','status':None}
+    submittal=_SUBMITTAL_HEADER.match(line)
+    if submittal:
+        identifier=normalize_identifier('SUBMITTAL',submittal.group(1))
+        if identifier:return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL',
+                              'identifier':identifier,'role':'SUBMITTAL','status':None}
+    return None
+
+
+def _preserve_primary_fields(explicit: dict | None, primary: dict) -> dict | None:
+    if (explicit and explicit.get('workflow_type')==primary.get('workflow_type')
+            and explicit.get('identifier')==primary.get('identifier')):
+        return {**explicit,'document_type':primary.get('document_type',explicit['document_type']),
+                'role':primary.get('role'),'status':primary.get('status')}
+    return explicit
+
+
 def workflow_references(text: str) -> list[dict]:
     """Extract exact workflow identifiers only; this does not assert a relationship."""
     found=[];seen=set()
@@ -150,20 +181,22 @@ def workflow_references(text: str) -> list[dict]:
 
 def document_context(text: str, original_name: str = '') -> dict:
     """Return a conservative workflow label; it is routing metadata, not approval."""
-    searchable=text[:80_000]
+    searchable=text[:80_000];rfi_in_text=False;submittal_in_text=False
     rfi_subject=_EMAIL_RFI_SUBJECT.search(searchable)
     submittal_subject=_EMAIL_SUBMITTAL_SUBJECT.search(searchable)
-    if rfi_subject:rfi=rfi_subject;submittal=None
-    elif submittal_subject:rfi=None;submittal=submittal_subject
+    if rfi_subject:rfi=rfi_subject;submittal=None;rfi_in_text=True
+    elif submittal_subject:rfi=None;submittal=submittal_subject;submittal_in_text=True
     else:
         rfi=_RFI_HEADER.search(searchable)
         submittal=None if rfi else _SUBMITTAL_HEADER.search(searchable)
+        rfi_in_text=bool(rfi);submittal_in_text=bool(submittal)
     if not rfi and not submittal:
         rfi=re.search(r'(?i)(?:^|[\s_.-])RFI(?:[\s_.#-]+([A-Z0-9][A-Z0-9.-]{0,30}))?',
                       Path(original_name).stem)
     if rfi is not None:
         identifier=_clean_identifier(rfi.group(1) if rfi.lastindex else None,'RFI')
-        roles={value.upper() for value in _RFI_ROLE.findall(searchable)}
+        scope=_workflow_scope(searchable,'RFI',identifier,rfi.end()) if rfi_in_text else searchable
+        roles={value.upper() for value in _RFI_ROLE.findall(scope)}
         role=('MIXED' if {'QUESTION','REQUEST'} & roles and {'RESPONSE','ANSWER','REPLY'} & roles else
               'RESPONSE' if {'RESPONSE','ANSWER','REPLY'} & roles else
               'QUESTION' if {'QUESTION','REQUEST'} & roles else 'UNKNOWN')
@@ -176,7 +209,9 @@ def document_context(text: str, original_name: str = '') -> dict:
                             Path(original_name).stem)
     if submittal is not None:
         identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
-        status_match=_SUBMITTAL_STATUS.search(searchable)
+        scope=(_workflow_scope(searchable,'SUBMITTAL',identifier,submittal.end())
+               if submittal_in_text else searchable)
+        status_match=_SUBMITTAL_STATUS.search(scope)
         return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,
                 'role':'SUBMITTAL','status':_submittal_status(status_match.group(1)) if status_match else None}
     return {'document_type':'UNKNOWN','workflow_type':None,'identifier':None,'role':None,'status':None}
@@ -194,13 +229,19 @@ def _workflow_label(context: dict, role: str | None = None) -> str | None:
 
 def annotate_workflow_fragments(fragments: list[Fragment], text: str, original_name: str,
                                 *, prefix: str | None = None) -> dict:
-    context=document_context(text,original_name);current=context.get('role')
+    context=document_context(text,original_name);active={**context}
     for fragment in fragments:
-        matches={value.upper() for value in _RFI_ROLE.findall(fragment.text)}
-        if {'QUESTION','REQUEST'} & matches and {'RESPONSE','ANSWER','REPLY'} & matches:current='MIXED'
-        elif {'QUESTION','REQUEST'} & matches:current='QUESTION'
-        elif {'RESPONSE','ANSWER','REPLY'} & matches:current='RESPONSE'
-        workflow=_workflow_label(context,current)
+        for line in fragment.text.splitlines():
+            explicit=_preserve_primary_fields(_explicit_line_context(line),context)
+            if explicit:active=explicit
+            role=_RFI_ROLE.match(line)
+            if role and active.get('workflow_type')=='RFI':
+                value=role.group(1).upper()
+                active['role']='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+            status=_SUBMITTAL_STATUS.match(line)
+            if status and active.get('workflow_type')=='SUBMITTAL':
+                active['status']=_submittal_status(status.group(1))
+        workflow=_workflow_label(active)
         existing=fragment.locator.get('section')
         section=' > '.join(value for value in (prefix,workflow,existing) if value)
         if section:fragment.locator['section']=section
@@ -210,29 +251,26 @@ def annotate_workflow_fragments(fragments: list[Fragment], text: str, original_n
 def split_workflow_lines(lines: list[str], loc: dict, method: str, rev: tuple,
                          text: str, original_name: str, *, prefix: str | None = None
                          ) -> tuple[list[Fragment],dict]:
-    """Split explicit RFI question/response headings before ordinary size batching."""
-    context=document_context(text,original_name)
-    if context.get('workflow_type')!='RFI':
-        fragments=split_lines(lines,loc,method,rev)
-        annotate_workflow_fragments(fragments,text,original_name,prefix=prefix)
-        return fragments,context
-    groups=[];start=0;current=context.get('role');buffer=[]
-    if current not in {'QUESTION','RESPONSE'}:current='UNKNOWN'
+    """Split explicit workflow sections before ordinary size batching."""
+    context=document_context(text,original_name);active={**context};groups=[];start=0;buffer=[]
     for index,line in enumerate(lines):
-        match=_RFI_ROLE.match(line)
-        role=None
-        if match:
-            value=match.group(1).upper()
-            role='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
-        if role and buffer:
-            groups.append((start,buffer,current));buffer=[];start=index
+        explicit=_preserve_primary_fields(_explicit_line_context(line),context);prospective=explicit or active
+        role=_RFI_ROLE.match(line) if prospective.get('workflow_type')=='RFI' else None
+        status=_SUBMITTAL_STATUS.match(line) if prospective.get('workflow_type')=='SUBMITTAL' else None
+        if (explicit or role or status) and buffer:
+            groups.append((start,buffer,{**active}));buffer=[];start=index
+        if explicit:active=explicit
+        if role:
+            value=role.group(1).upper()
+            active['role']='RESPONSE' if value in {'RESPONSE','ANSWER','REPLY'} else 'QUESTION'
+        if status:active['status']=_submittal_status(status.group(1))
         if not buffer:start=index
-        if role:current=role
         buffer.append(line)
-    if buffer:groups.append((start,buffer,current))
+    if buffer:groups.append((start,buffer,{**active}))
     fragments=[]
-    for offset,group,role in groups:
-        section=' > '.join(value for value in (prefix,_workflow_label(context,role),loc.get('section')) if value)
+    for offset,group,local_context in groups:
+        section=' > '.join(value for value in
+                           (prefix,_workflow_label(local_context),loc.get('section')) if value)
         fragments.extend(split_lines(group,{**loc,'section':section or None},method,rev,offset))
     return fragments,context
 

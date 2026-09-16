@@ -141,6 +141,29 @@ def test_email_subject_routes_primary_workflow_while_body_identifier_stays_refer
     assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
 
 
+def test_email_submittal_status_does_not_cross_to_different_subject_identifier(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Submittal 23-02\nStatus: Rejected\nPump P-2 does not comply.')
+    document=upload(client,project['id'],'submittal-scope.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+    pump=next(item for item in evidence if 'Pump P-2' in item['raw_text'])
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status'] is None
+    assert groups[('SUBMITTAL','23-02')]['members'][0]['source']=='REFERENCE'
+    assert 'SUBMITTAL 23-02 > STATUS: REJECTED' in pump['locator']['section']
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
     raw=(b'Subject: Coordination\r\n'
          b'Message-ID: <first@example.test>\r\n'
