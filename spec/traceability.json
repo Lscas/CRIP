@@ -226,7 +226,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; active HTML and remote resources are not executed or fetched. Attachments remain inert until a reviewer explicitly imports one. Workflow IDs must contain digits, spaced CSI-style Submittal IDs and common explicit statuses normalize deterministically, and roleless RFI sources remain unknown. Exact email header relationships use hashes only, including every token in a multi-value In-Reply-To header. MSG, mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; paired HTML blockquote boundaries preserve current text after a closed quote. Active HTML and remote resources are not executed or fetched. Attachments remain inert until a reviewer explicitly imports one. Workflow IDs must contain digits, spaced CSI-style Submittal IDs and common explicit statuses normalize deterministically, and roleless RFI sources remain unknown. Exact email header relationships use hashes only, including every token in a multi-value In-Reply-To header. MSG, mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",

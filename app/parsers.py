@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-9'
+PARSER_VERSION='multisource-10'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -69,7 +69,8 @@ _SUBMITTAL_STATUS_MAP={
     'RETURNED FOR CORRECTION':'REVISE AND RESUBMIT','REVISE/RESUBMIT':'REVISE AND RESUBMIT',
     'SUBMITTED':'PENDING','FOR REVIEW':'PENDING','UNDER REVIEW':'PENDING',
 }
-_HTML_QUOTE_MARKER='\x00CIRP-QUOTED-HISTORY\x00'
+_HTML_QUOTE_START='\x00CIRP-QUOTED-HISTORY-START\x00'
+_HTML_QUOTE_END='\x00CIRP-QUOTED-HISTORY-END\x00'
 _EMAIL_HISTORY_START=re.compile(
     r'(?i)^\s*(?:On .{1,240} wrote:|-{2,}\s*(?:Original Message|Forwarded message)\s*-{2,})\s*$')
 
@@ -238,11 +239,12 @@ class _PlainHTML(HTMLParser):
     def handle_starttag(self,tag,attrs):
         tag=tag.casefold()
         if tag in {'script','style','noscript'}:self.hidden+=1
-        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_MARKER+'\n')
+        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_START+'\n')
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_endtag(self,tag):
         tag=tag.casefold()
         if tag in {'script','style','noscript'} and self.hidden:self.hidden-=1
+        elif not self.hidden and tag=='blockquote':self.parts.append('\n'+_HTML_QUOTE_END+'\n')
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_data(self,data):
         if not self.hidden:self.parts.append(data)
@@ -263,17 +265,21 @@ def _email_part_text(part) -> tuple[str,str] | None:
 
 def split_email_history(text: str) -> tuple[str,str]:
     """Separate current message text from explicit quoted history conservatively."""
-    current=[];quoted=[];history=False;lines=text.splitlines()
+    current=[];quoted=[];history=False;html_quote_depth=0;lines=text.splitlines()
     for index,line in enumerate(lines):
         stripped=line.strip()
+        if stripped==_HTML_QUOTE_START:
+            html_quote_depth+=1;continue
+        if stripped==_HTML_QUOTE_END:
+            html_quote_depth=max(0,html_quote_depth-1);continue
         following='\n'.join(lines[index+1:index+6])
         header_block=(bool(re.match(r'(?i)^From\s*:',stripped)) and
                       bool(re.search(r'(?im)^\s*(?:Sent|Date|To|Subject)\s*:',following)))
-        if stripped==_HTML_QUOTE_MARKER or _EMAIL_HISTORY_START.match(stripped) or header_block:
-            history=True
-            if stripped!=_HTML_QUOTE_MARKER:quoted.append(line)
+        if _EMAIL_HISTORY_START.match(stripped) or header_block:
+            if not html_quote_depth:history=True
+            quoted.append(line)
             continue
-        if history or stripped.startswith('>'):quoted.append(line)
+        if history or html_quote_depth or stripped.startswith('>'):quoted.append(line)
         else:current.append(line)
     return ('\n'.join(current).strip(),'\n'.join(quoted).strip())
 

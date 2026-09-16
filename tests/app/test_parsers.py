@@ -181,7 +181,8 @@ def test_eml_multiple_in_reply_to_ids_link_one_exact_hashed_thread(tmp_path):
 def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
     message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
         '<html><body><p>Status: Pending</p><p>Current note.</p>'
-        '<blockquote><p>Status: Approved</p><p>Old note.</p></blockquote></body></html>',subtype='html')
+        '<blockquote><p>On Monday, Pat wrote:</p><p>Status: Approved</p><p>Old note.</p></blockquote>'
+        '<p>Current after quote.</p></body></html>',subtype='html')
     path=tmp_path/'thread.eml';path.write_bytes(message.as_bytes())
 
     result=parse_file(path,path.name)
@@ -190,8 +191,8 @@ def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
     quoted='\n'.join(item['text'] for item in result['fragments']
                      if item['locator']['native_element_id']=='email-quoted-history')
 
-    assert 'Current note.' in current and 'Approved' not in current
-    assert 'Approved' in quoted and 'Old note.' in quoted
+    assert 'Current note.' in current and 'Current after quote.' in current and 'Approved' not in current
+    assert 'Approved' in quoted and 'Old note.' in quoted and 'Current after quote.' not in quoted
     assert result['workflow_status']=='PENDING'
 
 def test_docx_minimal(tmp_path):

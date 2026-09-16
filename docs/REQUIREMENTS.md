@@ -124,6 +124,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - Explicit RFI question/response roles and Submittal status remain in evidence locators; an RFI question cannot become a material, inspection, test or report candidate.
 - Workflow identifiers must contain a digit, spaced CSI-style Submittal identifiers are normalized, and roleless RFI references remain unknown rather than becoming questions.
 - Current message text and explicit quoted history are separated; quoted history alone cannot become a current requirement or property.
+- Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
 - Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
 - MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
