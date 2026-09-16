@@ -36,6 +36,8 @@ EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；�
 
 没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。
 
+`Request for Information`完整名称与`RFI`缩写采用同一含数字编号规则并形成相同精确引用关系。
+
 RFI角色按同一来源的明确页面语义聚合：只有明确Question和Response同时存在（或解析器已明确给出MIXED）才显示MIXED；UNKNOWN页面保持中性，不能补成缺失的一方。
 Submittal正文与其他文档中的精确编号引用形成LINKED关系；邮件若用自己的精确Message-ID作为父级或引用则标为AMBIGUOUS；附件来源关系只有在父文档确实解析为Email时才显示。
 本地邮件线程按精确哈希父级／引用关系让祖先先于回复；同级使用文件名和文档ID稳定排序。头信息形成循环时保留全部成员并标为AMBIGUOUS，不用正文或日期猜顺序。

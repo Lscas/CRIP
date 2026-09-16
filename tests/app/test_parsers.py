@@ -147,6 +147,17 @@ def test_generic_email_uses_first_explicit_body_workflow_heading(tmp_path):
     assert {'workflow_type':'RFI','identifier':'42'} in result['workflow_references']
 
 
+def test_full_request_for_information_name_is_an_exact_reference(tmp_path):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Status: Pending\nSee Request for Information No. 0042 before release.')
+    path=tmp_path/'submittal-rfi-reference.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['workflow_type']=='SUBMITTAL'
+    assert {'workflow_type':'RFI','identifier':'42'} in result['workflow_references']
+
+
 def test_roleless_rfi_stays_unknown_and_not_implicitly_a_question(tmp_path):
     path=tmp_path/'RFI-42.txt';path.write_text('RFI 42\nClarification is pending.',encoding='utf-8')
     result=parse_file(path,path.name)
