@@ -403,7 +403,7 @@ def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tm
 
 
 def test_msg_reuses_safe_email_evidence_without_reading_attachment_content(tmp_path,monkeypatch):
-    attachment=SimpleNamespace(file_name='../response.pdf',mime_type='application/pdf',
+    attachment=SimpleNamespace(file_name=None,mime_type='application/pdf',
                                file_bytes=b'ATTACHMENT-ONLY SECRET REQUIREMENT')
     message=SimpleNamespace(
         message_headers={'Message-ID':'<reply@example.test>',
@@ -421,7 +421,7 @@ def test_msg_reuses_safe_email_evidence_without_reading_attachment_content(tmp_p
     result=parse_file(path,path.name);text='\n'.join(item['text'] for item in result['fragments'])
 
     assert result['document_type']=='EMAIL' and result['workflow_type']=='RFI'
-    assert result['attachments']==[{'file_name':'response.pdf','content_type':'application/pdf',
+    assert result['attachments']==[{'file_name':'attachment-1.pdf','content_type':'application/pdf',
                                     'status':'NOT_PROCESSED'}]
     assert 'Type L copper pipe' in text and 'ATTACHMENT-ONLY' not in text
     assert result['email_thread']['message_key'].startswith('MSG-')

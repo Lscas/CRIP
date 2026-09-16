@@ -36,7 +36,7 @@ Email-address suffixes anywhere in supported content cannot create RFI or Submit
 
 EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；全部纯文本为空时才使用非空安全HTML，不合并可能矛盾的alternative正文。
 
-Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode the OLE container. CIRP then applies the existing Email, RFI, Submittal, quoted-history, hash-only thread, active-content, and attachment boundaries. MSG files over 8 MB fail locally before model work.
+Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode the OLE container. CIRP then applies the existing Email, RFI, Submittal, quoted-history, hash-only thread, active-content, and attachment boundaries, including the same MIME-derived name in parser inventory and selected import. MSG files over 8 MB fail locally before model work.
 
 Email routing headers, quoted history and recognized signatures remain stored and reviewable, but they complete as no-current-requirement before extraction batching. Different exact RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the adjacent batch so they cannot share one extraction prompt. Only eligible current evidence reaches the model; Coverage reports locally skipped fragments.
 

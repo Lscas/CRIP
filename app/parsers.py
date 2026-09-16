@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-42'
+PARSER_VERSION='multisource-43'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -581,9 +581,10 @@ def _parse_msg(path: Path,original_name: str) -> dict:
             if source.body is not None:message.add_alternative(source.html_body,subtype='html')
             else:message.set_content(source.html_body,subtype='html')
         attachments=[]
-        for item in source.attachments:
-            name=str(item.file_name or 'unnamed attachment').replace('\\','/').split('/')[-1][:240]
-            attachments.append({'file_name':name,'content_type':str(item.mime_type or 'application/octet-stream'),
+        for index,item in enumerate(source.attachments):
+            content_type=str(item.mime_type or 'application/octet-stream')
+            name=safe_attachment_name(item.file_name,index,content_type)
+            attachments.append({'file_name':name,'content_type':content_type,
                                 'status':'NOT_PROCESSED'})
     except (LookupError,OSError,TypeError,UnicodeError,ValueError):
         return result_payload('FAILED',[],[],['Outlook MSG could not be parsed locally; no model was called.'],

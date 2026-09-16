@@ -229,7 +229,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Each MIME alternative group selects one non-empty body, preferring plain text then safe HTML; conflicting same-type choices warn instead of merging. A multipart/related start selects its matching Content-ID, with the first child as the standards fallback; non-root resources stay inert. Unnamed attachment inventory uses standard MIME extensions so supported selected imports route to the existing parser. Only a Subject with a normalized digit-bearing workflow ID can outrank an exact body heading. Every distinct exact marker is retained; a body-routed primary stops at any different exact RFI/Submittal section, while established valid-Subject priority remains. Thread headers accept bounded angle-bracketed local@domain tokens only. Exact history/signature boundaries and every nested message MIME part stay outside extraction. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Each MIME alternative group selects one non-empty body, preferring plain text then safe HTML; conflicting same-type choices warn instead of merging. A multipart/related start selects its matching Content-ID, with the first child as the standards fallback; non-root resources stay inert. EML and MSG parser inventory plus selected import use one MIME-derived name for unnamed parts so supported resources stay analyzable. Only a Subject with a normalized digit-bearing workflow ID can outrank an exact body heading. Every distinct exact marker is retained; a body-routed primary stops at any different exact RFI/Submittal section, while established valid-Subject priority remains. Thread headers accept bounded angle-bracketed local@domain tokens only. Exact history/signature boundaries and every nested message MIME part stay outside extraction. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -302,7 +302,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML or MSG attachment through project capacity, chunk, SHA-256 and deduplication controls. Nested messages and related non-root resources remain inert; unnamed parts receive a standard MIME-derived extension so supported imports remain analyzable. Supplied names and conservative parser validation remain unchanged; no analysis or model call starts automatically."
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML or MSG attachment through project capacity, chunk, SHA-256 and deduplication controls. Nested messages and related non-root resources remain inert; parser inventory and selected import share one standard MIME-derived name for unnamed parts so supported imports remain analyzable. Supplied names and conservative parser validation remain unchanged; no analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",

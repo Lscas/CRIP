@@ -50,7 +50,7 @@ def test_selected_email_attachment_import_reuses_hash_and_dedupe(client,project)
 
 def test_selected_msg_attachment_uses_the_same_bounded_import_path(client,project,monkeypatch):
     data=b'%PDF-from-msg'
-    attachment=SimpleNamespace(file_name='../response.pdf',mime_type='application/pdf',file_bytes=data)
+    attachment=SimpleNamespace(file_name=None,mime_type='application/pdf',file_bytes=data)
     class Message:
         @classmethod
         def load(cls,path):return SimpleNamespace(attachments=(attachment,))
@@ -63,9 +63,9 @@ def test_selected_msg_attachment_uses_the_same_bounded_import_path(client,projec
         'document_id':source['document_id'],'attachment_index':0,'expected_sha256':item['sha256']})
 
     assert listing.status_code==200 and item=={
-        'attachment_index':0,'name':'response.pdf','content_type':'application/pdf','size':len(data),
+        'attachment_index':0,'name':'attachment-1.pdf','content_type':'application/pdf','size':len(data),
         'sha256':hashlib.sha256(data).hexdigest(),'importable':True}
-    assert imported.status_code==201 and imported.json()['name']=='response.pdf'
+    assert imported.status_code==201 and imported.json()['name']=='attachment-1.pdf'
 
 
 def test_email_attachment_import_is_project_scoped_and_identity_checked(client,project):
