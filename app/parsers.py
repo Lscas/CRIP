@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-34'
+PARSER_VERSION='multisource-35'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -366,6 +366,48 @@ def _email_part_text(part) -> tuple[str,str] | None:
     return content_type,value
 
 
+def _email_attachment_boundary(part) -> bool:
+    return part.get_content_disposition()=='attachment' or bool(part.get_filename())
+
+
+def _inventory_email_attachments(part,attachments: list[dict]) -> None:
+    """Inventory top-level MIME attachments without entering attached messages or files."""
+    if _email_attachment_boundary(part):
+        attachments.append({'file_name':str(part.get_filename() or 'unnamed attachment')[:240],
+                            'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
+        return
+    if part.is_multipart():
+        for child in part.iter_parts():_inventory_email_attachments(child,attachments)
+
+
+def _select_email_body(part) -> tuple[str | None,str,list[str]]:
+    """Select one candidate per multipart/alternative; concatenate only real body segments."""
+    if _email_attachment_boundary(part):return None,'',[]
+    if not part.is_multipart():
+        parsed=_email_part_text(part)
+        return (parsed[0],parsed[1],[]) if parsed and parsed[1].strip() else (None,'',[])
+    candidates=[_select_email_body(child) for child in part.iter_parts()]
+    candidates=[candidate for candidate in candidates if candidate[1].strip()]
+    if not candidates:return None,'',[]
+    if part.get_content_type()=='multipart/alternative':
+        preferred=('text/plain' if any(kind=='text/plain' for kind,_,_ in candidates) else
+                   'text/html' if any(kind=='text/html' for kind,_,_ in candidates) else candidates[0][0])
+        matching=[candidate for candidate in candidates if candidate[0]==preferred]
+        kind,text,warnings=matching[0];warnings=list(warnings)
+        if len({value for _,value,_ in matching})>1:
+            warnings.append(
+                f'Email has multiple non-empty {preferred} alternatives; the first supported '
+                'alternative was used and alternatives were not merged.')
+        return kind,text,warnings
+    texts=[];warnings=[];types=[]
+    for kind,text,child_warnings in candidates:
+        types.append(kind);texts.append(text)
+        for warning in child_warnings:
+            if warning not in warnings:warnings.append(warning)
+    kind='text/plain' if 'text/plain' in types else 'text/html' if 'text/html' in types else types[0]
+    return kind,'\n\n'.join(texts),warnings
+
+
 def split_email_history(text: str) -> tuple[str,str]:
     """Separate current message text from explicit quoted history conservatively."""
     current=[];quoted=[];history=False;html_quote_depth=0;lines=text.splitlines()
@@ -442,23 +484,9 @@ def _parse_email_message(message,original_name: str,size: int,attachments: list[
         value=message.get(name)
         if value is not None:headers.append(f'{name}: {str(value)[:4000]}')
     supplied_attachments=attachments is not None
-    attachments=list(attachments or []);plain=[];html=[]
-    def collect(part):
-        disposition=part.get_content_disposition();filename=part.get_filename()
-        if disposition=='attachment' or filename:
-            if not supplied_attachments:
-                attachments.append({'file_name':str(filename or 'unnamed attachment')[:240],
-                                    'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
-            return
-        if part.is_multipart():
-            for child in part.iter_parts():collect(child)
-            return
-        parsed=_email_part_text(part)
-        if parsed:
-            (plain if parsed[0]=='text/plain' else html).append(parsed[1])
-    collect(message)
-    plain=[value for value in plain if value.strip()];html=[value for value in html if value.strip()]
-    body='\n\n'.join(plain or html)
+    attachments=list(attachments or [])
+    if not supplied_attachments:_inventory_email_attachments(message,attachments)
+    _,body,body_warnings=_select_email_body(message)
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
     current_body,quoted_body=split_email_history(body)
     current_body,signature_body=split_email_signature(current_body)
@@ -493,7 +521,7 @@ def _parse_email_message(message,original_name: str,size: int,attachments: list[
                     native_element_id='email-quoted-signature'),
             'EMAIL',revision(quoted_signature)))
     signature_chars=len(signature_body)+len(quoted_signature)
-    warnings=[]
+    warnings=list(body_warnings)
     if attachments:warnings.append('Email attachments were inventoried but not analyzed; upload each attachment separately.')
     if not current_body and quoted_body:warnings.append('Email has quoted history but no distinct current body text.')
     elif not current_body and signature_chars:warnings.append('Email has a signature but no distinct current body text.')

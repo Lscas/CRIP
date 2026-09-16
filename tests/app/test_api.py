@@ -219,6 +219,28 @@ def test_email_rfi_status_reaches_review_without_replacing_question_response(cli
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_email_mime_alternatives_do_not_manufacture_a_mixed_rfi(client,project):
+    message=EmailMessage();message['Subject']='RFI 301';message.make_alternative()
+    message.add_alternative('Question:\nConfirm clearance.',subtype='plain')
+    message.add_alternative('Official Response:\nUse 4 inches.',subtype='plain')
+    document=upload(client,project['id'],'RFI-301.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='RFI' and item['identifier']=='301')
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+
+    assert group['state']=='OPEN' and group['members'][0]['role']=='QUESTION'
+    assert any('Confirm clearance.' in item['raw_text'] for item in evidence)
+    assert all('Use 4 inches.' not in item['raw_text'] for item in evidence)
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_email_submittal_status_does_not_cross_to_different_subject_identifier(client,project):
     message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
         'Submittal 23-02\nFinal Response: Rejected\nPump P-2 does not comply.')

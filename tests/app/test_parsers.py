@@ -432,6 +432,24 @@ def test_eml_blank_plain_alternative_falls_back_to_html_but_nonempty_plain_remai
     assert 'Type L copper' in fallback_text and fallback['workflow_contexts'][0]['role']=='RESPONSE'
     assert fallback['email_content']['current_body_chars']>0
     assert 'Plain current requirement.' in plain_text and 'HTML-ONLY' not in plain_text
+    assert all('multiple non-empty' not in warning for warning in plain['warnings'])
+
+
+def test_eml_same_type_alternatives_select_one_body_instead_of_merging_roles(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 301';message.make_alternative()
+    message.add_alternative('Question:\nConfirm clearance.',subtype='plain')
+    message.add_alternative('Official Response:\nUse 4 inches.',subtype='plain')
+    path=tmp_path/'conflicting-alternatives.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    body='\n'.join(item['text'] for item in result['fragments']
+                   if item['locator']['native_element_id']=='email-body')
+
+    assert result['status']=='PARTIAL'
+    assert result['workflow_contexts'][0]['role']=='QUESTION'
+    assert 'Confirm clearance.' in body and 'Use 4 inches.' not in body
+    assert any('multiple non-empty text/plain alternatives' in warning
+               for warning in result['warnings'])
 
 
 def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):

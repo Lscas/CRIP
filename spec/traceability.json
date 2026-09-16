@@ -228,7 +228,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Exact history/signature boundaries stay outside extraction. Official Response maps to an RFI response; exact known RFI Status and Submittal response/status values reach evidence without inferring authority. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Each MIME alternative group selects one non-empty body, preferring plain text then safe HTML; conflicting same-type choices warn instead of merging. Exact history/signature/attachment boundaries stay outside extraction. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -254,7 +254,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across body, Subject and filename into one bounded read-only index. Known RFI statuses remain metadata; conflicting values are ambiguous without precedence. Known Submittal responses reuse existing groups; weaker IDs remain references. Hash-only email threads, selected attachments, SQLite projection and reviewer-requested pagination remain deterministic and model-free."
+      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across the one selected Email body, Subject and filename into a bounded read-only index. MIME alternatives cannot manufacture mixed roles. Known statuses remain metadata and conflicts stay ambiguous without precedence. Hash-only threads, selected attachments, SQLite projection and reviewer pagination remain deterministic and model-free."
     },
     {
       "requirement_id": "FR-INGEST-005",
