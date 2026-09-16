@@ -236,6 +236,25 @@ def test_submission_filename_fallback_reaches_workflow_index(client,project):
     assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
 
 
+def test_one_email_submittal_with_conflicting_statuses_is_ambiguous(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Status: Pending\nPump data received.\nStatus: Rejected\nWrong pump selected.')
+    document=upload(client,project['id'],'submittal-status-conflict.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='SUBMITTAL' and item['identifier']=='23-01')
+
+    assert group['state']=='AMBIGUOUS'
+    assert group['members'][0]['status']=='PENDING / REJECTED'
+    assert 'multiple explicit statuses' in group['warnings'][0]
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_email_rfi_role_requires_an_explicit_heading_boundary(client,project):
     message=EmailMessage();message['Subject']='RFI 42';message.set_content(
         'Response time: 10 days.\nQuestionnaire attached.')

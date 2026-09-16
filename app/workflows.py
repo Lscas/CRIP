@@ -66,10 +66,14 @@ def _contexts(summary: dict) -> list[dict]:
         if not isinstance(raw,dict) or raw.get('workflow_type') not in {'RFI','SUBMITTAL'}:continue
         workflow=raw['workflow_type'];identifier=_identifier(workflow,raw.get('identifier'))
         if not identifier:continue
-        value={'workflow_type':workflow,'identifier':identifier,
-               'role':raw.get('role'),'status':raw.get('status')}
-        identity=(workflow,identifier,value['role'],value['status'])
-        if identity not in seen:seen.add(identity);out.append(value)
+        statuses=[raw.get('status')]
+        if workflow=='SUBMITTAL' and isinstance(statuses[0],str):
+            statuses=[value.strip() for value in statuses[0].split(' / ') if value.strip()] or [None]
+        for status in statuses:
+            value={'workflow_type':workflow,'identifier':identifier,
+                   'role':raw.get('role'),'status':status}
+            identity=(workflow,identifier,value['role'],value['status'])
+            if identity not in seen:seen.add(identity);out.append(value)
     return out
 
 
@@ -102,7 +106,7 @@ def _workflow_state(workflow: str, members: list[dict], source_status_conflict: 
         return 'OPEN',['This RFI identifier has no explicit Question or Response role; review the source.']
     else:
         if source_status_conflict:
-            return 'AMBIGUOUS',['One Submittal source contains multiple explicit statuses; compare the original pages.']
+            return 'AMBIGUOUS',['One Submittal source contains multiple explicit statuses; compare the original source sections.']
         statuses={str(member['status']).upper() for member in primary if member.get('status')}
         if len(statuses)>1:return 'AMBIGUOUS',['Submittal sources with this identifier have different explicit statuses.']
         return ('SINGLE' if len(members)==1 else 'LINKED'),[]

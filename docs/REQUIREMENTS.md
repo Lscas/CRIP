@@ -143,7 +143,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
 - Digit-bearing RFI/Request for Information and Submittal/Submission references normalize identically; only exact headings link RFI roles, while duplicates and unknown roles stay ambiguous.
-- Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
+- Submittals with the same exact identifier retain every explicit source status; exact references link to the primary, while conflicts across documents or within one source remain ambiguous.
 - Email routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay reference-only and cannot donate role/status.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.

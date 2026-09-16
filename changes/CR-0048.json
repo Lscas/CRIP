@@ -1,0 +1,43 @@
+{
+  "change_id": "CR-0048",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Preserve all distinct Submittal statuses from one TXT or current Email source and reuse the existing ambiguous-state calculation.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy across RFI, Submittal and Email content",
+    "Confirmed synthetic reproduction where Pending plus Rejected in one source retained only Pending and appeared SINGLE"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-033.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0048.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area parsers",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued RFI, Submittal and Email accuracy improvements.",
+  "known_limitations": [
+    "Only explicit supported status headings inside the selected exact Submittal scope participate.",
+    "The parser reports the conflict for human review and does not choose an approval outcome.",
+    "Validation is synthetic and offline; no mailbox, model, external provider or customer file was used."
+  ]
+}

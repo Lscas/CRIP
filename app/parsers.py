@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-23'
+PARSER_VERSION='multisource-24'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -220,9 +220,9 @@ def document_context(text: str, original_name: str = '') -> dict:
         identifier=_clean_identifier(submittal.group(1) if submittal.lastindex else None,'SUBMITTAL')
         scope=(_workflow_scope(searchable,'SUBMITTAL',identifier,submittal.end())
                if submittal_in_text else searchable)
-        status_match=_SUBMITTAL_STATUS.search(scope)
+        statuses=sorted({_submittal_status(value) for value in _SUBMITTAL_STATUS.findall(scope)})
         return {'document_type':'SUBMITTAL','workflow_type':'SUBMITTAL','identifier':identifier,
-                'role':'SUBMITTAL','status':_submittal_status(status_match.group(1)) if status_match else None}
+                'role':'SUBMITTAL','status':' / '.join(statuses) or None}
     return {'document_type':'UNKNOWN','workflow_type':None,'identifier':None,'role':None,'status':None}
 
 

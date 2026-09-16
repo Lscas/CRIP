@@ -1,0 +1,44 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "A TXT or Email Submittal with multiple explicit statuses currently keeps only the first status in its workflow context.",
+    "The existing workflow index already marks multiple statuses from one source ambiguous, but the parser must preserve every distinct canonical status for that exact primary identifier.",
+    "Reuse the current status normalizer and ambiguity calculation; add no dependency, semantic inference, mailbox access or model call.",
+    "Offline parser, workflow and API regressions, specification sync and every bounded task context pack passed before completion."
+  ],
+  "task_id": "DEV-033",
+  "title": "Single-source Submittal status conflicts",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-033.json",
+    "changes/CR-0048.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_workflows.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Preserve every distinct explicit status for one exact Submittal source so an Email or TXT conflict reaches the existing AMBIGUOUS workflow review state."
+}

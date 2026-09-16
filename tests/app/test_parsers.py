@@ -210,6 +210,19 @@ def test_not_approved_submittal_status_is_canonical_rejected(tmp_path):
     assert all('STATUS: REJECTED' in item['locator']['section'] for item in result['fragments'])
 
 
+def test_one_text_submittal_preserves_conflicting_explicit_statuses(tmp_path):
+    path=tmp_path/'Submittal-23-01.txt';path.write_text(
+        'Submittal 23-01\nStatus: Pending\nPump data received.\n'
+        'Status: Rejected\nWrong pump selected.',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status']=='PENDING / REJECTED'
+    sections=[item['locator']['section'] for item in result['fragments']]
+    assert any('STATUS: PENDING' in section for section in sections)
+    assert any('STATUS: REJECTED' in section for section in sections)
+
+
 def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tmp_path):
     message=EmailMessage();message['Subject']='RFI 042';message['From']='contractor@example.test'
     message['To']='engineer@example.test';message.set_content(
