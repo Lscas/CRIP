@@ -12,7 +12,7 @@
 不能将“全部专业能上传”写成“全部专业已正确分析”。每专业、文件、页面和任务均显示未处理、完成、部分、失败或能力缺失。内部原型可以逐模块交付，但不能擅自把总目标缩为混凝土专项。
 
 ## 2. 范围
-首版输入PDF、DOCX、TXT、RFC风格EML、PNG/JPEG/TIFF/BMP/WEBP等常见图片、DWG。EML仅在本机解析安全头信息和可见正文，并把当前正文与显式引用历史分开；附件先保持不活动，MIME遍历遇到附件即停止，不把附加邮件正文或其嵌套文件计入父邮件证据、附件清单或工作流角色。审核者可显式选择单个附件，经普通上传控制导入并保留父邮件来源。父邮件与已选附件在后续运行的Workflow中形成只读来源关系，但附件不继承RFI/Submittal角色、审批或权威；系统不执行HTML、不加载远程资源，也不自动递归或启动分析。客户可配置Autodesk APS或Procore访问令牌，以只读方式浏览项目目录并导入选定文件；CIRP不远程写入、删除或同步，也不把导入成功宣称为分析成功。非支持图像或格式保留清单并说明，不以“所有图片”宣称无限格式支持。Excel、MSG、邮箱连接／同步、BIM原生和持续同步不自动加入本轮范围。
+The current input slice accepts PDF, DOCX, TXT, RFC-style EML, bounded local Outlook MSG, common PNG/JPEG/TIFF/BMP/WEBP images, DWG, and DXF. EML and MSG expose safe headers and visible body text through the same evidence and workflow path; attachments remain inert until a reviewer explicitly imports one through the ordinary upload controls. Active HTML is not executed, remote resources are not fetched, and nested attachments do not recurse automatically. Autodesk APS and Procore remain read-only selected-file imports. Excel, mailbox connection or synchronization, native BIM, and continuous synchronization are outside this slice.
 
 永久材料列设计要求、类别、厂家、产品、型号、等级、尺寸、安装范围、来源及设计净量；临时材料只要求名称与依据。无指定字段为null。无价格、无采购订单、无供货责任裁定。多个厂家／产品若为互斥选项，全部列在ONE_OF组，不替用户选一个，不合计多倍数量。
 
@@ -35,6 +35,8 @@ DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可�
 Email-address suffixes anywhere in supported content cannot create RFI or Submittal workflow groups. From, To, Cc and Date remain visible email-header evidence; non-address Subject, current-body and explicit quoted-history text remains eligible for exact relationship extraction.
 
 EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；全部纯文本为空时才使用非空安全HTML，不合并可能矛盾的alternative正文。
+
+Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode the OLE container. CIRP then applies the existing Email, RFI, Submittal, quoted-history, hash-only thread, active-content, and attachment boundaries. MSG files over 8 MB fail locally before model work.
 
 没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。
 

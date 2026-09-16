@@ -22,6 +22,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - Deterministic pre-publication checks for clear material-name, QA-activity, duplicate-property, evidence-scope, and mixed workflow-source errors. Invalid RFI-question, rejected-Submittal, email-header, or quoted-history citations are removed individually while valid direct support is preserved; every remaining workflow source contributes to the visible conditional status.
 - Native PDF page routing with specification Section/Part/clause locators and bordered table rows kept as coordinate-backed evidence. Borderless and cross-page tables still require review.
 - Local `.eml` parsing for safe headers and visible body text, with RFI question/response and Submittal status evidence boundaries. Non-empty plain text is preferred; whitespace-only plain alternatives fall back to non-empty safe HTML. Paired HTML blockquotes and explicit Outlook-style `From` plus `Sent`/`Date`/`To`/`Subject` headers keep quoted history separate, including when those visible header labels share one line. Spaced CSI-style Submittal identifiers are normalized from explicit body, subject, or filename metadata. MIME parsing stops at attachment boundaries, so an attached email body and its nested files stay out of parent evidence and workflow roles until explicitly imported through the normal capacity, hash and deduplication controls. The parent email and selected attachment then appear together in workflow review without inheriting approval or authority. HTML active content and remote resources are not executed or fetched.
+- Local Outlook `.msg` parsing reuses the same Email/RFI/Submittal evidence and selected-attachment paths. The pinned MIT-licensed `python-oxmsg` package decodes the bounded binary container; CIRP does not implement a second semantic parser or connect to a mailbox.
 - Current email text and explicit quoted history are separated; exact RFI, Submittal, hash-only email-thread, and selected-attachment relationships appear in one bounded reviewer workflow view without a model call. Primary workflow routing uses explicit email Subject before explicit body heading before filename; different exact identifiers remain references and cannot donate their RFI role or Submittal status to the primary identifier. Each explicit body section keeps its own identifier, role or status in the evidence locator. A bounded mix of reply/forward prefixes and bracketed enterprise labels such as `[EXTERNAL]` or `[External Email]` may precede an otherwise explicit workflow Subject. UNKNOWN RFI page contexts stay neutral instead of manufacturing a missing Question or Response. Exact Submittal references link to their primary source; conflicting explicit statuses remain ambiguous. Every identifier in a multi-value `In-Reply-To` header is hashed separately. Exact local ancestors appear before replies; self-references, parent/reference cycles and multiple distinct Message-ID values in one email are ambiguous and retain all messages. Raw message identifiers are not persisted, while a missing Message-ID remains a valid standalone item. Attachment provenance is shown only for a parsed email parent.
 - Customer-configured read-only Autodesk Construction Cloud or Procore browsing and selected-file import, reusing project capacity checks, 4 MiB chunks, SHA-256, deduplication, and optional Windows current-user DPAPI storage.
 - Reproducible offline PDF performance measurement in `scripts/benchmark_local_parse.py`; see `docs/PERFORMANCE_BASELINE.md` for the measured fixture and limits.
@@ -79,12 +80,12 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 596 Python tests passed.
+- 599 Python tests passed.
 - 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.
 - Requirements/specification synchronization passed.
-- The source bundle manifest passed for 325 files.
+- The source bundle manifest passed for 327 files.
 
 No DeepSeek, Gemini, or other paid model call was made during recovery, validation, or publication preparation.
 
@@ -112,7 +113,7 @@ The source PDFs are intentionally not included. The workbook is a reviewer candi
 - A partial run is not evidence of construction accuracy or completeness.
 - PDF vector geometry is not treated as material quantity.
 - CAD-derived counts and measurements remain review candidates until scope, units, and duplicate representations are verified.
-- Outlook MSG, mailbox synchronization, attachment recursion, and semantic email-thread inference are not supported yet.
+- Mailbox synchronization, automatic attachment recursion, and semantic email-thread inference are not supported yet.
 - Autodesk/Procore interactive OAuth, automatic token refresh or provider-side revocation, recursive bulk import, change polling, continuous synchronization, and live-tenant acceptance are not included yet. Forgetting a connection removes only the local encrypted copy.
 - The public workbook demonstrates the export format and a completed processing result; it does not prove that every extracted item is correct.
 - No license file is included. Public visibility does not grant reuse rights beyond applicable law and the repository owner's permissions.

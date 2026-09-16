@@ -14,6 +14,7 @@
 - S11 Gemini推理与生成上限：https://ai.google.dev/gemini-api/docs/thinking 。`max_output_tokens`包含内部推理与可见输出，计费包含两者；本应用不请求thought summary。
 - S12 RapidOCR安装与使用：https://rapidai.github.io/RapidOCRDocs/main/en/install_usage/rapidocr/install/ ；项目仓库及Apache-2.0许可：https://github.com/RapidAI/RapidOCR 。本版使用`rapidocr`+`onnxruntime`本机推理，不向OCR服务上传文件。
 - S13 ezdxf单位说明：https://ezdxf.readthedocs.io/en/stable/concepts/units.html 。DXF模型坐标本身无单位，只有`$INSUNITS`等上下文；本版缺单位时不发布长度/面积候选，不做隐式换算。
+- S14 python-oxmsg project and MIT license: https://github.com/scanny/python-oxmsg ; pinned package metadata: https://pypi.org/project/python-oxmsg/ . CIRP uses version 0.0.2 to decode bounded local Outlook MSG containers and reuses the existing email evidence path. Public upstream fixtures were validated at commit `d0ee4645d4a8bf6d18517d33bc1f7dcb23e7620b`; the fixtures are not redistributed in this repository.
 - S14 GNU LibreDWG：https://www.gnu.org/software/libredwg/ ；`dwg2dxf`命令说明：https://github.com/LibreDWG/libredwg/blob/master/programs/dwg2dxf.1 。本机固定0.14 win64发布包并校验归档SHA-256；GPLv3工具仅作本机独立转换进程，原DWG保持不变。
 - S15 ODA File Converter：https://www.opendesign.com/guestfiles 。它是可选免费工具而非开源组件；本机优先GNU LibreDWG，只有用户另行安装时才作为后备。
 

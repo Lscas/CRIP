@@ -1,6 +1,8 @@
-"""Selected EML attachments stay inert until an explicit local import."""
+"""Selected local email attachments stay inert until an explicit import."""
 import hashlib
+import sys
 from email.message import EmailMessage
+from types import SimpleNamespace
 
 from tests.app.conftest import upload
 
@@ -39,6 +41,26 @@ def test_selected_email_attachment_import_reuses_hash_and_dedupe(client,project)
     assert all(item['source_kind']=='EMAIL_ATTACHMENT' for item in imported_uploads)
     assert all(item['source_detail']=={'attachment_index':0,'content_type':'application/pdf',
                                        'sha256':pdf['sha256']} for item in imported_uploads)
+
+
+def test_selected_msg_attachment_uses_the_same_bounded_import_path(client,project,monkeypatch):
+    data=b'%PDF-from-msg'
+    attachment=SimpleNamespace(file_name='../response.pdf',mime_type='application/pdf',file_bytes=data)
+    class Message:
+        @classmethod
+        def load(cls,path):return SimpleNamespace(attachments=(attachment,))
+    monkeypatch.setitem(sys.modules,'oxmsg',SimpleNamespace(Message=Message))
+    source=upload(client,project['id'],'response.msg',b'synthetic-msg-container')
+
+    listing=client.get(f'/api/documents/{source["document_id"]}/email-attachments')
+    item=listing.json()['attachments'][0]
+    imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
+        'document_id':source['document_id'],'attachment_index':0,'expected_sha256':item['sha256']})
+
+    assert listing.status_code==200 and item=={
+        'attachment_index':0,'name':'response.pdf','content_type':'application/pdf','size':len(data),
+        'sha256':hashlib.sha256(data).hexdigest(),'importable':True}
+    assert imported.status_code==201 and imported.json()['name']=='response.pdf'
 
 
 def test_email_attachment_import_is_project_scoped_and_identity_checked(client,project):

@@ -1,5 +1,5 @@
 """FR-PARSE-001/003/004，基础文字解析，不是施工视觉评测。"""
-import io,json,zipfile
+import io,json,sys,zipfile
 from email.message import EmailMessage
 from pathlib import Path
 from types import SimpleNamespace
@@ -260,6 +260,32 @@ def test_eml_parses_safe_body_and_inventories_attachment_without_analyzing_it(tm
     assert 'EMAIL > BODY > RFI 42 > RESPONSE' in body['locator']['section']
     assert body['internal_revision_date']=='2026-09-15'
     assert any('not analyzed' in warning for warning in result['warnings'])
+
+
+def test_msg_reuses_safe_email_evidence_without_reading_attachment_content(tmp_path,monkeypatch):
+    attachment=SimpleNamespace(file_name='../response.pdf',mime_type='application/pdf',
+                               file_bytes=b'ATTACHMENT-ONLY SECRET REQUIREMENT')
+    message=SimpleNamespace(
+        message_headers={'Message-ID':'<reply@example.test>',
+                         'In-Reply-To':'<question@example.test>'},
+        subject='RFI 042',sender='contractor@example.test',recipients=(),sent_date=None,
+        body='Response:\nProvide Type L copper pipe.',html_body=None,attachments=(attachment,))
+    class Message:
+        @classmethod
+        def load(cls,path):
+            assert Path(path).name=='response.msg'
+            return message
+    monkeypatch.setitem(sys.modules,'oxmsg',SimpleNamespace(Message=Message))
+    path=tmp_path/'response.msg';path.write_bytes(b'synthetic-msg-container')
+
+    result=parse_file(path,path.name);text='\n'.join(item['text'] for item in result['fragments'])
+
+    assert result['document_type']=='EMAIL' and result['workflow_type']=='RFI'
+    assert result['attachments']==[{'file_name':'response.pdf','content_type':'application/pdf',
+                                    'status':'NOT_PROCESSED'}]
+    assert 'Type L copper pipe' in text and 'ATTACHMENT-ONLY' not in text
+    assert result['email_thread']['message_key'].startswith('MSG-')
+    assert 'reply@example.test' not in str(result) and result['active_content_processed'] is False
 
 
 def test_eml_attached_message_and_its_nested_files_stay_out_of_parent_evidence(tmp_path):

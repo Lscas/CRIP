@@ -113,28 +113,28 @@ DWG 通过受支持的本机开源或可配置CAD转换组件派生并标记解�
 - 转换器可用且派生 DXF 对象解析成功时标记 OBJECT_METADATA；转换器未配置、转换失败或对象解析不可用时标记 UNAVAILABLE。
 - 原 DWG 不改写；派生文件、转换器标识和兼容性警告可追溯，不将部分对象解析冒充为完整 CAD 语义。
 
-## FR-PARSE-007 · EML email parsing and workflow evidence
+## FR-PARSE-007 · EML and Outlook MSG email parsing and workflow evidence
 
 优先级：P0；状态：implemented
 
-Parse RFC-style EML headers and visible body text locally while preserving RFI, Submittal and attachment boundaries.
+Parse RFC-style EML and bounded local Outlook MSG headers and visible body text while preserving RFI, Submittal and attachment boundaries.
 
-- EML headers and preferred plain-text or safe visible HTML body become separately locatable evidence without executing active content or fetching remote resources.
+- EML and MSG headers plus preferred visible body text become separately locatable evidence without active-content execution or remote fetches.
 - A whitespace-only text/plain alternative does not suppress a non-empty safe HTML alternative; any non-empty plain text remains preferred without merging conflicting alternatives.
-- Attachments are inventoried as not processed and cannot silently contribute evidence; a reviewer may explicitly import one selected attachment through the normal upload controls before starting a new analysis run.
-- Parent-email parsing stops at each MIME attachment boundary, so an attached email body and its nested files cannot contribute parent evidence, attachment inventory or workflow role before explicit import.
+- Attachments are inventoried, cannot contribute evidence before explicit import, and stay inert until a reviewer starts a new analysis run.
+- EML traversal stops at attachment boundaries; attached-email bodies and nested files cannot enter parent evidence, inventory or workflow roles before import.
 - Only exact RFI role headings and Submittal statuses enter evidence locators; ordinary word prefixes and RFI questions cannot become material or QA candidates.
-- Workflow IDs require a digit; RFI/Request for Information and Submittal/Submission aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
+- Workflow IDs require digits; aliases normalize across body, Subject and filename; spaced CSI IDs persist and roleless RFI stays unknown.
 - Primary routing ranks explicit Subject, earliest body heading, then filename; other identifiers stay references and cannot donate role/status.
-- Up to six interleaved reply, forward or bracketed enterprise labels of at most 40 characters each may precede an explicit RFI or Submittal Subject without weakening the workflow-word or digit-bearing identifier rules.
-- Current body and quoted history stay separate; email addresses never create workflow groups, routing headers remain evidence, and quoted history cannot create current requirements or properties.
-- An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.
+- Up to six bounded reply, forward or bracketed enterprise labels may precede an explicit workflow Subject without weakening identifier rules.
+- Current body and quoted history stay separate; addresses never create workflow groups, routing headers remain evidence, and history cannot create current requirements or properties.
+- An Outlook-style From block with Sent, Date, To or Subject starts quoted history whether labels share a line or use adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
 - Multiple distinct Message-ID values in one email are preserved only as a hash-safe conflict flag instead of being silently treated as a valid or missing single identity.
 - Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
 - Local thread members are ordered parent-before-child from exact hashed header relationships; cyclic relationships remain complete and are marked ambiguous.
-- MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
+- MSG parsing reuses the existing email evidence and workflow path through the pinned MIT-licensed python-oxmsg package; mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported.
 
 ## FR-WORKFLOW-001 · Deterministic workflow relationships
 
@@ -149,7 +149,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
-- An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
+- An explicitly imported EML or MSG attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
 - The browser shows loaded and total workflow-group counts, requests subsequent bounded 500-group pages only when the reviewer asks, and appends them without duplicate group identifiers.
 - The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
@@ -166,11 +166,11 @@ Allow a customer-configured read-only Autodesk APS or Procore connection to brow
 - Only trusted HTTPS download hosts are accepted and a bearer token is not forwarded to a different signed-storage host.
 - All automated validation uses synthetic httpx MockTransport responses and makes no live Autodesk or Procore request.
 
-## FR-INGEST-006 · Selected EML attachment import
+## FR-INGEST-006 · Selected local email attachment import
 
 优先级：P0；状态：implemented
 
-Let a reviewer inspect inert EML attachments and explicitly import one selected attachment through the existing immutable upload pipeline.
+Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly import one selected attachment through the existing immutable upload pipeline.
 
 - Attachment listing returns only bounded metadata and a SHA-256 identity; raw attachment bytes are not returned by the listing endpoint.
 - The selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.

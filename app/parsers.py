@@ -9,7 +9,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, asdict, field
 from datetime import date
 from email import policy
+from email.message import EmailMessage
 from email.parser import BytesParser
+from email.utils import format_datetime,formataddr
 from html.parser import HTMLParser
 from pathlib import Path
 from time import monotonic
@@ -20,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-26'
+PARSER_VERSION='multisource-27'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -369,22 +371,22 @@ def _email_thread_metadata(message) -> dict:
             'reference_keys':references}
 
 
-def _parse_email(path: Path, original_name: str) -> dict:
-    size=path.stat().st_size
+def _parse_email_message(message,original_name: str,size: int,attachments: list[dict] | None = None) -> dict:
     if size>MAX_CHARS*4:
         return result_payload('FAILED',[],[],['Email exceeds the local 8 MB parsing limit; no model was called.'],
                               document_type='EMAIL',workflow_type=None,attachments=[])
-    message=BytesParser(policy=policy.default).parsebytes(path.read_bytes())
     headers=[]
     for name in ('Subject','From','To','Cc','Date'):
         value=message.get(name)
         if value is not None:headers.append(f'{name}: {str(value)[:4000]}')
-    attachments=[];plain=[];html=[]
+    supplied_attachments=attachments is not None
+    attachments=list(attachments or []);plain=[];html=[]
     def collect(part):
         disposition=part.get_content_disposition();filename=part.get_filename()
         if disposition=='attachment' or filename:
-            attachments.append({'file_name':str(filename or 'unnamed attachment')[:240],
-                                'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
+            if not supplied_attachments:
+                attachments.append({'file_name':str(filename or 'unnamed attachment')[:240],
+                                    'content_type':part.get_content_type(),'status':'NOT_PROCESSED'})
             return
         if part.is_multipart():
             for child in part.iter_parts():collect(child)
@@ -429,6 +431,47 @@ def _parse_email(path: Path, original_name: str) -> dict:
                           email_thread=_email_thread_metadata(message),
                           email_content={'current_body_chars':len(current_body),'quoted_history_chars':len(quoted_body)},
                           attachments=attachments,active_content_processed=False)
+
+
+def _parse_email(path: Path, original_name: str) -> dict:
+    size=path.stat().st_size
+    message=BytesParser(policy=policy.default).parsebytes(path.read_bytes())
+    return _parse_email_message(message,original_name,size)
+
+
+def _msg_header(headers: dict,name: str) -> str | None:
+    for key,value in headers.items():
+        if str(key).casefold()==name.casefold():
+            return ' '.join(str(value).splitlines()).strip() or None
+    return None
+
+
+def _parse_msg(path: Path,original_name: str) -> dict:
+    size=path.stat().st_size
+    if size>MAX_CHARS*4:
+        return _parse_email_message(EmailMessage(),original_name,size)
+    from oxmsg import Message
+    try:
+        source=Message.load(str(path));headers=source.message_headers;message=EmailMessage()
+        recipients=', '.join(filter(None,(formataddr((str(item.name or ''),str(item.email_address or '')))
+                                         for item in source.recipients)))
+        fallbacks={'Subject':source.subject,'From':source.sender,'To':recipients,
+                   'Date':format_datetime(source.sent_date) if source.sent_date else None}
+        for name in ('Subject','From','To','Cc','Date','Message-ID','In-Reply-To','References'):
+            if value:=_msg_header(headers,name) or fallbacks.get(name):message[name]=str(value)[:16_000]
+        if source.body is not None:message.set_content(source.body)
+        if source.html_body:
+            if source.body is not None:message.add_alternative(source.html_body,subtype='html')
+            else:message.set_content(source.html_body,subtype='html')
+        attachments=[]
+        for item in source.attachments:
+            name=str(item.file_name or 'unnamed attachment').replace('\\','/').split('/')[-1][:240]
+            attachments.append({'file_name':name,'content_type':str(item.mime_type or 'application/octet-stream'),
+                                'status':'NOT_PROCESSED'})
+    except (LookupError,OSError,TypeError,UnicodeError,ValueError):
+        return result_payload('FAILED',[],[],['Outlook MSG could not be parsed locally; no model was called.'],
+                              document_type='EMAIL',workflow_type=None,attachments=[])
+    return _parse_email_message(message,original_name,size,attachments)
 
 
 def split_text(text: str) -> list[str]:
@@ -703,6 +746,8 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         return parse_cad(path,original_name)
     if ext=='.eml':
         return _parse_email(path,original_name)
+    if ext=='.msg':
+        return _parse_msg(path,original_name)
     if ext=='.txt':
         data=path.read_bytes() if path.stat().st_size<=MAX_CHARS*4 else path.open('rb').read(MAX_CHARS*4)
         if path.stat().st_size>len(data): warnings.append('文本超出当前单文件解析资源限额，剩余内容未处理。')

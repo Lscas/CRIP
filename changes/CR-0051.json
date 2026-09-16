@@ -1,0 +1,50 @@
+{
+  "change_id": "CR-0051",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "summary": "Decode bounded local Outlook MSG containers with the pinned MIT-licensed python-oxmsg package, then reuse the existing safe EML evidence, workflow and selected-attachment paths.",
+  "decision_refs": [
+    "Active user goal to improve adaptability for RFI, Submittal and Email content",
+    "Explicit user request under /ponytail to prefer existing open-source code over custom implementation",
+    "Offline validation against public python-oxmsg fixtures at commit d0ee4645d4a8bf6d18517d33bc1f7dcb23e7620b"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/email_attachments.py",
+    "requirements-app.txt",
+    "web/app.js",
+    "web/index.html",
+    "web/i18n.js",
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/web/test_display_contract.py",
+    "spec/**",
+    "tasks/DEV-036.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0051.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/web/test_display_contract.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py",
+    "public upstream python-oxmsg MSG fixtures"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested continued optimization with /ponytail and preference for open-source reuse.",
+  "known_limitations": [
+    "MSG files above the existing 8 MB local email parsing limit fail before model work.",
+    "Mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported.",
+    "Attachments stored only by reference remain visible as non-importable metadata when the upstream parser provides no bytes.",
+    "Public upstream fixtures validate format integration, not construction-domain extraction accuracy on customer mail."
+  ]
+}

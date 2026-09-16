@@ -215,7 +215,7 @@
         "tests/app/test_email_attachments.py"
       ],
       "contract_tests": [],
-      "test_scope": "local_offline_synthetic_email_and_workflow_documents",
+      "test_scope": "local_offline_synthetic_email_and_upstream_msg_fixture",
       "implemented_product_paths": [
         "app/parsers.py",
         "app/email_attachments.py",
@@ -226,7 +226,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML headers, current visible body text and explicit quoted history are locally separated; paired HTML blockquote boundaries preserve current text after a closed quote. Explicit Outlook From plus Sent, Date, To or Subject header blocks start quoted history whether those labels appear on one visible line or adjacent lines. Primary workflow routing uses an explicit email Subject, otherwise the earliest explicit body heading, then filename; different content identifiers remain references. Email-address suffixes never create workflow groups, while routing headers stay visible evidence. Full-name Request for Information/RFI and Submission/Submittal aliases use the same exact identifier normalizers in body, Subject and filename fallback. RFI role words require a standalone heading or an explicit colon, hash or dash separator, so ordinary prefixes such as Response time and Questionnaire stay neutral. RFI roles and Submittal statuses stop at a different exact same-type identifier, while each explicit body section receives its own evidence locator. Every distinct canonical Submittal status in one TXT or current Email source is preserved. Up to six bounded interleaved reply, forward or bracketed enterprise labels may precede an explicit workflow Subject. Non-empty plain text remains preferred, while blank plain alternatives safely fall back to non-empty visible HTML. Active HTML and remote resources are not executed or fetched. MIME traversal stops at every attachment boundary, so attached-message bodies and descendants remain inert until explicitly imported. Workflow IDs must contain digits; exact hashed email relationships order local ancestors before replies and mark cycles ambiguous without dropping members. Multiple distinct Message-ID values become a hash-only conflict flag; raw identifiers are not retained. MSG, mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG headers and visible bodies share one safe evidence and workflow path. python-oxmsg handles the binary MSG container; CIRP retains its existing active-content, remote-resource, attachment, exact-workflow and hash-only thread boundaries. One public upstream MSG with an attachment, one without, and one invalid fixture were validated offline. Mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -287,7 +287,7 @@
         "scripts/browser_i18n_smoke.py"
       ],
       "contract_tests": [],
-      "test_scope": "local_offline_synthetic_eml_only",
+      "test_scope": "local_offline_synthetic_eml_and_msg",
       "implemented_product_paths": [
         "app/email_attachments.py",
         "app/workflows.py",
@@ -297,7 +297,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained per import and displayed only when the source document parsed as email; repeated identical relationships collapse visually with an import count and never inherit authority. Parent parsing stops at the attached-message boundary, so its body and nested files require another explicit import and cannot change parent evidence or workflow role. No analysis or model call starts automatically."
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one selected EML or MSG attachment through project capacity, chunk, SHA-256 and deduplication controls. Parent-email provenance is retained, nested content stays inert until separately selected, and no analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",

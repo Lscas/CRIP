@@ -47,7 +47,7 @@ async function refresh(){
  const manifest=await api(`/projects/${state.project}/manifest`);$('files-body').replaceChildren();
  manifest.uploads.forEach(u=>{const tr=el('tr'),name=el('td',u.name),verification=elT('td',u.state==='DUPLICATE'?'files.duplicate':u.state==='COMPLETE'?'files.hash':'files.chunk',{offset:u.offset,size:u.size});
   if(u.source_kind==='EMAIL_ATTACHMENT'&&u.source_document_name)name.append(elT('small','files.emailAttachmentSource',{source:u.source_document_name},'muted'));
-  if(u.document_id&&/\.eml$/i.test(u.name)&&['COMPLETE','DUPLICATE'].includes(u.state)){
+  if(u.document_id&&/\.(?:eml|msg)$/i.test(u.name)&&['COMPLETE','DUPLICATE'].includes(u.state)){
    const attachments=elT('button','emailAttachments.open',{},'link evidence-button');attachments.onclick=error(()=>showEmailAttachments(u.document_id,u.name));verification.append(attachments);
   }
   tr.append(name,el('td',(u.size/1024/1024).toFixed(2)+' MB'),I.bindStatus(el('td'),u.state),verification);$('files-body').append(tr);

@@ -1,4 +1,4 @@
-"""Safe, user-selected RFC email attachment inspection and local import."""
+"""Safe, user-selected local email attachment inspection and import."""
 from __future__ import annotations
 
 import hashlib
@@ -13,8 +13,7 @@ from app.db import DomainError
 MAX_EMAIL_BYTES=8_000_000
 
 
-def _message(path: Path, original_name: str):
-    if Path(original_name).suffix.casefold()!='.eml':raise DomainError('The selected document is not an EML email',422)
+def _message(path: Path):
     if path.stat().st_size>MAX_EMAIL_BYTES:raise DomainError('Email exceeds the local 8 MB inspection limit',413)
     try:return BytesParser(policy=policy.default).parsebytes(path.read_bytes())
     except (LookupError,TypeError,ValueError) as exc:raise DomainError('The EML email could not be parsed',422) from exc
@@ -34,10 +33,10 @@ def _attachment_bytes(part) -> bytes | None:
     return None
 
 
-def _attachment_name(part,index: int) -> str:
-    raw=str(part.get_filename() or '').replace('\\','/').split('/')[-1]
+def _safe_name(value: object,index: int,content_type: str) -> str:
+    raw=str(value or '').replace('\\','/').split('/')[-1]
     raw=''.join(char for char in raw if ord(char)>=32).strip()
-    if not raw:raw=f'attached-message-{index+1}.eml' if part.get_content_type()=='message/rfc822' else f'attachment-{index+1}'
+    if not raw:raw=f'attached-message-{index+1}.eml' if content_type=='message/rfc822' else f'attachment-{index+1}'
     return raw[:240]
 
 
@@ -49,15 +48,41 @@ def _attachment_parts(part):
         for child in part.iter_parts():yield from _attachment_parts(child)
 
 
-def _records(path: Path,original_name: str) -> list[tuple[dict,bytes | None]]:
+def _eml_records(path: Path) -> list[tuple[dict,bytes | None]]:
     result=[]
-    for part in _attachment_parts(_message(path,original_name)):
-        data=_attachment_bytes(part);index=len(result);name=_attachment_name(part,index)
-        result.append(({'attachment_index':index,'name':name,'content_type':part.get_content_type(),
+    for part in _attachment_parts(_message(path)):
+        data=_attachment_bytes(part);index=len(result);content_type=part.get_content_type()
+        name=_safe_name(part.get_filename(),index,content_type)
+        result.append(({'attachment_index':index,'name':name,'content_type':content_type,
                         'size':len(data) if data is not None else None,
                         'sha256':hashlib.sha256(data).hexdigest() if data is not None else None,
                         'importable':data is not None},data))
     return result
+
+
+def _msg_records(path: Path) -> list[tuple[dict,bytes | None]]:
+    if path.stat().st_size>MAX_EMAIL_BYTES:raise DomainError('Email exceeds the local 8 MB inspection limit',413)
+    from oxmsg import Message
+    try:
+        attachments=Message.load(str(path)).attachments;result=[]
+        for item in attachments:
+            index=len(result);raw=item.file_bytes;data=raw if isinstance(raw,bytes) else None
+            content_type=str(item.mime_type or 'application/octet-stream')
+            name=_safe_name(item.file_name,index,content_type)
+            result.append(({'attachment_index':index,'name':name,'content_type':content_type,
+                            'size':len(data) if data is not None else None,
+                            'sha256':hashlib.sha256(data).hexdigest() if data is not None else None,
+                            'importable':data is not None},data))
+    except (LookupError,OSError,TypeError,UnicodeError,ValueError) as exc:
+        raise DomainError('The Outlook MSG email could not be parsed',422) from exc
+    return result
+
+
+def _records(path: Path,original_name: str) -> list[tuple[dict,bytes | None]]:
+    suffix=Path(original_name).suffix.casefold()
+    if suffix=='.eml':return _eml_records(path)
+    if suffix=='.msg':return _msg_records(path)
+    raise DomainError('The selected document is not a supported email file',422)
 
 
 def list_email_attachments(path: Path,original_name: str) -> list[dict]:

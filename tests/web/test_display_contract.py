@@ -72,6 +72,14 @@ def test_original_actions_and_input_constraints_remain_present():
     assert byid['analysis-progress'][1]['aria-valuemax'] == '100'
 
 
+def test_outlook_msg_is_selectable_and_uses_email_attachment_review():
+    elements=Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
+    byid={attrs['id']:attrs for _,attrs in elements if 'id' in attrs}
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    assert all('.msg' in byid[name]['accept'].split(',') for name in ('file-input','folder-input'))
+    assert '/\\.(?:eml|msg)$/i.test(u.name)' in source
+
+
 def test_reconciliation_ui_requires_provider_check_and_never_inserts_diagnostic_html():
     source = (ROOT/'web/app.js').read_text(encoding='utf-8')
     translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
