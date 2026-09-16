@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-35'
+PARSER_VERSION='multisource-36'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -218,6 +218,8 @@ def document_context(text: str, original_name: str = '') -> dict:
     searchable=text[:80_000];rfi_in_text=False;submittal_in_text=False
     rfi_subject=_EMAIL_RFI_SUBJECT.search(searchable)
     submittal_subject=_EMAIL_SUBMITTAL_SUBJECT.search(searchable)
+    if rfi_subject and not _clean_identifier(rfi_subject.group(1),'RFI'):rfi_subject=None
+    if submittal_subject and not _clean_identifier(submittal_subject.group(1),'SUBMITTAL'):submittal_subject=None
     if rfi_subject:rfi=rfi_subject;submittal=None;rfi_in_text=True
     elif submittal_subject:rfi=None;submittal=submittal_subject;submittal_in_text=True
     else:

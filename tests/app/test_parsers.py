@@ -146,6 +146,24 @@ def test_email_role_and_status_stay_with_their_exact_body_identifier(tmp_path):
     assert {'workflow_type':'SUBMITTAL','identifier':'23-02'} in submittal_result['workflow_references']
 
 
+@pytest.mark.parametrize(('subject','body','expected'),[
+    ('RFI Status Update','Submittal 23-01\nStatus: Pending\nPump data.',
+     ('SUBMITTAL','23-01','SUBMITTAL','PENDING')),
+    ('Submittal Coordination','RFI 42\nQuestion:\nConfirm clearance.',
+     ('RFI','42','QUESTION',None)),
+])
+def test_workflow_like_subject_without_identifier_yields_to_exact_body_heading(
+        tmp_path,subject,body,expected):
+    message=EmailMessage();message['Subject']=subject;message.set_content(body)
+    path=tmp_path/'routing.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name);context=result['workflow_contexts'][0]
+    visible='\n'.join(item['text'] for item in result['fragments'])
+
+    assert (context['workflow_type'],context['identifier'],context['role'],context['status'])==expected
+    assert f'Subject: {subject}' in visible
+
+
 def test_generic_email_uses_first_explicit_body_workflow_heading(tmp_path):
     message=EmailMessage();message['Subject']='Coordination';message.set_content(
         'Submittal 23-01\nStatus: Pending\nPump P-1 data.\n'

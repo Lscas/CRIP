@@ -182,6 +182,32 @@ def test_email_subject_routes_primary_workflow_while_body_identifier_stays_refer
     assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
 
 
+@pytest.mark.parametrize(('subject','body','kind','identifier','role','status'),[
+    ('RFI Status Update','Submittal 23-01\nStatus: Pending\nPump data.',
+     'SUBMITTAL','23-01','SUBMITTAL','PENDING'),
+    ('Submittal Coordination','RFI 42\nQuestion:\nConfirm clearance.',
+     'RFI','42','QUESTION',None),
+])
+def test_workflow_subject_without_identifier_cannot_suppress_exact_body_primary(
+        client,project,subject,body,kind,identifier,role,status):
+    message=EmailMessage();message['Subject']=subject;message.set_content(body)
+    document=upload(client,project['id'],'workflow-routing.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups=[item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+            if item['kind'] in {'RFI','SUBMITTAL'}]
+
+    assert [(item['kind'],item['identifier']) for item in groups]==[(kind,identifier)]
+    assert groups[0]['members'][0]['source']=='PRIMARY'
+    assert groups[0]['members'][0]['role']==role and groups[0]['members'][0]['status']==status
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_prefixed_rfi_links_text_question_and_email_response(client,project):
     question=upload(client,project['id'],'RFI-ARC-0042.txt',
                     b'RFI No. ARC-0042\nQuestion:\nConfirm pipe material.')
