@@ -20,7 +20,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-16'
+PARSER_VERSION='multisource-17'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -314,6 +314,7 @@ def _email_thread_metadata(message) -> dict:
     for key in parents[:-1]:
         if key not in references:references.append(key)
     return {'message_key':messages[0] if len(messages)==1 else None,
+            'message_id_conflict':len(messages)>1,
             'parent_message_key':parents[-1] if parents else None,
             'reference_keys':references}
 

@@ -131,6 +131,7 @@ Parse RFC-style EML headers and visible body text locally while preserving RFI, 
 - An explicit Outlook-style From header followed by Sent, Date, To or Subject starts quoted history whether the visible header labels are on the same line or adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
+- Multiple distinct Message-ID values in one email are preserved only as a hash-safe conflict flag instead of being silently treated as a valid or missing single identity.
 - Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
 - Local thread members are ordered parent-before-child from exact hashed header relationships; cyclic relationships remain complete and are marked ambiguous.
 - MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported and are reported as such.
@@ -145,6 +146,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - Submittals with the same exact normalized identifier retain source statuses; a primary document plus an exact reference is linked, while status conflicts across documents or within one multi-page source remain ambiguous.
 - For email documents, stronger Subject or body routing metadata forms the primary workflow group while different exact identifiers from weaker body or filename metadata form reference-only groups.
 - Email threads link only exact hashed Message-ID relationships; external references are counted without exposing raw message identifiers, and a message that references its own exact ID is ambiguous.
+- An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
 - A multi-value In-Reply-To header links every locally present exact hashed identifier into the same review thread without semantic inference.
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
 - An explicitly imported EML attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.

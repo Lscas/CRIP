@@ -215,6 +215,20 @@ def test_eml_separates_quoted_history_and_hashes_thread_headers(tmp_path):
     assert 'reply@example.test' not in serialized and 'question@example.test' not in serialized
 
 
+def test_eml_flags_multiple_distinct_message_ids_without_persisting_raw_values(tmp_path):
+    raw=(b'Subject: Coordination\r\n'
+         b'Message-ID: <first@example.test>\r\n'
+         b'Message-ID: <second@example.test>\r\n'
+         b'Content-Type: text/plain; charset=utf-8\r\n\r\nCurrent coordination text.')
+    path=tmp_path/'conflicting-message-id.eml';path.write_bytes(raw)
+
+    result=parse_file(path,path.name);serialized=json.dumps(result)
+
+    assert result['email_thread']['message_key'] is None
+    assert result['email_thread']['message_id_conflict'] is True
+    assert 'first@example.test' not in serialized and 'second@example.test' not in serialized
+
+
 def test_eml_outlook_inline_header_starts_quoted_history_without_mixing_rfi_role(tmp_path):
     message=EmailMessage();message['Subject']='RFI 088';message.set_content(
         '<html><body><p>Response:</p><p>Use Type L copper.</p>'

@@ -146,6 +146,21 @@ def test_email_self_reference_is_ambiguous():
     assert 'references its own Message-ID' in item['warnings'][0]
 
 
+def test_multiple_distinct_message_ids_are_ambiguous_but_missing_id_is_not():
+    result=build_workflow_index([
+        row('D1','conflicting.eml',document_type='EMAIL',email_thread={
+            'message_key':None,'parent_message_key':None,'reference_keys':[],
+            'message_id_conflict':True}),
+        row('D2','missing.eml',document_type='EMAIL',email_thread={
+            'message_key':None,'parent_message_key':None,'reference_keys':[]}),
+    ])
+    items={item['members'][0]['document_id']:item for item in result['items']}
+
+    assert items['D1']['state']=='AMBIGUOUS'
+    assert 'multiple distinct Message-ID' in items['D1']['warnings'][0]
+    assert items['D2']['state']=='SINGLE' and not items['D2']['warnings']
+
+
 def test_email_reference_cycle_is_ambiguous_and_retains_every_member():
     first='MSG-'+'a'*24;second='MSG-'+'b'*24
     result=build_workflow_index([

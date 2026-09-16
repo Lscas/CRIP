@@ -163,14 +163,18 @@ def _email_threads(documents: list[dict]) -> tuple[list[dict],set[str]]:
         values,cycle=_email_thread_order(values,by_key)
         keys=[item['email_thread'].get('message_key') for item in values if item['email_thread'].get('message_key')]
         duplicate=len(keys)!=len(set(keys));known=set(keys);external=set();self_reference=False
+        message_id_conflict=any(bool(item['email_thread'].get('message_id_conflict')) for item in values)
         for item in values:
             thread=item['email_thread']
             for key in [thread.get('parent_message_key'),*(thread.get('reference_keys') or [])]:
                 self_reference=self_reference or bool(key and key==thread.get('message_key'))
                 if key and key not in known:external.add(key)
-        state='AMBIGUOUS' if duplicate or self_reference or cycle else 'LINKED' if len(values)>1 else 'SINGLE'
+        state=('AMBIGUOUS' if duplicate or message_id_conflict or self_reference or cycle else
+               'LINKED' if len(values)>1 else 'SINGLE')
         warnings=[]
         if duplicate:warnings.append('Duplicate Message-ID values require review.')
+        if message_id_conflict:warnings.append(
+            'One message contains multiple distinct Message-ID values; review the malformed headers.')
         if self_reference:warnings.append('A message references its own Message-ID; review the malformed thread headers.')
         if cycle:warnings.append('Email parent/reference headers form a cycle; compare the original messages.')
         item={'group_id':_key('MAIL',*sorted(keys or [value['document_id'] for value in values])),

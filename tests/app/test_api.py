@@ -141,6 +141,28 @@ def test_email_subject_routes_primary_workflow_while_body_identifier_stays_refer
     assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
 
 
+def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
+    raw=(b'Subject: Coordination\r\n'
+         b'Message-ID: <first@example.test>\r\n'
+         b'Message-ID: <second@example.test>\r\n'
+         b'Content-Type: text/plain; charset=utf-8\r\n\r\nCurrent coordination text.')
+    document=upload(client,project['id'],'conflicting-message-id.eml',raw)
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    response=client.get(f'/api/analysis-runs/{rid}/workflows')
+    summary=db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary']
+
+    assert response.status_code==200 and response.json()['items'][0]['state']=='AMBIGUOUS'
+    assert 'multiple distinct Message-ID' in response.json()['items'][0]['warnings'][0]
+    assert 'message_id_conflict' in summary
+    assert 'first@example.test' not in summary and 'second@example.test' not in summary
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
 def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
     for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
                       ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.'),
