@@ -1,0 +1,59 @@
+{
+  "change_id": "CR-0020",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-INGEST-001",
+    "FR-API-005",
+    "FR-MATERIAL-001",
+    "FR-INSPECTION-001"
+  ],
+  "summary": "Add a reproducible local performance baseline, bounded single-PDF page concurrency, adjacent evidence extraction batches, and deterministic material/QA quality checks without adding dependencies or parallel paid requests.",
+  "decision_refs": [
+    "D-28",
+    "User-selected P0 optimization list and ponytail instruction on 2026-09-15"
+  ],
+  "affected_paths": [
+    "app/assemble.py",
+    "app/db.py",
+    "app/gateway.py",
+    "app/parser_worker.py",
+    "app/parsers.py",
+    "app/runner.py",
+    "prompts/joint-extraction/system.md",
+    "scripts/benchmark_local_parse.py",
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_parsers.py",
+    "tests/test_devtools.py",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "docs/REQUIREMENTS.md",
+    "docs/DECISIONS.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/EVIDENCE_VALIDATION.md",
+    "docs/PERFORMANCE_BASELINE.md",
+    "tasks/DEV-005.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0020.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_parsers.py",
+    "tests/test_devtools.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly selected the four listed P0 updates and requested implementation with ponytail minimalism.",
+  "known_limitations": [
+    "The measured 48-page benchmark is generated and reproducible because the two earlier customer PDFs were no longer present; it is not a customer-document or accuracy benchmark.",
+    "Paid model calls remain serial; batching reduces request count but does not prove model quality or live-provider speedup.",
+    "Page workers use process startup and separate OCR engines, so small PDFs may be slower with two or four workers.",
+    "Deterministic checks target clear false positives and evidence-scope errors; full entity, option and QA ontology mapping remains planned."
+  ]
+}

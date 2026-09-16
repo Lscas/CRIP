@@ -37,7 +37,7 @@ _NON_MATERIAL = re.compile(
 )
 _QA_ACTION = re.compile(
     r'\b(?:inspect(?:ed|ing|ion)?|test(?:ed|ing)?|check(?:ed|ing)?|verify|verification|witness|hold point|'
-    r'commission(?:ing)?|start[- ]?up|balance|balancing|calibrat(?:e|ion)|functional performance|'
+    r'perform|conduct|examine|observe|measure|commission(?:ing)?|start[- ]?up|balance|balancing|calibrat(?:e|ion)|functional performance|'
     r'hydrostatic|pressure test|leak(?:age)? test|continuity|megger|torque test|'
     r'bacteriological|airflow|sound level|vibration)\b',
     re.I,
@@ -77,6 +77,10 @@ _ATTRIBUTE_ONLY_MATERIAL = re.compile(
     r'minimum of \d+(?:\.\d+)?\s*gauge\b)',
     re.I,
 )
+_GENERIC_QA_OBJECT = re.compile(r'^(?:equipment|system|work|installation|materials?|testing|inspection|test|report)$',re.I)
+_ENTITY_PROPERTY = {'material_name','equipment_name','product_name','item_name','test_name','inspection_name'}
+QUALITY_REPAIR_NOTE=('Deterministic quality checks removed invalid material or QA items, duplicate or out-of-scope '
+                     'properties, or orphaned parent links. Review the source extraction.')
 
 def key(*values):return hashlib.sha256(dumps(values).encode()).hexdigest()[:24]
 
@@ -124,7 +128,48 @@ def _inspection_atom_allowed(atom: dict) -> bool:
     if not _QA_ACTION.search(text):return False
     if _NON_QA_DOCUMENT.search(text) or _ADMINISTRATIVE_VERIFY.search(text):return False
     if _NON_QA_REQUIREMENT.search(text):return False
+    if _GENERIC_QA_OBJECT.fullmatch(str(atom.get('object') or '').strip()):return False
+    category=atom.get('category');action=str(atom.get('action') or '')
+    if category in ('INSPECTION','TEST') and not _QA_ACTION.search(action):return False
+    if category=='REPORT' and not re.search(
+            r'\b(?:test|inspection|start[- ]?up|commissioning|balancing|quality control)\b.{0,50}\breport\b|'
+            r'\breport\b.{0,50}\b(?:test|inspection|start[- ]?up|commissioning|balancing|quality control)\b',text,re.I):
+        return False
     return True
+
+def apply_deterministic_quality(data: dict) -> tuple[dict,list[str]]:
+    """Remove only structurally clear false positives; never invent or reassign facts."""
+    checked=deepcopy(data);kept=[];flags=[]
+    for atom in checked.get('requirements',[]):
+        category=atom.get('category')
+        if category=='MATERIAL' and not _material_atom_allowed(atom):
+            flags.append('MATERIAL_NAME');continue
+        if category in ('INSPECTION','TEST','REPORT') and not _inspection_atom_allowed(atom):
+            flags.append('QA_ACTIVITY');continue
+        scope=set(atom.get('evidence_ids') or [])|set(atom.get('context_evidence_ids') or [])
+        properties=[];seen=set()
+        for prop in atom.get('properties') or []:
+            normalized=re.sub(r'[^a-z0-9]+','_',str(prop.get('name','')).casefold()).strip('_')
+            if not set(prop.get('evidence_ids') or []).issubset(scope):
+                flags.append('PROPERTY_SCOPE');continue
+            if category=='MATERIAL' and normalized in _ENTITY_PROPERTY:
+                flags.append('PROPERTY_ROLE');continue
+            identity=(normalized,str(prop.get('value')),prop.get('unit'),tuple(sorted(prop.get('evidence_ids') or [])))
+            if identity in seen:
+                flags.append('DUPLICATE_PROPERTY');continue
+            seen.add(identity);properties.append(prop)
+        atom['properties']=properties;kept.append(atom)
+    keys={atom['candidate_key'] for atom in kept}
+    for atom in kept:
+        if atom.get('parent_requirement_key') and atom['parent_requirement_key'] not in keys:
+            atom['parent_requirement_key']=None;atom['needs_context']=True;flags.append('PARENT_SCOPE')
+    checked['requirements']=kept
+    if flags:
+        checked['disposition']='TRUNCATED'
+        reason=str(checked.get('reason') or '').strip()
+        available=max(0,400-len(QUALITY_REPAIR_NOTE)-1)
+        checked['reason']=(reason[:available]+' ' if reason[:available] else '')+QUALITY_REPAIR_NOTE
+    return checked,sorted(set(flags))
 
 def bounded_support_note(value: str) -> str:
     """Keep generated review notes within the candidate contract.
@@ -230,14 +275,15 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
         for atom in result['requirements']:
             if atom['needs_context'] or atom['parent_requirement_key'] or atom['option_relation']!='NONE':
                 continue
+            source=evidence_records.get(atom['evidence_ids'][0],evidence)
             if atom['category']=='MATERIAL' and _material_atom_allowed(atom):
-                mat=material(atom,evidence)
+                mat=material(atom,source)
                 # 只有显式设备Tag式主体可以尝试跨文档合并；普通名称不代表同一安装实例。
                 tag=bool(re.fullmatch(TAG_PATTERN,atom['subject']))
-                group=('TAG',atom['subject'].casefold(),atom['object'].casefold(),mat['condition']) if tag else ('EVIDENCE',evidence['evidence_id'],atom['candidate_key'])
-                material_groups[group].append((mat,evidence))
+                group=('TAG',atom['subject'].casefold(),atom['object'].casefold(),mat['condition']) if tag else ('EVIDENCE',source['evidence_id'],atom['candidate_key'])
+                material_groups[group].append((mat,source))
             elif atom['category'] in ('INSPECTION','TEST','REPORT') and _inspection_atom_allowed(atom):
-                candidates.append(('INSPECTION',inspection(atom,evidence)))
+                candidates.append(('INSPECTION',inspection(atom,source)))
     for group,items in material_groups.items():
         merged=deepcopy(items[0][0]); by_property=defaultdict(list)
         # A tagged cross-evidence material is one logical record.  Derive its

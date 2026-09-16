@@ -3,6 +3,7 @@ from __future__ import annotations
 import codecs
 import re
 import zipfile
+from concurrent.futures import ProcessPoolExecutor
 from collections.abc import Callable
 from dataclasses import dataclass, asdict, field
 from datetime import date
@@ -21,6 +22,7 @@ MAX_FRAGMENT_CHARS=1600
 # room for prompt, schema, evidence identity and locator metadata.
 MAX_FRAGMENT_BYTES=2200
 PROGRESS_INTERVAL_SECONDS=5.0
+PDF_PAGE_CHUNK=4
 IMAGE_SUFFIXES={'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
 LOW_TEXT_WORDS=8
 LOW_TEXT_CHARS=80
@@ -92,7 +94,78 @@ def result_payload(status: str, fragments: list[Fragment], pages: list[dict], wa
     result.update(extras)
     return result
 
-def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] | None = None) -> dict:
+def _parse_pdf_page(path: Path, page, index: int) -> dict:
+    fragments=[];warnings=[];visual_tasks=[];geometry=[];text_chars=0
+    try:
+        # Analysis follows the visible CropBox used by OCR, preview, and vision.
+        visible_page=page.crop(page.cropbox)
+        words=visible_page.extract_words()
+        page_text=visible_page.extract_text() or ''
+        graphics=len(visible_page.images)+len(visible_page.lines)+len(visible_page.curves)+len(visible_page.rects)
+        large_format=visible_page.width>1000 or visible_page.height>1400
+        low_text_density=bool(words) and graphics>0 and (
+            len(words)<LOW_TEXT_WORDS or len(page_text.strip())<LOW_TEXT_CHARS)
+        visual=large_format or (graphics>0 and (not words or low_text_density or graphics>=40))
+        summary=pdf_geometry_summary(visible_page,index,page_text)
+        if any(summary['primitive_counts'].values()):geometry.append(summary)
+        if visual:
+            reason='LARGE_FORMAT' if large_format else 'LOW_TEXT_GRAPHICS' if low_text_density or not words else 'DENSE_GRAPHICS'
+            visual_tasks.append({'page':index,'reason':reason,'status':'PENDING'})
+        ocr=[]
+        if (not words or low_text_density) and local_ocr_available():
+            ocr=ocr_pdf_page(path,index)
+            if words and ocr:
+                layer_compact=re.sub(r'\s+','',page_text).casefold()
+                ocr_compact=re.sub(r'\s+','','\n'.join(item['text'] for item in ocr)).casefold()
+                if ocr_compact==layer_compact:ocr=[]
+        if not words:
+            if ocr:
+                ocr_rev=revision('\n'.join(item['text'] for item in ocr))
+                for item in ocr:item['internal_revision_date'],item['revision_label']=ocr_rev
+                fragments.extend(Fragment(**item) for item in ocr)
+                status='OCR_EXTRACTED_VISUAL_PENDING'
+                warnings.append(f'PDF第{index}页没有文字层；已用本机{OCR_VERSION}提取，需对照图面审核。')
+            else:
+                status='NEEDS_VISION' if visual else 'NO_CONTENT'
+                warnings.append(f'PDF第{index}页没有可用文字层，本地OCR也未得到文字；'
+                                +('已排入视觉或人工检查。' if visual else '未发现值得发送的图形内容，需人工确认空白页。'))
+        else:
+            text=' '.join(word['text'] for word in words);text_chars=len(text);rev=revision(page_text or text)
+            status=('TEXT_AND_OCR_VISUAL_PENDING' if ocr else
+                    'TEXT_ONLY_VISUAL_PENDING' if visual else 'TEXT_EXTRACTED')
+            if visual:warnings.append(f'PDF第{index}页含图像/线条/大幅面；已排入视觉分析。')
+            buf=[];chars=0;size=0;safe_words=[]
+            for word in words:safe_words.extend({**word,'text':part} for part in split_text(word['text']))
+            for word in safe_words:
+                word_size=len(word['text'].encode('utf-8'))
+                if buf and (chars+len(word['text'])+1>MAX_FRAGMENT_CHARS or size+word_size+1>MAX_FRAGMENT_BYTES):
+                    fragments.append(pdf_fragment(buf,index,rev,page.cropbox));buf=[];chars=0;size=0
+                buf.append(word);chars+=len(word['text'])+1;size+=word_size+1
+            if buf:fragments.append(pdf_fragment(buf,index,rev,page.cropbox))
+            if ocr:
+                ocr_rev=revision('\n'.join(item['text'] for item in ocr))
+                for item in ocr:item['internal_revision_date'],item['revision_label']=ocr_rev
+                fragments.extend(Fragment(**item) for item in ocr)
+                warnings.append(f'PDF第{index}页文字层密度低；已追加本机{OCR_VERSION}结果，需对照图面去重审核。')
+            elif low_text_density:
+                warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
+        return {'fragments':fragments,'page':{'page':index,'status':status},'warnings':warnings,
+                'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars}
+    finally:
+        page.close()
+
+
+def _parse_pdf_chunk(source: str, page_numbers: list[int]) -> list[dict]:
+    """Open one PDF once per bounded chunk; each worker keeps its own OCR engine."""
+    import pdfplumber
+    path=Path(source)
+    with pdfplumber.open(path) as pdf:
+        return [_parse_pdf_page(path,pdf.pages[number-1],number) for number in page_numbers]
+
+
+def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] | None = None,
+               workers: int = 1) -> dict:
+    if workers not in (1,2,4):raise ValueError('本地PDF工作进程数必须为1、2或4')
     ext=Path(original_name).suffix.lower(); fragments=[]; warnings=[]; pages=[];page_count=None
     visual_tasks=[];geometry=[]
     if ext in IMAGE_SUFFIXES:
@@ -159,81 +232,36 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 progress(result_payload('PARTIAL',fragments,pages,warnings,page_count,
                                         visual_tasks=visual_tasks,geometry_summaries=geometry))
                 last_progress=now
-        with pdfplumber.open(path) as pdf:
-            total=0;page_count=len(pdf.pages)
-            for index,page in enumerate(pdf.pages,1):
-                if total>=MAX_CHARS:
-                    warnings.append('PDF超过单文件字符资源限额；后续页未处理。')
-                    pages.extend({'page':j,'status':'NOT_PROCESSED'} for j in range(index,len(pdf.pages)+1))
-                    page.close();break
-                try:
-                    # Analysis follows the visible CropBox, the same region rendered
-                    # for OCR, preview, and external vision. This avoids parsing or
-                    # transferring content intentionally cropped out of a PDF.
-                    visible_page=page.crop(page.cropbox)
-                    words=visible_page.extract_words()
-                    page_text=visible_page.extract_text() or ''
-                    graphics=len(visible_page.images)+len(visible_page.lines)+len(visible_page.curves)+len(visible_page.rects)
-                    large_format=visible_page.width>1000 or visible_page.height>1400
-                    low_text_density=bool(words) and graphics>0 and (
-                        len(words)<LOW_TEXT_WORDS or len(page_text.strip())<LOW_TEXT_CHARS)
-                    # Rich specification pages often contain a few decorative rules or table borders.
-                    # Send only large sheets, image/vector pages without useful text, or dense graphics to vision.
-                    visual=large_format or (graphics>0 and (not words or low_text_density or graphics>=40))
-                    summary=pdf_geometry_summary(visible_page,index,page_text)
-                    if any(summary['primitive_counts'].values()):
-                        geometry.append(summary)
-                    if visual:
-                        reason='LARGE_FORMAT' if large_format else 'LOW_TEXT_GRAPHICS' if low_text_density or not words else 'DENSE_GRAPHICS'
-                        visual_tasks.append({'page':index,'reason':reason,'status':'PENDING'})
-                    ocr=[]
-                    if (not words or low_text_density) and local_ocr_available():
-                        ocr=ocr_pdf_page(path,index)
-                        if words and ocr:
-                            layer_compact=re.sub(r'\s+','',page_text).casefold()
-                            ocr_compact=re.sub(r'\s+','', '\n'.join(item['text'] for item in ocr)).casefold()
-                            if ocr_compact==layer_compact:
-                                ocr=[]
-                    if not words:
-                        if ocr:
-                            ocr_rev=revision('\n'.join(item['text'] for item in ocr))
-                            for item in ocr:
-                                item['internal_revision_date'],item['revision_label']=ocr_rev
-                            fragments.extend(Fragment(**item) for item in ocr)
-                            pages.append({'page':index,'status':'OCR_EXTRACTED_VISUAL_PENDING'})
-                            warnings.append(f'PDF第{index}页没有文字层；已用本机{OCR_VERSION}提取，需对照图面审核。')
-                        else:
-                            pages.append({'page':index,'status':'NEEDS_VISION' if visual else 'NO_CONTENT'})
-                            warnings.append(f'PDF第{index}页没有可用文字层，本地OCR也未得到文字；'
-                                            +('已排入视觉或人工检查。' if visual else '未发现值得发送的图形内容，需人工确认空白页。'))
-                    else:
-                        text=' '.join(w['text'] for w in words);rev=revision(page_text or text)
-                        pages.append({'page':index,'status':('TEXT_AND_OCR_VISUAL_PENDING' if ocr else
-                                     'TEXT_ONLY_VISUAL_PENDING' if visual else 'TEXT_EXTRACTED')})
-                        if visual:warnings.append(f'PDF第{index}页含图像/线条/大幅面；已排入视觉分析。')
-                        # 空间邻近词构成短片段，保留页坐标。尚不声称二维表格和施工对象解析。
-                        buf=[];chars=0;size=0;safe_words=[]
-                        for word in words:
-                            safe_words.extend({**word,'text':part} for part in split_text(word['text']))
-                        for word in safe_words:
-                            word_size=len(word['text'].encode('utf-8'))
-                            if buf and (chars+len(word['text'])+1>MAX_FRAGMENT_CHARS
-                                        or size+word_size+1>MAX_FRAGMENT_BYTES):
-                                fragments.append(pdf_fragment(buf,index,rev,page.cropbox));buf=[];chars=0;size=0
-                            buf.append(word);chars+=len(word['text'])+1;size+=word_size+1
-                        if buf:fragments.append(pdf_fragment(buf,index,rev,page.cropbox))
-                        if ocr:
-                            ocr_rev=revision('\n'.join(item['text'] for item in ocr))
-                            for item in ocr:
-                                item['internal_revision_date'],item['revision_label']=ocr_rev
-                            fragments.extend(Fragment(**item) for item in ocr)
-                            warnings.append(f'PDF第{index}页文字层密度低；已追加本机{OCR_VERSION}结果，需对照图面去重审核。')
-                        elif low_text_density:
-                            warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
-                        total+=len(text)
-                finally:
-                    page.close()
-                save_progress()
+        with pdfplumber.open(path) as pdf:page_count=len(pdf.pages)
+        total=0;limit_reached=False
+        def merge_page(result):
+            nonlocal total,limit_reached
+            number=result['page']['page']
+            if total>=MAX_CHARS:
+                warnings.append('PDF超过单文件字符资源限额；后续页未处理。')
+                pages.extend({'page':value,'status':'NOT_PROCESSED'} for value in range(number,page_count+1))
+                limit_reached=True;return
+            fragments.extend(result['fragments']);pages.append(result['page'])
+            warnings.extend(result['warnings']);visual_tasks.extend(result['visual_tasks'])
+            geometry.extend(result['geometry_summaries']);total+=result['text_chars'];save_progress()
+        if workers==1:
+            with pdfplumber.open(path) as pdf:
+                for index,page in enumerate(pdf.pages,1):
+                    merge_page(_parse_pdf_page(path,page,index))
+                    if limit_reached:break
+        else:
+            # ponytail: bounded four-page chunks give one large PDF useful parallelism without a queue.
+            window=workers*PDF_PAGE_CHUNK
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                for start in range(1,page_count+1,window):
+                    groups=[list(range(first,min(first+PDF_PAGE_CHUNK,page_count+1)))
+                            for first in range(start,min(start+window,page_count+1),PDF_PAGE_CHUNK)]
+                    for results in pool.map(_parse_pdf_chunk,[str(path)]*len(groups),groups):
+                        for result in results:
+                            merge_page(result)
+                            if limit_reached:break
+                        if limit_reached:break
+                    if limit_reached:break
     else:
         return {'status':'UNSUPPORTED','fragments':[],'pages':[],
                 'warnings':[f'格式{ext or "无扩展名"}尚未支持，未调用模型。'],'parser_version':PARSER_VERSION}

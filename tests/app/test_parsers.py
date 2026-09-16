@@ -81,6 +81,22 @@ def test_pdf_text_and_bbox(tmp_path):
     assert 'Provide' in r['fragments'][0]['text']
 
 
+def test_single_pdf_page_workers_preserve_order_and_content(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'parallel.pdf';drawing=canvas.Canvas(str(path))
+    for page in range(1,9):
+        drawing.drawString(72,700,f'Page {page} copper pipe requirement')
+        drawing.showPage()
+    drawing.save()
+
+    serial=parse_file(path,path.name,workers=1)
+    parallel=parse_file(path,path.name,workers=2)
+
+    assert parallel['pages']==serial['pages']
+    assert [item['text'] for item in parallel['fragments']]==[item['text'] for item in serial['fragments']]
+    assert [item['locator']['page_number'] for item in parallel['fragments']]==list(range(1,9))
+
+
 def test_rich_text_page_with_decorative_rule_skips_vision_but_large_sheet_keeps_it(tmp_path):
     from reportlab.pdfgen import canvas
     text='Provide materials and execute inspections in accordance with the project specifications.'

@@ -13,6 +13,7 @@ import httpx
 from app.db import (Database, DomainError, MAX_PAID_TASK_CALLS, dumps,
                     paid_task_family, paid_task_key)
 from app.settings import Settings, ROOT
+from app.assemble import apply_deterministic_quality
 from contracts.runtime_rules import (EvidenceScope,evidence_references,validate_schema,quote_tokens,cache_key)
 
 class ProviderPaused(DomainError):pass
@@ -140,7 +141,7 @@ def normalize_verification_contract(data: dict) -> tuple[dict,list[str]]:
     return {'checks':normalized},sorted(set(flags))
 
 
-def normalize_extraction_contract(data: dict, evidence_id: str) -> tuple[dict,list[str]]:
+def normalize_extraction_contract(data: dict, evidence_id: str | set[str]) -> tuple[dict,list[str]]:
     """Salvage only contract-safe structure and make every repair review-visible.
 
     The normalizer never invents a requirement, source reference, property, or
@@ -150,7 +151,7 @@ def normalize_extraction_contract(data: dict, evidence_id: str) -> tuple[dict,li
     the runner cannot publish the result as fully extracted without review.
     """
     if not isinstance(data,dict):raise ValueError('extraction object required')
-    flags=[]
+    flags=[];allowed_ids={evidence_id} if isinstance(evidence_id,str) else set(evidence_id)
     if set(data)-_EXTRACTION_FIELDS:flags.append('EXTRA_FIELDS')
     disposition=data.get('disposition')
     if disposition not in _DISPOSITIONS:raise ValueError('valid extraction disposition required')
@@ -173,7 +174,7 @@ def normalize_extraction_contract(data: dict, evidence_id: str) -> tuple[dict,li
             flags.append('EVIDENCE_IDS_TYPE');return []
         out=[]
         for item in value:
-            if item==evidence_id and item not in out:out.append(item)
+            if item in allowed_ids and item not in out:out.append(item)
             else:raise InvalidModelOutput('模型引用了本请求未提供的证据')
         if required and not out:raise InvalidModelOutput('模型证据引用缺失')
         return out
@@ -497,9 +498,10 @@ class Gateway:
         details = usage.get('completion_tokens_details') or {}
         return bool(message.get('reasoning_content') or details.get('reasoning_tokens', 0))
 
-    def validate(self, data: dict, evidence: dict):
+    def validate(self, data: dict, evidence: dict | list[dict]):
         validate_schema('extraction-result',data)
-        allowed={evidence['evidence_id']}
+        records=evidence if isinstance(evidence,list) else [evidence]
+        allowed={item['evidence_id'] for item in records}
         refs=evidence_references(data)
         if not refs.issubset(allowed):raise InvalidModelOutput('模型引用了本请求未提供的证据')
         for requirement in data['requirements']:
@@ -601,9 +603,19 @@ class Gateway:
             raise ProviderPaused(f'{label}任务族已达到三次累计调用上限；保留旧记录且不再收费',409)
 
     def extract(self, run: dict, evidence: dict) -> ModelResult:
+        return self.extract_many(run,[evidence])
+
+    def extract_many(self, run: dict, evidences: list[dict]) -> ModelResult:
+        if not isinstance(evidences,list) or not 1<=len(evidences)<=4:
+            raise InvalidModelOutput('相邻证据批次必须包含1至4个片段；未调用API')
+        ids=[item.get('evidence_id') for item in evidences]
+        if any(not isinstance(value,str) or not value for value in ids) or len(ids)!=len(set(ids)):
+            raise InvalidModelOutput('相邻证据批次标识无效或重复；未调用API')
+        evidence=evidences[0];allowed_ids=set(ids)
         if self.s.provider=='mock':
-            data=mock_extract(evidence)
-            self.validate(data,evidence)
+            data=mock_extract_many(evidences)
+            data,_quality_flags=apply_deterministic_quality(data)
+            self.validate(data,evidences)
             return ModelResult(data,None)
         blockers=self.s.live_errors()
         if blockers:raise ProviderPaused('；'.join(blockers),409)
@@ -611,20 +623,22 @@ class Gateway:
             raise ProviderPaused('运行Provider与当前服务不一致；为避免误收费，请新建分析。',409)
         if self.db.one('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(run['project_id'],),False):
             raise ProviderPaused('项目存在待对账请求；禁止新建或重复付费分析',409)
-        task_family=evidence['evidence_id']
+        task_family=(evidence['evidence_id'] if len(evidences)==1 else
+                     'extract-batch:'+evidence['evidence_id']+':'+hashlib.sha256(dumps(ids).encode()).hexdigest()[:16])
         generation=self._generation(run,task_family)
         task=paid_task_key(task_family,generation)
         recent=self._family_calls(run['id'],task_family)
         if any(x['actual_units'] is None for x in recent):raise ProviderPaused('存在待对账请求；避免自动重复收费',409)
-        recovered=self._recover_terminal(run['id'],task,lambda value:self.validate(value,evidence))
+        recovered=self._recover_terminal(run['id'],task,lambda value:self.validate(value,evidences))
         if recovered is not None:return recovered
-        self._guard_family_before_request(recent,task,generation,'该片段')
+        self._guard_family_before_request(recent,task,generation,'相邻片段组' if len(evidences)>1 else '该片段')
         # The paid task key may include an internal manual-requeue generation.
         # The model and evidence-scope validator must always see the immutable
         # source evidence ID, never that billing-only suffix.
-        content={'evidence_id':evidence['evidence_id'],'text':evidence['raw_text'],
-                 'internal_revision_date':evidence['internal_revision_date'],
-                 'locator':evidence['locator']}
+        items=[{'evidence_id':item['evidence_id'],'text':item['raw_text'],
+                'internal_revision_date':item['internal_revision_date'],'locator':item['locator']}
+               for item in evidences]
+        content=items[0] if len(items)==1 else {'evidence_items':items}
         limit=min(_EXTRACTION_OUTPUT_TOKEN_CAP,self.s.output_limit)
         payload=self.payload(
             [{'role':'system','content':self.prompt+'\nJSON Schema:\n'+dumps(self.schema)},
@@ -635,7 +649,8 @@ class Gateway:
             raise InvalidModelOutput('片段加Schema超出简单任务输入预算；需细分，未调用API')
         key=cache_key({'tenant_id':'local','project_id':run['project_id'],'input_snapshot_id':run['snapshot_id'],
                       'input_hash':hashlib.sha256(dumps(content).encode()).hexdigest(),'crop_hashes':[],
-                      'parser_version':evidence.get('parser_version','text-baseline-1'),'prompt_version':self.prompt_hash,
+                      'parser_version':'+'.join(sorted({item.get('parser_version','text-baseline-1') for item in evidences})),
+                      'prompt_version':self.prompt_hash,
                       'provider':self.s.api_base_url,'model_id':self.s.cheap_model,'model_snapshot':None,
                       'schema_version':'0.2.0','retrieval_version':'none-v1','assembly_rule_version':'disabled-v1',
                       'revision_policy_version':'0.2.0','routing_version':'0.2.0',
@@ -644,7 +659,8 @@ class Gateway:
                       **({'manual_requeue_generation':generation} if generation else {})})
         cached=self.db.cached(key,run['project_id'])
         if cached:
-            self.validate(cached,evidence)
+            cached,_quality_flags=apply_deterministic_quality(cached)
+            self.validate(cached,evidences)
             return ModelResult(cached,None,True,self.s.provider)
         amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
         self._wait_and_record(run['id'])
@@ -671,8 +687,9 @@ class Gateway:
             text=choice['message']['content']
             if not isinstance(text,str) or len(text)>100_000:raise ValueError('空响应或响应过大')
             data,_wrapper_flags=normalize_extraction_result(text)
-            data,_contract_flags=normalize_extraction_contract(data,evidence['evidence_id'])
-            self.validate(data,evidence)
+            data,_contract_flags=normalize_extraction_contract(data,allowed_ids)
+            data,_quality_flags=apply_deterministic_quality(data)
+            self.validate(data,evidences)
         except Exception as exc:
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('EXTRACTION_RESULT',exc))
@@ -864,3 +881,13 @@ def mock_extract(evidence: dict) -> dict:
                      'option_relation':'NONE','evidence_ids':[eid],'context_evidence_ids':[], 'needs_context':False})
     return {'disposition':'CANDIDATES' if rows else 'NEEDS_CONTEXT','requirements':rows,
             'reason':'合成演示，不代表工程结论。' if rows else '模拟Provider不分析任意施工文件。请配置真实API；本片段尚未进行语义审查。'}
+
+
+def mock_extract_many(evidences: list[dict]) -> dict:
+    requirements=[]
+    for evidence in evidences:
+        requirements.extend(mock_extract(evidence)['requirements'])
+    for index,requirement in enumerate(requirements,1):requirement['candidate_key']='R'+str(index)
+    return {'disposition':'CANDIDATES' if requirements else 'NEEDS_CONTEXT','requirements':requirements,
+            'reason':'Synthetic demo only; no construction conclusion.' if requirements else
+                     'Mock mode does not analyze arbitrary construction content.'}

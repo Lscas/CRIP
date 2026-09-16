@@ -180,6 +180,7 @@ Requirement 按 CSI、专业、系统、设备和区域路由。
 
 - 多个选项显示ONE_OF，不自行选中。
 - 设计要求、送审产品、选择状态分开保存。
+- 属性标题、尺寸、gauge和泛称不得作为材料名；尺寸、规格及数量保留在独立字段。
 
 ## FR-MATERIAL-002 · 临时材料清单
 
@@ -248,6 +249,7 @@ Material Register 主要按 CSI Division/Section 组织。
 提取 Inspection、Testing、Reports、Startup、Commissioning、Training 和 Closeout 要求。
 
 - 覆盖 Product Spec 列出的全部类型。
+- 图纸、示意图和通用送审不得仅因test、verify或report关键词成为QA活动。
 
 ## FR-INSPECTION-002 · 仅上传文件作为项目依据
 
@@ -396,6 +398,8 @@ Show run coverage, current materials and QA review results, analysis percentage,
 产品端排队、分批和限流；不假定供应商具有Batch、background或文件检索能力。
 
 - A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.
+- A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.
+- Up to four adjacent evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family.
 - Paid model calls remain serial and every call is recorded in the project ledger.
 
 ## FR-API-006 · Customer-configurable OpenAI-compatible model

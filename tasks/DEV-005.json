@@ -1,0 +1,48 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User selected four P0 performance and precision updates on 2026-09-15 and invoked ponytail for the smallest working implementation.",
+  "notes": [
+    "Use existing SQLite recovery, parser subprocesses and schemas; add no queue or runtime dependency.",
+    "Benchmark locally without credentials, .local data, or model API calls."
+  ],
+  "task_id": "DEV-005",
+  "title": "Measured PDF concurrency, adjacent extraction batching and deterministic quality checks",
+  "requirement_ids": [
+    "FR-INGEST-001",
+    "FR-API-005",
+    "FR-MATERIAL-001",
+    "FR-INSPECTION-001"
+  ],
+  "allowed_paths": [
+    "app/assemble.py",
+    "app/db.py",
+    "app/gateway.py",
+    "app/parser_worker.py",
+    "app/parsers.py",
+    "app/runner.py",
+    "prompts/joint-extraction/system.md",
+    "scripts/benchmark_local_parse.py",
+    "tests/**",
+    "spec/**",
+    "docs/**",
+    "changes/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/PERFORMANCE_BASELINE.md"
+  ],
+  "acceptance_tests": [
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area gateway",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "review",
+  "objective": "Measure before optimizing; preserve output order and paid-call recovery while reducing local parse time, extraction request count, and clear material/QA false positives."
+}

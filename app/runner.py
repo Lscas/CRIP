@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -11,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from app.db import Database,DomainError,BudgetError,dumps,now,uid
+from app.db import Database,DomainError,BudgetError,dumps,now,uid,paid_task_family
 from app.settings import Settings,ROOT,live_provider
 from app.security import environment_without_secrets
 from app.uploads import Uploads
@@ -23,6 +24,37 @@ from contracts.runtime_rules import validate_schema
 from app.verification import VerificationService
 
 ACTIVE=('QUEUED','RUNNING')
+EXTRACTION_BATCH_SIZE=4
+EXTRACTION_BATCH_BYTES=8800
+
+def _adjacent_evidence(left: dict, right: dict) -> bool:
+    if left.get('document_id')!=right.get('document_id'):return False
+    a=left.get('locator') or {};b=right.get('locator') or {}
+    ap=a.get('page_number');bp=b.get('page_number')
+    if type(ap) is int and type(bp) is int:return 0<=bp-ap<=1
+    ae=a.get('text_line_end');bs=b.get('text_line_start')
+    if type(ae) is int and type(bs) is int:return 0<=bs-ae<=1
+    am=re.search(r'(\d+)$',str(a.get('native_element_id') or ''))
+    bm=re.search(r'(\d+)$',str(b.get('native_element_id') or ''))
+    return bool(am and bm and 0<=int(bm.group(1))-int(am.group(1))<=1)
+
+def adjacent_extraction_batches(items: list[tuple[dict | None,dict]],
+                                forced_single: set[str] | None = None) -> list[list[tuple[dict | None,dict]]]:
+    """Group only physically adjacent evidence under a small deterministic byte ceiling."""
+    forced_single=forced_single or set();batches=[];current=[];size=0
+    for item in items:
+        evidence=item[1];item_size=len(evidence.get('raw_text','').encode('utf-8'))
+        if evidence.get('evidence_id') in forced_single:
+            if current:batches.append(current);current=[];size=0
+            batches.append([item]);continue
+        fits=(current and current[-1][1].get('evidence_id') not in forced_single
+              and len(current)<EXTRACTION_BATCH_SIZE and size+item_size<=EXTRACTION_BATCH_BYTES
+              and _adjacent_evidence(current[-1][1],evidence))
+        if current and not fits:
+            batches.append(current);current=[];size=0
+        current.append(item);size+=item_size
+    if current:batches.append(current)
+    return batches
 
 class Runner:
     def __init__(self,db:Database,settings:Settings,uploads:Uploads,gateway:Gateway):
@@ -193,17 +225,31 @@ class Runner:
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('一次读取，联合提取材料与检查要求',rid))
             with self.timed(rid,'stage.extract'):
-                todo=self.db.all("SELECT * FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY id",(rid,))
-                for e in todo:
+                todo=self.db.all("SELECT rowid AS sequence,* FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY document_id,sequence",(rid,))
+                pending=[(row,json.loads(row['payload'])) for row in todo]
+                families={paid_task_family(row['task_key']) for row in self.db.all(
+                    'SELECT task_key FROM model_calls WHERE run_id=?',(rid,))}
+                forced_single={family for family in families if family.startswith('EV-')}
+                for batch in adjacent_extraction_batches(pending,forced_single):
                     if not self.checkpoint(rid):break
-                    ev=json.loads(e['payload'])
+                    evidences=[item[1] for item in batch]
                     try:
-                        result=self.gateway.extract(run,ev)
-                        self.db.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
-                            (dumps({'data':result.data,'request_id':result.request_id,'cached':result.cached}),
-                             'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',e['id']))
+                        result=(self.gateway.extract(run,evidences[0]) if len(evidences)==1 else
+                                self.gateway.extract_many(run,evidences))
+                        with self.db.connect(True) as connection:
+                            for index,(row,evidence) in enumerate(batch):
+                                data=result.data if index==0 else {
+                                    'disposition':'NO_REQUIREMENTS','requirements':[],
+                                    'reason':'Processed with adjacent evidence batch '+evidences[0]['evidence_id']+'.'}
+                                extraction={'data':data,'request_id':result.request_id,'cached':result.cached,
+                                            'batch_primary_evidence_id':evidences[0]['evidence_id']}
+                                connection.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
+                                    (dumps(extraction),'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',row['id']))
                     except InvalidModelOutput as exc:
-                        self.db.execute('UPDATE evidence SET status=?,error=? WHERE id=?',('NEEDS_REVIEW',str(exc),e['id']))
+                        with self.db.connect(True) as connection:
+                            for row,_ in batch:
+                                connection.execute('UPDATE evidence SET status=?,error=? WHERE id=?',
+                                                   ('NEEDS_REVIEW',str(exc),row['id']))
                     self.update_coverage(rid)
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('生成可审核记录与设计差异',rid))
@@ -240,20 +286,21 @@ class Runner:
             if not self.checkpoint(rid):return
             batch=pending[offset:offset+workers]
             if len(batch)==1:
-                self.parse_one(run,batch[0]);self.update_coverage(rid);continue
+                self.parse_one(run,batch[0],workers);self.update_coverage(rid);continue
             # ponytail: one small batch bounds memory; add a persistent local queue only after measured demand.
             with ThreadPoolExecutor(max_workers=len(batch),thread_name_prefix='cirp-parser') as pool:
                 futures=[pool.submit(self.parse_one,run,did) for did in batch]
                 for future in futures:
                     future.result();self.update_coverage(rid)
 
-    def parse_one(self,run,did):
+    def parse_one(self,run,did,page_workers=1):
         doc=self.db.one('SELECT * FROM documents WHERE id=?',(did,))
         output=self.parse_dir/(run['id']+'-'+did+'.json')
         # 解析进程不继承任何常见凭证环境变量；任何文字不会被执行。
         env=environment_without_secrets()
         try:
-            subprocess.run([sys.executable,'-m','app.parser_worker',str(self.uploads.object_path(doc)),doc['name'],str(output)],
+            subprocess.run([sys.executable,'-m','app.parser_worker',str(self.uploads.object_path(doc)),doc['name'],
+                            str(page_workers),str(output)],
                            cwd=ROOT,env=env,timeout=self.s.parser_timeout,check=True,
                            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             result=json.loads(output.read_text(encoding='utf-8'))

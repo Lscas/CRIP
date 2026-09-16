@@ -11,7 +11,9 @@ CIRP is a local construction-document review prototype. It parses project files,
 - English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.
 - Optional local OCR, full-page visual analysis, DXF/CAD metadata, and review-only quantity candidates.
 - Local human review and a project cost ledger with a user-selected CNY dispatch cap (CNY 300 for new projects by default).
-- User-selectable 1, 2, or 4 local document workers, selective vision routing, evidence-scope verification batching, and visible stage/model timing.
+- User-selectable 1, 2, or 4 local workers across documents or bounded page chunks inside one PDF, selective vision routing, adjacent-evidence extraction batching, evidence-scope verification batching, and visible stage/model timing.
+- Deterministic pre-publication checks for clear material-name, QA-activity, duplicate-property, and evidence-scope errors; the original extraction remains available for review.
+- Reproducible offline PDF performance measurement in `scripts/benchmark_local_parse.py`; see `docs/PERFORMANCE_BASELINE.md` for the measured fixture and limits.
 
 Conflict and Missing Information are not shown as current reviewer categories or export sheets. Legacy stored records are preserved for compatibility. Coverage and partial-processing status remain visible at run level.
 

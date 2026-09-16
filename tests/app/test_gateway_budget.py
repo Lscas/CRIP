@@ -79,6 +79,28 @@ def test_cheap_payload_and_cache(context,tmp_path):
     assert call['request_hash']==hashlib.sha256(dumps(requests[0]).encode()).hexdigest()
 
 
+def test_adjacent_evidence_uses_one_paid_request_and_one_recovery_family(context,tmp_path):
+    db,run,first=context;second={**first,'evidence_id':'EV-second','raw_text':'Use 2 inch diameter.'}
+    expected=result(first);requirement=expected['requirements'][0]
+    requirement['evidence_ids']=[first['evidence_id'],second['evidence_id']]
+    requirement['properties']=[{'name':'diameter','value':'2','unit':'inches',
+                                'evidence_ids':[second['evidence_id']]}]
+    response={'id':'batch-call','choices':[{'finish_reason':'stop','message':{'content':json.dumps(expected)}}],
+              'usage':{'prompt_tokens':150,'completion_tokens':50}}
+    requests=[]
+    gateway=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(json.loads(request.content)),httpx.Response(200,json=response))[1])))
+
+    value=gateway.extract_many(run,[first,second])
+    recovered=gateway.extract_many(run,[first,second])
+
+    assert value.data==expected and recovered.cached and len(requests)==1
+    user=json.loads(requests[0]['messages'][1]['content'])
+    assert [item['evidence_id'] for item in user['evidence_items']]==[first['evidence_id'],second['evidence_id']]
+    call=db.one('SELECT task_key,state FROM model_calls WHERE run_id=?',(run['id'],))
+    assert call['task_key'].startswith('extract-batch:'+first['evidence_id']+':') and call['state']=='SETTLED'
+
+
 def test_extract_stop_response_above_old_4000_limit_is_accepted(context,tmp_path):
     db,run,ev=context;requests=[];response=body(ev)
     response['id']='extract-over-4000'

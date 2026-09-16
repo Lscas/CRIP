@@ -11,10 +11,14 @@ def save_result(destination: Path, result: dict) -> None:
     temporary.replace(destination)
 
 def main():
-    source,name,destination=sys.argv[1:]
+    arguments=sys.argv[1:]
+    if len(arguments)==3:
+        source,name,destination=arguments;workers=1
+    else:
+        source,name,workers_text,destination=arguments;workers=int(workers_text)
     destination=Path(destination)
     try:
-        result=parse_file(Path(source),name,progress=lambda current:save_result(destination,current))
+        result=parse_file(Path(source),name,progress=lambda current:save_result(destination,current),workers=workers)
     except Exception as exc:
         result={'status':'FAILED','fragments':[],'pages':[],
                 'warnings':['解析失败：'+type(exc).__name__],'parser_version':PARSER_VERSION}

@@ -1,5 +1,5 @@
 """DEV-LOWCOST-001 / DEV-CHECK-001：真实脚本，不验证账户价格。"""
-import json,sys,tomllib
+import json,subprocess,sys,tomllib
 from pathlib import Path
 import pytest
 from scripts.context_pack import build,ROOT
@@ -39,3 +39,13 @@ def test_all_checks_include_every_runtime_and_fail_closed_without_node():
     assert [sys.executable,'scripts/build_bundle_manifest.py','--check'] in commands
     assert ['node','--test','tests/web/i18n.test.mjs'] in commands
     assert ['node','--test','tests/deploy/worker.test.mjs'] in commands
+
+
+def test_local_parse_benchmark_is_measured_offline(tmp_path):
+    output=tmp_path/'benchmark.json'
+    subprocess.run([sys.executable,'scripts/benchmark_local_parse.py','--fixture-pages','4',
+                    '--workers','1','2','--output',str(output)],check=True)
+    report=json.loads(output.read_text(encoding='utf-8'))
+    assert report['paid_api_calls']==0 and report['files'][0]['outputs_match']
+    assert [run['workers'] for run in report['files'][0]['runs']]==[1,2]
+    assert all(run['pages_processed']==4 for run in report['files'][0]['runs'])

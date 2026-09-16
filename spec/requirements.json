@@ -261,7 +261,8 @@
       "status": "planned",
       "acceptance_criteria": [
         "多个选项显示ONE_OF，不自行选中。",
-        "设计要求、送审产品、选择状态分开保存。"
+        "设计要求、送审产品、选择状态分开保存。",
+        "属性标题、尺寸、gauge和泛称不得作为材料名；尺寸、规格及数量保留在独立字段。"
       ],
       "decision_source": "已批准的产品目标；实现尚未交付",
       "spec_section": "docs/PRODUCT_SPEC.md"
@@ -361,7 +362,8 @@
       "priority": "P0",
       "status": "planned",
       "acceptance_criteria": [
-        "覆盖 Product Spec 列出的全部类型。"
+        "覆盖 Product Spec 列出的全部类型。",
+        "图纸、示意图和通用送审不得仅因test、verify或report关键词成为QA活动。"
       ],
       "decision_source": "已批准的产品目标；实现尚未交付",
       "spec_section": "docs/PRODUCT_SPEC.md"
@@ -586,9 +588,11 @@
       "status": "planned",
       "acceptance_criteria": [
         "A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.",
+        "A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.",
+        "Up to four adjacent evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family.",
         "Paid model calls remain serial and every call is recorded in the project ledger."
       ],
-      "decision_source": "Approved product objective; D-27 implements bounded local document concurrency while broader task orchestration remains planned.",
+      "decision_source": "Approved product objective; D-27 and D-28 implement bounded local concurrency and adjacent extraction batching while broader task orchestration remains planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {

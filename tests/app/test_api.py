@@ -1,5 +1,5 @@
 """FR-INGEST-003/004, FR-REVIEW-001/002, FR-EXPORT-001, PRD-PROTOTYPE-001"""
-import io,json,subprocess,threading
+import hashlib,io,json,subprocess,threading
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +9,7 @@ import httpx
 from openpyxl import load_workbook
 from PIL import Image
 from app.gateway import Gateway,ModelResult,mock_extract
+from app.runner import adjacent_extraction_batches
 from .conftest import upload,run_demo
 
 
@@ -124,6 +125,67 @@ def test_selected_local_workers_parse_two_documents_concurrently(client,project,
     monkeypatch.setattr(runner,'parse_one',parse)
     runner.parse_documents(run)
     assert peak==2 and runner.get(run['id'])['coverage']['pages_processed']==2
+
+
+def test_adjacent_extraction_batching_is_bounded_and_respects_legacy_single_tasks():
+    def evidence(number,page,text='x'):
+        return {'evidence_id':f'EV-{number}','document_id':'DOC-1','raw_text':text,
+                'locator':{'page_number':page}}
+    items=[(None,evidence(number,page)) for number,page in enumerate((1,1,2,3,4),1)]
+
+    assert [len(batch) for batch in adjacent_extraction_batches(items)]==[4,1]
+    assert [len(batch) for batch in adjacent_extraction_batches(items,{'EV-2'})]==[1,1,3]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,'x'*5000)),(None,evidence(2,1,'y'*5000))])]==[1,1]
+
+
+def test_mock_run_combines_adjacent_text_fragments_once(client,project,monkeypatch):
+    lines=[]
+    for index in range(4):
+        lines.append(f'DEMO_MATERIAL|PIPE-{index}|Copper Water Pipe {index}|-|diameter=2|note='+('x'*650))
+    upload(client,project['id'],'batch.txt','\n'.join(lines).encode())
+    runner=client.app.state.runner;calls=[];original=runner.gateway.extract_many
+    def counted(run,evidences):
+        calls.append(len(evidences));return original(run,evidences)
+    monkeypatch.setattr(runner.gateway,'extract_many',counted)
+    run=runner.create(project['id'],local_workers=2)
+
+    runner.process(run['id'])
+
+    current=runner.get(run['id'])
+    assert current['coverage']['fragments_total']>=2
+    assert calls==[current['coverage']['fragments_total']]
+    assert len(client.get(f'/api/analysis-runs/{run["id"]}/records').json())==4
+
+
+def test_reconciled_adjacent_batch_recovers_as_the_same_pending_family(client,project,monkeypatch):
+    from app.db import dumps
+    lines=[f'DEMO_MATERIAL|PIPE-{index}|Copper Water Pipe {index}|-|note='+('x'*650) for index in range(4)]
+    upload(client,project['id'],'resume-batch.txt','\n'.join(lines).encode())
+    runner=client.app.state.runner;db=client.app.state.db;run=runner.create(project['id'])
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    runner.parse_one(run,run['document_ids'][0])
+    evidence=[json.loads(row['payload']) for row in db.all(
+        'SELECT payload FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))]
+    assert len(evidence)==2
+    ids=[item['evidence_id'] for item in evidence]
+    family='extract-batch:'+ids[0]+':'+hashlib.sha256(dumps(ids).encode()).hexdigest()[:16]
+    call=db.reserve(project['id'],run['id'],family,Decimal('0.1'),'model','hash',Decimal('1'),Decimal('2'))
+    db.unknown(call,dumps({'kind':'NETWORK_ERROR','class':'TIMEOUT'}))
+    db.execute("UPDATE runs SET status='PAUSED_PROVIDER' WHERE id=?",(run['id'],))
+    client.post(f'/api/model-calls/{call}/reconcile',json={
+        'resolution':'NOT_BILLED','actual_cny':'0','confirmation':'PROVIDER_BILLING_CHECKED'}).raise_for_status()
+
+    resumed=client.post(f'/api/analysis-runs/{run["id"]}/resume')
+
+    assert resumed.status_code==200 and resumed.json()['status']=='QUEUED'
+    event=json.loads(db.one("SELECT payload FROM call_reconciliation_events WHERE payload LIKE '%RECOVERY_GENERATION_AUTHORIZED%'")['payload'])
+    assert event['task_family']==family and event['generation']==1
+    calls=[];original=runner.gateway.extract_many
+    monkeypatch.setattr(runner.gateway,'extract_many',lambda current,items:(calls.append(len(items)),original(current,items))[1])
+    runner.process(run['id'])
+    assert calls==[2]
+    assert {row['status'] for row in db.all('SELECT status FROM evidence WHERE run_id=?',(run['id'],))}=={'EXTRACTED'}
 
 
 def test_completed_mock_run_records_stage_performance(client,project):

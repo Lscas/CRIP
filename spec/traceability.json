@@ -45,15 +45,19 @@
         "app/ingest"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
       ],
       "contract_tests": [],
       "test_scope": "not_implemented",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/parsers.py",
+        "app/parser_worker.py",
+        "app/runner.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/PERFORMANCE_BASELINE.md",
+      "progress_note": "PDF text/OCR parsing now supports bounded 1/2/4-worker page chunks with deterministic page-order merge; full format and 10GB coverage remain planned."
     },
     {
       "requirement_id": "FR-INGEST-002",
@@ -294,17 +298,21 @@
         "app/material"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_assemble.py",
+        "tests/app/test_gateway_budget.py"
       ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/assemble.py",
+        "app/gateway.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "A deterministic pre-publication check rejects descriptor/generic material names and removes duplicate or evidence-misaligned properties. Full option/entity mapping remains planned."
     },
     {
       "requirement_id": "FR-MATERIAL-002",
@@ -434,17 +442,20 @@
         "app/inspection"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_assemble.py"
       ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/assemble.py",
+        "app/gateway.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "A deterministic QA check requires an executable inspection/test action, excludes non-QA documents and generic objects, and keeps full extraction evidence for review. Full QA type coverage remains planned."
     },
     {
       "requirement_id": "FR-INSPECTION-002",
@@ -726,11 +737,24 @@
       "planned_product_modules": [
         "app/api"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_parsers.py",
+        "tests/test_devtools.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "offline_mock_transport_and_measured_local_fixture",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/gateway.py",
+        "app/parser_worker.py",
+        "app/parsers.py",
+        "app/runner.py",
+        "scripts/benchmark_local_parse.py"
+      ],
+      "verification_report": "docs/PERFORMANCE_BASELINE.md",
+      "progress_note": "Adjacent extraction batches are capped at four fragments/8.8 KB with a stable recovery family; a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
     },
     {
       "requirement_id": "FR-API-006",

@@ -493,6 +493,19 @@ class Database:
                                            (run['id']+':'+family,run['id'])).fetchone()
                 if not pending:
                     raise DomainError('已对账提取调用不对应真实待处理证据；不能安全创建恢复代次',409)
+            elif family.startswith('extract-batch:'):
+                try:
+                    prefix,digest=family.rsplit(':',1)
+                    primary=prefix[len('extract-batch:'):]
+                except ValueError:
+                    primary=digest=''
+                if not primary.startswith('EV-') or not re.fullmatch(r'[0-9a-f]{16}',digest):
+                    raise DomainError('已对账批量提取任务键无效；不能安全创建恢复代次',409)
+                pending=connection.execute('''SELECT id FROM evidence
+                                              WHERE id=? AND run_id=? AND status='PENDING' ''',
+                                           (run['id']+':'+primary,run['id'])).fetchone()
+                if not pending:
+                    raise DomainError('已对账批量提取调用不对应真实待处理证据；不能安全创建恢复代次',409)
             elif family.startswith('vision:'):
                 try:
                     document_id,page_text=family[len('vision:'):].rsplit(':',1)
