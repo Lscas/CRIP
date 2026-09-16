@@ -460,6 +460,59 @@ def test_eml_common_html_reply_wrappers_are_history_and_current_text_resumes(tmp
     assert 'Approved' in quoted and 'Old note.' in quoted and 'Current after quote.' not in quoted
     assert result['workflow_status']=='PENDING'
 
+
+def test_eml_plain_signature_delimiter_is_separate_from_current_rfi_body(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response:\nProvide Type L copper pipe.\n-- \nPat Smith\nAcme Equipment Group\nRFI 999 Desk')
+    path=tmp_path/'plain-signature.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    current='\n'.join(item['text'] for item in result['fragments']
+                      if item['locator']['native_element_id']=='email-body')
+    signature='\n'.join(item['text'] for item in result['fragments']
+                        if item['locator']['native_element_id']=='email-signature')
+
+    assert 'Type L copper pipe' in current and 'Acme Equipment Group' not in current
+    assert 'Pat Smith' in signature and 'Acme Equipment Group' in signature
+    assert result['workflow_contexts'][0]['role']=='RESPONSE'
+    assert {'workflow_type':'RFI','identifier':'999'} not in result['workflow_references']
+    assert result['email_content']['signature_chars']>0
+
+
+def test_eml_gmail_signature_wrapper_is_separate_and_current_text_resumes(tmp_path):
+    message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
+        '<html><body><p>Status: Pending</p><p>Current before.</p>'
+        '<div class="gmail_signature"><div>Pat Smith</div><div>Acme Equipment Group</div></div>'
+        '<p>Current after.</p></body></html>',subtype='html')
+    path=tmp_path/'gmail-signature.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    current='\n'.join(item['text'] for item in result['fragments']
+                      if item['locator']['native_element_id']=='email-body')
+    signature='\n'.join(item['text'] for item in result['fragments']
+                        if item['locator']['native_element_id']=='email-signature')
+
+    assert 'Current before.' in current and 'Current after.' in current
+    assert 'Acme Equipment Group' not in current and 'Acme Equipment Group' in signature
+    assert result['workflow_status']=='PENDING' and result['email_content']['signature_chars']>0
+
+
+def test_eml_quoted_signature_cannot_create_a_workflow_reference(tmp_path):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response:\nProvide Type L copper.\n\nOn Monday, Pat wrote:\n'
+        '> Question: May PVC be used?\n> -- \n> Pat Smith\n> RFI 999 Desk')
+    path=tmp_path/'quoted-signature.eml';path.write_bytes(message.as_bytes())
+
+    result=parse_file(path,path.name)
+    signature='\n'.join(item['text'] for item in result['fragments']
+                        if item['locator']['native_element_id']=='email-quoted-signature')
+    quoted='\n'.join(item['text'] for item in result['fragments']
+                     if item['locator']['native_element_id']=='email-quoted-history')
+
+    assert 'May PVC be used?' in quoted and 'RFI 999 Desk' not in quoted
+    assert 'RFI 999 Desk' in signature
+    assert {'workflow_type':'RFI','identifier':'999'} not in result['workflow_references']
+
 def test_docx_minimal(tmp_path):
     p=tmp_path/'x.docx'
     xml='''<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Material alpha</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Quantity 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>'''

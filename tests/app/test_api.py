@@ -106,7 +106,10 @@ def test_email_routing_evidence_stays_reviewable_without_model_extraction(client
         '<html><body><p>Response:</p>'
         '<p>DEMO_MATERIAL|PIPE|Type L Copper Pipe|-|diameter=2 in</p>'
         '<div class="gmail_quote"><p>On Monday, Pat wrote:</p>'
-        '<p>Question: May PVC be used?</p></div></body></html>',subtype='html')
+        '<p>Question: May PVC be used?</p></div>'
+        '<div class="gmail_signature">'
+        '<p>DEMO_MATERIAL|EQUIPMENT|Acme Equipment Group|-|role=consultant</p>'
+        '</div></body></html>',subtype='html')
     upload(client,project['id'],'rfi-42-reply.eml',message.as_bytes())
     runner=client.app.state.runner;seen=[];seen_text=[];original_many=runner.gateway.extract_many
     def many(run,evidences):
@@ -121,18 +124,21 @@ def test_email_routing_evidence_stays_reviewable_without_model_extraction(client
     routing=[]
     for row in rows:
         evidence=json.loads(row['payload']);section=evidence['locator']['section'] or ''
-        if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
+        if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY','EMAIL > SIGNATURE')):
             routing.append((evidence,json.loads(row['extraction'])))
     records=client.get(f'/api/analysis-runs/{run["id"]}/records').json()
 
     assert seen==['EMAIL > BODY > RFI 42 > RESPONSE']
-    assert all('May PVC be used?' not in text for text in seen_text)
-    assert len(routing)==2 and all(item[1]['deterministic_skip_reason']=='ROUTING_ONLY_EMAIL_EVIDENCE'
-                                   for item in routing)
+    assert all('May PVC be used?' not in text and 'Acme Equipment Group' not in text
+               for text in seen_text)
+    assert len(routing)==3
+    assert {item[1]['deterministic_skip_reason'] for item in routing}=={
+        'ROUTING_ONLY_EMAIL_EVIDENCE','EMAIL_SIGNATURE_EVIDENCE'}
     assert any('Subject: RFI 42' in item[0]['raw_text'] for item in routing)
     assert any('May PVC be used?' in item[0]['raw_text'] for item in routing)
+    assert any('Acme Equipment Group' in item[0]['raw_text'] for item in routing)
     assert len(records)==1 and records[0]['record']['candidate']['name']=='Type L Copper Pipe'
-    assert runner.get(run['id'])['coverage']['fragments_model_skipped']==2
+    assert runner.get(run['id'])['coverage']['fragments_model_skipped']==3
 
 
 def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,project):

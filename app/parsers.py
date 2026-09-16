@@ -22,7 +22,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-28'
+PARSER_VERSION='multisource-29'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -78,6 +78,8 @@ _SUBMITTAL_STATUS_MAP={
 }
 _HTML_QUOTE_START='\x00CIRP-QUOTED-HISTORY-START\x00'
 _HTML_QUOTE_END='\x00CIRP-QUOTED-HISTORY-END\x00'
+_HTML_SIGNATURE_START='\x00CIRP-EMAIL-SIGNATURE-START\x00'
+_HTML_SIGNATURE_END='\x00CIRP-EMAIL-SIGNATURE-END\x00'
 _HTML_VOID_TAGS={'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
 _EMAIL_HISTORY_START=re.compile(
     r'(?i)^\s*(?:On .{1,240} wrote:|-{2,}\s*(?:Original Message|Forwarded message)\s*-{2,})\s*$')
@@ -301,9 +303,12 @@ class _PlainHTML(HTMLParser):
         quoted=(tag=='blockquote' or (tag=='div' and
                 (bool(classes & {'gmail_quote','gmail_quote_container'}) or
                  values.get('id','').casefold()=='divrplyfwdmsg')))
+        signature=(tag=='div' and 'gmail_signature' in classes and not quoted)
         if tag in {'script','style','noscript'}:self.hidden+=1
-        if tag not in _HTML_VOID_TAGS:self.tags.append((tag,quoted and not self.hidden))
-        if not self.hidden and quoted:self.parts.append('\n'+_HTML_QUOTE_START+'\n')
+        quote_marker=quoted and not self.hidden;signature_marker=signature and not self.hidden
+        if tag not in _HTML_VOID_TAGS:self.tags.append((tag,quote_marker,signature_marker))
+        if quote_marker:self.parts.append('\n'+_HTML_QUOTE_START+'\n')
+        elif signature_marker:self.parts.append('\n'+_HTML_SIGNATURE_START+'\n')
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_endtag(self,tag):
         tag=tag.casefold();closed=[]
@@ -311,8 +316,11 @@ class _PlainHTML(HTMLParser):
             if self.tags[index][0]==tag:
                 closed=self.tags[index:];del self.tags[index:];break
         if tag in {'script','style','noscript'} and self.hidden:self.hidden-=1
-        if not self.hidden and any(quoted for _,quoted in closed):
-            self.parts.extend('\n'+_HTML_QUOTE_END+'\n' for _,quoted in reversed(closed) if quoted)
+        markers=[]
+        for _,quoted,signature in reversed(closed):
+            if quoted:markers.append('\n'+_HTML_QUOTE_END+'\n')
+            elif signature:markers.append('\n'+_HTML_SIGNATURE_END+'\n')
+        if not self.hidden and markers:self.parts.extend(markers)
         elif not self.hidden and tag in self._BLOCKS:self.parts.append('\n')
     def handle_data(self,data):
         if not self.hidden:self.parts.append(data)
@@ -351,6 +359,23 @@ def split_email_history(text: str) -> tuple[str,str]:
         if history or html_quote_depth or stripped.startswith('>'):quoted.append(line)
         else:current.append(line)
     return ('\n'.join(current).strip(),'\n'.join(quoted).strip())
+
+
+def split_email_signature(text: str) -> tuple[str,str]:
+    """Separate strict plain-text or explicitly wrapped HTML signature evidence."""
+    current=[];signature=[];html_depth=0;plain_signature=False
+    for line in text.splitlines():
+        stripped=line.strip()
+        if stripped==_HTML_SIGNATURE_START:
+            html_depth+=1;continue
+        if stripped==_HTML_SIGNATURE_END:
+            html_depth=max(0,html_depth-1);continue
+        raw=line.rstrip('\r')
+        if (not html_depth and not plain_signature and
+                (raw=='-- ' or bool(re.fullmatch(r'(?:>\s*)+-- ',raw)))):
+            plain_signature=True;signature.append(line);continue
+        (signature if plain_signature or html_depth else current).append(line)
+    return ('\n'.join(current).strip(),'\n'.join(signature).strip())
 
 
 def _email_message_key(value: object) -> str | None:
@@ -409,6 +434,8 @@ def _parse_email_message(message,original_name: str,size: int,attachments: list[
     body='\n\n'.join(plain or html)
     if len(body)>MAX_CHARS:body=body[:MAX_CHARS]
     current_body,quoted_body=split_email_history(body)
+    current_body,signature_body=split_email_signature(current_body)
+    quoted_body,quoted_signature=split_email_signature(quoted_body)
     current_source='\n'.join(headers+[current_body]);current_rev=revision(current_source);fragments=[]
     reference_source='\n'.join((str(message.get('Subject') or '')[:4000],current_body,quoted_body))
     context=document_context(current_source,original_name)
@@ -427,19 +454,35 @@ def _parse_email_message(message,original_name: str,size: int,attachments: list[
             quoted_body.splitlines(),locator(native_element_id='email-quoted-history'),'EMAIL',revision(quoted_body),
             quoted_body,'',prefix='EMAIL > QUOTED HISTORY')
         fragments.extend(quoted_fragments)
+    if signature_body:
+        fragments.extend(split_lines(
+            signature_body.splitlines(),
+            locator(section='EMAIL > SIGNATURE',native_element_id='email-signature'),
+            'EMAIL',revision(signature_body)))
+    if quoted_signature:
+        fragments.extend(split_lines(
+            quoted_signature.splitlines(),
+            locator(section='EMAIL > SIGNATURE > QUOTED HISTORY',
+                    native_element_id='email-quoted-signature'),
+            'EMAIL',revision(quoted_signature)))
+    signature_chars=len(signature_body)+len(quoted_signature)
     warnings=[]
     if attachments:warnings.append('Email attachments were inventoried but not analyzed; upload each attachment separately.')
     if not current_body and quoted_body:warnings.append('Email has quoted history but no distinct current body text.')
+    elif not current_body and signature_chars:warnings.append('Email has a signature but no distinct current body text.')
     elif not body:warnings.append('Email has no supported plain-text or HTML body.')
     pages=[{'page':None,'status':'EMAIL_BODY_EXTRACTED' if current_body else
-            'EMAIL_QUOTED_HISTORY_ONLY' if quoted_body else 'EMAIL_HEADERS_ONLY'}]
+            'EMAIL_QUOTED_HISTORY_ONLY' if quoted_body else
+            'EMAIL_SIGNATURE_ONLY' if signature_chars else 'EMAIL_HEADERS_ONLY'}]
     contexts=[context] if context.get('workflow_type') else []
     return result_payload('PARTIAL' if warnings else 'SUCCESS',fragments,pages,warnings,
                           document_type='EMAIL',workflow_type=context.get('workflow_type'),
                           document_identifier=context.get('identifier'),workflow_status=context.get('status'),
                           workflow_contexts=contexts,workflow_references=workflow_references(reference_source),
                           email_thread=_email_thread_metadata(message),
-                          email_content={'current_body_chars':len(current_body),'quoted_history_chars':len(quoted_body)},
+                          email_content={'current_body_chars':len(current_body),
+                                         'quoted_history_chars':len(quoted_body),
+                                         'signature_chars':signature_chars},
                           attachments=attachments,active_content_processed=False)
 
 

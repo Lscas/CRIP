@@ -62,3 +62,7 @@ A synthetic RFI reply produces three retained evidence scopes: routing headers, 
 ## CR-0053 HTML reply-wrapper accuracy fixture
 
 Two synthetic Submittal emails exercise a nested Gmail quote class and Outlook `divRplyFwdMsg` wrapper. Before the parser fix, an historical `Approved` status and old note remained in current-body evidence beside the actual `Pending` status. Both wrappers now create reviewable quoted-history evidence, text after their matching close resumes as current, and current workflow status remains `Pending`. The API regression also proves wrapped RFI history is absent from extraction input and counted among locally skipped fragments. These are offline structural fixtures, not mailbox compatibility, semantic-thread inference, live-model quality or universal email-token savings measurements.
+
+## CR-0054 signature-boundary accuracy fixture
+
+A synthetic RFI reply contains one valid current material and one equipment-like company name inside a Gmail signature. Before separation, both lines reached extraction and the mock contract published two material candidates. The signature now remains reviewable evidence, is counted as locally skipped, cannot add an `RFI 999` relationship, and never enters extraction; the valid current material remains the sole record. A second fixture covers the strict plain-text `-- ` delimiter, and HTML text after a closed signature resumes as current. This measures a deterministic boundary, not universal signature detection, live-model accuracy, latency or billing.

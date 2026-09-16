@@ -228,7 +228,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML and bounded local Outlook MSG headers and visible bodies share one safe evidence and workflow path. Exact Gmail quote classes and Outlook divRplyFwdMsg wrappers now delimit reviewable history while text after a matching close remains current. Routing headers and quoted history complete locally before model batching. python-oxmsg handles the binary MSG container; active-content, remote-resource, attachment, exact-workflow and hash-only thread boundaries remain unchanged. Mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG headers and visible bodies share one safe evidence and workflow path. Exact Gmail/Outlook history wrappers plus strict plain-text and Gmail HTML signature boundaries retain non-current evidence while excluding it from workflow routing and extraction. Text after matching HTML closes remains current. python-oxmsg handles the binary MSG container; active-content, remote-resource, attachment and hash-only thread boundaries remain unchanged. Mailbox sync, automatic attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -877,7 +877,7 @@
         "scripts/benchmark_local_parse.py"
       ],
       "verification_report": "docs/PERFORMANCE_BASELINE.md",
-      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family; routing-only email headers and recognized plain-text or HTML history close locally before batching, and a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
+      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family; email headers, recognized history and signatures close locally before batching, and a single PDF uses bounded page chunks. Paid calls remain serial and broader distributed orchestration remains planned."
     },
     {
       "requirement_id": "FR-API-006",

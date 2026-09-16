@@ -32,6 +32,8 @@ def deterministic_extraction_skip_reason(evidence: dict) -> str | None:
     section=str((evidence.get('locator') or {}).get('section') or '').upper()
     if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
         return 'ROUTING_ONLY_EMAIL_EVIDENCE'
+    if section.startswith('EMAIL > SIGNATURE'):
+        return 'EMAIL_SIGNATURE_EVIDENCE'
     return None
 
 def _adjacent_evidence(left: dict, right: dict) -> bool:
@@ -239,10 +241,12 @@ class Runner:
                     reason=deterministic_extraction_skip_reason(item[1])
                     (skipped if reason else eligible).append((*item,reason))
                 if skipped:
-                    data={'disposition':'NO_REQUIREMENTS','requirements':[],
-                          'reason':'Email routing or quoted-history evidence was retained locally and excluded from current requirement extraction.'}
                     with self.db.connect(True) as connection:
                         for row,evidence,reason in skipped:
+                            explanation=('Email signature evidence was retained locally and excluded from current requirement extraction.'
+                                         if reason=='EMAIL_SIGNATURE_EVIDENCE' else
+                                         'Email routing or quoted-history evidence was retained locally and excluded from current requirement extraction.')
+                            data={'disposition':'NO_REQUIREMENTS','requirements':[],'reason':explanation}
                             extraction={'data':data,'request_id':None,'cached':False,
                                         'batch_primary_evidence_id':evidence['evidence_id'],
                                         'deterministic_skip_reason':reason}

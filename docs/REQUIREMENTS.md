@@ -131,10 +131,10 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 - An Outlook-style From block with Sent, Date, To or Subject starts quoted history whether labels share a line or use adjacent lines.
 - Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.
 - Gmail quote classes and Outlook divRplyFwdMsg delimit HTML history; text after a matching close resumes as current evidence.
-- Exact Message-ID, In-Reply-To and References values are represented only by local hashes for deterministic thread linking; raw identifiers are not persisted in parser summaries.
-- Multiple distinct Message-ID values in one email are preserved only as a hash-safe conflict flag instead of being silently treated as a valid or missing single identity.
-- Every exact identifier in a multi-value In-Reply-To header participates in deterministic thread linking instead of being hashed as one combined pseudo-identifier.
-- Local thread members are ordered parent-before-child from exact hashed header relationships; cyclic relationships remain complete and are marked ambiguous.
+- Exact -- plus trailing space and Gmail gmail_signature create reviewable signature evidence excluded from workflow routing and extraction; closed HTML signatures resume current text.
+- Message-ID, In-Reply-To and References are stored only as local hashes; raw identifiers are never persisted.
+- Multiple Message-IDs set a conflict flag while missing remains standalone; multi-value In-Reply-To preserves each exact relationship.
+- Exact ancestors precede replies; cycles retain every member and remain ambiguous.
 - MSG parsing reuses the existing email evidence and workflow path through the pinned MIT-licensed python-oxmsg package; mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported.
 
 ## FR-WORKFLOW-001 · Deterministic workflow relationships
@@ -468,7 +468,7 @@ Show run coverage, current materials and QA review results, analysis percentage,
 
 - A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.
 - A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.
-- Up to four adjacent eligible evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family; routing-only email evidence, including recognized HTML reply history, closes locally before batching.
+- Up to four adjacent eligible evidence fragments can share one extraction request under a bounded byte limit and one auditable recovery family; email headers, recognized history and signatures close locally before batching.
 - Paid model calls remain serial and every call is recorded in the project ledger.
 
 ## FR-API-006 · Customer-configurable OpenAI-compatible model
