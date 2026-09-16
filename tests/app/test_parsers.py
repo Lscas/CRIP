@@ -238,6 +238,23 @@ def test_not_approved_submittal_status_is_canonical_rejected(tmp_path):
     assert all('STATUS: REJECTED' in item['locator']['section'] for item in result['fragments'])
 
 
+@pytest.mark.parametrize(('source_status','expected_status'),[
+    ('Furnish as Submitted','APPROVED'),
+    ('Furnish as Corrected','APPROVED AS NOTED'),
+    ('Amend and Resubmit','REVISE AND RESUBMIT'),
+])
+def test_common_submittal_return_statuses_use_existing_canonical_groups(
+        tmp_path,source_status,expected_status):
+    path=tmp_path/'submittal.txt'
+    path.write_text(f'Submittal No: 23 05 00-03\nStatus: {source_status}\nPump P-2',encoding='utf-8')
+
+    result=parse_file(path,path.name)
+
+    assert result['workflow_contexts'][0]['status']==expected_status
+    assert all(f'STATUS: {expected_status}' in item['locator']['section']
+               for item in result['fragments'])
+
+
 def test_one_text_submittal_preserves_conflicting_explicit_statuses(tmp_path):
     path=tmp_path/'Submittal-23-01.txt';path.write_text(
         'Submittal 23-01\nStatus: Pending\nPump data received.\n'

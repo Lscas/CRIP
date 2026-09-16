@@ -11,7 +11,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 - RFI roles require a standalone `Question`/`Response` heading or an explicit `:`, `#`, or `-` separator; prefixes such as `Questionnaire` and `Response time` remain neutral.
 - `Request for Information No. 0042`/`RFI 0042` and `Submission 23-01`/`Submittal 23-01` create the same exact relationships. Compact digit-bearing prefixes such as `ARC-0042`, `MEP-023` and `SUB-001` are preserved without fuzzy matching or cross-prefix merging.
 - The same full-name aliases work in bounded filename fallback for scanned or otherwise textless files.
-- One TXT, Email or multi-page Submittal retains every distinct explicit status and becomes ambiguous when those statuses conflict.
+- One TXT, Email or multi-page Submittal retains every distinct explicit status and becomes ambiguous when those statuses conflict. Exact `Furnish as Submitted`, `Furnish as Corrected` and `Amend and Resubmit` stamps reuse the existing `APPROVED`, `APPROVED AS NOTED` and `REVISE AND RESUBMIT` groups without inferring authority from ordinary prose.
 - Materials and equipment, with the item name, quantity, unit, design properties, specification section, location, status, and evidence separated into readable fields.
 - Executable inspections and tests, with the QA activity, specification section, performer, witness, timing, frequency, acceptance criteria, and evidence kept with the item.
 - English application and export text. Source quotations remain source evidence and are not rewritten as if they were original English text.
@@ -81,7 +81,7 @@ This single entry point runs the Python suite, specification and bundle-manifest
 
 The publication recovery was validated from a clean local environment with:
 
-- 608 Python tests passed.
+- 611 Python tests passed.
 - 24 localization/UI JavaScript tests passed.
 - 11 deployment-boundary JavaScript tests passed.
 - 12 offline Chromium browser regressions passed with zero model calls and zero external requests.

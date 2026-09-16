@@ -228,7 +228,7 @@
         "web/index.html"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence and workflow path. Exact Gmail/Outlook history and signature boundaries retain non-current evidence outside extraction. Digit-bearing compact identifiers now retain alphabetic project or discipline prefixes across body, Subject and filename without fuzzy matching. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
+      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence and workflow path. Exact Gmail/Outlook history and signature boundaries retain non-current evidence outside extraction. Digit-bearing compact identifiers retain alphabetic project or discipline prefixes, while Furnish as Submitted, Furnish as Corrected and Amend and Resubmit reuse existing canonical status groups. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
     },
     {
       "requirement_id": "FR-WORKFLOW-001",
@@ -254,7 +254,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact digit-bearing RFI and Submittal aliases, including alphabetic project or discipline prefixes, normalize across body, Subject and filename into one bounded read-only reviewer index. Different prefixes remain distinct, weaker identifiers remain references, and addresses or routing headers cannot create groups. Explicit roles/statuses, ambiguous duplicates, hash-only email threads, selected attachments, nine-field SQLite projection and reviewer-requested pagination remain deterministic and model-free."
+      "progress_note": "Exact digit-bearing RFI and Submittal aliases, including alphabetic project or discipline prefixes, normalize across body, Subject and filename into one bounded read-only reviewer index. Common exact Submittal return-stamp synonyms use existing canonical groups; different prefixes remain distinct, weaker identifiers remain references, and addresses or routing headers cannot create groups. Explicit roles/statuses, ambiguous duplicates, hash-only email threads, selected attachments, nine-field SQLite projection and reviewer-requested pagination remain deterministic and model-free."
     },
     {
       "requirement_id": "FR-INGEST-005",
