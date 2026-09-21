@@ -23,8 +23,9 @@ from app.runner import Runner
 from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
                           reviewer_record_is_visible)
 from app.remote_access import PreviewAccess
-from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,build_workflow_index,
-                           projected_workflow_summary)
+from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,apply_workflow_classification,
+                           build_workflow_index,normalize_workflow_classification,
+                           projected_workflow_summary,workflow_classification_view)
 from app.connectors import ExternalConnectors
 from app.email_attachments import (import_email_attachment,import_email_attachments,
                                    list_email_attachments)
@@ -59,6 +60,13 @@ class EmailAttachmentBatchInput(Input):
 class VerificationInput(Input):
     expected_version:int=Field(ge=0)
     semantic:bool=False
+class WorkflowClassificationInput(Input):
+    expected_version:int=Field(ge=0)
+    workflow_type:Literal['DETECTED','OTHER','RFI','SUBMITTAL']
+    identifier:str|None=Field(default=None,max_length=64)
+    role:str|None=Field(default=None,max_length=32)
+    status:str|None=Field(default=None,max_length=80)
+    note:str=Field(default='',max_length=1000)
 
 class ReconcileCallInput(Input):
     resolution:Literal['NOT_BILLED','BILLED']
@@ -245,6 +253,57 @@ def create_app(settings:Settings|None=None)->FastAPI:
                         'takeoffs':summary.get('takeoffs',[]),
                         'geometry_summaries':summary.get('geometry_summaries',[])})
         return out
+    def classification_payload(rid:str,did:str):
+        run=runner.get(rid)
+        row=db.one('''SELECT r.summary,d.name FROM document_results r
+                      JOIN documents d ON d.id=r.document_id
+                      WHERE r.run_id=? AND r.document_id=? AND d.project_id=?''',
+                   (rid,did,run['project_id']))
+        override=db.one('''SELECT workflow_type,identifier,role,status,version,note,updated_at
+                           FROM workflow_classification_overrides
+                           WHERE run_id=? AND document_id=?''',(rid,did),required=False)
+        return {'run_id':rid,'document_id':did,'file_name':row['name'],
+                **workflow_classification_view(json.loads(row['summary']),override)}
+    @app.get('/api/analysis-runs/{rid}/documents/{did}/workflow-classification')
+    def workflow_classification_get(rid:str,did:str):
+        """Read detected/effective workflow metadata without parsing or model work."""
+        return classification_payload(rid,did)
+    @app.post('/api/analysis-runs/{rid}/documents/{did}/workflow-classification')
+    def workflow_classification_set(rid:str,did:str,data:WorkflowClassificationInput):
+        normalized=normalize_workflow_classification(
+            data.workflow_type,data.identifier,data.role,data.status)
+        timestamp=now()
+        with db.connect(True) as connection:
+            run=connection.execute('SELECT project_id,status FROM runs WHERE id=?',(rid,)).fetchone()
+            if not run:raise DomainError('Analysis run was not found',404)
+            if run['status'] not in ('PARTIAL','COMPLETED'):
+                raise DomainError('Workflow classification can be corrected only after the run finishes',409)
+            result=connection.execute('''SELECT 1 FROM document_results r JOIN documents d ON d.id=r.document_id
+                                         WHERE r.run_id=? AND r.document_id=? AND d.project_id=?''',
+                                      (rid,did,run['project_id'])).fetchone()
+            if not result:raise DomainError('Document does not belong to this analysis run',404)
+            current=connection.execute('''SELECT workflow_type,identifier,role,status,version,note,updated_at
+                                          FROM workflow_classification_overrides
+                                          WHERE run_id=? AND document_id=?''',(rid,did)).fetchone()
+            version=current['version'] if current else 0
+            if version!=data.expected_version:
+                raise DomainError('Workflow classification changed; refresh before saving',409)
+            saved={**normalized,'version':version+1,'note':data.note,'updated_at':timestamp}
+            connection.execute('''INSERT INTO workflow_classification_overrides
+                (run_id,document_id,project_id,workflow_type,identifier,role,status,version,note,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(run_id,document_id) DO UPDATE SET
+                 workflow_type=excluded.workflow_type,identifier=excluded.identifier,
+                 role=excluded.role,status=excluded.status,version=excluded.version,
+                 note=excluded.note,updated_at=excluded.updated_at''',
+                (rid,did,run['project_id'],saved['workflow_type'],saved['identifier'],saved['role'],
+                 saved['status'],saved['version'],saved['note'],saved['updated_at']))
+            before=dict(current) if current else None
+            connection.execute('''INSERT INTO workflow_classification_events
+                (id,run_id,document_id,actor,before_json,after_json,note,created_at)
+                VALUES(?,?,?,?,?,?,?,?)''',
+                (uid('WCLASS'),rid,did,'local-user',dumps(before),dumps(saved),data.note,timestamp))
+        return classification_payload(rid,did)
     @app.get('/api/analysis-runs/{rid}/workflows')
     def run_workflows(rid:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
         """Read-only deterministic workflow relationships; never calls a model."""
@@ -253,7 +312,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
                        json_extract(r.summary,{WORKFLOW_SUMMARY_SQL_PATHS}) AS workflow_values
                        FROM document_results r JOIN documents d ON d.id=r.document_id
                        WHERE r.run_id=? ORDER BY d.name''',(rid,))
-        for row in rows:row['summary']=projected_workflow_summary(row.pop('workflow_values'))
+        overrides={row['document_id']:row for row in db.all(
+            '''SELECT document_id,workflow_type,identifier,role,status,version,note,updated_at
+               FROM workflow_classification_overrides WHERE run_id=?''',(rid,))}
+        for row in rows:
+            summary=projected_workflow_summary(row.pop('workflow_values'));override=overrides.get(row['document_id'])
+            row['summary']=apply_workflow_classification(summary,override)
+            row['classification_source']='MANUAL' if override and override['workflow_type']!='DETECTED' else 'DETECTED'
         links=db.all('''SELECT s.source_kind,s.source_document_id,u.document_id,s.source_detail
                         FROM upload_sources s JOIN uploads u ON u.id=s.upload_id
                         JOIN document_results child ON child.run_id=? AND child.document_id=u.document_id

@@ -5,6 +5,7 @@ import heapq
 import json
 import re
 from collections import defaultdict
+from app.db import DomainError
 
 
 _SPACED_SUBMITTAL_ID=re.compile(
@@ -13,6 +14,13 @@ _COMPACT_ID=re.compile(r'^(?=[A-Z0-9._/-]*\d)[A-Z0-9]+(?:[._/-][A-Z0-9]+)*')
 WORKFLOW_SUMMARY_KEYS=('document_type','workflow_contexts','workflow_references','email_content','email_thread',
                        'workflow_type','document_identifier','workflow_role','workflow_status')
 WORKFLOW_SUMMARY_SQL_PATHS=','.join(repr(f'$.{key}') for key in WORKFLOW_SUMMARY_KEYS)
+RFI_OVERRIDE_ROLES=('UNKNOWN','QUESTION','RESPONSE')
+RFI_OVERRIDE_STATUSES=('OPEN','OPEN FOR MANAGER','OPEN FOR REVIEW','OPEN FOR COORDINATOR',
+                       'OPEN IN REVIEW','OPEN ANSWERED','OPEN WAITING FOR SUBMISSION',
+                       'WAITING FOR SUBMISSION','DRAFT','SUBMITTED','ANSWERED','REJECTED',
+                       'CLOSED','CLOSED-DRAFT','CLOSED-REVISED','VOID')
+SUBMITTAL_OVERRIDE_STATUSES=('APPROVED','APPROVED AS NOTED','REVISE AND RESUBMIT',
+                             'REJECTED','REVIEWED','PENDING')
 
 
 def projected_workflow_summary(value: object) -> dict:
@@ -45,6 +53,73 @@ def normalize_identifier(workflow: str, value: object) -> str | None:
     if not identifier:return None
     if workflow=='RFI' and identifier.isdigit():identifier=str(int(identifier))
     return identifier
+
+
+def normalize_workflow_classification(workflow_type: str,identifier: object,role: object,
+                                      status: object) -> dict:
+    """Validate one explicit human correction without inferring missing business meaning."""
+    workflow=str(workflow_type or '').upper()
+    if workflow not in {'DETECTED','OTHER','RFI','SUBMITTAL'}:
+        raise DomainError('Workflow classification type is not supported',422)
+    if workflow in {'DETECTED','OTHER'}:
+        if any(value not in (None,'') for value in (identifier,role,status)):
+            raise DomainError('Detected or Other classification cannot contain workflow fields',422)
+        return {'workflow_type':workflow,'identifier':None,'role':None,'status':None}
+    normalized_identifier=normalize_identifier(workflow,identifier)
+    if not normalized_identifier:
+        raise DomainError('Workflow identifier must be exact and contain a digit',422)
+    normalized_role=str(role or '').upper()
+    normalized_status=' '.join(str(status).upper().split()) if status not in (None,'') else None
+    if workflow=='RFI':
+        if normalized_role not in RFI_OVERRIDE_ROLES:
+            raise DomainError('RFI role must be Unknown, Question or Response',422)
+        if normalized_status not in (None,*RFI_OVERRIDE_STATUSES):
+            raise DomainError('RFI status is not in the bounded reviewer list',422)
+    else:
+        if normalized_role!='SUBMITTAL':
+            raise DomainError('Submittal role must remain Submittal',422)
+        if normalized_status not in (None,*SUBMITTAL_OVERRIDE_STATUSES):
+            raise DomainError('Submittal status is not in the bounded reviewer list',422)
+    return {'workflow_type':workflow,'identifier':normalized_identifier,
+            'role':normalized_role,'status':normalized_status}
+
+
+def apply_workflow_classification(summary: dict,override: dict|None) -> dict:
+    """Overlay reviewer workflow metadata in memory; never mutate stored parser output."""
+    effective={**summary};workflow=(override or {}).get('workflow_type')
+    if workflow in (None,'DETECTED'):return effective
+    if workflow=='OTHER':
+        effective.update({'document_type':'OTHER','workflow_contexts':[],
+                          'workflow_type':None,'document_identifier':None,
+                          'workflow_role':None,'workflow_status':None})
+        return effective
+    context={key:override.get(key) for key in ('workflow_type','identifier','role','status')}
+    document_type=('SUBMITTAL' if workflow=='SUBMITTAL' else
+                   'RFI_RESPONSE' if context['role']=='RESPONSE' else
+                   'RFI_QUESTION' if context['role']=='QUESTION' else 'OTHER')
+    effective.update({'document_type':document_type,'workflow_contexts':[context],
+                      'workflow_type':workflow,'document_identifier':context['identifier'],
+                      'workflow_role':context['role'],'workflow_status':context['status']})
+    return effective
+
+
+def workflow_classification_view(summary: dict,override: dict|None) -> dict:
+    effective=apply_workflow_classification(summary,override)
+    public_override={key:(override or {}).get(key) for key in
+                     ('workflow_type','identifier','role','status','version','note','updated_at')}
+    if not override:
+        public_override={'workflow_type':'DETECTED','identifier':None,'role':None,'status':None,
+                         'version':0,'note':'','updated_at':None}
+    return {
+        'detected':{'document_type':summary.get('document_type','UNKNOWN'),
+                    'contexts':_contexts(summary),'references':_references(summary)},
+        'effective':{'document_type':effective.get('document_type','UNKNOWN'),
+                     'contexts':_contexts(effective),'references':_references(effective)},
+        'override':public_override,
+        'options':{'rfi_roles':list(RFI_OVERRIDE_ROLES),
+                   'rfi_statuses':list(RFI_OVERRIDE_STATUSES),
+                   'submittal_statuses':list(SUBMITTAL_OVERRIDE_STATUSES)},
+    }
 
 
 def _key(prefix: str, *values: str) -> str:
@@ -235,6 +310,7 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
         if isinstance(summary,str):summary=json.loads(summary)
         documents.append({'document_id':row['document_id'],'file_name':row['name'],
                           'document_type':summary.get('document_type','UNKNOWN'),
+                          'classification_source':row.get('classification_source','DETECTED'),
                           'contexts':_contexts(summary),'references':_references(summary),
                           'attachments':len(summary.get('attachments') or []),
                           'email_content':summary.get('email_content') or {},
@@ -245,7 +321,8 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
             identity=(context['workflow_type'],context['identifier'])
             member=groups[identity].setdefault(document['document_id'],{
                 'document_id':document['document_id'],'file_name':document['file_name'],
-                'document_type':document['document_type'],'roles':set(),'statuses':set(),'source':'PRIMARY'})
+                'document_type':document['document_type'],'roles':set(),'statuses':set(),'source':'PRIMARY',
+                'classification_source':document['classification_source']})
             if context.get('role'):member['roles'].add(context['role'])
             if context.get('status'):member['statuses'].add(context['status'])
     for document in documents:
@@ -255,7 +332,8 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
             if identity in primary:continue
             groups[identity].setdefault(document['document_id'],{
                 'document_id':document['document_id'],'file_name':document['file_name'],
-                'document_type':document['document_type'],'roles':set(),'statuses':set(),'source':'REFERENCE'})
+                'document_type':document['document_type'],'roles':set(),'statuses':set(),'source':'REFERENCE',
+                'classification_source':document['classification_source']})
     items=[];workflow_documents=set()
     for (workflow,identifier),raw_members in sorted(groups.items()):
         members=[];source_status_conflict=False
@@ -281,7 +359,9 @@ def build_workflow_index(rows: list[dict],attachment_links: list[dict]|None=None
             items.append({'group_id':_key('EMAIL',document['document_id']),'kind':'EMAIL','identifier':None,
                           'state':'SINGLE','members':[{'document_id':document['document_id'],
                           'file_name':document['file_name'],'document_type':'EMAIL','role':'MESSAGE',
-                          'status':None,'source':'PRIMARY'}],'warnings':[],'external_reference_count':0})
+                          'status':None,'source':'PRIMARY',
+                          'classification_source':document['classification_source']}],
+                          'warnings':[],'external_reference_count':0})
             workflow_documents.add(document['document_id'])
     order={'RFI':0,'SUBMITTAL':1,'EMAIL_THREAD':2,'EMAIL_ATTACHMENT':3,'EMAIL':4}
     items.sort(key=lambda item:(order[item['kind']],item.get('identifier') or '',item['group_id']))

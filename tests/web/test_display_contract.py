@@ -178,6 +178,16 @@ def test_workflow_pagination_shows_true_total_and_loads_more_without_duplicates(
     assert 'state.workflows=(await api(`/analysis-runs/${rid}/workflows?limit=500`)).items' not in source
 
 
+def test_workflow_classification_correction_uses_native_auditable_controls():
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert "elT('button','workflowClassification.open'" in source
+    assert "['DETECTED','OTHER','RFI','SUBMITTAL']" in source
+    assert "expected_version:data.override.version" in source
+    assert "does not rewrite parsed text, evidence, or extracted candidates" in translations
+    assert "不改写解析文本、证据或候选结果" in translations
+
+
 def test_live_vision_has_explicit_full_page_data_transfer_disclosure():
     html=(ROOT/'web/index.html').read_text(encoding='utf-8')
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')

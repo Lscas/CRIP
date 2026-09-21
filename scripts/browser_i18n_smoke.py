@@ -225,6 +225,19 @@ def main():
                 assert {id_: page.locator('#'+id_).is_disabled() for id_ in states_before} == states_before
                 passed('Run selection, PARTIAL status, candidates, numbers, cost and button enablement are unchanged')
 
+                page.get_by_role('button',name='Correct workflow classification',exact=True).first.click()
+                wait_until(lambda:page.locator('#drawer-title').text_content()=='Workflow classification','workflow classification drawer did not open')
+                assert 'does not rewrite parsed text, evidence, or extracted candidates' in page.locator('#drawer-body').inner_text()
+                page.locator('#workflow-classification-type').select_option('SUBMITTAL')
+                page.locator('#workflow-classification-identifier').fill('23-01')
+                assert page.locator('#workflow-classification-role').input_value()=='SUBMITTAL'
+                page.locator('#workflow-classification-status').select_option('PENDING')
+                page.locator('#workflow-classification-note').fill('Reviewer checked the cover sheet.')
+                page.get_by_role('button',name='Save correction',exact=True).click()
+                wait_until(lambda:page.locator('#drawer').evaluate('(n)=>n.hidden') and 'Submittal 23-01' in page.locator('#workflow-body').inner_text(),'manual workflow classification did not render')
+                assert 'Manual correction' in page.locator('#workflow-body').inner_text()
+                passed('Run-scoped workflow correction is explicit, audited and visible without reparsing or a model call')
+
                 page.locator('#filter').fill('Concrete')
                 filtered_before = page.locator('#results-body tr').count()
                 assert filtered_before > 0

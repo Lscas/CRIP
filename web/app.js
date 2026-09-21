@@ -50,6 +50,9 @@ async function refresh(){
   if(u.document_id&&/\.(?:eml|msg)$/i.test(u.name)&&['COMPLETE','DUPLICATE'].includes(u.state)){
    const attachments=elT('button','emailAttachments.open',{},'link evidence-button');attachments.onclick=error(()=>showEmailAttachments(u.document_id,u.name));verification.append(attachments);
   }
+  if(u.document_id&&['COMPLETE','DUPLICATE'].includes(u.state)){
+   const classification=elT('button','workflowClassification.open',{},'link evidence-button');classification.onclick=error(()=>showWorkflowClassification(u.document_id,u.name));verification.append(classification);
+  }
   tr.append(name,el('td',(u.size/1024/1024).toFixed(2)+' MB'),I.bindStatus(el('td'),u.state),verification);$('files-body').append(tr);
  });
  I.bindText($('file-total'),'files.total',{count:manifest.documents.length});
@@ -212,7 +215,7 @@ function renderWorkflows(){
  $('workflow-load-more').hidden=!more;$('workflow-load-more').disabled=!more;$('workflow-body').replaceChildren();
  if(!rows.length){const tr=el('tr');const td=elT('td','workflow.empty',{},'muted');td.colSpan=4;tr.append(td);$('workflow-body').append(tr);return;}
  rows.forEach(item=>{const tr=el('tr');const title=el('td');title.append(el('strong',workflowCodeLabel('kind',item.kind)+(item.identifier?' '+item.identifier:'')));if(item.kind==='EMAIL_ATTACHMENT'&&item.import_count>1)title.append(elT('small','workflow.importCount',{count:item.import_count}));
-  const documents=el('td');(item.members||[]).forEach(member=>{const a=el('a',member.file_name,'link evidence-button');a.href='/api/documents/'+member.document_id+'/file';a.target='_blank';a.rel='noopener';documents.append(a);const details=[member.role&&workflowCodeLabel('role',member.role),member.status&&workflowCodeLabel('status',member.status),member.source&&workflowCodeLabel('source',member.source)].filter(Boolean);if(details.length)documents.append(el('small',details.join(' · ')));});
+  const documents=el('td');(item.members||[]).forEach(member=>{const a=el('a',member.file_name,'link evidence-button');a.href='/api/documents/'+member.document_id+'/file';a.target='_blank';a.rel='noopener';documents.append(a);const details=[member.role&&workflowCodeLabel('role',member.role),member.status&&workflowCodeLabel('status',member.status),member.source&&workflowCodeLabel('source',member.source),member.classification_source&&I.t('workflowClassification.source.'+member.classification_source)].filter(Boolean);if(details.length)documents.append(el('small',details.join(' · ')));});
   const status=el('td',workflowCodeLabel('state',item.state),'badge '+(item.state==='AMBIGUOUS'?'warn':''));status.dataset.code=item.state;
   tr.append(title,status,documents,el('td',(item.warnings||[]).join(' ')));$('workflow-body').append(tr);
  });
@@ -252,6 +255,37 @@ async function showEmailAttachments(documentId,fileName){
   button.onclick=error(async()=>{button.disabled=true;await api(`/projects/${state.project}/email-attachment-imports`,'POST',{document_id:documentId,attachment_index:item.attachment_index,expected_sha256:item.sha256});$('drawer').hidden=true;toast(I.t('emailAttachments.imported',{name:item.name}));await refresh();});
   card.append(button);if(!item.importable)card.append(elT('small','emailAttachments.unsupported'));body.append(card);
  });
+}
+function classificationText(value){
+ const context=value.contexts?.[0];
+ return context?[context.workflow_type,context.identifier,context.role,context.status].filter(Boolean).join(' · '):(value.document_type||'UNKNOWN');
+}
+async function showWorkflowClassification(documentId,fileName){
+ if(!state.run){toast(I.t('workflowClassification.noRun'));return;}
+ const rid=state.run,data=await api(`/analysis-runs/${rid}/documents/${documentId}/workflow-classification`);
+ $('drawer').hidden=false;I.bindText($('drawer-title'),'workflowClassification.title');const body=$('drawer-body');body.replaceChildren();
+ body.append(el('h3',fileName),elT('p','workflowClassification.description',{},'muted'),elT('strong','workflowClassification.detected'),el('p',classificationText(data.detected)),elT('strong','workflowClassification.effective'),el('p',classificationText(data.effective)));
+ const form=el('form',null,'classification-form');
+ const typeSelect=el('select');typeSelect.id='workflow-classification-type';
+ ['DETECTED','OTHER','RFI','SUBMITTAL'].forEach(value=>typeSelect.append(optionT('workflowClassification.type.'+value,value)));
+ typeSelect.value=data.override.workflow_type;
+ const identifier=el('input');identifier.id='workflow-classification-identifier';identifier.maxLength=64;identifier.value=data.override.identifier||'';
+ const role=el('select');role.id='workflow-classification-role';
+ const status=el('select');status.id='workflow-classification-status';
+ const note=el('input');note.id='workflow-classification-note';note.maxLength=1000;note.value=data.override.note||'';
+ function addField(key,control){const label=el('label');label.append(elT('span',key),control);form.append(label);}
+ addField('workflowClassification.type',typeSelect);addField('workflowClassification.identifier',identifier);addField('workflowClassification.role',role);addField('workflowClassification.status',status);addField('workflowClassification.note',note);
+ function sync(){
+  const value=typeSelect.value,isRfi=value==='RFI',isSubmittal=value==='SUBMITTAL',active=isRfi||isSubmittal;
+  identifier.disabled=!active;role.disabled=!active;status.disabled=!active;role.replaceChildren();status.replaceChildren(optionT('workflowClassification.none'));
+  (isRfi?data.options.rfi_roles:isSubmittal?['SUBMITTAL']:[]).forEach(value=>role.append(new Option(workflowCodeLabel('role',value),value)));
+  (isRfi?data.options.rfi_statuses:isSubmittal?data.options.submittal_statuses:[]).forEach(value=>status.append(new Option(workflowCodeLabel('status',value),value)));
+  if(active){role.value=data.override.role||role.options[0]?.value||'';status.value=data.override.status||'';}else{identifier.value='';}
+ }
+ typeSelect.onchange=sync;sync();
+ const save=elT('button','workflowClassification.save',{},'primary');save.type='submit';form.append(save,elT('p','workflowClassification.viewOnly',{},'muted'));
+ form.onsubmit=error(async event=>{event.preventDefault();save.disabled=true;try{await api(`/analysis-runs/${rid}/documents/${documentId}/workflow-classification`,'POST',{expected_version:data.override.version,workflow_type:typeSelect.value,identifier:identifier.disabled?null:identifier.value,role:role.disabled?null:role.value,status:status.disabled||!status.value?null:status.value,note:note.value});$('drawer').hidden=true;await loadWorkflowPage(true);state.workflowsRun=rid;renderWorkflows();toast(I.t('workflowClassification.saved'));}finally{save.disabled=false;}});
+ body.append(form);
 }
 async function showRecord(row){
   const listDisplay=row.record.display;

@@ -524,6 +524,80 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     assert result['summary']['rfi_groups']==1 and before==after
     assert len(full_summary)>250_000 and projected_bytes and max(projected_bytes)<10_000
 
+
+def test_reviewer_workflow_classification_override_is_versioned_audited_and_reversible(
+        client,project):
+    uploaded=upload(client,project['id'],'RFI-42-question.txt',
+                    b'RFI 42\nQuestion:\nMay PVC be used?')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,uploaded['document_id'])
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
+    path=f'/api/analysis-runs/{rid}/documents/{uploaded["document_id"]}/workflow-classification'
+    stored=db.one('SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+                  (rid,uploaded['document_id']))['summary']
+    calls=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+
+    detected=client.get(path)
+    changed=client.post(path,json={'expected_version':0,'workflow_type':'SUBMITTAL',
+                                   'identifier':'23-01','role':'SUBMITTAL',
+                                   'status':'PENDING','note':'Reviewer checked the cover sheet.'})
+    conflict=client.post(path,json={'expected_version':0,'workflow_type':'OTHER',
+                                    'identifier':None,'role':None,'status':None,'note':''})
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+
+    assert detected.status_code==200
+    assert detected.json()['detected']['contexts'][0]['workflow_type']=='RFI'
+    assert detected.json()['override']=={'workflow_type':'DETECTED','identifier':None,
+                                         'role':None,'status':None,'version':0,
+                                         'note':'','updated_at':None}
+    assert changed.status_code==200 and changed.json()['override']['version']==1
+    assert changed.json()['effective']['contexts']==[
+        {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]
+    manual=next(item for item in items if item['kind']=='SUBMITTAL' and item['identifier']=='23-01')
+    assert manual['members'][0]['classification_source']=='MANUAL'
+    assert conflict.status_code==409
+    assert db.one('SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+                  (rid,uploaded['document_id']))['summary']==stored
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==calls
+    events=db.all('SELECT before_json,after_json,note FROM workflow_classification_events')
+    assert len(events)==1 and json.loads(events[0]['after_json'])['workflow_type']=='SUBMITTAL'
+
+    reset=client.post(path,json={'expected_version':1,'workflow_type':'DETECTED',
+                                 'identifier':None,'role':None,'status':None,
+                                 'note':'Return to detected classification.'})
+    restored=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    assert reset.status_code==200 and reset.json()['override']['version']==2
+    assert any(item['kind']=='RFI' and item['identifier']=='42' and
+               item['members'][0]['classification_source']=='DETECTED' for item in restored)
+    assert not any(item['kind']=='SUBMITTAL' and item['identifier']=='23-01' for item in restored)
+    assert db.one('SELECT COUNT(*) AS n FROM workflow_classification_events')['n']==2
+
+
+def test_workflow_classification_override_rejects_invalid_or_cross_run_values(client,project):
+    uploaded=upload(client,project['id'],'RFI-7.txt',b'RFI 7\nQuestion:\nConfirm clearance.')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,uploaded['document_id'])
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
+    path=f'/api/analysis-runs/{rid}/documents/{uploaded["document_id"]}/workflow-classification'
+    base={'expected_version':0,'workflow_type':'RFI','identifier':'door','role':'QUESTION',
+          'status':None,'note':''}
+
+    assert client.post(path,json=base).status_code==422
+    assert client.post(path,json={**base,'identifier':'8','role':'SUBMITTAL'}).status_code==422
+    assert client.post(path,json={**base,'workflow_type':'OTHER','identifier':'8',
+                                  'role':None}).status_code==422
+    other=client.post('/api/projects',json={'name':'Other project'}).json()
+    foreign=upload(client,other['id'],'other.txt',b'RFI 9\nQuestion:\nOther project.')
+    foreign_path=f'/api/analysis-runs/{rid}/documents/{foreign["document_id"]}/workflow-classification'
+    assert client.get(foreign_path).status_code==404
+    assert client.post(foreign_path,json={**base,'identifier':'9'}).status_code==404
+    assert db.one('SELECT COUNT(*) AS n FROM workflow_classification_overrides')['n']==0
+
+
 def test_chunk_limit(client,project):
     u=client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'x.txt','size':6000000}).json()
     assert client.put(f'/api/uploads/{u["id"]}/chunk',content=b'x'*(4*1024*1024+1)).status_code==413

@@ -1,0 +1,50 @@
+{
+  "change_id": "CR-0075",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-CLASS-001",
+    "FR-WORKFLOW-001",
+    "NFR-SECURITY-003"
+  ],
+  "summary": "Add a versioned, append-only-audited workflow classification overlay for individual documents in completed analysis runs.",
+  "decision_refs": [
+    "FR-CLASS-001 requires users to view and correct classification",
+    "The active goal requires better RFI/Submittal/Email adaptability",
+    "The current workflow index is explicitly read-only and exposes no correction path"
+  ],
+  "affected_paths": [
+    "migrations/006_workflow_classification_overrides.sql",
+    "app/db.py",
+    "app/main.py",
+    "app/workflows.py",
+    "web/**",
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py",
+    "tests/web/**",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "tasks/DEV-060.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0075.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py",
+    "tests/web/i18n.test.mjs",
+    "scripts/browser_i18n_smoke.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The approved FR-CLASS-001 acceptance criterion explicitly says users can view and correct classification.",
+  "known_limitations": [
+    "The correction changes only the current run's workflow relationship view; parser summaries, evidence and extracted candidates remain immutable.",
+    "Discipline, CSI, system, equipment, area and revision classification correction remain planned.",
+    "A correction does not establish approval authority, contractual precedence or semantic relationships.",
+    "Validation is synthetic and offline; no customer file, external provider or paid model is used."
+  ]
+}

@@ -246,6 +246,7 @@
         "tests/app/test_workflows.py",
         "tests/app/test_api.py",
         "tests/app/test_email_attachments.py",
+        "tests/app/test_verification.py",
         "scripts/browser_i18n_smoke.py"
       ],
       "contract_tests": [],
@@ -257,11 +258,12 @@
         "app/main.py",
         "app/runner.py",
         "migrations/005_upload_sources.sql",
+        "migrations/006_workflow_classification_overrides.sql",
         "web/index.html",
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across the selected Email body, valid digit-bearing Subject and filename into a bounded read-only index. Same-line metadata stays outside exact IDs; a known status must consume the complete value apart from terminal punctuation, so descriptions stay neutral. Distinct same-line and cross-type references cannot donate role/status across body-routed sections; canonical duplicates collapse and valid Subject priority remains. A workflow-like Subject without an accepted ID cannot suppress an exact body primary. Malformed thread tokens, nested messages and non-root related resources cannot manufacture mixed roles. Status conflicts stay ambiguous without precedence. Hash-only threads, selected attachments, SQLite projection and reviewer pagination remain deterministic and model-free."
+      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across the selected Email body, valid digit-bearing Subject and filename into a bounded index. Same-line metadata stays outside exact IDs; a known status must consume the complete value apart from terminal punctuation, so descriptions stay neutral. Distinct same-line and cross-type references cannot donate role/status across body-routed sections; canonical duplicates collapse and valid Subject priority remains. A workflow-like Subject without an accepted ID cannot suppress an exact body primary. Malformed thread tokens, nested messages and non-root related resources cannot manufacture mixed roles. Status conflicts stay ambiguous without precedence. Hash-only threads, selected attachments, SQLite projection and reviewer pagination remain deterministic and model-free. A reviewer may apply or reset an exact current-run RFI/Submittal/Other overlay; detected summaries and evidence remain immutable, every write is version-checked and audited, and no parse/model/cost action starts."
     },
     {
       "requirement_id": "FR-INGEST-005",
@@ -329,14 +331,18 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [],
-      "test_scope": "not_implemented",
+      "test_scope": "local_offline_partial_workflow_classification_correction",
       "implemented_product_paths": [
         "app/parsers.py",
         "app/assemble.py",
+        "app/workflows.py",
+        "app/main.py",
+        "migrations/006_workflow_classification_overrides.sql",
+        "web/app.js",
         "spec/schemas/classification.schema.json"
       ],
-      "verification_report": null,
-      "progress_note": "Explicit RFI roles, complete Submittal status values and EML source roles are preserved before extraction; same-line metadata is separated from its exact ID and keyword-prefixed prose stays neutral. Exact PDF scope persists across continuation pages until another exact heading. Full semantic classification, discipline/CSI assignment and user correction remain planned."
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Explicit RFI roles, complete Submittal status values and EML source roles are preserved before extraction; same-line metadata is separated from its exact ID and keyword-prefixed prose stays neutral. Exact PDF scope persists across continuation pages until another exact heading. A reviewer can compare detected/effective workflow metadata and apply or reset a versioned current-run exact RFI/Submittal/Other overlay without mutating parser evidence or candidates. Full semantic classification and discipline/CSI/system/equipment/area/revision correction remain planned."
     },
     {
       "requirement_id": "FR-REVISION-001",
@@ -964,11 +970,18 @@
       "planned_product_modules": [
         "app/security"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_verification.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial_workflow_classification_audit",
+      "implemented_product_paths": [
+        "app/main.py",
+        "migrations/006_workflow_classification_overrides.sql"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Workflow-classification corrections record actor, time, run/document target, before/after values and reviewer note in append-only events. Complete upload, analysis, export and deletion audit coverage remains planned."
     },
     {
       "requirement_id": "NFR-SECURITY-003",

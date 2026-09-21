@@ -144,11 +144,11 @@ Parse RFC-style EML and bounded local Outlook MSG headers and visible body text 
 
 优先级：P0；状态：implemented
 
-Build a read-only reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
+Build a bounded reviewer index for exact RFI, Submittal and email relationships without model calls or guessed matches.
 
-- Digit-bearing RFI/Submittal aliases normalize identically; exact headings assign RFI roles, including an allowlisted same-line suffix; known statuses stay reviewer metadata and uncertainty stays ambiguous.
-- Each exact Submittal ID retains complete known dispositions from Status, Review Response, Final Response or Submittal Response labels; keyword-prefixed prose stays neutral, references link to the primary, conflicts remain ambiguous, and no final-response precedence is inferred.
-- Email routing ranks a Subject only when it contains a valid digit-bearing workflow ID, then the earliest body heading, then filename; other content IDs are reference-only, while addresses and From, To, Cc and Date cannot create groups or donate role/status.
+- Normalize exact digit-bearing RFI/Submittal aliases; preserve explicit roles, allowlisted same-line metadata, statuses and ambiguity.
+- Retain each exact Submittal disposition; keep keyword-prefixed prose neutral, link exact references, preserve conflicts and infer no precedence.
+- Route Email by a valid digit-bearing Subject, then earliest body heading, then filename; other IDs are references and routing headers cannot donate role/status.
 - Email threads link only exact hashed relationships from bounded RFC-style angle-bracketed Message-ID tokens; arbitrary header words cannot link messages, external references do not expose raw identifiers, and a message that references its own exact ID is ambiguous.
 - An email containing multiple distinct Message-ID values is marked ambiguous, while an email with no Message-ID remains a valid standalone item.
 - A multi-value In-Reply-To header links every locally present exact accepted hashed identifier into the same review thread without semantic inference.
@@ -156,7 +156,7 @@ Build a read-only reviewer index for exact RFI, Submittal and email relationship
 - An explicitly imported EML or MSG attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
 - The browser shows loaded and total workflow-group counts, requests subsequent bounded 500-group pages only when the reviewer asks, and appends them without duplicate group identifiers.
-- The bounded reviewer endpoint and page are read-only and create no model call or cost entry.
+- Reviewer corrections are versioned current-run RFI/Submittal/Other overlays with append-only events; detected summaries, evidence and candidates remain immutable, and no parse, model or cost action starts.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import
 
@@ -199,6 +199,7 @@ Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly impor
 
 - 用户可查看并修正分类。
 - Deterministic parsing preserves explicit RFI question/response, Submittal status and EML body/header source roles before semantic classification, including allowlisted metadata immediately after an exact same-line identifier.
+- For a completed or partial run, a reviewer can compare detected and effective workflow metadata, then apply or reset an exact RFI/Submittal/Other overlay with optimistic versioning and an append-only audit event; discipline, CSI, system, equipment, area and revision correction remain planned.
 
 ## FR-REVISION-001 · 内部日期最新优先
 
@@ -528,6 +529,7 @@ A local customer can start CIRP with a customer-selected OpenAI-compatible text 
 上传、分析、审核、导出和删除均记录审计事件。
 
 - 事件包含 actor、time、object、action。
+- A workflow-classification correction records actor, time, run/document object, before/after values and the review note in an append-only event.
 
 ## NFR-RELIABILITY-001 · 任务幂等可恢复
 

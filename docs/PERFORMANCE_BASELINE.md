@@ -90,3 +90,7 @@ A synthetic EML with two supported attachments now needs one parse and one expli
 ## CR-0074 DOCX workflow-table accuracy fixture
 
 One synthetic Word table containing `RFI 42 > QUESTION` followed by `SUBMITTAL 23-01 > STATUS: APPROVED AS NOTED` previously produced one fragment labeled entirely as the Submittal. It now produces separate evidence scopes with the original native table element and non-overlapping line ranges. This is an offline boundary check, not a complete Word-structure or construction-accuracy benchmark.
+
+## CR-0075 workflow-classification correction fixture
+
+A synthetic run changes `RFI 42` to `Submittal 23-01 / Pending`, rejects a stale version and resets it. Parser bytes and model-call count stay unchanged; two events retain before/after values. The browser repeats this with zero model or external calls. This is structural, not an accuracy benchmark.
