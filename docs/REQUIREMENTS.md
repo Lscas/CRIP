@@ -155,8 +155,8 @@ Build a bounded reviewer index for exact RFI, Submittal and email relationships 
 - Exact local email ancestors appear before replies with deterministic sibling ordering; a parent/reference cycle is ambiguous and retains every member.
 - An explicitly imported EML or MSG attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
-- The browser shows loaded and total workflow-group counts, requests subsequent bounded 500-group pages only when the reviewer asks, and appends them without duplicate group identifiers.
-- Reviewer corrections are versioned current-run RFI/Submittal/Other overlays with append-only events; detected summaries, evidence, Email attachment provenance and candidates remain immutable, and no parse, model or cost action starts.
+- Use duplicate-free 500-group pages; terminal runs reuse a bounded process-local index and active runs remain uncached.
+- Versioned RFI/Submittal/Other corrections append audit events and invalidate the index; summaries, evidence, Email provenance and candidates stay immutable, with no parse, model or cost action.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import
 
@@ -199,7 +199,7 @@ Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly impor
 
 - 用户可查看并修正分类。
 - Deterministic parsing preserves explicit RFI question/response, Submittal status and EML body/header source roles before semantic classification, including allowlisted metadata immediately after an exact same-line identifier.
-- For a completed or partial run, a reviewer can compare detected and effective workflow metadata, then apply or reset an exact RFI/Submittal/Other overlay with optimistic versioning and an append-only audit event without hiding parsed Email attachment provenance; discipline, CSI, system, equipment, area and revision correction remain planned.
+- For a completed or partial run, a reviewer can apply or reset an exact RFI/Submittal/Other overlay with optimistic versioning, append-only audit and immediate workflow-index invalidation without hiding parsed Email attachment provenance; other classification dimensions remain planned.
 
 ## FR-REVISION-001 · 内部日期最新优先
 

@@ -509,6 +509,10 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     monkeypatch.setattr(db,'all',measured_all)
 
     before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    active=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    active_repeat=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    assert active.json()==active_repeat.json() and len(projected_bytes)==2
+    projected_bytes.clear();db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
     response=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
     repeated=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
     second=client.get(f'/api/analysis-runs/{rid}/workflows?offset=1&limit=1')
@@ -522,7 +526,7 @@ def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,
     assert result['items'][0]['group_id']!=second_result['items'][0]['group_id']
     assert result['items'][0]['kind']=='RFI' and result['items'][0]['state']=='LINKED'
     assert result['summary']['rfi_groups']==1 and before==after
-    assert len(full_summary)>250_000 and projected_bytes and max(projected_bytes)<10_000
+    assert len(full_summary)>250_000 and len(projected_bytes)==1 and max(projected_bytes)<10_000
 
 
 def test_reviewer_workflow_classification_override_is_versioned_audited_and_reversible(
@@ -540,6 +544,7 @@ def test_reviewer_workflow_classification_override_is_versioned_audited_and_reve
     calls=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
 
     detected=client.get(path)
+    baseline=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
     changed=client.post(path,json={'expected_version':0,'workflow_type':'SUBMITTAL',
                                    'identifier':'23-01','role':'SUBMITTAL',
                                    'status':'PENDING','note':'Reviewer checked the cover sheet.'})
@@ -548,6 +553,7 @@ def test_reviewer_workflow_classification_override_is_versioned_audited_and_reve
     items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
 
     assert detected.status_code==200
+    assert any(item['kind']=='RFI' and item['identifier']=='42' for item in baseline)
     assert detected.json()['detected']['contexts'][0]['workflow_type']=='RFI'
     assert detected.json()['override']=={'workflow_type':'DETECTED','identifier':None,
                                          'role':None,'status':None,'version':0,

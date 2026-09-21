@@ -93,4 +93,8 @@ One synthetic Word table containing `RFI 42 > QUESTION` followed by `SUBMITTAL 2
 
 ## CR-0075 workflow-classification correction fixture
 
-A synthetic run changes `RFI 42` to `Submittal 23-01 / Pending`, rejects a stale version and resets it. Parser bytes and model-call count stay unchanged; two events retain before/after values. The browser repeats this with zero model or external calls. This is structural, not an accuracy benchmark.
+A synthetic run changes then resets `RFI 42`; stale writes fail, audit values remain, and parser bytes/model calls do not change. Offline structural check only.
+
+## CR-0077 terminal workflow-index fixture
+
+Terminal first/repeated/next pages build once, not three times; active reads stay uncached and corrections clear the index. Offline fixture.

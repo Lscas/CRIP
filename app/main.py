@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hmac
 import logging
+from functools import lru_cache
 from decimal import Decimal
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -253,6 +254,33 @@ def create_app(settings:Settings|None=None)->FastAPI:
                         'takeoffs':summary.get('takeoffs',[]),
                         'geometry_summaries':summary.get('geometry_summaries',[])})
         return out
+    def build_run_workflow_index(rid:str,run:dict):
+        rows=db.all(f'''SELECT r.document_id,d.name,
+                       json_extract(r.summary,{WORKFLOW_SUMMARY_SQL_PATHS}) AS workflow_values
+                       FROM document_results r JOIN documents d ON d.id=r.document_id
+                       WHERE r.run_id=? ORDER BY d.name''',(rid,))
+        overrides={row['document_id']:row for row in db.all(
+            '''SELECT document_id,workflow_type,identifier,role,status,version,note,updated_at
+               FROM workflow_classification_overrides WHERE run_id=?''',(rid,))}
+        for row in rows:
+            summary=projected_workflow_summary(row.pop('workflow_values'));override=overrides.get(row['document_id'])
+            row['summary']=apply_workflow_classification(summary,override)
+            row['classification_source']='MANUAL' if override and override['workflow_type']!='DETECTED' else 'DETECTED'
+        links=db.all('''SELECT s.source_kind,s.source_document_id,u.document_id,s.source_detail
+                        FROM upload_sources s JOIN uploads u ON u.id=s.upload_id
+                        JOIN document_results child ON child.run_id=? AND child.document_id=u.document_id
+                        JOIN document_results parent ON parent.run_id=? AND parent.document_id=s.source_document_id
+                        WHERE u.project_id=? AND s.source_kind='EMAIL_ATTACHMENT'
+                        ORDER BY s.source_document_id,u.document_id,s.upload_id''',(rid,rid,run['project_id']))
+        for link in links:
+            detail=json.loads(link.pop('source_detail'));link.update({
+                'attachment_index':detail.get('attachment_index'),
+                'content_type':detail.get('content_type')})
+        return build_workflow_index(rows,links)
+    # ponytail: eight terminal runs bound memory; add shared persistence only for multi-process deployment.
+    @lru_cache(maxsize=8)
+    def terminal_workflow_index(rid:str):
+        return build_run_workflow_index(rid,runner.get(rid))
     def classification_payload(rid:str,did:str):
         run=runner.get(rid)
         row=db.one('''SELECT r.summary,d.name FROM document_results r
@@ -303,33 +331,15 @@ def create_app(settings:Settings|None=None)->FastAPI:
                 (id,run_id,document_id,actor,before_json,after_json,note,created_at)
                 VALUES(?,?,?,?,?,?,?,?)''',
                 (uid('WCLASS'),rid,did,'local-user',dumps(before),dumps(saved),data.note,timestamp))
+        terminal_workflow_index.cache_clear()
         return classification_payload(rid,did)
     @app.get('/api/analysis-runs/{rid}/workflows')
     def run_workflows(rid:str,offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
         """Read-only deterministic workflow relationships; never calls a model."""
         run=runner.get(rid)
-        rows=db.all(f'''SELECT r.document_id,d.name,
-                       json_extract(r.summary,{WORKFLOW_SUMMARY_SQL_PATHS}) AS workflow_values
-                       FROM document_results r JOIN documents d ON d.id=r.document_id
-                       WHERE r.run_id=? ORDER BY d.name''',(rid,))
-        overrides={row['document_id']:row for row in db.all(
-            '''SELECT document_id,workflow_type,identifier,role,status,version,note,updated_at
-               FROM workflow_classification_overrides WHERE run_id=?''',(rid,))}
-        for row in rows:
-            summary=projected_workflow_summary(row.pop('workflow_values'));override=overrides.get(row['document_id'])
-            row['summary']=apply_workflow_classification(summary,override)
-            row['classification_source']='MANUAL' if override and override['workflow_type']!='DETECTED' else 'DETECTED'
-        links=db.all('''SELECT s.source_kind,s.source_document_id,u.document_id,s.source_detail
-                        FROM upload_sources s JOIN uploads u ON u.id=s.upload_id
-                        JOIN document_results child ON child.run_id=? AND child.document_id=u.document_id
-                        JOIN document_results parent ON parent.run_id=? AND parent.document_id=s.source_document_id
-                        WHERE u.project_id=? AND s.source_kind='EMAIL_ATTACHMENT'
-                        ORDER BY s.source_document_id,u.document_id,s.upload_id''',(rid,rid,run['project_id']))
-        for link in links:
-            detail=json.loads(link.pop('source_detail'));link.update({
-                'attachment_index':detail.get('attachment_index'),
-                'content_type':detail.get('content_type')})
-        result=build_workflow_index(rows,links);items=result['items'];page=items[offset:offset+limit]
+        result=(terminal_workflow_index(rid) if run['status'] in ('PARTIAL','COMPLETED')
+                else build_run_workflow_index(rid,run))
+        items=result['items'];page=items[offset:offset+limit]
         return {'items':page,'summary':result['summary'],
                 'pagination':{'offset':offset,'limit':limit,'total':len(items),
                               'next_offset':offset+len(page) if offset+len(page)<len(items) else None}}

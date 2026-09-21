@@ -263,7 +263,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across the selected Email body, valid digit-bearing Subject and filename into a bounded index. Same-line metadata stays outside exact IDs; a known status must consume the complete value apart from terminal punctuation, so descriptions stay neutral. Distinct same-line and cross-type references cannot donate role/status across body-routed sections; canonical duplicates collapse and valid Subject priority remains. A workflow-like Subject without an accepted ID cannot suppress an exact body primary. Malformed thread tokens, nested messages and non-root related resources cannot manufacture mixed roles. Status conflicts stay ambiguous without precedence. Hash-only threads, selected attachments, SQLite projection and reviewer pagination remain deterministic and model-free. A reviewer may apply or reset an exact current-run RFI/Submittal/Other overlay; immutable Email metadata retains explicit attachment provenance, every write is version-checked and audited, and no parse/model/cost action starts."
+      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across selected Email body, valid Subject and filename into a bounded index. Same-line metadata stays outside IDs; complete known statuses remain neutral metadata without precedence. Cross-scope references cannot donate role/status; malformed threads and inert resources cannot manufacture roles. Hash-only threads, selected attachments and SQLite projection stay model-free. Terminal-run pages reuse one bounded process-local index; active runs stay fresh, and a versioned/audited classification correction invalidates the cache while immutable Email provenance remains visible."
     },
     {
       "requirement_id": "FR-INGEST-005",
@@ -342,7 +342,7 @@
         "spec/schemas/classification.schema.json"
       ],
       "verification_report": "docs/IMPLEMENTATION_STATUS.md",
-      "progress_note": "Explicit RFI roles, complete Submittal status values and EML source roles are preserved before extraction; same-line metadata is separated from its exact ID and keyword-prefixed prose stays neutral. Exact PDF scope persists across continuation pages until another exact heading. A reviewer can apply or reset a versioned current-run RFI/Submittal/Other overlay without mutating evidence, candidates or parsed Email attachment provenance. Full semantic classification and other classification dimensions remain planned."
+      "progress_note": "Explicit RFI roles, complete Submittal statuses and EML source roles are preserved before extraction; exact PDF scope persists across continuation pages. A reviewer can apply/reset a versioned current-run RFI/Submittal/Other overlay; it invalidates the terminal index without mutating evidence, candidates or Email provenance. Full semantic classification and other dimensions remain planned."
     },
     {
       "requirement_id": "FR-REVISION-001",
