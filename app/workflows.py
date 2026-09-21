@@ -282,12 +282,13 @@ def _email_attachments(documents: list[dict],links: list[dict]) -> tuple[list[di
         parent_id=raw.get('source_document_id');child_id=raw.get('document_id');index=raw.get('attachment_index')
         if (parent_id not in by_id or child_id not in by_id or parent_id==child_id
                 or type(index) is not int or index<0):continue
-        if by_id[parent_id]['document_type']!='EMAIL':continue
+        parent=by_id[parent_id]
+        if parent['document_type']!='EMAIL' and parent['email_thread'] is None:continue
         identity=(parent_id,child_id,index)
         if identity in grouped:
             grouped[identity]['import_count']+=1
             continue
-        parent=by_id[parent_id];child=by_id[child_id]
+        child=by_id[child_id]
         grouped[identity]={'group_id':_key('ATTACHMENT',parent_id,child_id,str(index)),
             'kind':'EMAIL_ATTACHMENT','identifier':None,'state':'LINKED',
             'members':[

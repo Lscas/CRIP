@@ -156,7 +156,7 @@ Build a bounded reviewer index for exact RFI, Submittal and email relationships 
 - An explicitly imported EML or MSG attachment links to its parent email inside the analysis-run workflow view, without inheriting workflow role, approval or authority.
 - The reviewer endpoint projects only workflow-relevant parser-summary fields before Python decoding and does not load page, vision, CAD or geometry arrays.
 - The browser shows loaded and total workflow-group counts, requests subsequent bounded 500-group pages only when the reviewer asks, and appends them without duplicate group identifiers.
-- Reviewer corrections are versioned current-run RFI/Submittal/Other overlays with append-only events; detected summaries, evidence and candidates remain immutable, and no parse, model or cost action starts.
+- Reviewer corrections are versioned current-run RFI/Submittal/Other overlays with append-only events; detected summaries, evidence, Email attachment provenance and candidates remain immutable, and no parse, model or cost action starts.
 
 ## FR-INGEST-005 · Read-only Autodesk and Procore import
 
@@ -180,7 +180,7 @@ Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly impor
 - One explicit request may import 1 to 100 selected attachments; the email is parsed once and every index and SHA-256 is validated before any upload is created.
 - Every selected attachment passes through project capacity, chunking, hashing and duplicate-content controls and never starts analysis automatically.
 - Every import event preserves the parent email, attachment index, content type and expected SHA-256 even when the document content is deduplicated.
-- Duplicate imports are retained in the upload ledger but collapse to one parent-email/attachment relationship with an import count in workflow review; a relationship is displayed only when its parent document parsed as email.
+- Duplicate imports collapse to one counted parent-email/attachment relationship; immutable parsed-Email metadata keeps it visible even when a run overlay changes the parent's effective workflow classification.
 - Attached emails require another explicit selection before their body or nested attachments are visible; neither may contribute to the parent email analysis, and active content and remote resources remain inert.
 
 ## FR-DATA-001 · 统一文档模型
@@ -199,7 +199,7 @@ Let a reviewer inspect inert EML or Outlook MSG attachments and explicitly impor
 
 - 用户可查看并修正分类。
 - Deterministic parsing preserves explicit RFI question/response, Submittal status and EML body/header source roles before semantic classification, including allowlisted metadata immediately after an exact same-line identifier.
-- For a completed or partial run, a reviewer can compare detected and effective workflow metadata, then apply or reset an exact RFI/Submittal/Other overlay with optimistic versioning and an append-only audit event; discipline, CSI, system, equipment, area and revision correction remain planned.
+- For a completed or partial run, a reviewer can compare detected and effective workflow metadata, then apply or reset an exact RFI/Submittal/Other overlay with optimistic versioning and an append-only audit event without hiding parsed Email attachment provenance; discipline, CSI, system, equipment, area and revision correction remain planned.
 
 ## FR-REVISION-001 · 内部日期最新优先
 

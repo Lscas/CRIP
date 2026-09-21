@@ -1,7 +1,8 @@
 """Deterministic workflow relationship index; no provider calls."""
 import json
 
-from app.workflows import build_workflow_index,normalize_identifier,projected_workflow_summary
+from app.workflows import (apply_workflow_classification,build_workflow_index,
+                           normalize_identifier,projected_workflow_summary)
 
 
 def row(did,name,**summary):
@@ -253,3 +254,24 @@ def test_attachment_relationship_requires_an_email_parent():
           'attachment_index':0,'content_type':'application/pdf'}
 
     assert not build_workflow_index(rows,[link])['summary']['email_attachment_links']
+
+
+def test_workflow_correction_does_not_hide_parsed_email_attachment_provenance():
+    detected={'document_type':'EMAIL','email_content':{'current_body_chars':20},
+              'email_thread':{'message_key':None,'parent_message_key':None,'reference_keys':[]}}
+    link={'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL','document_id':'ATT',
+          'attachment_index':0,'content_type':'application/pdf'}
+    overrides=[
+        {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'CLOSED'},
+        {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+        {'workflow_type':'OTHER','identifier':None,'role':None,'status':None},
+    ]
+
+    for override in overrides:
+        effective=apply_workflow_classification(detected,override)
+        result=build_workflow_index([
+            {'document_id':'MAIL','name':'response.eml','summary':effective},
+            row('ATT','attachment.pdf',document_type='OTHER'),
+        ],[link])
+        attachment=next(item for item in result['items'] if item['kind']=='EMAIL_ATTACHMENT')
+        assert attachment['members'][0]['document_id']=='MAIL'

@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 377,
+  "file_count_excluding_manifest": 379,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -47,13 +47,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 34854,
-      "sha256": "8c7a85f7f4cae183ac9f9465b5295e452ac0b1fb723b2cae147f2d4e3de6517e"
+      "bytes": 35154,
+      "sha256": "5603d4702bda632ec0b0bf3d72a70b04e6a9418261ec97255d109ede2f38dea7"
     },
     {
       "path": "README.md",
-      "bytes": 14089,
-      "sha256": "78a6d43c0ea9bb5aad2dbd344944aabdd7cea9d2817035f068d5ea5ddebb08ca"
+      "bytes": 14059,
+      "sha256": "fd2e5e5246838c527a443678c32684a27706eddfa5524d5d946b5c0e38e65d94"
     },
     {
       "path": "VERSION",
@@ -182,8 +182,8 @@
     },
     {
       "path": "app/workflows.py",
-      "bytes": 22854,
-      "sha256": "574dd91f362f940112f124949bc0f41a649a643febfa890f246d3607ce5ab342"
+      "bytes": 22887,
+      "sha256": "8dc6e8db7df51d6d4e9a8ceb27d0c8e05f8fcd6acaab00edda953d52c7847c26"
     },
     {
       "path": "baseline/requirements.v0.1.0.json",
@@ -566,6 +566,11 @@
       "sha256": "88481a3a9abec6530e19986585950963f135f875c00ebb10808d42196430a751"
     },
     {
+      "path": "changes/CR-0076.json",
+      "bytes": 1517,
+      "sha256": "47035df335ea2c674b312a86f4cf1c2b30b04c7fdf519a354a2194afca4d4cf1"
+    },
+    {
       "path": "config/assembly_rules.json",
       "bytes": 1239,
       "sha256": "60011fb0cd460307099ddba8327ebf2858908e061d9d41668f8a8bf6b52ba8a6"
@@ -667,8 +672,8 @@
     },
     {
       "path": "docs/IMPLEMENTATION_STATUS.md",
-      "bytes": 13152,
-      "sha256": "2a9cf107255d9334e1ab37387f9119064e78ded8422a659fafd0590570cec510"
+      "bytes": 13200,
+      "sha256": "a29b55b70c6520bccae4449a9548f664b563d1d8ceb3c1889e8314fedf04116f"
     },
     {
       "path": "docs/LOCAL_DEPLOY.md",
@@ -702,8 +707,8 @@
     },
     {
       "path": "docs/PRODUCT_SPEC.md",
-      "bytes": 27133,
-      "sha256": "f409257314bf4992c6a297ab60728e5767c75ae4ec12f3298e85aaecfee04232"
+      "bytes": 27154,
+      "sha256": "25e4e33b486c524e384b66e87eca864fe8389e0557b0a4179d7842fa22c2bab0"
     },
     {
       "path": "docs/PROVIDER_INTEGRATION.md",
@@ -722,8 +727,8 @@
     },
     {
       "path": "docs/REQUIREMENTS.md",
-      "bytes": 41717,
-      "sha256": "bd1553d88acee5fee7751e136138878cee2ed84f1c1814069bd1ed12ce32ad83"
+      "bytes": 41780,
+      "sha256": "e0352ac44413269f7388367dcef45cf3b6144d3157027f0e324aecb923e62403"
     },
     {
       "path": "docs/REVIEW_RESOLUTION.md",
@@ -1292,8 +1297,8 @@
     },
     {
       "path": "spec/requirements.json",
-      "bytes": 70415,
-      "sha256": "9c0d6e62e2b05ef9c989c36cd7426d019f7f5141c27b80c9dde73b001e825d6e"
+      "bytes": 70478,
+      "sha256": "f697ccbbeedacae3a8b51f3c4963e1ee56ce7c2838e5d518d42066c29e356f68"
     },
     {
       "path": "spec/schemas/change-record.schema.json",
@@ -1372,8 +1377,8 @@
     },
     {
       "path": "spec/traceability.json",
-      "bytes": 62489,
-      "sha256": "05e138445db10c6bf8124a4b9b0e54eeee5c728da79642b889bdc5770bd0365e"
+      "bytes": 62350,
+      "sha256": "b452c1aa2535e2cc62e4e249478ca3897921b6921bc876542c4bb63278ffc9e9"
     },
     {
       "path": "start-custom-model.ps1",
@@ -1716,6 +1721,11 @@
       "sha256": "1786f9c0a16fb1a69b3e216cb2a0787449d4c561affb8c8f885acc0434731cc8"
     },
     {
+      "path": "tasks/DEV-061.json",
+      "bytes": 1910,
+      "sha256": "d6f02d04b3fe73dee2b8ba84b3f84a5fa7176cfeb90fcb40537e3e418bdf897d"
+    },
+    {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",
       "bytes": 833224,
       "sha256": "8cded5162ea2b5d851dde61fbd24806dd9137d6af4a6e31d1ef1a346541a3fc3"
@@ -1827,8 +1837,8 @@
     },
     {
       "path": "tests/app/test_workflows.py",
-      "bytes": 13485,
-      "sha256": "341642abb9354a9e195686398eee73ec40e61ae61608ed0231c92adfda04b6f4"
+      "bytes": 14702,
+      "sha256": "3de30042b174945a46cb0addb0840cceb1a403f0bd70c8ebce39fb50c2878082"
     },
     {
       "path": "tests/deploy/worker.test.mjs",
@@ -1877,8 +1887,8 @@
     },
     {
       "path": "web/i18n.js",
-      "bytes": 51731,
-      "sha256": "769d40a519d1baf7d691378a7f6012efca05117b3c4a5d5bafaf719508666e8e"
+      "bytes": 51748,
+      "sha256": "d9537d56afdb03d4949b30da2bdc19ef6358aee9731d0c653749e4f1cdf9cdef"
     },
     {
       "path": "web/index.html",

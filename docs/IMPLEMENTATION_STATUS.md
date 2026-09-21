@@ -19,7 +19,7 @@ EML: one body/related root; resources/history/signatures/nested messages stay in
 
 RFI角色只由明确Question/Response形成，UNKNOWN保持中性。Submittal正文与精确引用为LINKED；邮件自引用为AMBIGUOUS；附件关系只来自EMAIL父文档。
 Email线程只哈希有界`<local@domain>`头部token；其他值不建关系。祖先优先；循环/多Message-ID为AMBIGUOUS且不猜正文/日期。无有效ID仍独立显示。
-Workflow端点用SQLite JSON投影九个关系字段，不载入重数组；2,000页/300次合成基准快2.35×。网页每批≤500组，按需去重。当前Run可版本化修正RFI/Submittal/Other并追加审计；检测数据不变且无解析、模型或费用。其他分类维度仍未完成。
+Workflow端点用SQLite JSON投影九个关系字段，不载入重数组；2,000页/300次合成基准快2.35×。网页每批≤500组，按需去重。当前Run可版本化修正RFI/Submittal/Other并追加审计；不可变邮件元数据确保附件来源不因覆盖层消失，且无解析、模型或费用。其他分类维度仍未完成。
 
 默认演示模式只分析明确的DEMO标记；普通真实资料不会伪造材料清单。真实API需用户自行配置密钥、确认价格和开启开关，所有输出仍需审核。当前结果全部标为PARTIAL，不能声称全项目已经完整审查。
 
