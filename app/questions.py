@@ -81,6 +81,8 @@ _NUMERIC_RFI = re.compile(
 _STATUS_INTENT = re.compile(
     r'(?i)\b(?:status|disposition|approved|rejected|pending|open|closed|answered|'
     r'reviewed|void|revise\s+(?:and|/)\s*resubmit)\b')
+_DATE_QUESTION_INTENT = re.compile(r'(?i)\b(?:when|date)\b')
+_STATUS_FIELD_INTENT = re.compile(r'(?i)\b(?:status|disposition)\b')
 _WORKFLOW_COUNT_CATEGORY = r'(?:rfis|requests\s+for\s+information|submittals|e-?mails)'
 _WORKFLOW_COUNT_LIST = rf'{_WORKFLOW_COUNT_CATEGORY}(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+){_WORKFLOW_COUNT_CATEGORY})*'
 _WORKFLOW_COUNT_QUESTION = re.compile(
@@ -168,6 +170,34 @@ _DAY_MONTH_DATE = re.compile(
     rf'(?P<month>{_MONTH_WORD})\.?(?:,\s*|\s+)(?P<year>\d{{4}})(?!\w)')
 _SLASH_DATE = re.compile(
     r'(?<!\w)(?P<first>\d{1,2})/(?P<second>\d{1,2})/(?P<year>\d{4})(?!\w)')
+_DATE_ROLE_LABELS = (
+    ('DUE',r'(?:response\s+due(?:\s+date)?|(?:required|expected)\s+response\s+date|'
+           r'due(?!\s+to\b)(?:\s+date)?)'),
+    ('ISSUED',r'(?:issue\s+date|date\s+issued|issued)'),
+    ('SUBMITTED',r'(?:submission\s+date|date\s+submitted|submitted)'),
+    ('RECEIVED',r'(?:receipt\s+date|date\s+received|received)'),
+    ('SENT',r'(?:sent\s+date|date\s+sent|sent)'),
+    ('REVIEWED',r'(?:review\s+date|date\s+reviewed|reviewed)'),
+    ('APPROVED',r'(?:approval\s+date|date\s+approved|approved(?:\s+as\s+noted)?)'),
+    ('REVISION',r'(?:revision\s+date|rev(?:ision)?\.?\s+date|date\s+revised|revised)'),
+    ('RESPONSE',r'(?:response\s+(?:date|issued)|answer\s+date|date\s+answered|'
+                r'answered|responded)'),
+)
+_DATE_ROLE_PREFIXES = tuple(
+    (role,re.compile(rf'(?<!\w){label}(?!\w)(?:\s+(?:is|was|on))?\s*[:=-]?\s*$',re.I))
+    for role,label in _DATE_ROLE_LABELS)
+_DATE_ROLE_SUFFIXES = tuple(
+    (role,re.compile(rf'^\s*(?:(?:is|was)\s+)?(?:the\s+)?{label}(?!\w)',re.I))
+    for role,label in _DATE_ROLE_LABELS)
+_DATE_ROLE_ANY = tuple(
+    (role,re.compile(rf'(?<!\w){label}(?!\w)',re.I))
+    for role,label in _DATE_ROLE_LABELS)
+_DATE_ROLE_DISPOSITIONS = {
+    'SUBMITTED':frozenset({'SUBMITTED','PENDING'}),
+    'REVIEWED':frozenset({'REVIEWED'}),
+    'APPROVED':frozenset({'APPROVED','APPROVED_AS_NOTED'}),
+    'RESPONSE':frozenset({'ANSWERED'}),
+}
 _DISPOSITION_PHRASES = (
     (re.compile(r'(?i)\bnot\s+yet\s+approved\b'),'NOT_APPROVED',
      frozenset({'NOT_APPROVED'})),
@@ -714,26 +744,71 @@ def _numeric_values(text: str) -> set[str]:
     return values
 
 
-def _date_values(text: str) -> set[str]:
-    """Canonicalize explicit full dates without interpreting slash order."""
-    values={
-        f"YMD:{int(match['year'])}-{int(match['month'])}-{int(match['day'])}"
+def _date_occurrences(text: str) -> list[tuple[int,int,str]]:
+    values=[
+        (match.start(),match.end(),
+         f"YMD:{int(match['year'])}-{int(match['month'])}-{int(match['day'])}")
         for match in _ISO_DATE.finditer(text)
-    }
+    ]
     for pattern in (_MONTH_DAY_DATE,_DAY_MONTH_DATE):
         for match in pattern.finditer(text):
             month=_MONTHS.index(match['month'].casefold()[:3])+1
-            values.add(f"YMD:{int(match['year'])}-{month}-{int(match['day'])}")
-    values.update(
-        f"SLASH:{int(match['first'])}/{int(match['second'])}/{int(match['year'])}"
+            values.append((match.start(),match.end(),
+                           f"YMD:{int(match['year'])}-{month}-{int(match['day'])}"))
+    values.extend(
+        (match.start(),match.end(),
+         f"SLASH:{int(match['first'])}/{int(match['second'])}/{int(match['year'])}")
         for match in _SLASH_DATE.finditer(text)
     )
+    return sorted(set(values))
+
+
+def _date_values(text: str) -> set[str]:
+    """Canonicalize explicit full dates without interpreting slash order."""
+    return {value for _,_,value in _date_occurrences(text)}
+
+
+def _date_role_values(text: str) -> set[tuple[str,str]]:
+    occurrences=_date_occurrences(text);values=set()
+    for start,end,date_value in occurrences:
+        prefix=text[max(0,start-96):start];suffix=text[end:end+96]
+        roles={role for role,pattern in _DATE_ROLE_PREFIXES if pattern.search(prefix)}
+        roles.update(role for role,pattern in _DATE_ROLE_SUFFIXES if pattern.search(suffix))
+        if not roles:
+            left,right=statement_span(text,start,end)
+            if sum(left<=other_start and other_end<=right
+                   for other_start,other_end,_ in occurrences)==1:
+                statement=text[left:right]
+                roles.update(role for role,pattern in _DATE_ROLE_ANY
+                             if pattern.search(statement))
+        values.update((role,date_value) for role in roles)
     return values
 
 
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
     if _date_values(claim)-_date_values(' '.join(quotes)):
         raise ValueError(label+' contains a date absent from its citations')
+
+
+def _require_date_role_support(claim: str, quotes: list[str], label: str) -> None:
+    supported=set()
+    for quote in quotes:supported.update(_date_role_values(quote))
+    claimed=_date_role_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains a date role absent from its citations')
+    for role,_ in claimed:
+        if len({date_value for source_role,date_value in supported if source_role==role})>1:
+            raise ValueError(label+' cites multiple dates for one date role')
+
+
+def _needs_disposition_ambiguity_check(claim: str, date_question: bool) -> bool:
+    if not date_question:return True
+    dispositions=_disposition_values(claim)
+    if not dispositions:return False
+    date_dispositions=set()
+    for role,_ in _date_role_values(claim):
+        date_dispositions.update(_DATE_ROLE_DISPOSITIONS.get(role,()))
+    return not dispositions.issubset(date_dispositions)
 
 
 def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
@@ -1006,7 +1081,12 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     answer_quotes=list(top_level_quotes)
     answer_identity_texts=list(top_level_identity_texts)
     finding_sources=[];question_targets=_workflow_identities(question)
-    status_intent=bool(_STATUS_INTENT.search(question) or _disposition_values(value['answer']))
+    date_question=bool(_DATE_QUESTION_INTENT.search(question)
+                       and not _STATUS_FIELD_INTENT.search(question))
+    status_intent=bool((not date_question and _STATUS_INTENT.search(question))
+                       or (_disposition_values(value['answer'])
+                           and _needs_disposition_ambiguity_check(
+                               value['answer'],date_question)))
     for finding in value['source_findings']:
         key=(finding['source_type'],finding['file_name'])
         if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
@@ -1023,8 +1103,12 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             finding_quotes.append(item['quote'])
             finding_identity_texts.append(_citation_identity_text(source,item['quote']))
         if value['status']=='ANSWERED':
-            _require_unambiguous_dispositions(finding_quotes,'source finding')
-            if status_intent or _disposition_values(finding['statement']):
+            finding_status=bool(_disposition_values(finding['statement'])
+                                and _needs_disposition_ambiguity_check(
+                                    finding['statement'],date_question))
+            if _needs_disposition_ambiguity_check(finding['statement'],date_question):
+                _require_unambiguous_dispositions(finding_quotes,'source finding')
+            if status_intent or finding_status:
                 targets=_workflow_identities(finding['statement']) or {
                     target for target in question_targets if target[0]==finding['source_type']}
                 retrieved=_retrieved_scope(
@@ -1037,13 +1121,16 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             _require_workflow_identity_support(
                 finding['statement'],finding_identity_texts,'source finding')
             _require_date_support(finding['statement'],finding_quotes,'source finding')
+            _require_date_role_support(finding['statement'],finding_quotes,'source finding')
             _require_numeric_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
         answer_quotes.extend(finding_quotes)
         answer_identity_texts.extend(finding_identity_texts)
     if value['status']=='ANSWERED':
-        if top_level_quotes:_require_unambiguous_dispositions(top_level_quotes,'answer')
+        if (top_level_quotes
+                and _needs_disposition_ambiguity_check(value['answer'],date_question)):
+            _require_unambiguous_dispositions(top_level_quotes,'answer')
         if not value['source_findings'] and status_intent:
             targets=_workflow_identities(question) or _workflow_identities(value['answer'])
             if targets:
@@ -1057,6 +1144,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
+        _require_date_role_support(value['answer'],answer_quotes,'answer')
         _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts)
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):

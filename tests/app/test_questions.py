@@ -664,6 +664,95 @@ def test_date_grounding_does_not_interpret_an_ambiguous_slash_date(client, proje
 
 
 @pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 issued 2024-01-05. Due date 2024-02-10.',
+     'When is RFI 42 due?', 'RFI 42 is due 2024-01-05.'),
+    ('Submittal 23-01 submitted 2024-03-01 and approved 2024-03-08.',
+     'When was Submittal 23-01 approved?', 'Submittal 23-01 was approved 2024-03-01.'),
+    ('Sent: January 5, 2024. Received: January 6, 2024.',
+     'When was the email received?', 'The email was received January 5, 2024.'),
+])
+def test_answer_rejects_a_date_borrowed_from_another_role(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':claim,'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='date role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 Due Date: 2024-02-10.',
+     'When is RFI 42 due?', 'RFI 42 is due February 10, 2024.'),
+    ('Submittal 23-01 submitted 2024-03-01 and approved 2024-03-08.',
+     'When was Submittal 23-01 approved?', 'Submittal 23-01 was approved March 8, 2024.'),
+    ('Sent: January 5, 2024. Received: January 6, 2024.',
+     'When was the email received?', 'The email was received January 6, 2024.'),
+    ('RFI 42: 2024-04-07 is the response date.',
+     'What is the RFI 42 response date?', 'RFI 42 response date is April 7, 2024.'),
+])
+def test_date_role_grounding_accepts_the_same_labeled_date(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED','answer':claim,'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_date_role_grounding_does_not_join_separate_citations(client, project):
+    sources=['Due date:','2024-01-05']
+    run=_evidence(client,project,sources)
+    evidence=retrieve_evidence(client.app.state.db,run,'What is the due date in 2024?')
+    combined={'status':'ANSWERED','answer':'The due date is 2024-01-05.',
+              'source_findings':[],
+              'citations':[{'evidence_id':f'EV-QA-{index}','quote':source}
+                           for index,source in enumerate(sources,1)]}
+
+    with pytest.raises(ValueError,match='date role'):
+        validate_answer_model(combined,evidence,'What is the due date in 2024?')
+
+
+def test_date_role_grounding_rejects_multiple_dates_for_the_same_role(client, project):
+    source='Submittal 23-01 approved 2024-03-08. Approval Date: 2024-03-09.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'When was Submittal 23-01 approved?')
+    selected={'status':'ANSWERED','answer':'Submittal 23-01 was approved 2024-03-09.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='multiple dates'):
+        validate_answer_model(selected,evidence,'When was Submittal 23-01 approved?')
+
+
+def test_status_question_still_rejects_submitted_and_approved_history(client, project):
+    source='Submittal 23-01 submitted 2024-03-01 and approved 2024-03-08.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What is the status of Submittal 23-01?')
+    selected={'status':'ANSWERED','answer':'Submittal 23-01 is approved.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='conflicting workflow dispositions'):
+        validate_answer_model(selected,evidence,'What is the status of Submittal 23-01?')
+
+
+def test_unlabeled_date_claim_remains_grounded_by_the_full_date(client, project):
+    source='Project milestone 2024-01-05.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is the project milestone?')
+    grounded={'status':'ANSWERED','answer':'The project milestone is January 5, 2024.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,'When is the project milestone?')
+
+
+@pytest.mark.parametrize(('source','question','claim'),[
     ('RFI 42 status: CLOSED.', 'What is the status of RFI 42?',
      'RFI 42 is open.'),
     ('Submittal 23-01 status: REJECTED.', 'What is the status of Submittal 23-01?',
@@ -1082,6 +1171,32 @@ def test_comparison_date_must_be_grounded_in_its_own_source_finding(client, proj
     }
 
     with pytest.raises(ValueError,match='date'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_comparison_date_role_must_be_grounded_in_its_own_source_finding(
+        client, project):
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',['Specification issued 2024-01-05.']),
+        ('RFI-42.txt',['RFI 42 issued 2024-01-05. Due date 2024-02-10.']),
+    ])
+    question='Compare the specification date and RFI 42 due date.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The sources contain project dates.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification was issued 2024-01-05.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification issued 2024-01-05.'}]},
+            {'source_type':'RFI','file_name':'RFI-42.txt',
+             'statement':'RFI 42 is due 2024-01-05.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 issued 2024-01-05. Due date 2024-02-10.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='date role'):
         validate_answer_model(wrong,evidence,question)
 
 
