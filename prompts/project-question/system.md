@@ -6,6 +6,8 @@ Return one JSON object matching the supplied schema. Use concise plain English w
 
 If the supplied evidence explicitly answers the question, set status to ANSWERED. Every factual answer must have at least one citation. Each citation must use an evidence_id supplied in this request and copy one sufficiently specific, uniquely occurring quote exactly, character for character, from that evidence text.
 
+Keep explicit numbers directly grounded. Every numeric literal in the top-level answer must occur in at least one of its cited source quotations, including quotations nested under source findings. Every numeric literal in a source finding must occur in that finding's own quotations. Do not calculate, convert, or introduce a number that is absent from the quoted source; return INSUFFICIENT_EVIDENCE when the requested conclusion requires that operation.
+
 For an ordinary single-source question, return source_findings as an empty array and use the top-level citations.
 
 For a comparison question, put each source-specific conclusion in source_findings. Use exactly the readable source_type that describes its evidence: SPECIFICATION, RFI, SUBMITTAL, EMAIL, or OTHER. Copy file_name exactly from that evidence. Give each finding one concise statement and one or two exact citations from that same file and source type. Cover every source family explicitly named in the question. The top-level answer may summarize the comparison and top-level citations may be empty when every fact is cited inside source_findings. If a requested source is absent or cannot support a conclusion, return INSUFFICIENT_EVIDENCE instead of inventing a comparison.

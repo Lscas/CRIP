@@ -70,6 +70,8 @@ _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
 _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
+_NUMERIC_VALUE = re.compile(
+    r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _FAMILY_SQL_FILTERS = {
     'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
@@ -178,6 +180,30 @@ def _source_key(evidence: dict) -> tuple[str,str]:
     document=str(evidence.get('_source_document_id') or evidence.get('document_id')
                  or evidence.get('file_name') or evidence.get('evidence_id'))
     return document,_source_family(evidence)
+
+
+def _numeric_values(text: str) -> set[str]:
+    """Canonicalize explicit numeric literals without inferring conversions."""
+    values=set()
+    for match in _NUMERIC_VALUE.finditer(text):
+        token=match.group().replace(',','')
+        parts=token.split('/')
+        normalized=[]
+        for part in parts:
+            if part.count('.')<=1:
+                whole,dot,fraction=part.partition('.')
+                whole=str(int(whole))
+                fraction=fraction.rstrip('0')
+                normalized.append(whole+(dot+fraction if fraction else ''))
+            else:
+                normalized.append(part)
+        values.add('/'.join(normalized))
+    return values
+
+
+def _require_numeric_support(claim: str, quotes: list[str], label: str) -> None:
+    if _numeric_values(claim)-_numeric_values(' '.join(quotes)):
+        raise ValueError(label+' contains a numeric claim absent from its citations')
 
 
 def _selection_order(ranked: list[tuple], diversify: bool) -> list[tuple]:
@@ -305,15 +331,18 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     allowed={item['evidence_id']:item for item in evidence}
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
+    answer_quotes=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
         if source is None:raise ValueError('citation is outside the retrieved evidence scope')
         exact_quote(source,item['quote'])
+        answer_quotes.append(item['quote'])
     finding_sources=[]
     for finding in value['source_findings']:
         key=(finding['source_type'],finding['file_name'])
         if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
         finding_sources.append(key)
+        finding_quotes=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
             if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
@@ -322,6 +351,12 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             if _source_family(source)!=finding['source_type']:
                 raise ValueError('source finding type does not match its evidence')
             exact_quote(source,item['quote'])
+            finding_quotes.append(item['quote'])
+        if value['status']=='ANSWERED':
+            _require_numeric_support(finding['statement'],finding_quotes,'source finding')
+        answer_quotes.extend(finding_quotes)
+    if value['status']=='ANSWERED':
+        _require_numeric_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:
             raise ValueError('a comparison answer requires source findings')

@@ -890,12 +890,23 @@ class Gateway:
         upper=sum(len(message['content'].encode('utf-8')) for message in payload['messages'])+256
         if upper>min(_ANSWER_INPUT_BYTE_CAP,self.s.input_limit):
             raise InvalidModelOutput('The retrieved question context exceeds the configured input limit; no API call was made.')
+        evidence_fingerprint=[(item['evidence_id'],item.get('prompt_text',item['raw_text']))
+                              for item in evidence]
+        cache_question=' '.join(question.split())
         fingerprint=[run['project_id'],run['snapshot_id'],self.s.api_base_url,self.s.cheap_model,
-                     self.answer_prompt_hash,question,[(item['evidence_id'],item.get('prompt_text',item['raw_text'])) for item in evidence]]
+                     self.answer_prompt_hash,cache_question,evidence_fingerprint]
         task_family='answer:'+hashlib.sha256(dumps(fingerprint).encode()).hexdigest()
         task=paid_task_key(task_family,0)
         recovered=self._recover_terminal(
             run['id'],task,lambda value:validate_answer_model(value,evidence,question))
+        # Preserve an exact settled response created before cache normalization.
+        if recovered is None and cache_question!=question:
+            legacy=[run['project_id'],run['snapshot_id'],self.s.api_base_url,self.s.cheap_model,
+                    self.answer_prompt_hash,question,evidence_fingerprint]
+            legacy_family='answer:'+hashlib.sha256(dumps(legacy).encode()).hexdigest()
+            recovered=self._recover_terminal(
+                run['id'],paid_task_key(legacy_family,0),
+                lambda value:validate_answer_model(value,evidence,question))
         if recovered is not None:return recovered
         recent=self._family_calls(run['id'],task_family)
         self._guard_family_before_request(recent,task,0,'This project question')

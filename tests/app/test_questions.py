@@ -1,5 +1,6 @@
 """Project-file Q&A stays run-scoped, evidence-grounded, and budgeted."""
 from decimal import Decimal
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -7,7 +8,7 @@ import sqlite3
 import httpx
 import pytest
 
-from app.db import BudgetError, Database
+from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, expanded_query_terms, requires_source_diversity, retrieve_evidence,
@@ -366,16 +367,52 @@ def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
     service = ProjectQuestions(db, gateway)
     result = service.ask(run, 'What is the water service pipe material and size?')
     recovered = service.ask(run, 'What is the water service pipe material and size?')
+    equivalent = service.ask(run, 'What  is the water service pipe material and size?')
 
     assert result['status'] == 'ANSWERED' and result['answer'] == 'Use 2 inch Type L copper.'
     assert result['citations'][0]['evidence_id'] == 'EV-QA-1'
     assert result['citations'][0]['start'] == 0
     assert recovered['answer'] == result['answer'] and recovered['cached'] is True
+    assert equivalent['answer'] == result['answer'] and equivalent['cached'] is True
     assert len(requests) == 1
     assert 'Domestic water service pipe' not in requests[0]['messages'][0]['content']
     assert 'Domestic water service pipe' in requests[0]['messages'][1]['content']
     call = db.one('SELECT task_key,state FROM model_calls WHERE run_id=?', (run['id'],))
     assert call['task_key'].startswith('answer:') and call['state'] == 'SETTLED'
+
+
+def test_question_recovers_a_settled_pre_normalization_task_without_http(client, project, tmp_path):
+    run = _evidence(client, project, [
+        'Domestic water service pipe shall be 2 inch Type L copper.',
+    ])
+    question='What  is the water service pipe material and size?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    settings=_live_settings(tmp_path)
+    requests=[]
+    gateway=Gateway(settings,client.app.state.db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    evidence_fingerprint=[
+        (item['evidence_id'],item.get('prompt_text',item['raw_text'])) for item in evidence]
+    legacy=[run['project_id'],run['snapshot_id'],settings.api_base_url,settings.cheap_model,
+            gateway.answer_prompt_hash,question,evidence_fingerprint]
+    family='answer:'+hashlib.sha256(dumps(legacy).encode()).hexdigest()
+    attempt=client.app.state.db.reserve(
+        run['project_id'],run['id'],paid_task_key(family,0),Decimal('0.01'),
+        settings.cheap_model,'legacy-request',settings.input_rate,settings.output_rate,
+        interactive_question=True)
+    response_data={
+        'status':'ANSWERED','answer':'Use 2 inch Type L copper.','source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1',
+                      'quote':'Domestic water service pipe shall be 2 inch Type L copper.'}],
+    }
+    client.app.state.db.finalize_model_call(
+        attempt,Decimal('0.01'),{'prompt_tokens':1,'completion_tokens':1},
+        'legacy-question',response=response_data)
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(run,question)
+
+    assert result['cached'] is True and result['answer']=='Use 2 inch Type L copper.'
+    assert requests==[]
 
 
 def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, tmp_path):
@@ -396,6 +433,50 @@ def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, t
     call = db.one('SELECT state,response,error FROM model_calls WHERE run_id=?', (run['id'],))
     assert call['state'] == 'SETTLED_ERROR' and call['response'] is None
     assert json.loads(call['error'])['class'] == 'PROJECT_ANSWER'
+
+
+def test_answer_rejects_a_numeric_claim_missing_from_its_citation(client, project):
+    run = _evidence(client, project, [
+        'Domestic water service pipe shall be 2 inch Type L copper.',
+    ])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What is the water service pipe material and size?')
+    wrong={
+        'status':'ANSWERED','answer':'Use 4 inch Type L copper.','source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1',
+                      'quote':'Domestic water service pipe shall be 2 inch Type L copper.'}],
+    }
+
+    with pytest.raises(ValueError,match='numeric'):
+        validate_answer_model(wrong,evidence,'What is the water service pipe material and size?')
+
+
+def test_numeric_grounding_accepts_commas_and_leading_zero_formatting(client, project):
+    run = _evidence(client, project, [
+        'RFI 0042 response requires concrete with 4,000 psi compressive strength.',
+    ])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What concrete compressive strength is required?')
+    grounded={
+        'status':'ANSWERED','answer':'RFI 42 requires 4000 psi concrete.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1',
+                      'quote':'RFI 0042 response requires concrete with 4,000 psi compressive strength.'}],
+    }
+
+    validate_answer_model(grounded,evidence,'What concrete compressive strength is required?')
+
+
+def test_numeric_grounding_does_not_merge_comma_separated_values(client, project):
+    run = _evidence(client, project, ['Grid coordinates are 1,2.'])
+    evidence=retrieve_evidence(client.app.state.db,run,'What are the grid coordinates?')
+    wrong={
+        'status':'ANSWERED','answer':'The grid coordinate is 12.','source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':'Grid coordinates are 1,2.'}],
+    }
+
+    with pytest.raises(ValueError,match='numeric'):
+        validate_answer_model(wrong,evidence,'What are the grid coordinates?')
 
 
 def test_comparison_answer_rejects_a_mixed_summary_without_each_source(client, project, tmp_path):
@@ -501,6 +582,32 @@ def test_comparison_source_type_must_match_the_cited_file(client, project):
     with pytest.raises(ValueError,match='type does not match'):
         validate_answer_model(
             mislabeled,evidence,'Compare the specification and RFI 42 pipe requirements.')
+
+
+def test_comparison_rejects_a_numeric_finding_missing_from_its_own_citation(client, project):
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', ['Specification requires 2 inch Type L copper pipe.']),
+        ('RFI-42-response.txt', ['RFI 42 response requires 3 inch Type L copper pipe.']),
+    ])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'Compare the specification and RFI 42 pipe requirements.')
+    wrong={
+        'status':'ANSWERED','answer':'The sources specify different pipe sizes.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires 4 inch Type L copper pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification requires 2 inch Type L copper pipe.'}]},
+            {'source_type':'RFI','file_name':'RFI-42-response.txt',
+             'statement':'RFI 42 requires 3 inch Type L copper pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 response requires 3 inch Type L copper pipe.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='numeric'):
+        validate_answer_model(
+            wrong,evidence,'Compare the specification and RFI 42 pipe requirements.')
 
 
 def test_comparison_accepts_a_csi_section_in_a_generic_file_as_specification(client, project):
