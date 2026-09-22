@@ -307,6 +307,32 @@ def _workflow_identities(text: str) -> set[tuple[str,str]]:
     return identities
 
 
+def requires_workflow_status_index(question: str) -> bool:
+    return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
+
+
+def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[str]:
+    """Find exact requested workflow IDs with multiple explicit indexed statuses."""
+    if not requires_workflow_status_index(question) or not isinstance(workflow_index,dict):return []
+    targets=_workflow_identities(question)
+    if not targets:return []
+    conflicts=[]
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict):continue
+        kind=item.get('kind')
+        identifier=normalize_identifier(kind,item.get('identifier'))
+        if (kind,identifier) not in targets:continue
+        statuses=set()
+        for member in item.get('members',[]):
+            if not isinstance(member,dict) or member.get('source')!='PRIMARY':continue
+            status=member.get('status')
+            if isinstance(status,str):
+                statuses.update(value.strip().upper() for value in status.split(' / ')
+                                if value.strip())
+        if len(statuses)>1:conflicts.append(f'{kind} {identifier}')
+    return conflicts
+
+
 def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
     locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
     return _workflow_identities(
@@ -629,10 +655,18 @@ def _context_citation(evidence: dict) -> dict:
 class ProjectQuestions:
     def __init__(self, db: Database, gateway: Gateway):self.db=db;self.gateway=gateway
 
-    def ask(self, run: dict, question: str) -> dict:
+    def ask(self, run: dict, question: str, workflow_index: dict | None = None) -> dict:
         if run.get('status') not in ('PARTIAL','COMPLETED'):
             raise DomainError('Select a completed or partial analysis run before asking a question.',409)
         evidence=retrieve_evidence(self.db,run,question)
+        conflicts=_workflow_index_status_conflicts(question,workflow_index)
+        if conflicts:
+            return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
+                    'answer':('The current workflow status cannot be established because the complete '
+                              'project workflow index contains conflicting explicit statuses for '
+                              +', '.join(conflicts)+'. Review the original source sections.'),
+                    'citations':[],'source_findings':[],
+                    'retrieved_count':len(evidence),'cached':False}
         if not evidence:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':'The analyzed project files do not contain enough matching evidence to answer this question.',

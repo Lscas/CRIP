@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 10000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an exact workflow status conflict that exists outside the eight passages retrieved for one question.",
+    "Reuse the existing cached terminal-run workflow index; do not scan evidence or add another index, dependency or provider request.",
+    "Block only exact RFI/Submittal status questions with multiple explicit primary statuses; duplicate sources with one status must remain eligible.",
+    "Do not infer chronology, revision precedence, authority or a winning status."
+  ],
+  "task_id": "DEV-073",
+  "title": "Preflight exact workflow status questions against the full run index",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-003.json", "tasks/DEV-073.json", "changes/CR-0088.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent an exact RFI or Submittal status answer from missing a conflicting explicit status outside the bounded retrieval window."
+}

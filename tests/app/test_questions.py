@@ -11,10 +11,12 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, expanded_query_terms, numeric_rfi_search_terms,
-    requires_source_diversity, retrieve_evidence, search_query_terms, validate_answer_model,
+    ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
+    numeric_rfi_search_terms, requires_source_diversity, requires_workflow_status_index,
+    retrieve_evidence, search_query_terms, validate_answer_model,
 )
 from app.settings import ROOT, Settings
+from app.workflows import build_workflow_index
 from .conftest import upload
 
 
@@ -1066,3 +1068,89 @@ def test_paid_question_is_blocked_before_http_while_an_analysis_is_active(client
 
     assert requests == []
     assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?', (run['id'],)) == []
+
+
+@pytest.mark.parametrize(('kind','identifier','role','statuses'),[
+    ('RFI','42','RESPONSE',('OPEN','CLOSED')),
+    ('SUBMITTAL','23-01','SUBMITTAL',('PENDING','REJECTED')),
+])
+def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
+        client, project, tmp_path, kind, identifier, role, statuses):
+    question=f'What is the status of {kind.title()} {identifier}?'
+    run=_evidence(client,project,[f'{kind} {identifier} status: {statuses[0]}.'])
+    workflow_index=build_workflow_index([
+        {'document_id':'D-CURRENT','name':'current.eml','summary':{
+            'document_type':'EMAIL','workflow_contexts':[{
+                'workflow_type':kind,'identifier':identifier,'role':role,'status':statuses[0]}]}},
+        {'document_id':'D-ARCHIVE','name':'archive.eml','summary':{
+            'document_type':'EMAIL','workflow_contexts':[{
+                'workflow_type':kind,'identifier':identifier,'role':role,'status':statuses[1]}]}},
+    ])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(run,question,workflow_index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert f'{kind} {identifier}' in result['answer'] and result['retrieved_count']==1
+    assert requests==[]
+    assert client.app.state.db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_full_workflow_status_guard_is_exact_and_ignores_role_only_ambiguity():
+    role_only=build_workflow_index([
+        {'document_id':'D-Q1','name':'question-a.txt','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}},
+        {'document_id':'D-Q2','name':'question-b.txt','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}},
+    ])
+    other_identifier=build_workflow_index([
+        {'document_id':'D-43A','name':'rfi-43-open.txt','summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'43','role':'RESPONSE','status':'OPEN'}]}},
+        {'document_id':'D-43B','name':'rfi-43-closed.txt','summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'43','role':'RESPONSE','status':'CLOSED'}]}},
+    ])
+
+    assert next(item for item in role_only['items'] if item['kind']=='RFI')['state']=='AMBIGUOUS'
+    assert _workflow_index_status_conflicts('What is the status of RFI 42?',role_only)==[]
+    assert _workflow_index_status_conflicts('What is the status of RFI 42?',other_identifier)==[]
+    assert _workflow_index_status_conflicts('What status does the email report?',other_identifier)==[]
+    assert requires_workflow_status_index('What is the status of RFI 42?') is True
+    assert requires_workflow_status_index('What does RFI 42 require?') is False
+
+
+def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client, project):
+    run=_source_evidence(client,project,[
+        ('current.eml',['From: architect@example.test\nSubject: RFI 42\nRFI 42 status: OPEN.']),
+        ('archive.eml',['Archived coordination note.']),
+    ])
+    db=client.app.state.db
+    documents={row['name']:row['id'] for row in db.all(
+        'SELECT id,name FROM documents WHERE project_id=?',(project['id'],))}
+    summaries={
+        'current.eml':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'OPEN'}]},
+        'archive.eml':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'CLOSED'}]},
+    }
+    with db.connect(True) as connection:
+        connection.executemany('INSERT INTO document_results VALUES(?,?,?,?)',[
+            (run['id'],documents[name],'SUCCESS',json.dumps(summary))
+            for name,summary in summaries.items()])
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the status of RFI 42?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['retrieved_count']==1 and result['citations']==[]
+    assert 'RFI 42' in result['answer']
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
