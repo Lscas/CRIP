@@ -30,7 +30,8 @@ from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,apply_workflow_classificat
 from app.connectors import ExternalConnectors
 from app.email_attachments import (import_email_attachment,import_email_attachments,
                                    list_email_attachments)
-from app.questions import ProjectQuestions,requires_workflow_status_index
+from app.questions import (ProjectQuestions,requires_workflow_inventory,
+                           requires_workflow_status_index)
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -248,7 +249,8 @@ def create_app(settings:Settings|None=None)->FastAPI:
         if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
         workflow_index=(terminal_workflow_index(run['id'])
                         if run['status'] in ('PARTIAL','COMPLETED')
-                        and requires_workflow_status_index(question) else None)
+                        and (requires_workflow_status_index(question)
+                             or requires_workflow_inventory(question)) else None)
         return questions.ask(run,question,workflow_index)
     @app.get('/api/analysis-runs/{rid}')
     def run_get(rid:str):return runner.get(rid)

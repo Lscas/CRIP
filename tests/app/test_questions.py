@@ -12,8 +12,9 @@ from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
-    numeric_rfi_search_terms, requires_source_diversity, requires_workflow_status_index,
-    retrieve_evidence, search_query_terms, validate_answer_model,
+    numeric_rfi_search_terms, requested_workflow_counts, requires_source_diversity,
+    requires_workflow_inventory, requires_workflow_status_index, retrieve_evidence,
+    search_query_terms, validate_answer_model,
 )
 from app.settings import ROOT, Settings
 from app.workflows import build_workflow_index
@@ -1207,3 +1208,92 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
     assert sources['current.eml']['citation']['quote']=='RFI 42 status: OPEN.'
     assert 'citation' not in sources['archive.eml']
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('How many RFIs, Submittals, and Emails are in this run?',('RFI','SUBMITTAL','EMAIL')),
+    ('What is the number of requests for information?',('RFI',)),
+    ('Count the e-mails in the project.',('EMAIL',)),
+    ('How many open RFIs?',()),
+    ('How many RFI documents are there?',()),
+    ('How many RFIs mention concrete?',()),
+    ('How many RFI 42 responses are there?',()),
+])
+def test_workflow_inventory_question_boundary(question,expected):
+    assert requested_workflow_counts(question)==expected
+    assert requires_workflow_inventory(question) is bool(expected)
+
+
+def test_workflow_inventory_answer_skips_retrieval_and_live_provider(
+        client, project, tmp_path, monkeypatch):
+    run=_evidence(client,project,['RFI 42 question.'])
+    index=build_workflow_index([
+        {'document_id':'MAIL','name':'question.eml','summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[
+                {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]}},
+        {'document_id':'RESPONSE','name':'response.pdf','summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[
+                {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}},
+        {'document_id':'REFERENCE','name':'minutes.txt','summary':{
+            'document_type':'OTHER','workflow_references':[
+                {'workflow_type':'RFI','identifier':'99'}]}},
+        {'document_id':'SUBMITTAL','name':'submittal.pdf','summary':{
+            'document_type':'SUBMITTAL','workflow_contexts':[
+                {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL',
+                 'status':'PENDING'}]}},
+        {'document_id':'EMAIL','name':'coordination.eml','summary':{'document_type':'EMAIL'}},
+    ])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('inventory answer read evidence'))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(
+        run,'How many RFIs, Submittals, and Emails are in this run?',index)
+
+    assert result['status']=='ANSWERED' and result['answer_basis']=='WORKFLOW_INDEX'
+    assert result['answer']==('The complete workflow index for the selected analysis run contains '
+                              '2 RFI identifiers, 1 Submittal identifier, and 2 Email files.')
+    assert result['workflow_counts']==[
+        {'kind':'RFI','count':2},{'kind':'SUBMITTAL','count':1},{'kind':'EMAIL','count':2}]
+    assert result['retrieved_count']==0 and result['citations']==[]
+    assert requests==[]
+    assert client.app.state.db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_complete_workflow_index_for_inventory_count(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('question.eml',['RFI 42 question.']),('response.pdf',['RFI 42 response.']),
+        ('submittal.pdf',['Submittal 23-01 pending.']),('coordination.eml',['Coordination.']),
+    ])
+    db=client.app.state.db
+    documents={row['name']:row['id'] for row in db.all(
+        'SELECT id,name FROM documents WHERE project_id=?',(project['id'],))}
+    summaries={
+        'question.eml':{'document_type':'EMAIL','workflow_contexts':[
+            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]},
+        'response.pdf':{'document_type':'RFI_RESPONSE','workflow_contexts':[
+            {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]},
+        'submittal.pdf':{'document_type':'SUBMITTAL','workflow_contexts':[
+            {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]},
+        'coordination.eml':{'document_type':'EMAIL'},
+    }
+    with db.connect(True) as connection:
+        connection.executemany('INSERT INTO document_results VALUES(?,?,?,?)',[
+            (run['id'],documents[name],'SUCCESS',json.dumps(summary))
+            for name,summary in summaries.items()])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('inventory answer read evidence'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'How many RFIs, Submittals, and Emails are in this run?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['workflow_counts']==[
+        {'kind':'RFI','count':1},{'kind':'SUBMITTAL','count':1},{'kind':'EMAIL','count':2}]
+    assert result['retrieved_count']==0 and result['answer_basis']=='WORKFLOW_INDEX'

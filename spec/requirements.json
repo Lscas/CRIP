@@ -1419,7 +1419,7 @@
     {
       "id": "FR-QA-001",
       "title": "Evidence-grounded project questions",
-      "statement": "A user may ask an English question about a selected completed analysis run and receive a concise answer based only on bounded, project-scoped evidence, with exact source quotations immediately after the answer.",
+      "statement": "A user may ask an English question about a selected completed analysis run and receive a concise answer based only on bounded, project-scoped evidence or the deterministic complete-run workflow index, with exact source quotations immediately after evidence-based model answers.",
       "priority": "P0",
       "status": "implemented",
       "acceptance_criteria": [
@@ -1436,6 +1436,7 @@
         "Every explicit bounded workflow disposition in an answered summary occurs in its top-level or nested exact quotations, and every disposition in a source finding occurs in that finding's own quotations; conservative parser-aligned equivalents are allowed, but opposite states and unsupported qualifiers fail closed after cost settlement without retry.",
         "Within one ordinary answer or one source finding, distinct explicit dispositions in its citations or matching retrieved evidence remain ambiguous and cannot be silently reduced to one state; recognized composite phrases remain one state, exact workflow identities and separate comparison findings stay isolated, and no chronology or authority is inferred.",
         "Before model dispatch, an exact RFI or Submittal status question checks the complete run-level workflow index; multiple explicit primary statuses return insufficient evidence with each conflicting status, source file and detected-or-manual classification origin rendered directly under the answer. A detected source receives an exact parser-text citation only when the matching bounded status phrase is tied to the exact workflow identity in one statement or a fragment or locator scoped to that identity alone; manual corrections, another workflow's phrase and file-level detections without an exact source phrase remain visibly uncited rather than receiving a fabricated quotation. Duplicate sources with one status do not block.",
+        "An exact unfiltered plural count question for RFIs, Submittals and/or Emails uses the complete terminal-run workflow index before evidence retrieval and returns deterministic RFI/Submittal identifier counts and unique analyzed Email-file counts with an explicit workflow-index basis; filtered, status-qualified, document-source, identifier-specific and content questions do not take this shortcut, and no model call or budget action is added.",
         "Question task identity normalizes only repeated whitespace so equivalent spacing variants reuse one settled response without changing the submitted prompt; letter case, punctuation and identifiers remain significant, and exact settled task identities from before normalization remain recoverable.",
         "A question containing an explicit pure-numeric RFI identifier uses the parser's exact leading-zero equivalence through one bounded local identifier supplement; bare numbers, prefixed or compound RFI identifiers and Submittal identifiers remain exact, and no provider call is added."
       ],

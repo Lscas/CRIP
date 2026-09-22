@@ -82,6 +82,21 @@ _WORKFLOW_MARKER = re.compile(
 _STATUS_INTENT = re.compile(
     r'(?i)\b(?:status|disposition|approved|rejected|pending|open|closed|answered|'
     r'reviewed|void|revise\s+(?:and|/)\s*resubmit)\b')
+_WORKFLOW_COUNT_CATEGORY = r'(?:rfis|requests\s+for\s+information|submittals|e-?mails)'
+_WORKFLOW_COUNT_LIST = rf'{_WORKFLOW_COUNT_CATEGORY}(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+){_WORKFLOW_COUNT_CATEGORY})*'
+_WORKFLOW_COUNT_QUESTION = re.compile(
+    rf'''(?ix)^\s*(?:
+        how\s+many\s+(?P<how>{_WORKFLOW_COUNT_LIST})
+        |(?:what\s+is\s+)?(?:the\s+)?(?:count|number|total(?:\s+number)?)\s+of\s+
+         (?P<number>{_WORKFLOW_COUNT_LIST})
+        |count\s+(?:the\s+)?(?P<count>{_WORKFLOW_COUNT_LIST})
+    )(?:\s+(?:are\s+there|(?:are\s+)?in\s+(?:this|the)\s+(?:run|analysis|project)))?
+    \s*[?!.]*\s*$''')
+_WORKFLOW_COUNT_TYPES = (
+    ('RFI',re.compile(r'(?i)\b(?:rfis|requests\s+for\s+information)\b')),
+    ('SUBMITTAL',re.compile(r'(?i)\bsubmittals\b')),
+    ('EMAIL',re.compile(r'(?i)\be-?mails\b')),
+)
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _DISPOSITION_PHRASES = (
@@ -310,6 +325,44 @@ def _workflow_identities(text: str) -> set[tuple[str,str]]:
 
 def requires_workflow_status_index(question: str) -> bool:
     return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
+
+
+def requested_workflow_counts(question: str) -> tuple[str,...]:
+    """Recognize only unfiltered run-wide plural inventory questions."""
+    match=_WORKFLOW_COUNT_QUESTION.fullmatch(question)
+    if not match:return ()
+    categories=next(value for value in match.groupdict().values() if value is not None)
+    found=[(hit.start(),kind) for kind,pattern in _WORKFLOW_COUNT_TYPES
+           if (hit:=pattern.search(categories))]
+    return tuple(kind for _,kind in sorted(found))
+
+
+def requires_workflow_inventory(question: str) -> bool:
+    return bool(requested_workflow_counts(question))
+
+
+def _workflow_inventory_answer(question: str, workflow_index: dict | None) -> dict | None:
+    requested=requested_workflow_counts(question)
+    if not requested or not isinstance(workflow_index,dict):return None
+    items=[item for item in workflow_index.get('items',[]) if isinstance(item,dict)]
+    counts={
+        'RFI':sum(item.get('kind')=='RFI' for item in items),
+        'SUBMITTAL':sum(item.get('kind')=='SUBMITTAL' for item in items),
+        'EMAIL':len({str(member.get('document_id')) for item in items
+                     for member in item.get('members',[]) if isinstance(member,dict)
+                     and (member.get('document_type')=='EMAIL'
+                          or str(member.get('file_name') or '').casefold().endswith(('.eml','.msg')))
+                     and member.get('document_id')}),
+    }
+    units={'RFI':'RFI identifier','SUBMITTAL':'Submittal identifier','EMAIL':'Email file'}
+    values=[]
+    for kind in requested:
+        count=counts[kind];unit=units[kind]+('' if count==1 else 's')
+        values.append(f'{count} {unit}')
+    listing=(values[0] if len(values)==1 else ' and '.join(values) if len(values)==2
+             else ', '.join(values[:-1])+', and '+values[-1])
+    return {'answer':f'The complete workflow index for the selected analysis run contains {listing}.',
+            'workflow_counts':[{'kind':kind,'count':counts[kind]} for kind in requested]}
 
 
 def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[dict]:
@@ -736,6 +789,11 @@ class ProjectQuestions:
     def ask(self, run: dict, question: str, workflow_index: dict | None = None) -> dict:
         if run.get('status') not in ('PARTIAL','COMPLETED'):
             raise DomainError('Select a completed or partial analysis run before asking a question.',409)
+        inventory=_workflow_inventory_answer(question,workflow_index)
+        if inventory:
+            return {'run_id':run['id'],'question':question,'status':'ANSWERED',**inventory,
+                    'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
+                    'workflow_conflicts':[],'retrieved_count':0,'cached':False}
         evidence=retrieve_evidence(self.db,run,question)
         conflicts=_workflow_index_status_conflicts(question,workflow_index)
         if conflicts:
