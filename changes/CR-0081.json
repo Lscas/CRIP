@@ -1,0 +1,31 @@
+{
+  "change_id": "CR-0081",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Add capped whole-word construction terminology expansion to local project-question retrieval.",
+  "decision_refs": [
+    "The active goal requires continued accuracy and adaptability for RFI, Submittal and Email content",
+    "A synthetic reproduction showed accepted could not retrieve a later approved Submittal status",
+    "A second reproduction showed substring scoring treated size inside oversized as an exact match"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/requirements.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "tasks/DEV-066.json", "changes/CR-0081.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/benchmark_question_search.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active improvement goal explicitly covers project efficiency, accuracy and RFI/Submittal/Email adaptability.",
+  "known_limitations": [
+    "The vocabulary is deliberately narrow and does not provide general semantic or multilingual retrieval.",
+    "Shop Drawing and Product Data expand to Submittal only when those complete phrases occur in the question.",
+    "Validation uses synthetic offline evidence and does not establish construction accuracy on customer documents."
+  ]
+}

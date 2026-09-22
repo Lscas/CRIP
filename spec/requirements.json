@@ -1428,7 +1428,8 @@
         "An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.",
         "Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.",
         "The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.",
-        "Run-scoped local full-text ranking must not discard a later exact RFI, Submittal, Email or source-locator match because earlier evidence contains a common term; existing databases are backfilled, and runtimes without FTS5 use a complete compatibility scan."
+        "Run-scoped local full-text ranking must not discard a later exact RFI, Submittal, Email or source-locator match because earlier evidence contains a common term; existing databases are backfilled, and runtimes without FTS5 use a complete compatibility scan.",
+        "Question retrieval may use only capped, audited construction/workflow equivalents with whole-word matching and direct-term priority; it must not add an opposite workflow disposition or make an additional model request."
       ],
       "decision_source": "D-29: the user requested a Trunk Tools-style ability to ask questions and answer from existing project files.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"

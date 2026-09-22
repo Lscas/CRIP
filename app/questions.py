@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from app.db import Database, DomainError
@@ -13,16 +15,48 @@ if TYPE_CHECKING:
     from app.gateway import Gateway
 
 _WORD = re.compile(r"[a-z0-9]+(?:[-./][a-z0-9]+)*", re.I)
+_TOKEN = re.compile(r"[a-z0-9]+", re.I)
+_SIMPLE_TERM = re.compile(r"[a-z0-9]+\Z", re.I)
 _STOP = frozenset({
     'a','an','and','are','as','at','be','by','can','do','does','for','from','how','i','in',
     'is','it','of','on','or','project','show','tell','that','the','this','to','was','were',
     'what','when','where','which','who','why','with','would',
 })
 _MAX_QUERY_TERMS = 10
+_MAX_SEARCH_TERMS = 24
 _MAX_CANDIDATES = 160
 _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
+_EQUIVALENT_GROUPS = (
+    ('accept','accepted','acceptance','approve','approved','approval'),
+    ('answer','answered','reply','replied','response','responded'),
+    ('close','closed','resolve','resolved'),
+    ('email','e-mail','message','correspondence'),
+    ('send','sent','sender','from'),
+    ('receive','received','recipient'),
+    ('spec','specification','specifications'),
+    ('qty','quantity','quantities','count'),
+    ('dimension','dimensions','size','sizes'),
+    ('require','required','requirement','requirements','shall'),
+    ('test','tests','testing'),
+    ('inspect','inspected','inspection','inspections'),
+    ('material','materials'),
+    ('revision','revisions','rev'),
+    ('drawing','drawings','dwg'),
+)
+_TERM_ALIASES = {
+    term:tuple(value for value in group if value != term)
+    for group in _EQUIVALENT_GROUPS for term in group
+}
+_PHRASE_ALIASES = (
+    (re.compile(r'\brequest\s+for\s+information\b',re.I),
+     ('request','information'),('request for information','rfi')),
+    (re.compile(r'\bshop\s+drawing(?:s)?\b',re.I),
+     ('shop','drawing','drawings'),('shop drawing','shop drawings','submittal')),
+    (re.compile(r'\bproduct\s+data\b',re.I),
+     ('product','data'),('product data','submittal')),
+)
 
 
 def question_terms(question: str) -> list[str]:
@@ -34,8 +68,47 @@ def question_terms(question: str) -> list[str]:
     return terms[:_MAX_QUERY_TERMS]
 
 
-def _like(value: str) -> str:
-    return '%' + value.replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
+def _query_concepts(question: str, terms: list[str]) -> list[tuple[str,tuple[str,...]]]:
+    phrases=[];consumed=set()
+    for pattern,source_terms,variants in _PHRASE_ALIASES:
+        if pattern.search(question):
+            phrases.append((variants[0],variants));consumed.update(source_terms)
+    concepts=[(term,(term,*_TERM_ALIASES.get(term,())))
+              for term in terms if term not in consumed]
+    return [*concepts,*phrases]
+
+
+def expanded_query_terms(question: str, terms: list[str] | None = None) -> list[str]:
+    """Add only audited construction/workflow equivalents for local retrieval."""
+    originals=question_terms(question) if terms is None else list(terms)
+    concepts=_query_concepts(question,originals)
+    expanded=[]
+    for _,variants in concepts:
+        if variants[0] not in expanded:expanded.append(variants[0])
+    for depth in range(1,max((len(variants) for _,variants in concepts),default=0)):
+        for _,variants in concepts:
+            if depth<len(variants) and variants[depth] not in expanded:
+                expanded.append(variants[depth])
+                if len(expanded)>=_MAX_SEARCH_TERMS:return expanded
+    return expanded
+
+
+@lru_cache(maxsize=256)
+def _term_pattern(term: str) -> re.Pattern:
+    return re.compile(r'(?<![a-z0-9])'+re.escape(term)+r'(?![a-z0-9])',re.I)
+
+
+def _concept_match(searchable: str, token_counts: Counter,
+                   variants: tuple[str,...]) -> tuple[str,bool,int] | None:
+    for index,value in enumerate(variants):
+        if _SIMPLE_TERM.fullmatch(value):
+            count=token_counts.get(value,0)
+            if count:return value,index==0,min(3,count)
+            continue
+        matches=_term_pattern(value).finditer(searchable)
+        if next(matches,None) is not None:
+            return value,index==0,1+sum(1 for _ in zip(range(2),matches))
+    return None
 
 
 def _fts_query(terms: list[str]) -> str:
@@ -54,28 +127,21 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str]) -> list[dict]:
                            AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
                          ORDER BY search_rank,e.rowid LIMIT ?''',
                       [_fts_query(terms),run_id,_MAX_CANDIDATES])
-    clauses=[];args=[]
-    for term in terms:
-        fields=["json_extract(e.payload,'$.raw_text')","d.name"]
-        fields.extend(f"json_extract(e.payload,'$.locator.{key}')"
-                      for key in ('section','sheet','page','paragraph'))
-        clauses.extend(f"LOWER({field}) LIKE ? ESCAPE '\\'" for field in fields)
-        args.extend([_like(term)]*len(fields))
     # FTS5 is optional.  The compatibility path favors complete results over
-    # speed and deliberately does not truncate in row order.
-    return db.all(f'''SELECT e.payload,d.name AS file_name FROM evidence e
-                      JOIN documents d ON d.id=e.document_id
-                      WHERE e.run_id=?
-                        AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
-                        AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
-                        AND ({' OR '.join(clauses)})''',[run_id,*args])
+    # row-order truncation.  One local scan is also cheaper than repeating
+    # JSON extraction for every expanded term and locator field.
+    return db.all('''SELECT e.payload,d.name AS file_name FROM evidence e
+                     JOIN documents d ON d.id=e.document_id
+                     WHERE e.run_id=?
+                       AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                       AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION' ''',[run_id])
 
 
 def _window(text: str, terms: list[str]) -> str:
     if len(text) <= _MAX_FRAGMENT_CHARS:
         return text
-    folded=text.casefold();positions=[folded.find(term) for term in terms]
-    anchor=min((position for position in positions if position >= 0),default=0)
+    positions=[match.start() for term in terms if (match:=_term_pattern(term).search(text))]
+    anchor=min(positions,default=0)
     start=max(0,anchor-_MAX_FRAGMENT_CHARS//3)
     end=min(len(text),start+_MAX_FRAGMENT_CHARS)
     start=max(0,end-_MAX_FRAGMENT_CHARS)
@@ -86,14 +152,16 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
     """Use run-scoped full-text candidates, then deterministic local ranking.
 
     SQLite FTS5 avoids another service or vector store.  Environments without
-    FTS5 use a complete LIKE scan rather than silently losing later evidence.
+    FTS5 use a complete local scan rather than silently losing later evidence.
     Prompt windows stay bounded while citations are checked against the full
     immutable evidence text.
     """
     terms=question_terms(question)
     if not terms:
         return []
-    rows=_candidate_rows(db,run['id'],terms)
+    concepts=_query_concepts(question,terms)
+    search_terms=expanded_query_terms(question,terms)
+    rows=_candidate_rows(db,run['id'],search_terms)
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -106,14 +174,22 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         locator_text=' '.join(str(locator.get(key) or '')
                               for key in ('section','sheet','page','paragraph'))
         searchable=' '.join((text,row['file_name'],locator_text)).casefold()
-        matched=[term for term in terms if term in searchable]
-        if not matched:continue
-        score=sum(4 if any(char.isdigit() for char in term) else 2 for term in matched)
-        score+=min(6,sum(min(3,searchable.count(term)) for term in matched))
-        if all(term in searchable for term in terms):score+=8
-        evidence={**evidence,'file_name':row['file_name'],'prompt_text':_window(text,matched),
-                  '_question_terms':matched}
-        ranked.append((score,len(matched),evidence['evidence_id'],evidence))
+        token_counts=Counter(_TOKEN.findall(searchable))
+        concept_hits=[(label,_concept_match(searchable,token_counts,variants))
+                      for label,variants in concepts]
+        concept_hits=[(label,match) for label,match in concept_hits if match is not None]
+        if not concept_hits:continue
+        actual_matches=[];score=0
+        for label,match in concept_hits:
+            actual,direct,count=match
+            if actual not in actual_matches:actual_matches.append(actual)
+            score+=4 if any(char.isdigit() for char in label) else (2 if direct else 1)
+            score+=count
+        score+=min(6,len(concept_hits))
+        if len(concept_hits)==len(concepts):score+=8
+        evidence={**evidence,'file_name':row['file_name'],
+                  'prompt_text':_window(text,actual_matches),'_question_terms':actual_matches}
+        ranked.append((score,len(concept_hits),evidence['evidence_id'],evidence))
     ranked.sort(key=lambda item:(-item[0],-item[1],item[2]))
     selected=[];used=0
     for _,_,_,evidence in ranked:
@@ -136,9 +212,10 @@ def validate_answer_model(value: dict, evidence: list[dict]) -> None:
 
 
 def _context_citation(evidence: dict) -> dict:
-    text=evidence['raw_text'];folded=text.casefold()
-    position=min((folded.find(term) for term in evidence.get('_question_terms',[]) if term in folded),default=0)
-    end=min(len(text),position+max(1,len(next((term for term in evidence.get('_question_terms',[]) if term in folded),''))))
+    text=evidence['raw_text']
+    hits=[(match.start(),match.end()) for term in evidence.get('_question_terms',[])
+          if (match:=_term_pattern(term).search(text))]
+    position,end=min(hits,default=(0,min(1,len(text))))
     start,end=statement_span(text,position,end)
     return citation(evidence,start,end,role='CONTEXT')
 

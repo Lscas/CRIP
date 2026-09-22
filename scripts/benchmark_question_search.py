@@ -1,4 +1,4 @@
-"""Measure complete LIKE fallback versus local FTS5 question candidates; no API calls."""
+"""Measure complete-scan fallback versus local FTS5 question candidates; no API calls."""
 from __future__ import annotations
 
 import argparse
@@ -58,21 +58,21 @@ def measure(rows: int, iterations: int) -> dict:
             database.evidence_search_available=True
             return retrieve_evidence(database,run,QUESTION)
 
-        fallback_rows=fallback();fts_rows=full_text()
+        scan_rows=fallback();fts_rows=full_text()
         result={
             'fixture_rows':rows,
             'iterations':iterations,
             'index_and_insert_ms':round(index_ms,1),
-            'complete_like_results':len(fallback_rows),
+            'complete_scan_results':len(scan_rows),
             'fts_results':len(fts_rows),
-            'complete_like_ms_per_query':round(best_ms(fallback,iterations),3),
+            'complete_scan_ms_per_query':round(best_ms(fallback,iterations),3),
             'fts_ms_per_query':round(best_ms(full_text,iterations),3),
-            'complete_like_found_exact':bool(fallback_rows and fallback_rows[0]['evidence_id']==f'EV-{rows}'),
+            'complete_scan_found_exact':bool(scan_rows and scan_rows[0]['evidence_id']==f'EV-{rows}'),
             'fts_found_exact':bool(fts_rows and fts_rows[0]['evidence_id']==f'EV-{rows}'),
             'paid_api_calls':0,
         }
         result['query_speedup']=round(
-            result['complete_like_ms_per_query']/max(result['fts_ms_per_query'],0.000001),2)
+            result['complete_scan_ms_per_query']/max(result['fts_ms_per_query'],0.000001),2)
         return result
 
 

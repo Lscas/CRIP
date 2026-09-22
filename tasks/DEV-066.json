@@ -1,0 +1,31 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability for RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce synonym misses and substring false matches before changing retrieval.",
+    "Use a capped audited local vocabulary; do not add embeddings, a vector service or a model call.",
+    "Keep direct question terms stronger than equivalents and never add opposite dispositions.",
+    "Validate with synthetic offline evidence only."
+  ],
+  "task_id": "DEV-066",
+  "title": "Add bounded construction terminology to project questions",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/**", "docs/PROJECT_QUESTIONS.md", "tasks/DEV-066.json",
+    "changes/CR-0081.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/benchmark_question_search.py",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Recover exact RFI, Submittal and Email evidence when the user's wording differs, without semantic overreach or another service."
+}

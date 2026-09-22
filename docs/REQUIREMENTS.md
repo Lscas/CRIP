@@ -998,3 +998,4 @@ A user may ask an English question about a selected completed analysis run and r
 - Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.
 - The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.
 - Run-scoped local full-text ranking must not discard a later exact RFI, Submittal, Email or source-locator match because earlier evidence contains a common term; existing databases are backfilled, and runtimes without FTS5 use a complete compatibility scan.
+- Question retrieval may use only capped, audited construction/workflow equivalents with whole-word matching and direct-term priority; it must not add an opposite workflow disposition or make an additional model request.

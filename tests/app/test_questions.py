@@ -9,7 +9,7 @@ import pytest
 
 from app.db import BudgetError, Database
 from app.gateway import Gateway, InvalidModelOutput
-from app.questions import ProjectQuestions, retrieve_evidence
+from app.questions import ProjectQuestions, expanded_query_terms, retrieve_evidence
 from app.settings import ROOT, Settings
 from .conftest import upload
 
@@ -20,15 +20,17 @@ def _evidence(client, project, rows):
     db = client.app.state.db
     db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?", (run['id'],))
     base = json.loads(Path('examples/evidence.json').read_text(encoding='utf-8'))[0]
+    values = []
     for index, text in enumerate(rows, 1):
         eid = f'EV-QA-{index}'
         payload = {**base, 'evidence_id': eid, 'tenant_id': 'local',
                    'project_id': project['id'], 'input_snapshot_id': run['snapshot_id'],
                    'document_id': document['document_id'], 'raw_text': text,
                    'locator': {**base['locator'], 'section': f'Section {index}'}}
-        db.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',
-                   (run['id'] + ':' + eid, run['id'], project['id'], document['document_id'],
-                    json.dumps(payload), 'EXTRACTED', None, ''))
+        values.append((run['id'] + ':' + eid, run['id'], project['id'], document['document_id'],
+                       json.dumps(payload), 'EXTRACTED', None, ''))
+    with db.connect(True) as connection:
+        connection.executemany('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)', values)
     return client.app.state.runner.get(run['id'])
 
 
@@ -63,6 +65,70 @@ def test_retrieval_does_not_lose_late_exact_match_behind_common_terms(client, pr
     )
 
     assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_maps_question_terms_to_bounded_workflow_synonyms(client, project):
+    rows = ['Submittal 23-01 cover sheet.' for _ in range(160)]
+    rows.append('Submittal 23-01 status: Approved as noted for AHU-1.')
+    run = _evidence(client, project, rows)
+
+    found = retrieve_evidence(
+        client.app.state.db,
+        run,
+        'Was Submittal 23-01 accepted?',
+    )
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_does_not_count_a_synonym_inside_an_unrelated_word(client, project):
+    run = _evidence(client, project, [
+        'Oversized equipment storage requirements.',
+        'Equipment dimensions: 24 x 36 inches.',
+    ])
+
+    found = retrieve_evidence(client.app.state.db, run, 'What is the equipment size?')
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-2'
+
+
+def test_retrieval_expands_rfi_response_and_email_sender_terms(client, project):
+    rows = ['RFI 42 question remains open.' for _ in range(160)]
+    rows.append('RFI 42 response: Use 2 inch Type L copper.')
+    rows.extend('Email thread for RFI 42.' for _ in range(160))
+    rows.append(
+        'From: architect@example.com\nSubject: RFI 42 response\nUse 2 inch Type L copper.')
+    run = _evidence(client, project, rows)
+
+    rfi = retrieve_evidence(client.app.state.db, run, 'What answer was issued for RFI 42?')
+    email = retrieve_evidence(client.app.state.db, run, 'Who sent the reply for RFI 42?')
+
+    assert rfi and rfi[0]['evidence_id'] == 'EV-QA-161'
+    assert email and email[0]['evidence_id'] == 'EV-QA-322'
+
+
+def test_retrieval_treats_workflow_phrases_as_single_bounded_concepts(client, project):
+    rows = ['Drawing 23-01 cover page.' for _ in range(160)]
+    rows.append('Submittal 23-01 status: Approved as noted.')
+    rows.extend('Page 42 general note.' for _ in range(160))
+    rows.append('RFI 42 response: Use Type L copper.')
+    run = _evidence(client, project, rows)
+
+    submittal = retrieve_evidence(client.app.state.db, run, 'What is Shop Drawing 23-01?')
+    rfi = retrieve_evidence(client.app.state.db, run, 'Show Request for Information 42.')
+
+    assert submittal and submittal[0]['evidence_id'] == 'EV-QA-161'
+    assert rfi and rfi[0]['evidence_id'] == 'EV-QA-322'
+
+
+def test_query_expansion_is_bounded_and_never_adds_opposite_status():
+    expanded = expanded_query_terms(
+        'Was Submittal 23-01 accepted and was RFI 42 answered in the email '
+        'specification revision?')
+
+    assert len(expanded) <= 24
+    assert {'approved', 'response', 'message'}.issubset(expanded)
+    assert 'rejected' not in expanded
 
 
 def test_retrieval_fallback_does_not_apply_row_order_cutoff(client, project):
