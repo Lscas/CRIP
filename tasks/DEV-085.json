@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 14000,
+  "max_output_tokens": 2400,
+  "max_context_chars": 13000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an insulation-thickness value accepted as pipe diameter inside one exact RFI citation.",
+    "Bind a bounded set of explicit measurement roles to their mutually nearest numeric value and exact workflow identity.",
+    "Preserve common dimensional pipe and insulation wording without building a general engineering ontology.",
+    "Make no provider request, dependency, unit conversion, arithmetic or source-authority rule."
+  ],
+  "task_id": "DEV-085",
+  "title": "Ground numeric measurement properties",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-085.json", "changes/CR-0100.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent a numeric value from moving between explicit measurement properties within one RFI, Submittal, Email or Specification answer scope."
+}

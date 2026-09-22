@@ -156,6 +156,29 @@ _EXACT_WORKFLOW_STATUS_QUESTIONS = (
 )
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
+_MEASUREMENT_ROLE_PATTERNS = (
+    ('SIZE',re.compile(r'(?i)\b(?:(?:nominal|pipe|tube|duct|conduit)\s+)?'
+                       r'(?:size|diameter|dimensions?)\b')),
+    ('THICKNESS',re.compile(r'(?i)\b(?:thickness|thick)\b')),
+    ('LENGTH',re.compile(r'(?i)\b(?:length|long(?![-\s]+term\b))\b')),
+    ('WIDTH',re.compile(r'(?i)\b(?:width|wide)\b')),
+    ('HEIGHT',re.compile(r'(?i)\b(?:height|high(?!\s+pressure\b))\b')),
+    ('DEPTH',re.compile(r'(?i)\b(?:depth|deep)\b')),
+    ('QUANTITY',re.compile(r'(?i)\b(?:quantity|quantities|qty|count)\b')),
+    ('PRESSURE',re.compile(r'(?i)\bpressure\b')),
+    ('STRENGTH',re.compile(r'(?i)\bstrength\b')),
+    ('FLOW',re.compile(r'(?i)\bflow(?:\s+rate)?\b')),
+    ('CAPACITY',re.compile(r'(?i)\bcapacity\b')),
+    ('TEMPERATURE',re.compile(r'(?i)\btemperature\b')),
+    ('WEIGHT',re.compile(r'(?i)\bweight\b')),
+)
+_DIMENSION_UNIT_AFTER = re.compile(
+    r'(?ix)^\s*[-–]?\s*(?:(?:inch(?:es)?|in\.?|feet|foot|ft\.?|millimeters?|mm|'
+    r'centimeters?|cm|meters?|m)\b|["″\'′])')
+_DIMENSION_OBJECTS = (
+    ('SIZE',re.compile(r'(?i)\b(?:pipe|tube|tubing|duct|conduit|opening)\b')),
+    ('THICKNESS',re.compile(r'(?i)\b(?:insulation|membrane|coating|liner)\b')),
+)
 _MONTH_WORD = (r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
                r'jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|'
                r'oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)')
@@ -744,6 +767,53 @@ def _numeric_values(text: str) -> set[str]:
     return {value for _,_,value in _numeric_occurrences(text)}
 
 
+def _span_distance(first: tuple[int,int], second: tuple[int,int]) -> int:
+    return max(first[0]-second[1],second[0]-first[1],0)
+
+
+def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
+    """Pair explicit measurement labels with their mutually nearest number."""
+    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    numerics=[value for value in _numeric_occurrences(text)
+              if not any(left<=value[0] and value[1]<=right
+                         for left,right in identifier_spans)]
+    labels=[(role,match.start(),match.end())
+            for role,pattern in _MEASUREMENT_ROLE_PATTERNS
+            for match in pattern.finditer(text)]
+    values=[]
+    for start,end,numeric_value in numerics:
+        left,right=statement_span(text,start,end)
+        candidates=[label for label in labels if left<=label[1] and label[2]<=right
+                    and _span_distance((start,end),label[1:])<=64]
+        if candidates:
+            distance=min(_span_distance((start,end),label[1:]) for label in candidates)
+            nearest=[label for label in candidates
+                     if _span_distance((start,end),label[1:])==distance]
+            if len({label[0] for label in nearest})==1:
+                label=min(nearest,key=lambda value:(value[1],value[2]))
+                label_numerics=[other for other in numerics if left<=other[0]
+                                and other[1]<=right]
+                label_distance=min(_span_distance((label[1],label[2]),other[:2])
+                                   for other in label_numerics)
+                if _span_distance((label[1],label[2]),(start,end))==label_distance:
+                    values.append((label[0],numeric_value,start,end))
+                    continue
+        if not _DIMENSION_UNIT_AFTER.search(text[end:min(right,end+24)]):continue
+        objects=[(role,match.start(),match.end()) for role,pattern in _DIMENSION_OBJECTS
+                 for match in pattern.finditer(text,left,right)
+                 if _span_distance((start,end),(match.start(),match.end()))<=48]
+        if not objects:continue
+        distance=min(_span_distance((start,end),item[1:]) for item in objects)
+        nearest={item[0] for item in objects
+                 if _span_distance((start,end),item[1:])==distance}
+        if len(nearest)==1:values.append((nearest.pop(),numeric_value,start,end))
+    return sorted(set(values))
+
+
+def _numeric_property_values(text: str) -> set[tuple[str,str]]:
+    return {(role,value) for role,value,_,_ in _numeric_property_occurrences(text)}
+
+
 def _date_occurrences(text: str) -> list[tuple[int,int,str]]:
     values=[
         (match.start(),match.end(),
@@ -871,6 +941,23 @@ def _workflow_numeric_values(text: str, identity_text: str | None = None
     return values
 
 
+def _workflow_numeric_property_values(text: str, identity_text: str | None = None
+                                      ) -> set[tuple[tuple[str,str],str,str]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    values=set()
+    for role,numeric_value,start,end in _numeric_property_occurrences(text):
+        left,right=statement_span(text,start,end)
+        statement_identities=_workflow_identities(text[left:right])
+        if identity_text is None:
+            identities=statement_identities or all_identities
+        else:
+            identities=(statement_identities if len(statement_identities)==1 else
+                        all_identities if not statement_identities and len(all_identities)==1
+                        else set())
+        values.update((identity,role,numeric_value) for identity in identities)
+    return values
+
+
 def _require_numeric_support(claim: str, quotes: list[str], label: str,
                              identity_citations: list[str] | None = None,
                              scope_workflow: bool = True) -> None:
@@ -886,11 +973,24 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
     supported_scoped=set()
+    supported_properties=set();supported_scoped_properties=set()
     for index,quote in enumerate(quotes):
         identity_text=(identity_citations[index] if index<len(identity_citations) else quote)
         supported_scoped.update(_workflow_numeric_values(quote,identity_text))
+        supported_properties.update(_numeric_property_values(quote))
+        supported_scoped_properties.update(
+            _workflow_numeric_property_values(quote,identity_text))
     if _workflow_numeric_values(claim)-supported_scoped:
         raise ValueError(label+' contains a workflow numeric claim absent from its citations')
+    supported_roles={role for role,_ in supported_properties}
+    claimed_properties={value for value in _numeric_property_values(claim)
+                        if value[0] in supported_roles}
+    if claimed_properties-supported_properties:
+        raise ValueError(label+' contains a measurement property absent from its citations')
+    claimed_scoped_properties={value for value in _workflow_numeric_property_values(claim)
+                               if value[1] in supported_roles}
+    if claimed_scoped_properties-supported_scoped_properties:
+        raise ValueError(label+' contains a workflow measurement property absent from its citations')
 
 
 def _citation_identity_text(evidence: dict, quote: str) -> str:

@@ -1457,6 +1457,123 @@ def test_workflow_identifier_number_is_not_a_property_value(client, project):
     validate_answer_model(answer,evidence,question)
 
 
+def test_answer_rejects_insulation_thickness_as_pipe_diameter(client, project):
+    source=('RFI 42 response: Pipe diameter is 2 inch. '
+            'Insulation thickness is 1 inch.')
+    run=_evidence(client,project,[source])
+    question='What pipe diameter does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'RFI 42 requires a 1 inch pipe diameter.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize('answer_text',[
+    'RFI 42 requires a 2 inch pipe diameter.',
+    'RFI 42 requires 1 inch insulation thickness.',
+])
+def test_answer_accepts_each_number_with_its_own_measurement_property(
+        client, project, answer_text):
+    source=('RFI 42 response: Pipe diameter is 2 inch. '
+            'Insulation thickness is 1 inch.')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'What dimensions does RFI 42 require?')
+    answer={'status':'ANSWERED','answer':answer_text,'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'What dimensions does RFI 42 require?')
+
+
+@pytest.mark.parametrize('source',[
+    'RFI 42 response: Domestic water service pipe shall be 2 inch Type L copper.',
+    'RFI 42 response: Use 2-inch Type L copper pipe.',
+    'RFI 42 response: Use 2" Type L copper pipe.',
+])
+def test_plain_dimensional_pipe_wording_still_supports_pipe_size(
+        client, project, source):
+    run=_evidence(client,project,[source])
+    question='What pipe size does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED','answer':'RFI 42 requires a 2 inch pipe size.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_source_finding_rejects_submittal_height_as_width(client, project):
+    spec='Specification requires listed equipment dimensions.'
+    submittal='Submittal 23-01 equipment width is 24 inch. Height is 36 inch.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 equipment dimensions.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources describe equipment dimensions.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires listed equipment dimensions.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 equipment width is 36 inch.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_specification_answer_rejects_height_as_width(client, project):
+    source='Equipment width is 24 inch. Height is 36 inch.'
+    run=_evidence(client,project,[source])
+    question='What equipment width does the specification require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'The equipment width is 36 inch.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_measurement_property_cannot_borrow_another_rfi(client, project):
+    source=('RFI 42 response: Pipe diameter is 2 inch. '
+            'RFI 43 response: Insulation thickness is 2 inch.')
+    run=_evidence(client,project,[source])
+    question='What insulation thickness does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires 2 inch insulation thickness.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_answer_rejects_pressure_as_compressive_strength(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'High pressure is 150 psi. Compressive strength is 4,000 psi.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    question='What compressive strength does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires 150 psi compressive strength.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
 def test_prefixed_rfi_identifiers_remain_exact_in_answer_citations(client, project):
     source='RFI ARC-0042 response: Use Type L copper. Reference ARC-42 remains open.'
     run=_evidence(client,project,[source])
