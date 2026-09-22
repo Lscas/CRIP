@@ -1853,6 +1853,18 @@ def test_answer_rejects_recombined_drawing_identifier(client, project):
         validate_answer_model(wrong,evidence,'Which sheet applies to RFI 42?')
 
 
+def test_answer_rejects_recombined_detail_callout(client, project):
+    source='RFI 42 response: Coordinate Detail 3/A5.1 with Detail 5/A7.2.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which detail applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Detail 3/A7.2.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='drawing identifier'):
+        validate_answer_model(wrong,evidence,'Which detail applies to RFI 42?')
+
+
 def test_drawing_identifier_cannot_be_borrowed_from_another_rfi(client, project):
     source=('RFI 42 response: Use Sheet A1.01. '
             'RFI 43 response: Use Drawing P2.02.')
@@ -1870,6 +1882,7 @@ def test_drawing_identifier_cannot_be_borrowed_from_another_rfi(client, project)
     ('Sheet A1.01','Drawing A1.01'),
     ('Drawing No. P2-02','Dwg: P2-02'),
     ('Dwg. M–101','Sheet M-101'),
+    ('Detail No. 3/A5.1','Detail: 3/A5.1'),
 ])
 def test_answer_accepts_prefix_equivalent_drawing_identifiers(
         client, project, source_identifier, answer_identifier):
@@ -1924,6 +1937,21 @@ def test_email_drawing_identifier_stays_with_its_workflow(client, project):
         validate_answer_model(wrong,evidence,'Which sheet applies to RFI 42?')
 
 
+def test_email_detail_callout_stays_with_its_workflow(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'RFI 42 response: Use Detail 3/A5.1. '
+            'Submittal 23-01: Use Detail 5/A7.2.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which detail applies to RFI 42?')
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Detail 5/A7.2.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow drawing identifier'):
+        validate_answer_model(wrong,evidence,'Which detail applies to RFI 42?')
+
+
 def test_submittal_finding_cannot_borrow_specification_drawing_identifier(
         client, project):
     spec='Specification drawing list requires Sheet A1.01.'
@@ -1956,7 +1984,8 @@ def test_drawing_identifier_parser_requires_an_explicit_digit_bearing_label():
         'Drawing revision A; drawing list; sheet status current.')==set()
     assert _drawing_identifier_values('Drawing 2024-01-05')==set()
     assert _drawing_identifier_values(
-        'Sheet A1.01; Drawing No. P2-02; Dwg: M–101')=={'A1.01','P2-02','M-101'}
+        'Sheet A1.01; Drawing No. P2-02; Dwg: M–101; Detail 3/A5.1')=={
+            'A1.01','P2-02','M-101','3/A5.1'}
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(

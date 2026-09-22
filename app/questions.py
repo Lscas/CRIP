@@ -91,7 +91,7 @@ _REVISION_LABEL_WEAK = re.compile(
     r'(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*|'
     r'ifc|ifb|as[- ]built))(?!\w)')
 _DRAWING_IDENTIFIER = re.compile(
-    r'(?i)(?:\bsheet\b|\bdrawing\b|\bdwg\.?)'
+    r'(?i)(?:\bsheet\b|\bdrawing\b|\bdwg\.?|\bdetail\b)'
     r'(?:\s+(?:(?:no\.?|number)\s*)?|\s*[:#=-]\s*)'
     r'(?P<label>(?=[a-z0-9._/\-–—]*\d)[a-z0-9]+'
     r'(?:[._/\-–—][a-z0-9]+)*)(?!\w)')
