@@ -32,6 +32,8 @@ _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
 _MAX_WORKFLOW_CONFLICT_CITATION_SOURCES = 32
+# ponytail: keep Q&A at 50 values per category; use the paginated Workflow Reviewer above this ceiling.
+_MAX_WORKFLOW_INVENTORY_VALUES = 50
 _EQUIVALENT_GROUPS = (
     ('accept','accepted','acceptance','approve','approved','approval'),
     ('answer','answered','reply','replied','response','responded'),
@@ -92,6 +94,13 @@ _WORKFLOW_COUNT_QUESTION = re.compile(
         |count\s+(?:the\s+)?(?P<count>{_WORKFLOW_COUNT_LIST})
     )(?:\s+(?:are\s+there|(?:are\s+)?in\s+(?:this|the)\s+(?:run|analysis|project)))?
     \s*[?!.]*\s*$''')
+_WORKFLOW_LIST_QUESTION = re.compile(
+    rf'''(?ix)^\s*(?:
+        (?:list|show)(?:\s+me)?\s+(?:the\s+)?(?:all\s+)?(?P<command>{_WORKFLOW_COUNT_LIST})
+        (?:\s+in\s+(?:this|the)\s+(?:run|analysis|project))?
+        |(?:which|what)\s+(?P<which>{_WORKFLOW_COUNT_LIST})\s+are\s+
+         (?:in|included\s+in)\s+(?:this|the)\s+(?:run|analysis|project)
+    )\s*[?!.]*\s*$''')
 _WORKFLOW_COUNT_TYPES = (
     ('RFI',re.compile(r'(?i)\b(?:rfis|requests\s+for\s+information)\b')),
     ('SUBMITTAL',re.compile(r'(?i)\bsubmittals\b')),
@@ -327,9 +336,7 @@ def requires_workflow_status_index(question: str) -> bool:
     return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
 
 
-def requested_workflow_counts(question: str) -> tuple[str,...]:
-    """Recognize only unfiltered run-wide plural inventory questions."""
-    match=_WORKFLOW_COUNT_QUESTION.fullmatch(question)
+def _requested_workflow_types(match: re.Match | None) -> tuple[str,...]:
     if not match:return ()
     categories=next(value for value in match.groupdict().values() if value is not None)
     found=[(hit.start(),kind) for kind,pattern in _WORKFLOW_COUNT_TYPES
@@ -337,24 +344,55 @@ def requested_workflow_counts(question: str) -> tuple[str,...]:
     return tuple(kind for _,kind in sorted(found))
 
 
+def requested_workflow_counts(question: str) -> tuple[str,...]:
+    """Recognize only unfiltered run-wide plural inventory count questions."""
+    return _requested_workflow_types(_WORKFLOW_COUNT_QUESTION.fullmatch(question))
+
+
+def requested_workflow_list(question: str) -> tuple[str,...]:
+    """Recognize only unfiltered run-wide plural inventory list questions."""
+    return _requested_workflow_types(_WORKFLOW_LIST_QUESTION.fullmatch(question))
+
+
 def requires_workflow_inventory(question: str) -> bool:
-    return bool(requested_workflow_counts(question))
+    return bool(requested_workflow_counts(question) or requested_workflow_list(question))
+
+
+def _workflow_inventory_values(workflow_index: dict) -> dict[str,list[str]]:
+    values={'RFI':[],'SUBMITTAL':[],'EMAIL':[]};seen={kind:set() for kind in values}
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict):continue
+        kind=item.get('kind');identifier=item.get('identifier')
+        if kind in {'RFI','SUBMITTAL'} and identifier and identifier not in seen[kind]:
+            seen[kind].add(identifier);values[kind].append(str(identifier))
+        for member in item.get('members',[]):
+            if not isinstance(member,dict):continue
+            document_id=member.get('document_id');file_name=str(member.get('file_name') or 'Unknown file')
+            is_email=(member.get('document_type')=='EMAIL'
+                      or file_name.casefold().endswith(('.eml','.msg')))
+            if is_email and document_id and document_id not in seen['EMAIL']:
+                seen['EMAIL'].add(document_id);values['EMAIL'].append(file_name)
+    values['EMAIL'].sort(key=str.casefold)
+    return values
 
 
 def _workflow_inventory_answer(question: str, workflow_index: dict | None) -> dict | None:
-    requested=requested_workflow_counts(question)
+    requested=requested_workflow_counts(question);mode='COUNT'
+    if not requested:requested=requested_workflow_list(question);mode='LIST'
     if not requested or not isinstance(workflow_index,dict):return None
-    items=[item for item in workflow_index.get('items',[]) if isinstance(item,dict)]
-    counts={
-        'RFI':sum(item.get('kind')=='RFI' for item in items),
-        'SUBMITTAL':sum(item.get('kind')=='SUBMITTAL' for item in items),
-        'EMAIL':len({str(member.get('document_id')) for item in items
-                     for member in item.get('members',[]) if isinstance(member,dict)
-                     and (member.get('document_type')=='EMAIL'
-                          or str(member.get('file_name') or '').casefold().endswith(('.eml','.msg')))
-                     and member.get('document_id')}),
-    }
+    inventory=_workflow_inventory_values(workflow_index)
+    counts={kind:len(values) for kind,values in inventory.items()}
     units={'RFI':'RFI identifier','SUBMITTAL':'Submittal identifier','EMAIL':'Email file'}
+    if mode=='LIST':
+        entries=[];lines=[]
+        for kind in requested:
+            total=counts[kind];shown=inventory[kind][:_MAX_WORKFLOW_INVENTORY_VALUES]
+            truncated=total>len(shown);unit=units[kind]+('' if total==1 else 's')
+            qualifier=f'{total}; first {len(shown)} shown' if truncated else str(total)
+            lines.append(f"{unit} ({qualifier}): {', '.join(shown) if shown else 'none'}.")
+            entries.append({'kind':kind,'total':total,'values':shown,'truncated':truncated})
+        return {'answer':('The complete workflow index for the selected analysis run contains:\n'
+                          +'\n'.join(lines)),'workflow_inventory':entries}
     values=[]
     for kind in requested:
         count=counts[kind];unit=units[kind]+('' if count==1 else 's')

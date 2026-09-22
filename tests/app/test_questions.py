@@ -12,9 +12,10 @@ from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
-    numeric_rfi_search_terms, requested_workflow_counts, requires_source_diversity,
-    requires_workflow_inventory, requires_workflow_status_index, retrieve_evidence,
-    search_query_terms, validate_answer_model,
+    numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
+    requires_source_diversity, requires_workflow_inventory,
+    requires_workflow_status_index, retrieve_evidence, search_query_terms,
+    validate_answer_model,
 )
 from app.settings import ROOT, Settings
 from app.workflows import build_workflow_index
@@ -1224,6 +1225,21 @@ def test_workflow_inventory_question_boundary(question,expected):
     assert requires_workflow_inventory(question) is bool(expected)
 
 
+@pytest.mark.parametrize(('question','expected'),[
+    ('List all RFIs, Submittals, and Emails in this run.',('RFI','SUBMITTAL','EMAIL')),
+    ('Show me the e-mails.',('EMAIL',)),
+    ('Which RFIs and Submittals are in this project?',('RFI','SUBMITTAL')),
+    ('What Emails are included in the analysis?',('EMAIL',)),
+    ('List open RFIs.',()),
+    ('List RFI documents.',()),
+    ('List RFI 42 responses.',()),
+    ('List RFIs mentioning concrete.',()),
+])
+def test_workflow_inventory_list_question_boundary(question,expected):
+    assert requested_workflow_list(question)==expected
+    assert requires_workflow_inventory(question) is bool(expected)
+
+
 def test_workflow_inventory_answer_skips_retrieval_and_live_provider(
         client, project, tmp_path, monkeypatch):
     run=_evidence(client,project,['RFI 42 question.'])
@@ -1247,10 +1263,11 @@ def test_workflow_inventory_answer_skips_retrieval_and_live_provider(
     gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
                     httpx.Client(transport=httpx.MockTransport(
                         lambda request:(requests.append(request),httpx.Response(500))[1])))
+    service=ProjectQuestions(client.app.state.db,gateway)
     monkeypatch.setattr('app.questions.retrieve_evidence',
                         lambda *_args,**_kwargs:pytest.fail('inventory answer read evidence'))
 
-    result=ProjectQuestions(client.app.state.db,gateway).ask(
+    result=service.ask(
         run,'How many RFIs, Submittals, and Emails are in this run?',index)
 
     assert result['status']=='ANSWERED' and result['answer_basis']=='WORKFLOW_INDEX'
@@ -1259,6 +1276,27 @@ def test_workflow_inventory_answer_skips_retrieval_and_live_provider(
     assert result['workflow_counts']==[
         {'kind':'RFI','count':2},{'kind':'SUBMITTAL','count':1},{'kind':'EMAIL','count':2}]
     assert result['retrieved_count']==0 and result['citations']==[]
+    listed=service.ask(run,'List all RFIs, Submittals, and Emails in this run.',index)
+    assert listed['answer']==(
+        'The complete workflow index for the selected analysis run contains:\n'
+        'RFI identifiers (2): 42, 99.\n'
+        'Submittal identifier (1): 23-01.\n'
+        'Email files (2): coordination.eml, question.eml.')
+    assert listed['workflow_inventory']==[
+        {'kind':'RFI','total':2,'values':['42','99'],'truncated':False},
+        {'kind':'SUBMITTAL','total':1,'values':['23-01'],'truncated':False},
+        {'kind':'EMAIL','total':2,'values':['coordination.eml','question.eml'],'truncated':False},
+    ]
+    large=build_workflow_index([
+        {'document_id':f'RFI-{number}','name':f'rfi-{number}.txt','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[
+                {'workflow_type':'RFI','identifier':str(number),'role':'QUESTION','status':None}]}}
+        for number in range(1,56)])
+    large_result=service.ask(run,'List all RFIs in this run.',large)
+    assert large_result['workflow_inventory'][0]['total']==55
+    assert len(large_result['workflow_inventory'][0]['values'])==50
+    assert large_result['workflow_inventory'][0]['truncated'] is True
+    assert '55; first 50 shown' in large_result['answer']
     assert requests==[]
     assert client.app.state.db.all(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
@@ -1297,3 +1335,11 @@ def test_question_api_loads_complete_workflow_index_for_inventory_count(
     assert result['workflow_counts']==[
         {'kind':'RFI','count':1},{'kind':'SUBMITTAL','count':1},{'kind':'EMAIL','count':2}]
     assert result['retrieved_count']==0 and result['answer_basis']=='WORKFLOW_INDEX'
+    listed=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'List all RFIs, Submittals, and Emails in this run.'})
+    assert listed.status_code==200
+    assert listed.json()['workflow_inventory']==[
+        {'kind':'RFI','total':1,'values':['42'],'truncated':False},
+        {'kind':'SUBMITTAL','total':1,'values':['23-01'],'truncated':False},
+        {'kind':'EMAIL','total':2,'values':['coordination.eml','question.eml'],'truncated':False},
+    ]

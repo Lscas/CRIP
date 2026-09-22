@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9500,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an unfiltered workflow inventory list that falls through to bounded evidence retrieval and model generation.",
+    "Reuse the deterministic count path and complete cached terminal-run workflow index; do not add another index or dependency.",
+    "Return complete totals and at most 50 ordered values per category, leaving the existing paginated reviewer as the full large-inventory view.",
+    "Keep status, identifier, source, date and content filters on the ordinary evidence path and make no model or budget action."
+  ],
+  "task_id": "DEV-077",
+  "title": "List workflow inventory without a model call",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-077.json", "changes/CR-0092.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer safe run-wide RFI, Submittal and Email inventory list questions completely enough for direct use without paying a model to summarize a truncated evidence window."
+}
