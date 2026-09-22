@@ -75,6 +75,13 @@ _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
 _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
+_SPEC_SECTION_VALUE = re.compile(r'''(?ix)(?<!\w)
+    (?:section|csi(?:\s+section)?|spec(?:ification)?(?:\s+section)?)
+    \s*[:#-]?\s*
+    (?P<division>\d{2})(?:\s+|\s*[.-]\s*)
+    (?P<group>\d{2})(?:\s+|\s*[.-]\s*)
+    (?P<section>\d{2})(?P<extension>\.\d{2})?(?!\w)(?!\.\d)
+''')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
@@ -787,6 +794,16 @@ def _numeric_values(text: str) -> set[str]:
     return {value for _,_,value in _numeric_occurrences(text)}
 
 
+def _spec_section_occurrences(text: str) -> list[tuple[str,int,int]]:
+    return [(match['division']+match['group']+match['section']+
+             (match['extension'] or ''),match.start(),match.end())
+            for match in _SPEC_SECTION_VALUE.finditer(text)]
+
+
+def _spec_section_values(text: str) -> set[str]:
+    return {value for value,_,_ in _spec_section_occurrences(text)}
+
+
 def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
     match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
     if not match:return None
@@ -794,10 +811,11 @@ def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
 
 
 def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
-    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     values=[]
     for start,end,numeric_value in _numeric_occurrences(text):
-        if any(left<=start and end<=right for left,right in identifier_spans):continue
+        if any(left<=start and end<=right for left,right in reserved_spans):continue
         _,right=statement_span(text,start,end);unit=_unit_after(text,end,right)
         if unit:values.append((numeric_value,unit,start,end))
     return values
@@ -813,10 +831,11 @@ def _span_distance(first: tuple[int,int], second: tuple[int,int]) -> int:
 
 def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     """Pair explicit measurement labels with their mutually nearest number."""
-    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     numerics=[value for value in _numeric_occurrences(text)
               if not any(left<=value[0] and value[1]<=right
-                         for left,right in identifier_spans)]
+                         for left,right in reserved_spans)]
     labels=[(role,match.start(),match.end())
             for role,pattern in _MEASUREMENT_ROLE_PATTERNS
             for match in pattern.finditer(text)]
@@ -936,6 +955,28 @@ def _workflow_date_role_values(text: str, identity_text: str | None = None
     return _workflow_scoped_values(text,_date_role_occurrences(text),identity_text)
 
 
+def _workflow_spec_section_values(text: str, identity_text: str | None = None
+                                  ) -> set[tuple[tuple[str,str],str]]:
+    return _workflow_scoped_values(text,_spec_section_occurrences(text),identity_text)
+
+
+def _require_spec_section_support(
+        claim: str, quotes: list[str], label: str,
+        identity_citations: list[str] | None = None,
+        scope_workflow: bool = True) -> None:
+    identity_citations=identity_citations or quotes
+    supported=set();supported_scoped=set()
+    for index,quote in enumerate(quotes):
+        context=(identity_citations[index] if index<len(identity_citations) else quote)
+        supported.update(_spec_section_values(context))
+        supported_scoped.update(_workflow_spec_section_values(context))
+    if _spec_section_values(claim)-supported:
+        raise ValueError(label+' contains a specification section absent from its citations')
+    if (scope_workflow
+            and _workflow_spec_section_values(claim)-supported_scoped):
+        raise ValueError(label+' contains a workflow specification section absent from its citations')
+
+
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
     if _date_values(claim)-_date_values(' '.join(quotes)):
         raise ValueError(label+' contains a date absent from its citations')
@@ -984,10 +1025,11 @@ def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
 def _workflow_numeric_values(text: str, identity_text: str | None = None
                              ) -> set[tuple[tuple[str,str],str]]:
     """Keep non-identifier numbers attached to one exact workflow scope."""
-    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     occurrences=[(numeric_value,start,end)
                  for start,end,numeric_value in _numeric_occurrences(text)
-                 if not any(left<=start and end<=right for left,right in identifier_spans)]
+                 if not any(left<=start and end<=right for left,right in reserved_spans)]
     return _workflow_scoped_values(text,occurrences,identity_text)
 
 
@@ -1016,9 +1058,14 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
     supported_identities=_workflow_identities_in(identity_citations)
     identifier_spans=[(start,end) for identity,start,end in _workflow_identity_spans(claim)
                       if identity in supported_identities]
+    supported_sections=set()
+    for context in identity_citations:supported_sections.update(_spec_section_values(context))
+    section_spans=[(start,end) for value,start,end in _spec_section_occurrences(claim)
+                   if value in supported_sections]
     for start,end,value in _numeric_occurrences(claim):
         if value in quote_values:continue
         if any(left<=start and end<=right for left,right in identifier_spans):continue
+        if any(left<=start and end<=right for left,right in section_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
     supported_scoped=set();supported_units=set();supported_scoped_units=set()
@@ -1351,6 +1398,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                     _require_unambiguous_dispositions(retrieved,'retrieved source finding')
             _require_workflow_identity_support(
                 finding['statement'],finding_identity_texts,'source finding')
+            _require_spec_section_support(
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_date_role_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
@@ -1375,6 +1424,9 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                            if len(families)==1 else _retrieved_scope(evidence))
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
+        _require_spec_section_support(
+            value['answer'],answer_quotes,'answer',answer_identity_texts,
+            scope_workflow=not value['source_findings'])
         _require_date_support(value['answer'],answer_quotes,'answer')
         _require_date_role_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts)

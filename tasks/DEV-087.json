@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 2200,
+  "max_context_chars": 14000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a specification section assembled from numeric groups belonging to two cited sections.",
+    "Validate an explicitly labelled six-digit CSI/MasterFormat section as one value before generic numbers.",
+    "Keep a claimed section with the same exact RFI/Submittal identity or source finding.",
+    "Allow only formatting-equivalent space, hyphen and dot separators plus an immediate two-digit extension.",
+    "Do not infer unlabelled codes, applicability, authority or precedence; make no provider request or dependency change."
+  ],
+  "task_id": "DEV-087",
+  "title": "Ground project-answer specification sections",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-087.json",
+    "changes/CR-0102.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent a cited CSI/MasterFormat section from being recombined across sections, workflows or source findings in a project-file answer."
+}

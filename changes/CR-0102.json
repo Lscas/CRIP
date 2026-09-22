@@ -1,0 +1,31 @@
+{
+  "change_id": "CR-0102",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground explicitly labelled CSI/MasterFormat sections as atomic cited values and keep them scoped to exact workflow identities and source findings.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "Project answers already expose specification-section and exact evidence-locator context",
+    "An offline reproduction proved that component-number validation accepted a section recombined from two cited sections"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-087.json",
+    "changes/CR-0102.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes deterministic answer-accuracy improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only explicitly labelled three-group, two-digit CSI/MasterFormat sections and immediate two-digit extensions are interpreted.",
+    "Unlabelled codes, other standards and arbitrary subsection formats remain ordinary text.",
+    "The guard does not determine applicability, contractual authority, precedence or whether every relevant file was parsed."
+  ]
+}

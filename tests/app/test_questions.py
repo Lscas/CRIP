@@ -11,7 +11,7 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _numeric_unit_values, _workflow_identities,
+    ProjectQuestions, _numeric_unit_values, _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
@@ -1628,6 +1628,114 @@ def test_compact_measurement_units_are_allowlisted():
     assert _numeric_unit_values('Thickness 2mm; strength 150MPa; flow 4L/s.')=={
         ('2','MM'),('150','MPA'),('4','LPS')}
     assert _numeric_unit_values('Model 2model; speed 2m/s.')==set()
+
+
+def test_answer_rejects_recombined_specification_section(client, project):
+    source=('RFI 42 response: Specification Section 22 11 16 covers piping. '
+            'Specification Section 23 05 00 covers HVAC.')
+    run=_evidence(client,project,[source])
+    question='Which section applies?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED',
+           'answer':'RFI 42 references Specification Section 22 05 16.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='specification section'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source_section','answer_section'),[
+    ('22 11 16','22-11-16'),('22-11-16','22.11.16'),('22.11.16','22 11 16'),
+])
+def test_answer_accepts_formatting_equivalent_specification_sections(
+        client, project, source_section, answer_section):
+    source=f'RFI 42 response: Specification Section {source_section} covers piping.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which section applies?')
+    answer={'status':'ANSWERED',
+            'answer':f'RFI 42 references Specification Section {answer_section}.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which section applies?')
+
+
+def test_specification_section_can_use_one_exact_evidence_locator(client, project):
+    source='Use Type L copper for the domestic water service.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which section applies?')
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE > Section 22 11 16'
+    answer={'status':'ANSWERED',
+            'answer':'RFI 42 references Specification Section 22 11 16.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which section applies?')
+
+
+def test_specification_section_cannot_be_borrowed_from_another_rfi(client, project):
+    source=('RFI 42 response: Specification Section 22 11 16 applies. '
+            'RFI 43 response: Specification Section 23 05 00 applies.')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which section applies?')
+    wrong={'status':'ANSWERED',
+           'answer':'RFI 42 references Specification Section 23 05 00.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow specification section'):
+        validate_answer_model(wrong,evidence,'Which section applies?')
+
+
+def test_email_answer_rejects_recombined_specification_section(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'Use Specification Section 22 11 16. '
+            'Coordinate Specification Section 23 05 00.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which section applies?')
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED',
+           'answer':'RFI 42 references Specification Section 22 05 16.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='specification section'):
+        validate_answer_model(wrong,evidence,'Which section applies?')
+
+
+def test_submittal_finding_cannot_borrow_specification_section(
+        client, project):
+    spec='Specification Section 22 11 16 requires Type L copper.'
+    submittal='Submittal 23-01 references Specification Section 23 05 00.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 specification sections.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources reference different sections.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':spec,
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':('Submittal 23-01 references Specification '
+                          'Section 22 11 16.'),
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='specification section'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_specification_section_parser_does_not_treat_submittal_id_as_section():
+    assert _spec_section_values('Submittal 23 05 00 - 01 is pending.')==set()
+    assert _spec_section_values('Specification Section 23 05 00.13 applies.')=={
+        '230500.13'}
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(
