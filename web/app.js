@@ -136,8 +136,8 @@ function questionCitation(item,data){
 }
 function renderQuestionAnswer(question,data){
  const article=el('article',null,'question-answer');article.append(el('h3',question),el('p',data.answer));
- const workflowConflicts=data.workflow_conflicts||[];
- workflowConflicts.forEach(item=>{
+ const workflowStatuses=[...(data.workflow_statuses||[]),...(data.workflow_conflicts||[])];
+ workflowStatuses.forEach(item=>{
   const conflict=el('section',null,'question-finding');conflict.append(el('h4',item.label));
   (item.statuses||[]).forEach(status=>{
    const sources=el('div',null,'question-citation');sources.append(el('strong',workflowCodeLabel('status',status.status)));
@@ -157,7 +157,7 @@ function renderQuestionAnswer(question,data){
   article.append(finding);
  });
  const citations=(data.citations||[]).filter(item=>!findingCitations.has(item.evidence_id+'\n'+item.quote));
- if(!workflowConflicts.length&&!findings.length&&!citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
+ if(!workflowStatuses.length&&!findings.length&&!citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
  citations.forEach(item=>article.append(questionCitation(item,data)));
  $('question-results').prepend(article);
 }

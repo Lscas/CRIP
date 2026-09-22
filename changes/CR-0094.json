@@ -1,0 +1,35 @@
+{
+  "change_id": "CR-0094",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Answer strict exact RFI/Submittal status questions from explicit complete-index evidence without retrieval or a model call.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email efficiency, accuracy and adaptability",
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "Current offline reproduction proved that one explicit complete-index status still fell through to retrieval and provider dispatch"
+  ],
+  "affected_paths": [
+    "app/questions.py", "web/app.js", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-079.json", "changes/CR-0094.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective and project-question request authorize this deterministic completeness, accuracy and cost improvement.",
+  "known_limitations": [
+    "Only strict English status/disposition forms naming one exact RFI or Submittal identifier use this path.",
+    "Questions asking for explanation, comparison, a yes/no predicate, another filter or an Email-thread status remain on the evidence/model path.",
+    "Only an explicit primary detected-or-manual status from the bounded vocabulary applicable to that workflow type is returned; missing, unknown or inapplicable status is not inferred.",
+    "Multiple statuses and a single malformed multi-state value remain insufficient evidence without chronology or authority inference.",
+    "Detected sources receive an inline quote only when existing immutable evidence ties the exact status phrase to the exact identifier; manual sources remain file-only."
+  ]
+}

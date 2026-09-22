@@ -13,7 +13,8 @@ from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_workflow_status_inventory, requires_source_diversity,
+    requested_workflow_status_inventory, requested_workflow_status_item,
+    requires_source_diversity,
     requires_workflow_inventory, requires_workflow_status_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -1100,7 +1101,7 @@ def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
     result=ProjectQuestions(client.app.state.db,gateway).ask(run,question,workflow_index)
 
     assert result['status']=='INSUFFICIENT_EVIDENCE'
-    assert f'{kind} {identifier}' in result['answer'] and result['retrieved_count']==1
+    assert f'{kind} {identifier}' in result['answer'] and result['retrieved_count']==0
     assert all(status in result['answer'] for status in statuses)
     assert current['name'] in result['answer'] and 'archive.eml' in result['answer']
     assert '[detected]' in result['answer'] and '[manual correction]' in result['answer']
@@ -1119,6 +1120,114 @@ def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
     assert requests==[]
     assert client.app.state.db.all(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_status_uses_complete_index_without_retrieval_or_provider(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('current.eml',['From: architect@example.test\nSubject: RFI 42\nRFI 42 status: OPEN.']),
+    ])
+    current=client.app.state.db.one('''SELECT e.document_id,d.name FROM evidence e
+                                       JOIN documents d ON d.id=e.document_id
+                                       WHERE e.run_id=?''',(run['id'],))
+    workflow_index=build_workflow_index([
+        {'document_id':current['document_id'],'name':current['name'],'summary':{
+            'document_type':'EMAIL','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'OPEN'}]}},
+        {'document_id':'MANUAL','name':'reviewer-correction.eml',
+         'classification_source':'MANUAL','summary':{
+             'document_type':'EMAIL','workflow_contexts':[{
+                 'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'OPEN'}]}},
+    ])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact status answer read evidence'))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(
+        run,'What is the status of RFI 42?',workflow_index)
+
+    assert result['status']=='ANSWERED' and result['answer_basis']=='WORKFLOW_INDEX'
+    assert result['retrieved_count']==0 and result['citations']==[]
+    assert 'RFI 42' in result['answer'] and 'OPEN' in result['answer']
+    status=result['workflow_statuses'][0]
+    assert status['workflow_type']=='RFI' and status['identifier']=='42'
+    assert status['statuses'][0]['status']=='OPEN'
+    sources={source['file_name']:source for source in status['statuses'][0]['sources']}
+    assert sources['current.eml']['citation']['quote']=='RFI 42 status: OPEN.'
+    assert sources['reviewer-correction.eml']['classification_source']=='MANUAL'
+    assert 'citation' not in sources['reviewer-correction.eml']
+    assert requests==[]
+    assert client.app.state.db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_status_rejects_one_malformed_multi_state_without_provider(
+        client, project, tmp_path, monkeypatch):
+    run=_evidence(client,project,['RFI 42 status: OPEN CLOSED.'])
+    current=client.app.state.db.one('''SELECT e.document_id,d.name FROM evidence e
+                                       JOIN documents d ON d.id=e.document_id
+                                       WHERE e.run_id=?''',(run['id'],))
+    workflow_index=build_workflow_index([{
+        'document_id':current['document_id'],'name':current['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE',
+                'status':'OPEN CLOSED'}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('ambiguous status read evidence'))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(
+        run,'What is the status of RFI 42?',workflow_index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['retrieved_count']==0 and result['workflow_statuses']==[]
+    assert result['workflow_conflicts'][0]['statuses'][0]['status']=='OPEN CLOSED'
+    assert requests==[]
+
+
+@pytest.mark.parametrize('status',[None,'APPROVED'])
+def test_exact_workflow_status_without_a_supported_explicit_state_uses_evidence_path(
+        client, project, tmp_path, monkeypatch, status):
+    run=_evidence(client,project,['RFI 42 question.'])
+    index=build_workflow_index([{'document_id':'RFI-42','name':'rfi-42.txt','summary':{
+        'document_type':'RFI_QUESTION','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':status}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda _request:pytest.fail('empty evidence called provider'))))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(
+        run,'What is the status of RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'answer_basis' not in result and result['workflow_statuses']==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the status of RFI 42?',('RFI','42')),
+    ('Tell me the disposition for Request for Information No. 0042.',('RFI','42')),
+    ('Show me the status of Submittal 23-01.',('SUBMITTAL','23-01')),
+    ('What is the status of Submission 23-01?',('SUBMITTAL','23-01')),
+    ('What status does Submittal 23 05 00 - 01 have?',('SUBMITTAL','23 05 00-01')),
+    ('Which disposition is RFI ARC-42?',('RFI','ARC-42')),
+    ('Compare the status of RFI 42 and Submittal 23-01.',None),
+    ('Why is RFI 42 open?',None),
+    ('Is RFI 42 open?',None),
+    ('What does RFI 42 require?',None),
+    ('What is the status of RFI 42 and RFI 43?',None),
+    ('What is the status of this email?',None),
+])
+def test_exact_workflow_status_question_boundary(question,expected):
+    assert requested_workflow_status_item(question)==expected
 
 
 def test_workflow_conflict_citation_does_not_borrow_another_workflow_status(
@@ -1200,7 +1309,7 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
     assert response.status_code==200
     result=response.json()
     assert result['status']=='INSUFFICIENT_EVIDENCE'
-    assert result['retrieved_count']==1 and result['citations']==[]
+    assert result['retrieved_count']==0 and result['citations']==[]
     assert 'RFI 42' in result['answer']
     assert {source['file_name'] for item in result['workflow_conflicts'][0]['statuses']
             for source in item['sources']}=={'current.eml','archive.eml'}
@@ -1208,6 +1317,35 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
              for source in item['sources']}
     assert sources['current.eml']['citation']['quote']=='RFI 42 status: OPEN.'
     assert 'citation' not in sources['archive.eml']
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_answers_one_exact_email_derived_status_without_retrieval(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('current.eml',['From: architect@example.test\nSubject: RFI 42\nRFI 42 status: OPEN.']),
+    ])
+    db=client.app.state.db
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    summary={'document_type':'EMAIL','workflow_contexts':[{
+        'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'OPEN'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],document['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('route exact status read evidence'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],
+        'question':'Tell me the disposition for Request for Information No. 0042.'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED' and result['answer_basis']=='WORKFLOW_INDEX'
+    assert result['retrieved_count']==0 and result['workflow_statuses'][0]['identifier']=='42'
+    source=result['workflow_statuses'][0]['statuses'][0]['sources'][0]
+    assert source['file_name']=='current.eml'
+    assert source['citation']['quote']=='RFI 42 status: OPEN.'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

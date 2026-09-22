@@ -136,6 +136,23 @@ _WORKFLOW_STATUS_LIST_QUESTIONS = (
         (?:in|included\s+in)\s+(?:this|the)\s+(?:run|analysis|project)
         \s*[?!.]*\s*$'''),
 )
+_WORKFLOW_EXACT_IDENTIFIER = (
+    r'(?:\d{1,2}\s+\d{2}\s+\d{2}(?:\s*[-./]\s*[a-z0-9][a-z0-9._/-]{0,20})?'
+    r'|(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*)'
+)
+_WORKFLOW_EXACT_ITEM = (
+    rf'(?P<kind>rfi|request\s+for\s+information|submittal|submission)\s+'
+    rf'(?:(?:no\.?|number)\s*)?[#:-]?\s*(?P<identifier>{_WORKFLOW_EXACT_IDENTIFIER})'
+)
+_EXACT_WORKFLOW_STATUS_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:status|disposition)\s+(?:of|for)\s+{_WORKFLOW_EXACT_ITEM}
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:what|which)\s+(?:status|disposition)\s+does\s+
+        {_WORKFLOW_EXACT_ITEM}\s+have\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:what|which)\s+(?:status|disposition)\s+is\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+)
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _DISPOSITION_PHRASES = (
@@ -362,8 +379,23 @@ def _workflow_identities(text: str) -> set[tuple[str,str]]:
     return identities
 
 
+def requested_workflow_status_item(question: str) -> tuple[str,str] | None:
+    """Recognize only a direct status question naming one exact workflow item."""
+    for pattern in _EXACT_WORKFLOW_STATUS_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier
+    return None
+
+
 def requires_workflow_status_index(question: str) -> bool:
-    return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
+    return bool(requested_workflow_status_item(question)
+                or (_STATUS_INTENT.search(question) and _workflow_identities(question)))
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -519,12 +551,11 @@ def _workflow_inventory_answer(question: str, workflow_index: dict | None) -> di
             'workflow_counts':[{'kind':kind,'count':counts[kind]} for kind in requested]}
 
 
-def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[dict]:
-    """Find exact requested workflow IDs with multiple explicit indexed statuses."""
-    if not requires_workflow_status_index(question) or not isinstance(workflow_index,dict):return []
-    targets=_workflow_identities(question)
-    if not targets:return []
-    conflicts=[]
+def _workflow_index_status_records(targets: set[tuple[str,str]],
+                                   workflow_index: dict | None) -> list[dict]:
+    """Collect explicit primary statuses and their original workflow-index sources."""
+    if not targets or not isinstance(workflow_index,dict):return []
+    records=[]
     for item in workflow_index.get('items',[]):
         if not isinstance(item,dict):continue
         kind=item.get('kind')
@@ -541,15 +572,45 @@ def _workflow_index_status_conflicts(question: str, workflow_index: dict | None)
                             'file_name':str(member.get('file_name') or 'Unknown file'),
                             'classification_source':str(
                                 member.get('classification_source') or 'DETECTED')}
-        if len(statuses)>1:
-            conflicts.append({'workflow_type':kind,'identifier':identifier,
-                              'label':f'{kind} {identifier}','statuses':[
-                                  {'status':status,'sources':[
-                                      {'document_id':document_id,**source}
-                                      for document_id,source in sorted(files.items(),key=lambda pair:(
-                                          pair[1]['file_name'].casefold(),pair[0]))]}
-                                  for status,files in sorted(statuses.items())]})
-    return conflicts
+        if statuses:
+            records.append({'workflow_type':kind,'identifier':identifier,
+                            'label':f'{kind} {identifier}','statuses':[
+                                {'status':status,'sources':[
+                                    {'document_id':document_id,**source}
+                                    for document_id,source in sorted(files.items(),key=lambda pair:(
+                                        pair[1]['file_name'].casefold(),pair[0]))]}
+                                for status,files in sorted(statuses.items())]})
+    return records
+
+
+def _workflow_status_is_ambiguous(record: dict) -> bool:
+    return (len(record['statuses'])>1 or any(
+        len({primary for primary,_ in _disposition_matches(item['status'])})>1
+        for item in record['statuses']))
+
+
+def _workflow_status_is_supported(record: dict) -> bool:
+    allowed=_DISPOSITION_GROUPS[1 if record['workflow_type']=='RFI' else 0]
+    primaries=[primary for item in record['statuses']
+               for primary,_ in _disposition_matches(item['status'])]
+    return bool(primaries) and all(primary in allowed for primary in primaries)
+
+
+def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[dict]:
+    """Find exact requested workflow IDs with ambiguous explicit indexed statuses."""
+    if not requires_workflow_status_index(question):return []
+    targets=_workflow_identities(question)
+    direct=requested_workflow_status_item(question)
+    if direct:targets.add(direct)
+    return [record for record in _workflow_index_status_records(targets,workflow_index)
+            if _workflow_status_is_ambiguous(record)]
+
+
+def _workflow_index_exact_status(question: str, workflow_index: dict | None) -> dict | None:
+    target=requested_workflow_status_item(question)
+    if not target:return None
+    records=_workflow_index_status_records({target},workflow_index)
+    return records[0] if len(records)==1 and _workflow_status_is_supported(records[0]) else None
 
 
 def _workflow_status_conflict_answer(conflicts: list[dict]) -> str:
@@ -566,6 +627,12 @@ def _workflow_status_conflict_answer(conflicts: list[dict]) -> str:
     return ('The current workflow status cannot be established because the complete project '
             'workflow index contains conflicting explicit statuses. '
             +' '.join(details)+' Review the original source files.')
+
+
+def _workflow_status_answer(record: dict) -> str:
+    status=record['statuses'][0]['status']
+    return (f"The complete workflow index for the selected analysis run records "
+            f"{record['label']} with the explicit status {status}.")
 
 
 def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
@@ -681,9 +748,9 @@ def _retrieved_scope(evidence: list[dict], *, source_type: str | None = None,
     return scoped
 
 
-def _attach_workflow_status_citations(db: Database, run_id: str, conflicts: list[dict]) -> None:
+def _attach_workflow_status_citations(db: Database, run_id: str, records: list[dict]) -> None:
     """Attach exact parser-text spans; manual corrections remain explicitly uncited."""
-    sources=[source for conflict in conflicts for item in conflict['statuses']
+    sources=[source for record in records for item in record['statuses']
              for source in item['sources'] if source['classification_source']=='DETECTED']
     document_ids=list(dict.fromkeys(source['document_id'] for source in sources
                                    if source['document_id']))[:_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES]
@@ -700,9 +767,9 @@ def _attach_workflow_status_citations(db: Database, run_id: str, conflicts: list
         try:evidence=json.loads(row['payload'])
         except (TypeError,ValueError,json.JSONDecodeError):continue
         evidence['file_name']=row['file_name'];by_document[row['document_id']].append(evidence)
-    for conflict in conflicts:
-        identity=(conflict['workflow_type'],conflict['identifier'])
-        for item in conflict['statuses']:
+    for record in records:
+        identity=(record['workflow_type'],record['identifier'])
+        for item in record['statuses']:
             primaries={primary for primary,_ in _disposition_matches(item['status'])}
             if not primaries:continue
             for source in item['sources']:
@@ -947,6 +1014,23 @@ class ProjectQuestions:
         if inventory:
             return {'run_id':run['id'],'question':question,'status':'ANSWERED',**inventory,
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':0,'cached':False}
+        exact_status=_workflow_index_exact_status(question,workflow_index)
+        if exact_status:
+            _attach_workflow_status_citations(self.db,run['id'],[exact_status])
+            if _workflow_status_is_ambiguous(exact_status):
+                return {'run_id':run['id'],'question':question,
+                        'status':'INSUFFICIENT_EVIDENCE',
+                        'answer':_workflow_status_conflict_answer([exact_status]),
+                        'answer_basis':'WORKFLOW_INDEX','citations':[],
+                        'source_findings':[],'workflow_statuses':[],
+                        'workflow_conflicts':[exact_status],
+                        'retrieved_count':0,'cached':False}
+            return {'run_id':run['id'],'question':question,'status':'ANSWERED',
+                    'answer':_workflow_status_answer(exact_status),
+                    'answer_basis':'WORKFLOW_INDEX','citations':[],
+                    'source_findings':[],'workflow_statuses':[exact_status],
                     'workflow_conflicts':[],'retrieved_count':0,'cached':False}
         evidence=retrieve_evidence(self.db,run,question)
         conflicts=_workflow_index_status_conflicts(question,workflow_index)
@@ -955,18 +1039,19 @@ class ProjectQuestions:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':_workflow_status_conflict_answer(conflicts),
                     'citations':[],'source_findings':[],
-                    'workflow_conflicts':conflicts,
+                    'workflow_statuses':[],'workflow_conflicts':conflicts,
                     'retrieved_count':len(evidence),'cached':False}
         if not evidence:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':'The analyzed project files do not contain enough matching evidence to answer this question.',
-                    'citations':[],'source_findings':[],'workflow_conflicts':[],
+                    'citations':[],'source_findings':[],'workflow_statuses':[],
+                    'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
         if self.gateway.s.provider=='mock':
             return {'run_id':run['id'],'question':question,'status':'MODEL_DISABLED',
                     'answer':'Mock mode retrieved possible source passages but did not generate an answer. Configure a live API or local model to answer from these files.',
                     'citations':[_context_citation(item) for item in evidence[:3]],
-                    'source_findings':[],'workflow_conflicts':[],
+                    'source_findings':[],'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(evidence),'cached':False}
         result=self.gateway.answer(run,question,evidence)
         validate_answer_model(result.data,evidence,question)
@@ -982,4 +1067,5 @@ class ProjectQuestions:
             })
         return {'run_id':run['id'],'question':question,'status':result.data['status'],
                 'answer':result.data['answer'],'citations':citations,'source_findings':findings,
-                'workflow_conflicts':[],'retrieved_count':len(evidence),'cached':result.cached}
+                'workflow_statuses':[],'workflow_conflicts':[],
+                'retrieved_count':len(evidence),'cached':result.cached}
