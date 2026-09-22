@@ -11,7 +11,8 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _drawing_identifier_values, _numeric_unit_values, _revision_label_values,
+    ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
+    _numeric_unit_values, _revision_label_values,
     _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -1986,6 +1987,126 @@ def test_drawing_identifier_parser_requires_an_explicit_digit_bearing_label():
     assert _drawing_identifier_values(
         'Sheet A1.01; Drawing No. P2-02; Dwg: M–101; Detail 3/A5.1')=={
             'A1.01','P2-02','M-101','3/A5.1'}
+
+
+def test_answer_rejects_recombined_clause_identifier(client, project):
+    source='RFI 42 response: Follow Paragraph 2.3.1 and Paragraph 4.5.6.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which paragraph applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires Paragraph 2.3.6.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='clause identifier'):
+        validate_answer_model(wrong,evidence,'Which paragraph applies to RFI 42?')
+
+
+def test_clause_identifier_cannot_be_borrowed_from_another_rfi(client, project):
+    source=('RFI 42 response: Follow Clause 2.3.1. '
+            'RFI 43 response: Follow Clause 2.3.2.')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which clause applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires Clause 2.3.2.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow clause identifier'):
+        validate_answer_model(wrong,evidence,'Which clause applies to RFI 42?')
+
+
+@pytest.mark.parametrize(('source_identifier','answer_identifier'),[
+    ('Paragraph 2.3.1','Para. 2.3.1'),
+    ('Clause No. 4.5.6','Clause: 4.5.6'),
+    ('Article 1.2A','Article No. 1.2a'),
+])
+def test_answer_accepts_formatting_equivalent_clause_identifiers(
+        client, project, source_identifier, answer_identifier):
+    source=f'RFI 42 response: Follow {source_identifier}.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which clause applies to RFI 42?')
+    answer={'status':'ANSWERED','answer':f'RFI 42 requires {answer_identifier}.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which clause applies to RFI 42?')
+
+
+def test_clause_identifier_types_are_not_interchangeable(client, project):
+    source='RFI 42 response: Follow Paragraph 2.3.1.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which paragraph applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires Article 2.3.1.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='clause identifier'):
+        validate_answer_model(wrong,evidence,'Which paragraph applies to RFI 42?')
+
+
+def test_paragraph_locator_can_ground_only_its_exact_identifier(client, project):
+    source='Provide the specified hydrostatic test.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which test is specified?')
+    evidence[0]['locator']['paragraph']='2.3.1'
+    grounded={'status':'ANSWERED','answer':'Paragraph 2.3.1 requires the hydrostatic test.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+    invented={**grounded,'answer':'Paragraph 2.3.2 requires the hydrostatic test.'}
+
+    validate_answer_model(grounded,evidence,'What does Paragraph 2.3.1 require?')
+    with pytest.raises(ValueError,match='clause identifier'):
+        validate_answer_model(invented,evidence,'What does Paragraph 2.3.1 require?')
+
+
+def test_email_clause_identifier_stays_with_its_workflow(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'RFI 42 response: Follow Clause 2.3.1. '
+            'Submittal 23-01: Follow Clause 2.3.2.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which clause applies to RFI 42?')
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires Clause 2.3.2.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow clause identifier'):
+        validate_answer_model(wrong,evidence,'Which clause applies to RFI 42?')
+
+
+def test_submittal_finding_cannot_borrow_specification_clause_identifier(
+        client, project):
+    spec='Specification Paragraph 2.3.1 requires hydrostatic testing.'
+    submittal='Submittal 23-01 references Paragraph 4.5.6.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 paragraph references.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources reference different paragraphs.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':spec,
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 references Paragraph 2.3.1.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='clause identifier'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_clause_identifier_parser_requires_an_explicit_dotted_label():
+    assert _clause_identifier_values(
+        'Unlabelled 2.3.1; Paragraph status current; Clause 7.')==set()
+    assert _clause_identifier_values('Paragraph 2024.01.05')==set()
+    assert _clause_identifier_values(
+        'Paragraph 2.3.1; Para. 2.3.1; Clause No. 4.5.6; Article: 1.2a')=={
+            'PARAGRAPH:2.3.1','CLAUSE:4.5.6','ARTICLE:1.2A'}
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(
