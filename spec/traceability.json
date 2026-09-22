@@ -1845,12 +1845,14 @@
         "app/questions.py",
         "app/gateway.py",
         "app/db.py",
+        "migrations/007_evidence_search.sql",
         "app/main.py",
         "web/index.html",
         "web/app.js",
         "web/style.css",
         "prompts/project-question/system.md",
-        "spec/schemas/project-answer.schema.json"
+        "spec/schemas/project-answer.schema.json",
+        "scripts/benchmark_question_search.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }

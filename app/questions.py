@@ -38,6 +38,39 @@ def _like(value: str) -> str:
     return '%' + value.replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
 
 
+def _fts_query(terms: list[str]) -> str:
+    return ' OR '.join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms)
+
+
+def _candidate_rows(db: Database, run_id: str, terms: list[str]) -> list[dict]:
+    if getattr(db,'evidence_search_available',False):
+        return db.all('''SELECT e.payload,d.name AS file_name,
+                                bm25(evidence_search,2,1.5,1) AS search_rank
+                         FROM evidence_search
+                         JOIN evidence e ON e.rowid=evidence_search.rowid
+                         JOIN documents d ON d.id=e.document_id
+                         WHERE evidence_search MATCH ? AND e.run_id=?
+                           AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                           AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                         ORDER BY search_rank,e.rowid LIMIT ?''',
+                      [_fts_query(terms),run_id,_MAX_CANDIDATES])
+    clauses=[];args=[]
+    for term in terms:
+        fields=["json_extract(e.payload,'$.raw_text')","d.name"]
+        fields.extend(f"json_extract(e.payload,'$.locator.{key}')"
+                      for key in ('section','sheet','page','paragraph'))
+        clauses.extend(f"LOWER({field}) LIKE ? ESCAPE '\\'" for field in fields)
+        args.extend([_like(term)]*len(fields))
+    # FTS5 is optional.  The compatibility path favors complete results over
+    # speed and deliberately does not truncate in row order.
+    return db.all(f'''SELECT e.payload,d.name AS file_name FROM evidence e
+                      JOIN documents d ON d.id=e.document_id
+                      WHERE e.run_id=?
+                        AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                        AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                        AND ({' OR '.join(clauses)})''',[run_id,*args])
+
+
 def _window(text: str, terms: list[str]) -> str:
     if len(text) <= _MAX_FRAGMENT_CHARS:
         return text
@@ -50,27 +83,17 @@ def _window(text: str, terms: list[str]) -> str:
 
 
 def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
-    """Use a small SQL prefilter, then deterministic local ranking.
+    """Use run-scoped full-text candidates, then deterministic local ranking.
 
-    This deliberately avoids a second vector store for the first product slice.
-    The returned prompt windows are bounded while citations are later checked
-    against the full immutable evidence text.
+    SQLite FTS5 avoids another service or vector store.  Environments without
+    FTS5 use a complete LIKE scan rather than silently losing later evidence.
+    Prompt windows stay bounded while citations are checked against the full
+    immutable evidence text.
     """
     terms=question_terms(question)
     if not terms:
         return []
-    clauses=[];args=[]
-    for term in terms:
-        clauses.extend([
-            "LOWER(json_extract(e.payload,'$.raw_text')) LIKE ? ESCAPE '\\'",
-            "LOWER(d.name) LIKE ? ESCAPE '\\'",
-            "LOWER(json_extract(e.payload,'$.locator.section')) LIKE ? ESCAPE '\\'",
-        ])
-        args.extend([_like(term)]*3)
-    rows=db.all(f'''SELECT e.payload,d.name AS file_name FROM evidence e
-                    JOIN documents d ON d.id=e.document_id
-                    WHERE e.run_id=? AND ({' OR '.join(clauses)})
-                    ORDER BY e.rowid LIMIT ?''',[run['id'],*args,_MAX_CANDIDATES])
+    rows=_candidate_rows(db,run['id'],terms)
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -80,7 +103,9 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         text=evidence.get('raw_text')
         if not isinstance(text,str) or not text.strip():continue
         locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
-        searchable=' '.join((text,row['file_name'],str(locator.get('section') or ''))).casefold()
+        locator_text=' '.join(str(locator.get(key) or '')
+                              for key in ('section','sheet','page','paragraph'))
+        searchable=' '.join((text,row['file_name'],locator_text)).casefold()
         matched=[term for term in terms if term in searchable]
         if not matched:continue
         score=sum(4 if any(char.isdigit() for char in term) else 2 for term in matched)

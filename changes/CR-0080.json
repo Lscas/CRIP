@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0080",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Replace insertion-order-limited question candidates with a local run-scoped SQLite FTS5 index and a complete compatibility fallback.",
+  "decision_refs": [
+    "The user requested continued efficiency, accuracy and adaptability for RFI, Submittal and Email content",
+    "The project-question feature must answer from existing analyzed files",
+    "A synthetic reproduction proved that 160 earlier common-term fragments excluded a later exact RFI answer"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/db.py", "migrations/007_evidence_search.sql",
+    "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "tasks/DEV-065.json", "changes/CR-0080.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/benchmark_question_search.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active improvement goal explicitly covers efficiency, accuracy and RFI/Submittal/Email adaptability after project-file questions were requested.",
+  "known_limitations": [
+    "Retrieval is lexical rather than semantic-vector search, so synonyms absent from the evidence remain a limitation.",
+    "The compatibility scan without FTS5 is correct but slower on large runs.",
+    "Validation uses synthetic offline evidence and does not establish construction accuracy on customer documents."
+  ]
+}

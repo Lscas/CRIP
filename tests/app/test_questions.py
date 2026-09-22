@@ -2,14 +2,15 @@
 from decimal import Decimal
 import json
 from pathlib import Path
+import sqlite3
 
 import httpx
 import pytest
 
-from app.db import BudgetError
+from app.db import BudgetError, Database
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import ProjectQuestions, retrieve_evidence
-from app.settings import Settings
+from app.settings import ROOT, Settings
 from .conftest import upload
 
 
@@ -48,6 +49,134 @@ def test_retrieval_ranks_specific_project_evidence(client, project):
 
     assert found and found[0]['evidence_id'] == 'EV-QA-2'
     assert all(item['project_id'] == project['id'] for item in found)
+
+
+def test_retrieval_does_not_lose_late_exact_match_behind_common_terms(client, project):
+    rows = [f'General water coordination note {index}.' for index in range(160)]
+    rows.append('RFI 42 response: Domestic water service pipe shall be 2 inch Type L copper.')
+    run = _evidence(client, project, rows)
+
+    found = retrieve_evidence(
+        client.app.state.db,
+        run,
+        'What does RFI 42 require for the water service pipe material and size?',
+    )
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_fallback_does_not_apply_row_order_cutoff(client, project):
+    rows = [f'General equipment coordination note {index}.' for index in range(160)]
+    rows.append('Submittal 23-01 status: Approved as noted for AHU-1.')
+    run = _evidence(client, project, rows)
+    client.app.state.db.evidence_search_available = False
+
+    found = retrieve_evidence(
+        client.app.state.db,
+        run,
+        'What is the status of Submittal 23-01 for AHU-1?',
+    )
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_ranks_workflow_identifiers_and_email_metadata(client, project):
+    run = _evidence(client, project, [
+        'General equipment coordination requirements.',
+        'Submittal 23-01 status: Approved as noted for AHU-1.',
+        'Email subject: RFI 42 response. From: architect@example.com. '
+        'Domestic water service pipe shall be 2 inch Type L copper.',
+    ])
+
+    submittal = retrieve_evidence(
+        client.app.state.db, run, 'What is the status of Submittal 23-01 for AHU-1?')
+    email = retrieve_evidence(
+        client.app.state.db, run, 'What did the architect email say in the RFI 42 response?')
+
+    assert submittal and submittal[0]['evidence_id'] == 'EV-QA-2'
+    assert email and email[0]['evidence_id'] == 'EV-QA-3'
+
+
+def test_retrieval_indexes_updated_sheet_locator(client, project):
+    run = _evidence(client, project, ['Mechanical equipment schedule.'])
+    db = client.app.state.db
+    row = db.one('SELECT id,payload FROM evidence WHERE run_id=?', (run['id'],))
+    payload = json.loads(row['payload'])
+    payload['locator']['sheet'] = 'M1.1'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?', (json.dumps(payload), row['id']))
+
+    found = retrieve_evidence(db, run, 'What is shown on sheet M1.1?')
+    db.evidence_search_available = False
+    fallback = retrieve_evidence(db, run, 'What is shown on sheet M1.1?')
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-1'
+    assert fallback and fallback[0]['evidence_id'] == 'EV-QA-1'
+
+
+def test_excluded_vision_output_cannot_crowd_out_source_evidence(client, project):
+    rows = ['RFI 42 water service pipe material size.' for _ in range(160)]
+    rows.append('RFI 42 source response: Water service pipe shall be 2 inch Type L copper.')
+    run = _evidence(client, project, rows)
+    db = client.app.state.db
+    for row in db.all('SELECT id,payload FROM evidence WHERE run_id=? ORDER BY rowid LIMIT 160',
+                      (run['id'],)):
+        payload = json.loads(row['payload'])
+        payload['content_basis'] = 'MODEL_VISION_OUTPUT'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?', (json.dumps(payload), row['id']))
+
+    found = retrieve_evidence(
+        db, run, 'What does RFI 42 require for the water service pipe material and size?')
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_evidence_search_migration_backfills_an_existing_database(tmp_path):
+    path = tmp_path / 'before-evidence-search.sqlite3'
+    payload = {
+        'evidence_id': 'EV-OLD-1',
+        'project_id': 'P-old',
+        'document_id': 'D-old',
+        'raw_text': 'RFI 77 response requires a 3 inch copper service.',
+        'locator': {'section': 'RFI 77'},
+    }
+    with sqlite3.connect(path) as connection:
+        connection.executescript((ROOT / 'migrations/001_initial.sql').read_text(encoding='utf-8'))
+        connection.execute("INSERT INTO projects VALUES('P-old','Old project','now')")
+        connection.execute(
+            "INSERT INTO documents VALUES('D-old','P-old','old-rfi.txt',1,'sha','object','now')")
+        connection.execute('''INSERT INTO runs VALUES(
+            'R-old','P-old','mock','SN-old','["D-old"]','COMPLETED','DONE','','now',0,1,
+            '{}','{}',0)''')
+        connection.execute(
+            "INSERT INTO evidence VALUES('E-old','R-old','P-old','D-old',?,'EXTRACTED',NULL,'')",
+            (json.dumps(payload),),
+        )
+
+    db = Database(path)
+    found = retrieve_evidence(db, {'id': 'R-old'}, 'What is required by RFI 77?')
+
+    assert db.evidence_search_available is True
+    assert db.one('SELECT COUNT(*) AS count FROM evidence_search')['count'] == 1
+    assert db.one('SELECT version FROM schema_migrations WHERE version=7')['version'] == 7
+    assert found and found[0]['evidence_id'] == 'EV-OLD-1'
+
+
+def test_missing_fts5_uses_supported_fallback():
+    class MissingFtsConnection:
+        class EmptyResult:
+            @staticmethod
+            def fetchone():
+                return None
+
+        @staticmethod
+        def execute(query, args=()):
+            return MissingFtsConnection.EmptyResult()
+
+        @staticmethod
+        def executescript(script):
+            raise sqlite3.OperationalError('no such module: fts5')
+
+    assert Database._install_evidence_search(MissingFtsConnection()) is False
 
 
 def test_mock_question_returns_retrieval_context_without_fabricated_answer(client, project):

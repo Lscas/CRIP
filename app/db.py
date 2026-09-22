@@ -80,6 +80,29 @@ class Database:
             c.executescript((ROOT / 'migrations/004_performance_budget.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/005_upload_sources.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/006_workflow_classification_overrides.sql').read_text(encoding="utf-8"))
+            self.evidence_search_available=self._install_evidence_search(c)
+
+    @staticmethod
+    def _install_evidence_search(connection: sqlite3.Connection) -> bool:
+        installed=connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_search'"
+        ).fetchone()
+        migrated=connection.execute(
+            'SELECT 1 FROM schema_migrations WHERE version=7'
+        ).fetchone()
+        if installed and migrated:
+            return True
+        try:
+            connection.executescript(
+                (ROOT / 'migrations/007_evidence_search.sql').read_text(encoding='utf-8')
+            )
+        except sqlite3.OperationalError as exc:
+            if 'no such module: fts5' in str(exc).casefold():
+                return False
+            raise
+        return connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_search'"
+        ).fetchone() is not None
 
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:

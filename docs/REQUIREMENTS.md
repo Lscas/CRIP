@@ -997,3 +997,4 @@ A user may ask an English question about a selected completed analysis run and r
 - An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.
 - Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.
 - The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.
+- Run-scoped local full-text ranking must not discard a later exact RFI, Submittal, Email or source-locator match because earlier evidence contains a common term; existing databases are backfilled, and runtimes without FTS5 use a complete compatibility scan.
