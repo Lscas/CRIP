@@ -11,7 +11,7 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _numeric_unit_values, _revision_label_values,
+    ProjectQuestions, _drawing_identifier_values, _numeric_unit_values, _revision_label_values,
     _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -1839,6 +1839,124 @@ def test_revision_label_parser_ignores_dates_and_unlabelled_status_words():
     assert _revision_label_values('Revision: 2024-01-05')==set()
     assert _revision_label_values('Revision AS BUILT; Rev. IFC; Revision No. P2')=={
         'AS BUILT','IFC','P2'}
+
+
+def test_answer_rejects_recombined_drawing_identifier(client, project):
+    source='RFI 42 response: Coordinate Sheet A1.01 with Sheet P2.02.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which sheet applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Sheet A1.02.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='drawing identifier'):
+        validate_answer_model(wrong,evidence,'Which sheet applies to RFI 42?')
+
+
+def test_drawing_identifier_cannot_be_borrowed_from_another_rfi(client, project):
+    source=('RFI 42 response: Use Sheet A1.01. '
+            'RFI 43 response: Use Drawing P2.02.')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which sheet applies to RFI 42?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Dwg. P2.02.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow drawing identifier'):
+        validate_answer_model(wrong,evidence,'Which sheet applies to RFI 42?')
+
+
+@pytest.mark.parametrize(('source_identifier','answer_identifier'),[
+    ('Sheet A1.01','Drawing A1.01'),
+    ('Drawing No. P2-02','Dwg: P2-02'),
+    ('Dwg. M–101','Sheet M-101'),
+])
+def test_answer_accepts_prefix_equivalent_drawing_identifiers(
+        client, project, source_identifier, answer_identifier):
+    source=f'RFI 42 response: Use {source_identifier}.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which sheet applies to RFI 42?')
+    answer={'status':'ANSWERED','answer':f'RFI 42 uses {answer_identifier}.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which sheet applies to RFI 42?')
+
+
+def test_numeric_drawing_identifier_is_not_treated_as_a_quantity(client, project):
+    source='RFI 42 response: Use Sheet 2.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which sheet applies to RFI 42?')
+    answer={'status':'ANSWERED','answer':'RFI 42 uses Drawing 2.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which sheet applies to RFI 42?')
+
+
+def test_sheet_locator_can_ground_only_its_exact_drawing_identifier(client, project):
+    source='Mechanical equipment schedule.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'What is in the equipment schedule?')
+    evidence[0]['locator']['sheet']='M1.1'
+    grounded={'status':'ANSWERED','answer':'Sheet M1.1 contains the mechanical equipment schedule.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+    invented={**grounded,'answer':'Sheet M1.2 contains the mechanical equipment schedule.'}
+
+    validate_answer_model(grounded,evidence,'What is shown on Sheet M1.1?')
+    with pytest.raises(ValueError,match='drawing identifier'):
+        validate_answer_model(invented,evidence,'What is shown on Sheet M1.1?')
+
+
+def test_email_drawing_identifier_stays_with_its_workflow(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'RFI 42 response: Use Sheet A1.01. '
+            'Submittal 23-01: Use Sheet P2.02.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which sheet applies to RFI 42?')
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Sheet P2.02.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow drawing identifier'):
+        validate_answer_model(wrong,evidence,'Which sheet applies to RFI 42?')
+
+
+def test_submittal_finding_cannot_borrow_specification_drawing_identifier(
+        client, project):
+    spec='Specification drawing list requires Sheet A1.01.'
+    submittal='Submittal 23-01 product data references Sheet P2.02.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 drawing references.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources reference different drawings.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':spec,
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 product data references Sheet A1.01.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='drawing identifier'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_drawing_identifier_parser_requires_an_explicit_digit_bearing_label():
+    assert _drawing_identifier_values(
+        'Drawing revision A; drawing list; sheet status current.')==set()
+    assert _drawing_identifier_values('Drawing 2024-01-05')==set()
+    assert _drawing_identifier_values(
+        'Sheet A1.01; Drawing No. P2-02; Dwg: M–101')=={'A1.01','P2-02','M-101'}
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(

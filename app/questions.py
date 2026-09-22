@@ -90,6 +90,11 @@ _REVISION_LABEL_WEAK = re.compile(
     rf'(?i){_REVISION_PREFIX}\s+(?P<label>(?:[a-z]|\d+|'
     r'(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*|'
     r'ifc|ifb|as[- ]built))(?!\w)')
+_DRAWING_IDENTIFIER = re.compile(
+    r'(?i)(?:\bsheet\b|\bdrawing\b|\bdwg\.?)'
+    r'(?:\s+(?:(?:no\.?|number)\s*)?|\s*[:#=-]\s*)'
+    r'(?P<label>(?=[a-z0-9._/\-–—]*\d)[a-z0-9]+'
+    r'(?:[._/\-–—][a-z0-9]+)*)(?!\w)')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
@@ -828,6 +833,20 @@ def _revision_label_values(text: str) -> set[str]:
     return {value for value,_,_ in _revision_label_occurrences(text)}
 
 
+def _drawing_identifier_occurrences(text: str) -> list[tuple[str,int,int]]:
+    values=[]
+    for match in _DRAWING_IDENTIFIER.finditer(text):
+        label=match['label'].upper().translate(str.maketrans({'–':'-','—':'-'}))
+        if len(label)>32:continue
+        if re.fullmatch(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',label):continue
+        values.append((label,match.start(),match.end()))
+    return sorted(set(values),key=lambda value:(value[1],value[2],value[0]))
+
+
+def _drawing_identifier_values(text: str) -> set[str]:
+    return {value for value,_,_ in _drawing_identifier_occurrences(text)}
+
+
 def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
     match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
     if not match:return None
@@ -838,6 +857,7 @@ def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     values=[]
     for start,end,numeric_value in _numeric_occurrences(text):
         if any(left<=start and end<=right for left,right in reserved_spans):continue
@@ -859,6 +879,7 @@ def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     numerics=[value for value in _numeric_occurrences(text)
               if not any(left<=value[0] and value[1]<=right
                          for left,right in reserved_spans)]
@@ -991,6 +1012,11 @@ def _workflow_revision_label_values(text: str, identity_text: str | None = None
     return _workflow_scoped_values(text,_revision_label_occurrences(text),identity_text)
 
 
+def _workflow_drawing_identifier_values(text: str, identity_text: str | None = None
+                                        ) -> set[tuple[tuple[str,str],str]]:
+    return _workflow_scoped_values(text,_drawing_identifier_occurrences(text),identity_text)
+
+
 def _require_spec_section_support(
         claim: str, quotes: list[str], label: str,
         identity_citations: list[str] | None = None,
@@ -1023,6 +1049,20 @@ def _require_revision_label_support(
     if (scope_workflow
             and _workflow_revision_label_values(claim)-supported_scoped):
         raise ValueError(label+' contains a workflow revision label absent from its citations')
+
+
+def _require_drawing_identifier_support(
+        claim: str, citations: list[str], label: str,
+        scope_workflow: bool = True) -> None:
+    supported=set();supported_scoped=set()
+    for context in citations:
+        supported.update(_drawing_identifier_values(context))
+        supported_scoped.update(_workflow_drawing_identifier_values(context))
+    if _drawing_identifier_values(claim)-supported:
+        raise ValueError(label+' contains a drawing identifier absent from its citations')
+    if (scope_workflow
+            and _workflow_drawing_identifier_values(claim)-supported_scoped):
+        raise ValueError(label+' contains a workflow drawing identifier absent from its citations')
 
 
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
@@ -1076,6 +1116,7 @@ def _workflow_numeric_values(text: str, identity_text: str | None = None
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     occurrences=[(numeric_value,start,end)
                  for start,end,numeric_value in _numeric_occurrences(text)
                  if not any(left<=start and end<=right for left,right in reserved_spans)]
@@ -1101,6 +1142,7 @@ def _workflow_numeric_property_unit_values(
 
 def _require_numeric_support(claim: str, quotes: list[str], label: str,
                              identity_citations: list[str] | None = None,
+                             drawing_citations: list[str] | None = None,
                              scope_workflow: bool = True) -> None:
     quote_values=_numeric_values(' '.join(quotes))
     identity_citations=identity_citations or quotes
@@ -1115,11 +1157,17 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
     for context in identity_citations:supported_revisions.update(_revision_label_values(context))
     revision_spans=[(start,end) for value,start,end in _revision_label_occurrences(claim)
                     if value in supported_revisions]
+    supported_drawings=set()
+    for context in drawing_citations or identity_citations:
+        supported_drawings.update(_drawing_identifier_values(context))
+    drawing_spans=[(start,end) for value,start,end in _drawing_identifier_occurrences(claim)
+                   if value in supported_drawings]
     for start,end,value in _numeric_occurrences(claim):
         if value in quote_values:continue
         if any(left<=start and end<=right for left,right in identifier_spans):continue
         if any(left<=start and end<=right for left,right in section_spans):continue
         if any(left<=start and end<=right for left,right in revision_spans):continue
+        if any(left<=start and end<=right for left,right in drawing_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
     supported_scoped=set();supported_units=set();supported_scoped_units=set()
@@ -1165,6 +1213,12 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
 def _citation_identity_text(evidence: dict, quote: str) -> str:
     locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
     return str(locator.get('section') or '')+'\n'+quote
+
+
+def _citation_drawing_text(evidence: dict, quote: str) -> str:
+    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+    sheet=str(locator.get('sheet') or '').strip()
+    return _citation_identity_text(evidence,quote)+(('\nSheet '+sheet) if sheet else '')
 
 
 def _require_workflow_identity_support(claim: str, citations: list[str], label: str) -> None:
@@ -1403,15 +1457,17 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     allowed={item['evidence_id']:item for item in evidence}
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
-    top_level_quotes=[];top_level_identity_texts=[]
+    top_level_quotes=[];top_level_identity_texts=[];top_level_drawing_texts=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
         if source is None:raise ValueError('citation is outside the retrieved evidence scope')
         exact_quote(source,item['quote'])
         top_level_quotes.append(item['quote'])
         top_level_identity_texts.append(_citation_identity_text(source,item['quote']))
+        top_level_drawing_texts.append(_citation_drawing_text(source,item['quote']))
     answer_quotes=list(top_level_quotes)
     answer_identity_texts=list(top_level_identity_texts)
+    answer_drawing_texts=list(top_level_drawing_texts)
     finding_sources=[];question_targets=_workflow_identities(question)
     date_question=bool(_DATE_QUESTION_INTENT.search(question)
                        and not _STATUS_FIELD_INTENT.search(question))
@@ -1423,7 +1479,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         key=(finding['source_type'],finding['file_name'])
         if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
         finding_sources.append(key)
-        finding_quotes=[];finding_identity_texts=[]
+        finding_quotes=[];finding_identity_texts=[];finding_drawing_texts=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
             if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
@@ -1434,6 +1490,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             exact_quote(source,item['quote'])
             finding_quotes.append(item['quote'])
             finding_identity_texts.append(_citation_identity_text(source,item['quote']))
+            finding_drawing_texts.append(_citation_drawing_text(source,item['quote']))
         if value['status']=='ANSWERED':
             finding_status=bool(_disposition_values(finding['statement'])
                                 and _needs_disposition_ambiguity_check(
@@ -1456,14 +1513,18 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_revision_label_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
+            _require_drawing_identifier_support(
+                finding['statement'],finding_drawing_texts,'source finding')
             _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_date_role_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_numeric_support(
-                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts,
+                finding_drawing_texts)
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
         answer_quotes.extend(finding_quotes)
         answer_identity_texts.extend(finding_identity_texts)
+        answer_drawing_texts.extend(finding_drawing_texts)
     if value['status']=='ANSWERED':
         if (top_level_quotes
                 and _needs_disposition_ambiguity_check(value['answer'],date_question)):
@@ -1486,11 +1547,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         _require_revision_label_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
+        _require_drawing_identifier_support(
+            value['answer'],answer_drawing_texts,'answer',
+            scope_workflow=not value['source_findings'])
         _require_date_support(value['answer'],answer_quotes,'answer')
         _require_date_role_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts)
-        _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts,
-                                 scope_workflow=not value['source_findings'])
+        _require_numeric_support(
+            value['answer'],answer_quotes,'answer',answer_identity_texts,
+            answer_drawing_texts,scope_workflow=not value['source_findings'])
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:

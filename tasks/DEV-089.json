@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 13000,
+  "max_output_tokens": 2200,
+  "max_context_chars": 16000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a drawing identifier assembled from components belonging to two cited sheets.",
+    "Validate explicitly written Sheet, Drawing and Dwg identifiers as atomic values before generic numeric checks.",
+    "Keep a claimed drawing identifier with the same exact RFI/Submittal identity or source finding.",
+    "Allow an exact Sheet locator to ground only its own identifier.",
+    "Normalize prefix variants, case and dash glyphs only; do not infer unlabelled codes, applicability, revision or authority."
+  ],
+  "task_id": "DEV-089",
+  "title": "Ground project-answer drawing identifiers",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-089.json",
+    "changes/CR-0104.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent an explicit drawing identifier from being recombined or borrowed across workflows, source findings or exact Sheet locators in a project-file answer."
+}
