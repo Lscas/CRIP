@@ -15,7 +15,7 @@ from app.db import Database
 from app.questions import retrieve_evidence
 
 
-TARGET = 'RFI 42 response: Domestic water service pipe shall be 2 inch Type L copper.'
+TARGET = 'RFI 0042 response: Domestic water service pipe shall be 2 inch Type L copper.'
 QUESTION = 'What does RFI 42 require for the water service pipe material and size?'
 COMPARISON_QUESTION = 'Compare the specification water pipe requirements and RFI 42 response.'
 

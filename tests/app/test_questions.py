@@ -11,8 +11,8 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, expanded_query_terms, requires_source_diversity, retrieve_evidence,
-    validate_answer_model,
+    ProjectQuestions, expanded_query_terms, numeric_rfi_search_terms,
+    requires_source_diversity, retrieve_evidence, search_query_terms, validate_answer_model,
 )
 from app.settings import ROOT, Settings
 from .conftest import upload
@@ -92,6 +92,84 @@ def test_retrieval_does_not_lose_late_exact_match_behind_common_terms(client, pr
     )
 
     assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_matches_a_zero_padded_numeric_rfi_reference_under_candidate_pressure(
+        client, project):
+    rows = [
+        f'Specification note references an RFI response for water service pipe material size '
+        f'requirements {index}.' for index in range(160)
+    ]
+    rows.append(
+        'Specification note references RFI 0042 response: '
+        'Water service pipe shall be 2 inch Type L copper.')
+    run = _evidence(client, project, rows)
+
+    db=client.app.state.db
+    found = retrieve_evidence(
+        db,
+        run,
+        'What does RFI 42 require for the water service pipe material and size?',
+    )
+    db.evidence_search_available=False
+    fallback=retrieve_evidence(
+        db,run,'What does RFI 42 require for the water service pipe material and size?')
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+    assert fallback and fallback[0]['evidence_id'] == 'EV-QA-161'
+
+
+def test_retrieval_matches_a_zero_padded_rfi_in_email_under_candidate_pressure(
+        client, project):
+    rows = [
+        'From: contractor@example.test\nSubject: RFI response\n'
+        f'General response coordination note {index}.' for index in range(160)
+    ]
+    rows.append(
+        'From: architect@example.test\n'
+        'Subject: Request for Information No. 00077 response\n'
+        'Request for Information No. 00077 response: Use the reviewed Type L copper detail.')
+    run = _evidence(client, project, rows)
+
+    found = retrieve_evidence(
+        client.app.state.db,
+        run,
+        'Who answered Request for Information No. 77 in the email?',
+    )
+
+    assert found and found[0]['evidence_id'] == 'EV-QA-161'
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What does RFI ARC-42 require?','EV-QA-2'),
+    ('What is the status of Submittal 23-01?','EV-QA-4'),
+])
+def test_zero_padding_does_not_merge_prefixed_rfi_or_submittal_identifiers(
+        client, project, question, expected):
+    run = _evidence(client, project, [
+        'RFI ARC-0042 response: Use copper pipe.',
+        'RFI ARC-42 response: Use stainless steel pipe.',
+        'Submittal 23-001 status: Pending.',
+        'Submittal 23-01 status: Approved as noted.',
+    ])
+
+    found=retrieve_evidence(client.app.state.db,run,question)
+
+    assert found and found[0]['evidence_id']==expected
+
+
+def test_numeric_rfi_search_aliases_are_bounded_and_require_a_pure_numeric_identifier():
+    primary=search_query_terms(
+        'What did RFI 42 require for the water service pipe material size and inspection?')
+    aliases=numeric_rfi_search_terms(
+        'What did RFI 42 require for the water service pipe material size and inspection?')
+
+    assert len(primary)<=24 and len(aliases)<=24
+    assert {'rfi 0042','request for information number 0042'}.issubset(aliases)
+    assert numeric_rfi_search_terms('What is shown on page 42?')==[]
+    assert numeric_rfi_search_terms('What does RFI ARC-42 require?')==[]
+    assert numeric_rfi_search_terms('What does RFI 42-1 require?')==[]
+    assert numeric_rfi_search_terms('What is the status of Submittal 42?')==[]
 
 
 def test_retrieval_maps_question_terms_to_bounded_workflow_synonyms(client, project):

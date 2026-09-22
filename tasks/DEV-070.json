@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a question for RFI 42 returning an unrelated row numbered 42 while the actual RFI 0042 reference sits after 160 stronger candidates.",
+    "Reuse the parser's pure-numeric RFI identity through a bounded local phrase supplement instead of fuzzy matching or another model call.",
+    "Cover Specification prose, full-name Email text, FTS and complete-scan compatibility while preserving prefixed, compound and Submittal identifiers exactly.",
+    "Measure the production retrieval path with a 12,000-fragment synthetic padded-RFI fixture.",
+    "Keep legacy context packs bounded by retaining only their task-specific provider or performance document instead of growing product-wide inventories."
+  ],
+  "task_id": "DEV-070",
+  "title": "Recover zero-padded numeric RFI references in project questions",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/PERFORMANCE_BASELINE.md", "docs/DEV_STATE.md",
+    "tasks/DEV-004.json", "tasks/DEV-018.json", "tasks/DEV-070.json", "changes/CR-0085.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/benchmark_question_search.py --rows 12000 --iterations 20",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make project Q&A retrieve parser-equivalent zero-padded pure-numeric RFI references without merging other workflow identifiers or degrading normal search."
+}

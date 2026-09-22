@@ -98,3 +98,13 @@ A synthetic run changes then resets `RFI 42`; stale writes fail, audit values re
 ## CR-0077 terminal workflow-index fixture
 
 Terminal first/repeated/next pages build once, not three times; active reads stay uncached and corrections clear the index. Offline fixture.
+
+## CR-0085 padded numeric RFI question retrieval
+
+The 12,000-fragment question fixture now stores the final target as `RFI 0042` while asking for `RFI 42`. The ordinary FTS path performs one bounded 12-candidate identifier supplement only because the question contains an explicit pure-numeric RFI identity. Best-of-three, 20-iteration results on the current Windows/Python environment were 31.207 ms per FTS query, 87.356 ms per two-family comparison and 278.988 ms per complete compatibility scan, a 8.94x ordinary FTS/scan ratio. Every path returned the final target. This is synthetic local retrieval timing, not customer-corpus latency or answer accuracy; zero model calls were made.
+
+Reproduce locally:
+
+```powershell
+.venv\Scripts\python.exe scripts\benchmark_question_search.py --rows 12000 --iterations 20
+```

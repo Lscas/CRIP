@@ -7,7 +7,8 @@
   "approval_ref": "用户已批准全项目原型开发；本任务只实现既定行为，不改变范围或政策",
   "notes": [
     "token为任务输入建议，不是Codex硬配额。上下文超限拆任务，不能删除关键条件。",
-    "只读相关函数与失败摘要；提交前完整测试。"
+    "只读相关函数与失败摘要；提交前完整测试。",
+    "Provider Integration 是本任务的专用上下文；持续增长的全局 DEV_STATE 不再重复收入任务包。"
   ],
   "task_id": "DEV-004",
   "title": "用户API小规模能力探针与对账方案",
@@ -24,7 +25,6 @@
     "changes/**"
   ],
   "context_files": [
-    "docs/DEV_STATE.md",
     "docs/PROVIDER_INTEGRATION.md"
   ],
   "acceptance_tests": [

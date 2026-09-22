@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from app.db import Database, DomainError
 from app.verification import citation, exact_quote, statement_span
+from app.workflows import normalize_identifier
 from contracts.runtime_rules import validate_schema
 
 if TYPE_CHECKING:
@@ -26,6 +27,7 @@ _MAX_QUERY_TERMS = 10
 _MAX_SEARCH_TERMS = 24
 _MAX_CANDIDATES = 160
 _MAX_FAMILY_CANDIDATES = 12
+_MAX_IDENTIFIER_CANDIDATES = 12
 _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
@@ -70,6 +72,9 @@ _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
 _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
+_NUMERIC_RFI = re.compile(
+    r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
+    r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _FAMILY_SQL_FILTERS = {
@@ -100,11 +105,45 @@ def question_terms(question: str) -> list[str]:
     return terms[:_MAX_QUERY_TERMS]
 
 
+def _numeric_rfi_identifiers(text: str) -> list[tuple[str,str]]:
+    found=[];seen=set()
+    for match in _NUMERIC_RFI.finditer(text):
+        raw=match.group(1)
+        canonical=normalize_identifier('RFI',raw)
+        if canonical is None or not canonical.isdigit() or canonical in seen:continue
+        seen.add(canonical);found.append((raw,canonical))
+    return found
+
+
+def numeric_rfi_search_terms(question: str) -> list[str]:
+    identifiers=_numeric_rfi_identifiers(question)
+    numbers=[]
+    for raw,canonical in identifiers:
+        for value in (raw,canonical):
+            if value not in numbers:numbers.append(value)
+    for zeros in range(1,_MAX_SEARCH_TERMS):
+        for _,canonical in identifiers:
+            value='0'*zeros+canonical
+            if value not in numbers:numbers.append(value)
+    values=[]
+    prefixes=('rfi ','rfi no ','rfi number ',
+              'request for information ','request for information no ',
+              'request for information number ')
+    for number in numbers:
+        for prefix in prefixes:
+            values.append(prefix+number)
+            if len(values)>=_MAX_SEARCH_TERMS:return values
+    return values
+
+
 def _query_concepts(question: str, terms: list[str]) -> list[tuple[str,tuple[str,...]]]:
     phrases=[];consumed=set()
     for pattern,source_terms,variants in _PHRASE_ALIASES:
         if pattern.search(question):
             phrases.append((variants[0],variants));consumed.update(source_terms)
+    for raw,canonical in _numeric_rfi_identifiers(question):
+        phrases.append((f'rfi {canonical}',(f'rfi {canonical}',)))
+        consumed.update(('rfi',raw.casefold()))
     concepts=[(term,(term,*_TERM_ALIASES.get(term,())))
               for term in terms if term not in consumed]
     return [*concepts,*phrases]
@@ -123,6 +162,17 @@ def expanded_query_terms(question: str, terms: list[str] | None = None) -> list[
                 expanded.append(variants[depth])
                 if len(expanded)>=_MAX_SEARCH_TERMS:return expanded
     return expanded
+
+
+def search_query_terms(question: str, terms: list[str] | None = None) -> list[str]:
+    """Build the bounded primary FTS query without crowding out audited aliases."""
+    originals=question_terms(question) if terms is None else list(terms)
+    expanded=expanded_query_terms(question,originals)
+    values=[]
+    for value in (*originals,*expanded):
+        if value not in values:values.append(value)
+        if len(values)>=_MAX_SEARCH_TERMS:break
+    return values
 
 
 def requires_source_diversity(question: str) -> bool:
@@ -150,6 +200,12 @@ def _concept_match(searchable: str, token_counts: Counter,
         if next(matches,None) is not None:
             return value,index==0,1+sum(1 for _ in zip(range(2),matches))
     return None
+
+
+def _workflow_search_aliases(searchable: str) -> str:
+    aliases=' '.join(f'rfi {canonical}'
+                     for _,canonical in _numeric_rfi_identifiers(searchable))
+    return searchable+' '+aliases if aliases else searchable
 
 
 def _source_family(evidence: dict) -> str:
@@ -221,7 +277,8 @@ def _fts_query(terms: list[str]) -> str:
 
 
 def _candidate_rows(db: Database, run_id: str, terms: list[str],
-                    diversify: bool = False, source_families: tuple[str,...] = ()) -> list[dict]:
+                    diversify: bool = False, source_families: tuple[str,...] = (),
+                    identifier_terms: tuple[str,...] = ()) -> list[dict]:
     if getattr(db,'evidence_search_available',False):
         query='''SELECT e.id AS evidence_row_id,e.payload,d.name AS file_name,
                         e.document_id AS source_document_id,
@@ -236,8 +293,14 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str],
                          ORDER BY search_rank,e.rowid LIMIT ?'''
         match=_fts_query(terms)
         rows=db.all(query.format(family_filter=''),[match,run_id,_MAX_CANDIDATES])
-        if not diversify:return rows
         seen={row['evidence_row_id'] for row in rows}
+        if identifier_terms:
+            extra=db.all(query.format(family_filter=''),
+                         [_fts_query(list(identifier_terms)),run_id,_MAX_IDENTIFIER_CANDIDATES])
+            for row in extra:
+                if row['evidence_row_id'] not in seen:
+                    rows.append(row);seen.add(row['evidence_row_id'])
+        if not diversify:return rows
         families=(source_families if len(source_families)>=2
                   else tuple(_FAMILY_SQL_FILTERS))
         for family in families:
@@ -283,10 +346,12 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
     if not terms:
         return []
     concepts=_query_concepts(question,terms)
-    search_terms=expanded_query_terms(question,terms)
+    identifier_terms=tuple(numeric_rfi_search_terms(question))
+    search_terms=search_query_terms(question,terms)
     source_families=_requested_source_families(question)
     diversify=requires_source_diversity(question)
-    rows=_candidate_rows(db,run['id'],search_terms,diversify,source_families)
+    rows=_candidate_rows(
+        db,run['id'],search_terms,diversify,source_families,identifier_terms)
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -298,7 +363,8 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
         locator_text=' '.join(str(locator.get(key) or '')
                               for key in ('section','sheet','page','paragraph'))
-        searchable=' '.join((text,row['file_name'],locator_text)).casefold()
+        searchable=_workflow_search_aliases(
+            ' '.join((text,row['file_name'],locator_text)).casefold())
         token_counts=Counter(_TOKEN.findall(searchable))
         concept_hits=[(label,_concept_match(searchable,token_counts,variants))
                       for label,variants in concepts]
@@ -308,7 +374,9 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         for label,match in concept_hits:
             actual,direct,count=match
             if actual not in actual_matches:actual_matches.append(actual)
-            score+=4 if any(char.isdigit() for char in label) else (2 if direct else 1)
+            score+=(12 if label.startswith('rfi ') and any(char.isdigit() for char in label)
+                    else 4 if any(char.isdigit() for char in label)
+                    else 2 if direct else 1)
             score+=count
         score+=min(6,len(concept_hits))
         if len(concept_hits)==len(concepts):score+=8

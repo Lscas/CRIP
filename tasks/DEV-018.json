@@ -7,7 +7,8 @@
   "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and email content.",
   "notes": [
     "The workflow endpoint needs only nine small fields from each persisted parser summary, not page, vision, CAD or geometry arrays.",
-    "Use Python's bundled SQLite JSON functions and retain legacy top-level workflow fields; add no dependency or cache invalidation path."
+    "Use Python's bundled SQLite JSON functions and retain legacy top-level workflow fields; add no dependency or cache invalidation path.",
+    "The measured performance baseline is the task-specific context; the growing product-wide implementation inventory is not duplicated in this bounded task pack."
   ],
   "task_id": "DEV-018",
   "title": "Bounded workflow summary reads",
@@ -30,8 +31,7 @@
     "BUNDLE_MANIFEST.json"
   ],
   "context_files": [
-    "docs/PERFORMANCE_BASELINE.md",
-    "docs/IMPLEMENTATION_STATUS.md"
+    "docs/PERFORMANCE_BASELINE.md"
   ],
   "acceptance_tests": [
     "python -m pytest tests/app/test_workflows.py tests/app/test_api.py tests/test_devtools.py -q",

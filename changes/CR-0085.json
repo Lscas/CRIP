@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0085",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Retrieve zero-padded pure-numeric RFI references through a bounded identifier-aware local search.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The parser canonicalizes RFI 0042 to RFI 42 but project-question retrieval did not",
+    "A 161-row fixture returned an unrelated row numbered 42 and omitted the final RFI 0042 reference",
+    "The full gate exposed two legacy context packs that duplicated growing product-wide documents and exceeded their fixed limits"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/PERFORMANCE_BASELINE.md", "docs/DEV_STATE.md",
+    "tasks/DEV-004.json", "tasks/DEV-018.json", "tasks/DEV-070.json", "changes/CR-0085.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/benchmark_question_search.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective explicitly authorizes continued efficiency, accuracy and multi-content adaptability improvements.",
+  "known_limitations": [
+    "Only an explicitly written pure-numeric RFI identifier receives leading-zero equivalence; prefixed, compound and Submittal identifiers remain exact by design.",
+    "The local supplement is capped at 24 complete phrase variants and 12 candidates, so exotic very-long zero padding may still rely on the ordinary or complete-scan path.",
+    "Synthetic offline retrieval does not establish construction accuracy, contractual authority or customer-corpus latency."
+  ]
+}
