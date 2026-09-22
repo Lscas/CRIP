@@ -618,6 +618,51 @@ def test_numeric_grounding_does_not_merge_comma_separated_values(client, project
         validate_answer_model(wrong,evidence,'What are the grid coordinates?')
 
 
+@pytest.mark.parametrize(('source','claim'),[
+    ('RFI 42 issued 2024-01-05. Due date 2024-02-10.',
+     'RFI 42 is due 2024-01-10.'),
+    ('RFI 42 was issued January 5, 2024. Due February 10, 2024.',
+     'RFI 42 is due January 10, 2024.'),
+])
+def test_answer_rejects_a_date_recombined_from_cited_components(
+        client, project, source, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    wrong={'status':'ANSWERED','answer':claim,'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='date'):
+        validate_answer_model(wrong,evidence,'When is RFI 42 due?')
+
+
+@pytest.mark.parametrize(('source','claim'),[
+    ('RFI 42 is due 2024-01-05.','RFI 0042 is due 2024-1-5.'),
+    ('RFI 42 is due 2024-01-05.','RFI 42 is due January 5, 2024.'),
+    ('RFI 42 is due January 5, 2024.','RFI 42 is due Jan. 5, 2024.'),
+    ('RFI 42 is due 5 January 2024.','RFI 42 is due Jan 5 2024.'),
+    ('RFI 42 is due 01/05/2024.','RFI 42 is due 1/5/2024.'),
+])
+def test_date_grounding_accepts_formatting_only_equivalence(client, project, source, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    grounded={'status':'ANSWERED','answer':claim,'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,'When is RFI 42 due?')
+
+
+def test_date_grounding_does_not_interpret_an_ambiguous_slash_date(client, project):
+    source='RFI 42 is due 01/05/2024.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    converted={'status':'ANSWERED','answer':'RFI 42 is due 2024-01-05.',
+               'source_findings':[],
+               'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='date'):
+        validate_answer_model(converted,evidence,'When is RFI 42 due?')
+
+
 @pytest.mark.parametrize(('source','question','claim'),[
     ('RFI 42 status: CLOSED.', 'What is the status of RFI 42?',
      'RFI 42 is open.'),
@@ -1013,6 +1058,31 @@ def test_comparison_rejects_a_numeric_finding_missing_from_its_own_citation(clie
     with pytest.raises(ValueError,match='numeric'):
         validate_answer_model(
             wrong,evidence,'Compare the specification and RFI 42 pipe requirements.')
+
+
+def test_comparison_date_must_be_grounded_in_its_own_source_finding(client, project):
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',['Specification issued 2024-01-05.']),
+        ('RFI-42.txt',['RFI 42 is due 2024-02-10.']),
+    ])
+    question='Compare the specification date and RFI 42 due date.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The sources give different dates.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification was issued 2024-01-05.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification issued 2024-01-05.'}]},
+            {'source_type':'RFI','file_name':'RFI-42.txt',
+             'statement':'RFI 42 is due 2024-01-05.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 is due 2024-02-10.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='date'):
+        validate_answer_model(wrong,evidence,question)
 
 
 def test_answer_rejects_a_workflow_identifier_assembled_from_unrelated_numbers(

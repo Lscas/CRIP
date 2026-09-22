@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 14000,
+  "max_output_tokens": 2400,
+  "max_context_chars": 13000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user requested Trunk Tools-style questions answered from existing project files.",
+  "notes": [
+    "Reproduce a model answer that recombines date components from cited project text into a date the source never states.",
+    "Ground each explicit full date in an answer or source finding against that item's own exact quotations.",
+    "Treat ISO and English month-name formats as formatting equivalents, while slash dates retain their written order because locale is ambiguous.",
+    "Make no provider request, dependency, migration, date arithmetic, chronology inference or authority inference."
+  ],
+  "task_id": "DEV-081",
+  "title": "Ground project-answer dates in citations",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-081.json", "changes/CR-0096.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reject explicit dates absent from their own citations without interpreting ambiguous slash formats or adding another service."
+}

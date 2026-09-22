@@ -2,7 +2,7 @@
   "status": "READY",
   "max_input_tokens": 4096,
   "max_output_tokens": 1200,
-  "max_context_chars": 19000,
+  "max_context_chars": 20000,
   "paid_calls_allowed": false,
   "approval_ref": "用户已批准全项目原型开发；本任务只实现既定行为，不改变范围或政策",
   "notes": [

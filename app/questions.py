@@ -154,6 +154,20 @@ _EXACT_WORKFLOW_STATUS_QUESTIONS = (
 )
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
+_MONTH_WORD = (r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
+               r'jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|'
+               r'oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)')
+_MONTHS = ('jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec')
+_ISO_DATE = re.compile(
+    r'(?<!\w)(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})(?!\w)')
+_MONTH_DAY_DATE = re.compile(
+    rf'(?i)(?<!\w)(?P<month>{_MONTH_WORD})\.?\s+(?P<day>\d{{1,2}})'
+    rf'(?:st|nd|rd|th)?(?:,\s*|\s+)(?P<year>\d{{4}})(?!\w)')
+_DAY_MONTH_DATE = re.compile(
+    rf'(?i)(?<!\w)(?P<day>\d{{1,2}})(?:st|nd|rd|th)?\s+'
+    rf'(?P<month>{_MONTH_WORD})\.?(?:,\s*|\s+)(?P<year>\d{{4}})(?!\w)')
+_SLASH_DATE = re.compile(
+    r'(?<!\w)(?P<first>\d{1,2})/(?P<second>\d{1,2})/(?P<year>\d{4})(?!\w)')
 _DISPOSITION_PHRASES = (
     (re.compile(r'(?i)\bnot\s+yet\s+approved\b'),'NOT_APPROVED',
      frozenset({'NOT_APPROVED'})),
@@ -700,6 +714,28 @@ def _numeric_values(text: str) -> set[str]:
     return values
 
 
+def _date_values(text: str) -> set[str]:
+    """Canonicalize explicit full dates without interpreting slash order."""
+    values={
+        f"YMD:{int(match['year'])}-{int(match['month'])}-{int(match['day'])}"
+        for match in _ISO_DATE.finditer(text)
+    }
+    for pattern in (_MONTH_DAY_DATE,_DAY_MONTH_DATE):
+        for match in pattern.finditer(text):
+            month=_MONTHS.index(match['month'].casefold()[:3])+1
+            values.add(f"YMD:{int(match['year'])}-{month}-{int(match['day'])}")
+    values.update(
+        f"SLASH:{int(match['first'])}/{int(match['second'])}/{int(match['year'])}"
+        for match in _SLASH_DATE.finditer(text)
+    )
+    return values
+
+
+def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
+    if _date_values(claim)-_date_values(' '.join(quotes)):
+        raise ValueError(label+' contains a date absent from its citations')
+
+
 def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
     identities=set()
     for value in values:identities.update(_workflow_identities(value))
@@ -1000,6 +1036,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                     _require_unambiguous_dispositions(retrieved,'retrieved source finding')
             _require_workflow_identity_support(
                 finding['statement'],finding_identity_texts,'source finding')
+            _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_numeric_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
@@ -1019,6 +1056,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                            if len(families)==1 else _retrieved_scope(evidence))
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
+        _require_date_support(value['answer'],answer_quotes,'answer')
         _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts)
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
