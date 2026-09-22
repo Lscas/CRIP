@@ -6,6 +6,7 @@ CIRP is a local construction-document review prototype. It parses project files,
 
 ## Current reviewer scope
 
+- Ask the selected project run a plain-English question. CIRP retrieves bounded evidence locally, sends only that context through the configured budgeted model when the user submits, and places exact source quotations directly below the answer. Mock mode retrieves context but never fabricates an answer.
 - Workflow routing uses an explicit email Subject first only when it contains a valid digit-bearing RFI or Submittal ID; otherwise the earliest supported body heading becomes primary and later identifiers remain references.
 - Email addresses in headers, current body, or quoted history cannot create RFI or Submittal workflow groups; routing headers remain visible evidence.
 - RFI roles require a standalone `Question`/`Response`/`Official Response` heading or an explicit separator. Exact known `Status`/`RFI Status` values remain reviewer metadata; status-like prose stays neutral and never creates a role.

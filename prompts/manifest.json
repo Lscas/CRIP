@@ -72,6 +72,14 @@
       "schema": "spec/schemas/claim-check-batch.schema.json",
       "role": "cheap",
       "status": "implemented_mocktransport_tested_not_live_evaluated"
+    },
+    {
+      "id": "project-question",
+      "version": "0.2.6",
+      "path": "prompts/project-question/system.md",
+      "schema": "spec/schemas/project-answer.schema.json",
+      "role": "cheap",
+      "status": "implemented_mocktransport_tested_not_live_evaluated"
     }
   ]
 }

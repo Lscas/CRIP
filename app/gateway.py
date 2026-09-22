@@ -38,9 +38,11 @@ _VISION_FIELDS = frozenset({'page_type','sheet_id','important_visible_text','obs
 _EXTRACTION_INPUT_BYTE_CAP = 32000
 _VISION_INPUT_BYTE_CAP = 6000
 _VERIFICATION_INPUT_BYTE_CAP = 6000
+_ANSWER_INPUT_BYTE_CAP = 32000
 _EXTRACTION_OUTPUT_TOKEN_CAP = 8000
 _VISION_OUTPUT_TOKEN_CAP = 2000
 _VERIFICATION_OUTPUT_TOKEN_CAP = 1400
+_ANSWER_OUTPUT_TOKEN_CAP = 1600
 _JSON_WRAPPER_CHAR_LIMIT = 256
 _SAFE_EXTRACTION_PREFIX = re.compile(
     r'(?:Here is (?:the )?(?:requested )?JSON(?: object| result)?[:.]?'
@@ -342,6 +344,9 @@ class Gateway:
         self.vision_prompt=(ROOT/'prompts/drawing-crop/system.md').read_text(encoding='utf-8')
         self.vision_schema=expand_schema(json.loads((ROOT/'spec/schemas/vision-result.schema.json').read_text(encoding='utf-8')))
         self.vision_prompt_hash=hashlib.sha256((self.vision_prompt+dumps(self.vision_schema)).encode()).hexdigest()
+        self.answer_prompt=(ROOT/'prompts/project-question/system.md').read_text(encoding='utf-8')
+        self.answer_schema=expand_schema(json.loads((ROOT/'spec/schemas/project-answer.schema.json').read_text(encoding='utf-8')))
+        self.answer_prompt_hash=hashlib.sha256((self.answer_prompt+dumps(self.answer_schema)).encode()).hexdigest()
         self._request_slot_lock=threading.Lock();self._last_request_started=0.0
 
     def close(self):self.client.close()
@@ -861,6 +866,67 @@ class Gateway:
             raise InvalidModelOutput('核验响应未通过格式、范围或逐字引用检查，已记账') from exc
         self.db.finalize_model_call(attempt,actual,usage,provider_id,response=data,cache_key=result_cache_id)
         return ModelResult(data, attempt, False, self.s.provider)
+
+    def answer(self, run: dict, question: str, evidence: list[dict]) -> ModelResult:
+        """Answer one explicit user question from a bounded immutable evidence set."""
+        from app.questions import validate_answer_model
+        if self.s.provider=='mock':
+            raise ProviderPaused('Mock mode does not generate project answers.',409)
+        blockers=self.s.live_errors()
+        if blockers:raise ProviderPaused('; '.join(blockers),409)
+        if run.get('status') not in ('PARTIAL','COMPLETED'):
+            raise ProviderPaused('Project Q&A requires a completed or partial analysis run.',409)
+        if self.db.one('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(run['project_id'],),False):
+            raise ProviderPaused('The project has an unresolved model call. Reconcile it before asking another paid question.',409)
+        content={'question':question,'evidence':[{
+            'evidence_id':item['evidence_id'],'file_name':item.get('file_name'),
+            'locator':item.get('locator'),'text':item.get('prompt_text',item['raw_text'])
+        } for item in evidence]}
+        limit=min(_ANSWER_OUTPUT_TOKEN_CAP,self.s.output_limit)
+        payload=self.payload([
+            {'role':'system','content':self.answer_prompt+'\nJSON Schema:\n'+dumps(self.answer_schema)},
+            {'role':'user','content':dumps(content)},
+        ],limit)
+        upper=sum(len(message['content'].encode('utf-8')) for message in payload['messages'])+256
+        if upper>min(_ANSWER_INPUT_BYTE_CAP,self.s.input_limit):
+            raise InvalidModelOutput('The retrieved question context exceeds the configured input limit; no API call was made.')
+        fingerprint=[run['project_id'],run['snapshot_id'],self.s.api_base_url,self.s.cheap_model,
+                     self.answer_prompt_hash,question,[(item['evidence_id'],item.get('prompt_text',item['raw_text'])) for item in evidence]]
+        task_family='answer:'+hashlib.sha256(dumps(fingerprint).encode()).hexdigest()
+        task=paid_task_key(task_family,0)
+        recovered=self._recover_terminal(run['id'],task,lambda value:validate_answer_model(value,evidence))
+        if recovered is not None:return recovered
+        recent=self._family_calls(run['id'],task_family)
+        self._guard_family_before_request(recent,task,0,'This project question')
+        amount=quote_tokens(upper,limit,self.s.input_rate,self.s.output_rate)
+        self._wait_and_record(run['id'])
+        attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.cheap_model,
+                                hashlib.sha256(dumps(payload).encode()).hexdigest(),
+                                self.s.input_rate,self.s.output_rate,
+                                allow_zero=self.s.is_local_model(),interactive_question=True)
+        body=self._request_timed(run['id'],attempt,payload,'project question')
+        try:usage=self.billed_usage(body)
+        except ValueError:
+            self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
+            raise ProviderPaused('The question response omitted usage. The reservation remains pending for billing review.',409)
+        actual=quote_tokens(usage['prompt_tokens'],usage['completion_tokens'],self.s.input_rate,self.s.output_rate,safety=Decimal('1'))
+        provider_id=self._safe_provider_id(body.get('id'))
+        if self.rejects_reasoning(body,usage):
+            self.db.finalize_model_call(attempt,actual,usage,provider_id,
+                diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
+            raise ProviderPaused('The provider did not honor the non-reasoning setting. The cost was recorded and no answer was published.',409)
+        try:
+            choice=(body.get('choices') or [{}])[0]
+            if choice.get('finish_reason')!='stop':raise ValueError('question output was truncated')
+            text=choice.get('message',{}).get('content')
+            if not isinstance(text,str) or len(text)>50000:raise ValueError('question response was empty or too large')
+            data=json.loads(text);validate_answer_model(data,evidence)
+        except Exception as exc:
+            self.db.finalize_model_call(attempt,actual,usage,provider_id,
+                diagnostic=self._terminal_diagnostic('PROJECT_ANSWER',exc))
+            raise InvalidModelOutput('The project question response failed its evidence contract; the cost was recorded and the request was not retried.') from exc
+        self.db.finalize_model_call(attempt,actual,usage,provider_id,response=data)
+        return ModelResult(data,attempt,False,self.s.provider)
 
 
 def mock_extract(evidence: dict) -> dict:

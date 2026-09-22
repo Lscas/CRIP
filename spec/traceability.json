@@ -1826,6 +1826,33 @@
         "scripts/validate_readable_export.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_retrieval_mock_and_mocktransport_not_construction_accuracy",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/style.css",
+        "prompts/project-question/system.md",
+        "spec/schemas/project-answer.schema.json"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

@@ -72,6 +72,22 @@ def test_original_actions_and_input_constraints_remain_present():
     assert byid['analysis-progress'][1]['aria-valuemax'] == '100'
 
 
+def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
+    elements = Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
+    byid = {attrs['id']: (tag, attrs) for tag, attrs in elements if 'id' in attrs}
+    source = (ROOT/'web/app.js').read_text(encoding='utf-8')
+    for item in ('ask-project','question-form','project-question','ask-submit','question-results'):
+        assert item in byid
+    assert byid['question-form'][0] == 'form'
+    assert byid['project-question'][1]['maxlength'] == '1000'
+    assert "api(`/projects/${state.project}/questions`,'POST'" in source
+    assert "source.append(quote,location,open);article.append(source)" in source
+    assert "showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id)" in source
+    assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source
+    assert "citationLocation({file_name:null,locator:e.locator})" in source
+    assert 'innerHTML' not in source
+
+
 def test_outlook_msg_is_selectable_and_uses_email_attachment_review():
     elements=Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
     byid={attrs['id']:attrs for _,attrs in elements if 'id' in attrs}

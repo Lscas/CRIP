@@ -172,7 +172,8 @@ class Database:
 
     def reserve(self, project_id: str, run_id: str, task_key: str, amount: Decimal,
                 model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal,
-                verification_job_id: str | None = None, *, allow_zero: bool = False) -> str:
+                verification_job_id: str | None = None, *, allow_zero: bool = False,
+                interactive_question: bool = False) -> str:
         n = units(amount)
         if n == 0:
             if not allow_zero: raise DomainError('预留金额必须为正')
@@ -180,7 +181,15 @@ class Database:
         aid = uid('CALL')
         with self.connect(True) as c:
             run = c.execute('SELECT * FROM runs WHERE id=? AND project_id=?', (run_id,project_id)).fetchone()
-            if verification_job_id:
+            if verification_job_id and interactive_question:
+                raise BudgetError('A model call cannot be both verification and project Q&A.',409)
+            if interactive_question:
+                if (not run or run['status'] not in ('PARTIAL','COMPLETED')
+                        or not re.fullmatch(r'answer:[0-9a-f]{64}',task_key)):
+                    raise BudgetError('The project question is not bound to a completed analysis snapshot.',409)
+                if c.execute("SELECT id FROM runs WHERE status IN ('RUNNING','QUEUED')").fetchone():
+                    raise BudgetError('Wait for the active analysis to finish before asking a paid question.',409)
+            elif verification_job_id:
                 job = c.execute('SELECT * FROM verification_jobs WHERE id=? AND run_id=?', (verification_job_id, run_id)).fetchone()
                 record = c.execute('SELECT envelope,review_version FROM records WHERE id=?', (job['record_id'],)).fetchone() if job else None
                 import hashlib

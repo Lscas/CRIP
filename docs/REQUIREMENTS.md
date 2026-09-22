@@ -985,3 +985,15 @@ JSON和Excel以固定英文只输出可直接审核的材料/设备与可执行�
 - 材料或设备名称、设计属性、规格章节、数量和单位分列；尺寸、厚度、规格和明确数量不得充当名称，数量无明确依据时保持空白且不得写为零。
 - Tests & Inspections只列可执行QA活动，并分列规格章节、执行方、见证方、时机、频率和验收标准；接线图、Shop Drawings、进度资料和普通Submittal不得充当测试。
 - JSON与Excel不显示内部记录/证据/调用ID、原始候选JSON、字段路径、哈希或格式代码；证据紧随对应项目且优先显示实际支持句，所有文本不作为公式执行。
+
+## FR-QA-001 · Evidence-grounded project questions
+
+优先级：P0；状态：implemented
+
+A user may ask an English question about a selected completed analysis run and receive a concise answer based only on bounded, project-scoped evidence, with exact source quotations immediately after the answer.
+
+- Retrieval is limited to immutable evidence from the explicitly selected project and PARTIAL or COMPLETED run; a run from another project is rejected.
+- A live or local model call occurs only after the user submits a question, uses the existing project budget ledger, lowest-cost configured model and no automatic retry, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.
+- An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.
+- Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.
+- The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.

@@ -1415,6 +1415,22 @@
       ],
       "decision_source": "D-26：用户要求材料实体名与属性分开、QA只保留真实测试/检查并列出规格章节与执行方，同时取消Conflict和Missing输出。",
       "spec_section": "docs/EVIDENCE_VERIFICATION.md"
+    },
+    {
+      "id": "FR-QA-001",
+      "title": "Evidence-grounded project questions",
+      "statement": "A user may ask an English question about a selected completed analysis run and receive a concise answer based only on bounded, project-scoped evidence, with exact source quotations immediately after the answer.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Retrieval is limited to immutable evidence from the explicitly selected project and PARTIAL or COMPLETED run; a run from another project is rejected.",
+        "A live or local model call occurs only after the user submits a question, uses the existing project budget ledger, lowest-cost configured model and no automatic retry, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.",
+        "An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.",
+        "Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.",
+        "The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer."
+      ],
+      "decision_source": "D-29: the user requested a Trunk Tools-style ability to ask questions and answer from existing project files.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

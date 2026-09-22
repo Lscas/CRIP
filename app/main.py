@@ -30,6 +30,7 @@ from app.workflows import (WORKFLOW_SUMMARY_SQL_PATHS,apply_workflow_classificat
 from app.connectors import ExternalConnectors
 from app.email_attachments import (import_email_attachment,import_email_attachments,
                                    list_email_attachments)
+from app.questions import ProjectQuestions
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
@@ -68,6 +69,9 @@ class WorkflowClassificationInput(Input):
     role:str|None=Field(default=None,max_length=32)
     status:str|None=Field(default=None,max_length=80)
     note:str=Field(default='',max_length=1000)
+class QuestionInput(Input):
+    run_id:str=Field(min_length=1,max_length=128)
+    question:str=Field(min_length=3,max_length=1000)
 
 class ReconcileCallInput(Input):
     resolution:Literal['NOT_BILLED','BILLED']
@@ -86,6 +90,7 @@ class ReviewInput(Input):
 def create_app(settings:Settings|None=None)->FastAPI:
     s=settings or Settings.from_env();s.data_dir.mkdir(parents=True,exist_ok=True)
     db=Database(s.data_dir/'cirp.sqlite3');uploads=Uploads(db,s);gateway=Gateway(s,db);runner=Runner(db,s,uploads,gateway)
+    questions=ProjectQuestions(db,gateway)
     connectors=ExternalConnectors(s,uploads)
     @asynccontextmanager
     async def lifespan(app):
@@ -235,6 +240,13 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def run_create(pid:str,data:RunInput|None=None):return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')
     def runs_get(pid:str):return [runner.get(x['id']) for x in db.all('SELECT id FROM runs WHERE project_id=? ORDER BY created_at DESC',(pid,))]
+    @app.post('/api/projects/{pid}/questions')
+    def question_ask(pid:str,data:QuestionInput):
+        run=runner.get(data.run_id)
+        if run['project_id']!=pid:raise DomainError('The selected analysis run does not belong to this project.',404)
+        question=data.question.strip()
+        if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
+        return questions.ask(run,question)
     @app.get('/api/analysis-runs/{rid}')
     def run_get(rid:str):return runner.get(rid)
     @app.post('/api/analysis-runs/{rid}/{action}')

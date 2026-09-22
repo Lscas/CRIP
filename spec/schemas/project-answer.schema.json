@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/project-answer.schema.json",
+  "title": "Evidence-grounded project answer",
+  "type": "object",
+  "properties": {
+    "status": {"enum": ["ANSWERED", "INSUFFICIENT_EVIDENCE"]},
+    "answer": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "citations": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "evidence_id": {"type": "string", "minLength": 1, "maxLength": 160},
+          "quote": {"type": "string", "minLength": 1, "maxLength": 1800}
+        },
+        "required": ["evidence_id", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["status", "answer", "citations"],
+  "additionalProperties": false
+}
