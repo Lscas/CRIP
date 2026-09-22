@@ -2,7 +2,7 @@
   "status": "COMPLETE",
   "max_input_tokens": 14000,
   "max_output_tokens": 2400,
-  "max_context_chars": 13000,
+  "max_context_chars": 20000,
   "paid_calls_allowed": false,
   "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
   "notes": [

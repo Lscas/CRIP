@@ -25,9 +25,7 @@
     "spec/traceability.json",
     "changes/**"
   ],
-  "context_files": [
-    "docs/DEV_STATE.md"
-  ],
+  "context_files": [],
   "source_hints": [
     "app/main.py:evidence",
     "web/app.js:showEvidence",

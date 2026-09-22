@@ -11,7 +11,8 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _numeric_unit_values, _spec_section_values, _workflow_identities,
+    ProjectQuestions, _numeric_unit_values, _revision_label_values,
+    _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
@@ -1736,6 +1737,108 @@ def test_specification_section_parser_does_not_treat_submittal_id_as_section():
     assert _spec_section_values('Submittal 23 05 00 - 01 is pending.')==set()
     assert _spec_section_values('Specification Section 23 05 00.13 applies.')=={
         '230500.13'}
+
+
+def test_revision_label_cannot_be_borrowed_from_another_rfi(client, project):
+    source=('RFI 42 response: Drawing P2.01 Revision A applies. '
+            'RFI 43 response: Drawing P2.01 Revision B applies.')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which drawing revision applies?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Drawing P2.01 Revision B.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow revision label'):
+        validate_answer_model(wrong,evidence,'Which drawing revision applies?')
+
+
+def test_answer_rejects_recombined_revision_label(client, project):
+    source='RFI 42 response: Revision: A1 superseded Revision: B2.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which revision applies?')
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Revision A2.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='revision label'):
+        validate_answer_model(wrong,evidence,'Which revision applies?')
+
+
+@pytest.mark.parametrize(('source_revision','answer_revision'),[
+    ('Revision A','Rev. A'),('Revision: IFC','Rev IFC'),
+    ('Revision No. P2','Rev: P2'),
+])
+def test_answer_accepts_formatting_equivalent_revision_labels(
+        client, project, source_revision, answer_revision):
+    source=f'RFI 42 response: Drawing P2.01 {source_revision} applies.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which drawing revision applies?')
+    answer={'status':'ANSWERED',
+            'answer':f'RFI 42 uses Drawing P2.01 {answer_revision}.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which drawing revision applies?')
+
+
+def test_numeric_revision_label_is_not_treated_as_a_quantity(client, project):
+    source='RFI 42 response: Source document Revision 2 applies.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which drawing revision applies?')
+    answer={'status':'ANSWERED','answer':'RFI 42 uses Revision 2.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Which drawing revision applies?')
+
+
+def test_email_revision_label_stays_with_its_workflow(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'RFI 42 response: Drawing Revision A applies. '
+            'Submittal 23-01: Drawing Revision B applies.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Which drawing revision applies?')
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 uses Drawing Revision B.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow revision label'):
+        validate_answer_model(wrong,evidence,'Which drawing revision applies?')
+
+
+def test_submittal_finding_cannot_borrow_specification_revision(client, project):
+    spec='Specification drawing list requires Revision A.'
+    submittal='Submittal 23-01 product data is based on Revision B.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 drawing revisions.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources identify different revisions.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':spec,
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 product data is based on Revision A.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='revision label'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_revision_label_parser_ignores_dates_and_unlabelled_status_words():
+    assert _revision_label_values(
+        'Revision date: 2024-01-05. Revision history is current.')==set()
+    assert _revision_label_values('Revision: 2024-01-05')==set()
+    assert _revision_label_values('Revision AS BUILT; Rev. IFC; Revision No. P2')=={
+        'AS BUILT','IFC','P2'}
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(

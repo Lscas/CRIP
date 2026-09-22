@@ -82,6 +82,14 @@ _SPEC_SECTION_VALUE = re.compile(r'''(?ix)(?<!\w)
     (?P<group>\d{2})(?:\s+|\s*[.-]\s*)
     (?P<section>\d{2})(?P<extension>\.\d{2})?(?!\w)(?!\.\d)
 ''')
+_REVISION_PREFIX = r'(?:\brevision\b|\brev\.?)'
+_REVISION_LABEL_STRONG = re.compile(
+    rf'(?i){_REVISION_PREFIX}(?:\s+(?:no\.?|number)\s*|\s*[:#=-]\s*)'
+    r'(?P<label>[a-z0-9][a-z0-9._/-]{0,20})(?!\w)')
+_REVISION_LABEL_WEAK = re.compile(
+    rf'(?i){_REVISION_PREFIX}\s+(?P<label>(?:[a-z]|\d+|'
+    r'(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*|'
+    r'ifc|ifb|as[- ]built))(?!\w)')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
@@ -804,6 +812,22 @@ def _spec_section_values(text: str) -> set[str]:
     return {value for value,_,_ in _spec_section_occurrences(text)}
 
 
+def _revision_label_occurrences(text: str) -> list[tuple[str,int,int]]:
+    values=set()
+    for pattern in (_REVISION_LABEL_STRONG,_REVISION_LABEL_WEAK):
+        for match in pattern.finditer(text):
+            label=' '.join(match['label'].upper().translate(
+                str.maketrans({'–':'-','—':'-'})).split()).rstrip('.')
+            if label in {'DATE','STATUS','CURRENT'}:continue
+            if re.fullmatch(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',label):continue
+            values.add((label,match.start(),match.end()))
+    return sorted(values,key=lambda value:(value[1],value[2],value[0]))
+
+
+def _revision_label_values(text: str) -> set[str]:
+    return {value for value,_,_ in _revision_label_occurrences(text)}
+
+
 def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
     match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
     if not match:return None
@@ -813,6 +837,7 @@ def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
 def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     values=[]
     for start,end,numeric_value in _numeric_occurrences(text):
         if any(left<=start and end<=right for left,right in reserved_spans):continue
@@ -833,6 +858,7 @@ def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     """Pair explicit measurement labels with their mutually nearest number."""
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     numerics=[value for value in _numeric_occurrences(text)
               if not any(left<=value[0] and value[1]<=right
                          for left,right in reserved_spans)]
@@ -960,6 +986,11 @@ def _workflow_spec_section_values(text: str, identity_text: str | None = None
     return _workflow_scoped_values(text,_spec_section_occurrences(text),identity_text)
 
 
+def _workflow_revision_label_values(text: str, identity_text: str | None = None
+                                    ) -> set[tuple[tuple[str,str],str]]:
+    return _workflow_scoped_values(text,_revision_label_occurrences(text),identity_text)
+
+
 def _require_spec_section_support(
         claim: str, quotes: list[str], label: str,
         identity_citations: list[str] | None = None,
@@ -975,6 +1006,23 @@ def _require_spec_section_support(
     if (scope_workflow
             and _workflow_spec_section_values(claim)-supported_scoped):
         raise ValueError(label+' contains a workflow specification section absent from its citations')
+
+
+def _require_revision_label_support(
+        claim: str, quotes: list[str], label: str,
+        identity_citations: list[str] | None = None,
+        scope_workflow: bool = True) -> None:
+    identity_citations=identity_citations or quotes
+    supported=set();supported_scoped=set()
+    for index,quote in enumerate(quotes):
+        context=(identity_citations[index] if index<len(identity_citations) else quote)
+        supported.update(_revision_label_values(context))
+        supported_scoped.update(_workflow_revision_label_values(context))
+    if _revision_label_values(claim)-supported:
+        raise ValueError(label+' contains a revision label absent from its citations')
+    if (scope_workflow
+            and _workflow_revision_label_values(claim)-supported_scoped):
+        raise ValueError(label+' contains a workflow revision label absent from its citations')
 
 
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
@@ -1027,6 +1075,7 @@ def _workflow_numeric_values(text: str, identity_text: str | None = None
     """Keep non-identifier numbers attached to one exact workflow scope."""
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     occurrences=[(numeric_value,start,end)
                  for start,end,numeric_value in _numeric_occurrences(text)
                  if not any(left<=start and end<=right for left,right in reserved_spans)]
@@ -1062,10 +1111,15 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
     for context in identity_citations:supported_sections.update(_spec_section_values(context))
     section_spans=[(start,end) for value,start,end in _spec_section_occurrences(claim)
                    if value in supported_sections]
+    supported_revisions=set()
+    for context in identity_citations:supported_revisions.update(_revision_label_values(context))
+    revision_spans=[(start,end) for value,start,end in _revision_label_occurrences(claim)
+                    if value in supported_revisions]
     for start,end,value in _numeric_occurrences(claim):
         if value in quote_values:continue
         if any(left<=start and end<=right for left,right in identifier_spans):continue
         if any(left<=start and end<=right for left,right in section_spans):continue
+        if any(left<=start and end<=right for left,right in revision_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
     supported_scoped=set();supported_units=set();supported_scoped_units=set()
@@ -1400,6 +1454,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_identity_texts,'source finding')
             _require_spec_section_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
+            _require_revision_label_support(
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_date_role_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
@@ -1425,6 +1481,9 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
         _require_spec_section_support(
+            value['answer'],answer_quotes,'answer',answer_identity_texts,
+            scope_workflow=not value['source_findings'])
+        _require_revision_label_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
         _require_date_support(value['answer'],answer_quotes,'answer')

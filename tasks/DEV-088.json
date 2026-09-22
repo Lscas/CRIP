@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 13000,
+  "max_output_tokens": 2200,
+  "max_context_chars": 16000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an RFI answer borrowing an alphabetic revision label from another RFI in one citation.",
+    "Validate explicitly written Revision/Rev labels as atomic values before generic numeric checks.",
+    "Keep a claimed revision with the same exact RFI/Submittal identity or source finding.",
+    "Normalize prefix punctuation and case only; keep label values exact.",
+    "Do not treat revision dates, unlabelled words or evidence metadata alone as revision-label claims, and do not infer chronology or authority."
+  ],
+  "task_id": "DEV-088",
+  "title": "Ground project-answer revision labels",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-080.json", "tasks/DEV-081.json", "tasks/DEV-082.json",
+    "tasks/DEV-083.json", "tasks/DEV-084.json", "tasks/DEV-085.json",
+    "tasks/DEV-086.json", "tasks/DEV-088.json",
+    "changes/CR-0103.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent an explicit revision label from being recombined or borrowed across workflows or source findings in a project-file answer."
+}
