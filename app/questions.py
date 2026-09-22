@@ -78,9 +78,6 @@ _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
-_WORKFLOW_MARKER = re.compile(
-    r'(?i)\b(?P<kind>request\s+for\s+information|rfi|submittal|submission)\b'
-    r'(?P<tail>[^\r\n]{0,120})')
 _STATUS_INTENT = re.compile(
     r'(?i)\b(?:status|disposition|approved|rejected|pending|open|closed|answered|'
     r'reviewed|void|revise\s+(?:and|/)\s*resubmit)\b')
@@ -141,9 +138,11 @@ _WORKFLOW_EXACT_IDENTIFIER = (
     r'|(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*)'
 )
 _WORKFLOW_EXACT_ITEM = (
-    rf'(?P<kind>rfi|request\s+for\s+information|submittal|submission)\s+'
-    rf'(?:(?:no\.?|number)\s*)?[#:-]?\s*(?P<identifier>{_WORKFLOW_EXACT_IDENTIFIER})'
+    rf'(?P<kind>rfi|request\s+for\s+information|submittal|submission)'
+    rf'(?:\s+(?:(?:no\.?|number)\s*)?[#:-]?\s*|[-:#]\s*)'
+    rf'(?P<identifier>{_WORKFLOW_EXACT_IDENTIFIER})'
 )
+_WORKFLOW_IDENTITY_MARKER = re.compile(rf'(?i)\b{_WORKFLOW_EXACT_ITEM}')
 _EXACT_WORKFLOW_STATUS_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
         (?:the\s+)?(?:status|disposition)\s+(?:of|for)\s+{_WORKFLOW_EXACT_ITEM}
@@ -369,14 +368,20 @@ def _workflow_search_aliases(searchable: str) -> str:
     return searchable+' '+aliases if aliases else searchable
 
 
-def _workflow_identities(text: str) -> set[tuple[str,str]]:
-    identities=set()
-    for match in _WORKFLOW_MARKER.finditer(text):
+def _workflow_identity_spans(text: str) -> list[tuple[tuple[str,str],int,int]]:
+    identities=[]
+    for match in _WORKFLOW_IDENTITY_MARKER.finditer(text):
         workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
                   else 'SUBMITTAL')
-        identifier=normalize_identifier(workflow,match.group('tail'))
-        if identifier:identities.add((workflow,identifier))
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:identities.append(((workflow,identifier),match.start(),match.end()))
     return identities
+
+
+def _workflow_identities(text: str) -> set[tuple[str,str]]:
+    return {identity for identity,_,_ in _workflow_identity_spans(text)}
 
 
 def requested_workflow_status_item(question: str) -> tuple[str,str] | None:
@@ -695,9 +700,33 @@ def _numeric_values(text: str) -> set[str]:
     return values
 
 
-def _require_numeric_support(claim: str, quotes: list[str], label: str) -> None:
-    if _numeric_values(claim)-_numeric_values(' '.join(quotes)):
+def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
+    identities=set()
+    for value in values:identities.update(_workflow_identities(value))
+    return identities
+
+
+def _require_numeric_support(claim: str, quotes: list[str], label: str,
+                             identity_citations: list[str] | None = None) -> None:
+    quote_values=_numeric_values(' '.join(quotes))
+    supported_identities=_workflow_identities_in(identity_citations or [])
+    identifier_spans=[(start,end) for identity,start,end in _workflow_identity_spans(claim)
+                      if identity in supported_identities]
+    for match in _NUMERIC_VALUE.finditer(claim):
+        value=next(iter(_numeric_values(match.group())))
+        if value in quote_values:continue
+        if any(start<=match.start() and match.end()<=end for start,end in identifier_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
+
+
+def _citation_identity_text(evidence: dict, quote: str) -> str:
+    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+    return str(locator.get('section') or '')+'\n'+quote
+
+
+def _require_workflow_identity_support(claim: str, citations: list[str], label: str) -> None:
+    if _workflow_identities(claim)-_workflow_identities_in(citations):
+        raise ValueError(label+' contains a workflow identifier absent from its citations')
 
 
 def _disposition_match_spans(text: str) -> list[tuple[str,frozenset[str],int,int]]:
@@ -931,20 +960,22 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     allowed={item['evidence_id']:item for item in evidence}
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
-    top_level_quotes=[]
+    top_level_quotes=[];top_level_identity_texts=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
         if source is None:raise ValueError('citation is outside the retrieved evidence scope')
         exact_quote(source,item['quote'])
         top_level_quotes.append(item['quote'])
+        top_level_identity_texts.append(_citation_identity_text(source,item['quote']))
     answer_quotes=list(top_level_quotes)
+    answer_identity_texts=list(top_level_identity_texts)
     finding_sources=[];question_targets=_workflow_identities(question)
     status_intent=bool(_STATUS_INTENT.search(question) or _disposition_values(value['answer']))
     for finding in value['source_findings']:
         key=(finding['source_type'],finding['file_name'])
         if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
         finding_sources.append(key)
-        finding_quotes=[]
+        finding_quotes=[];finding_identity_texts=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
             if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
@@ -954,6 +985,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 raise ValueError('source finding type does not match its evidence')
             exact_quote(source,item['quote'])
             finding_quotes.append(item['quote'])
+            finding_identity_texts.append(_citation_identity_text(source,item['quote']))
         if value['status']=='ANSWERED':
             _require_unambiguous_dispositions(finding_quotes,'source finding')
             if status_intent or _disposition_values(finding['statement']):
@@ -966,9 +998,13 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                                if _workflow_identities(text)&targets]
                 if retrieved:
                     _require_unambiguous_dispositions(retrieved,'retrieved source finding')
-            _require_numeric_support(finding['statement'],finding_quotes,'source finding')
+            _require_workflow_identity_support(
+                finding['statement'],finding_identity_texts,'source finding')
+            _require_numeric_support(
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
         answer_quotes.extend(finding_quotes)
+        answer_identity_texts.extend(finding_identity_texts)
     if value['status']=='ANSWERED':
         if top_level_quotes:_require_unambiguous_dispositions(top_level_quotes,'answer')
         if not value['source_findings'] and status_intent:
@@ -982,7 +1018,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 retrieved=(_retrieved_scope(evidence,source_type=families[0])
                            if len(families)==1 else _retrieved_scope(evidence))
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
-        _require_numeric_support(value['answer'],answer_quotes,'answer')
+        _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
+        _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts)
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:

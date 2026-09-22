@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 14000,
+  "max_output_tokens": 2400,
+  "max_context_chars": 13000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a model answer that swaps an exact RFI/Submittal identifier while every numeric component still appears in the citation.",
+    "Ground explicit workflow identifiers in each answer or source finding against its own exact quotations or citation locators.",
+    "Reuse parser normalization: pure numeric RFI leading zeros are equivalent, while prefixed, compound and Submittal identifiers remain exact.",
+    "Recognize multiple exact workflow markers on one line and the full Request for Information No. form.",
+    "Make no provider request, dependency, migration, fuzzy matching or semantic authority inference."
+  ],
+  "task_id": "DEV-080",
+  "title": "Ground workflow identifiers in project answers",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-080.json", "changes/CR-0095.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reject RFI/Submittal identifiers that are absent from their own answer citations while preserving exact parser identity rules."
+}

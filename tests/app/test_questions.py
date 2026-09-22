@@ -11,7 +11,8 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
+    ProjectQuestions, _workflow_identities, _workflow_index_status_conflicts,
+    expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requires_source_diversity,
@@ -1012,6 +1013,113 @@ def test_comparison_rejects_a_numeric_finding_missing_from_its_own_citation(clie
     with pytest.raises(ValueError,match='numeric'):
         validate_answer_model(
             wrong,evidence,'Compare the specification and RFI 42 pipe requirements.')
+
+
+def test_answer_rejects_a_workflow_identifier_assembled_from_unrelated_numbers(
+        client, project):
+    source='RFI 42 response: Use Type L copper. Coordination item 43 remains open.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What does RFI 42 require for the pipe material?')
+    wrong={
+        'status':'ANSWERED','answer':'RFI 43 requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow identifier'):
+        validate_answer_model(
+            wrong,evidence,'What does RFI 42 require for the pipe material?')
+
+
+@pytest.mark.parametrize(('text','expected'),[
+    ('Request for Information No. 0042 status: CLOSED.',{('RFI','42')}),
+    ('RFI 42 is open; RFI 43 is closed.',{('RFI','42'),('RFI','43')}),
+    ('RFI-ARC-0042 response.',{('RFI','ARC-0042')}),
+    ('Submittal 23-01 and Submission 23 05 00 - 01.',
+     {('SUBMITTAL','23-01'),('SUBMITTAL','23 05 00-01')}),
+])
+def test_workflow_identity_parser_preserves_exact_parser_boundaries(text,expected):
+    assert _workflow_identities(text)==expected
+
+
+@pytest.mark.parametrize(('source','locator_section'),[
+    ('Request for Information No. 0042 response: Use Type L copper.','Section 1'),
+    ('Pipe material is Type L copper.','RFI 42 > RESPONSE'),
+])
+def test_answer_accepts_a_workflow_identifier_in_its_quote_or_locator(
+        client, project, source, locator_section):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What does RFI 42 require for the pipe material?')
+    evidence[0]['locator']['section']=locator_section
+    answer={
+        'status':'ANSWERED','answer':'RFI 42 requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(
+        answer,evidence,'What does RFI 42 require for the pipe material?')
+
+
+@pytest.mark.parametrize('claimed_size',[4,42])
+def test_locator_grounded_workflow_id_does_not_ground_another_number(
+        client, project, claimed_size):
+    source='Pipe size shall be 2 inch Type L copper.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What pipe size does RFI 42 require?')
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    wrong={
+        'status':'ANSWERED','answer':f'RFI 42 requires {claimed_size} inch Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='numeric'):
+        validate_answer_model(wrong,evidence,'What pipe size does RFI 42 require?')
+
+
+def test_prefixed_rfi_identifiers_remain_exact_in_answer_citations(client, project):
+    source='RFI ARC-0042 response: Use Type L copper. Reference ARC-42 remains open.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What does RFI ARC-0042 require?')
+    wrong={
+        'status':'ANSWERED','answer':'RFI ARC-42 requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow identifier'):
+        validate_answer_model(wrong,evidence,'What does RFI ARC-0042 require?')
+
+
+def test_source_finding_rejects_a_different_submittal_identifier(
+        client, project):
+    spec='Specification requires Type L copper.'
+    submittal=('Submittal 23-01 requires Type L copper. '
+               'Coordination tag 23-02 remains open.')
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 pipe requirements.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The sources both require Type L copper.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires Type L copper.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-02 requires Type L copper.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='workflow identifier'):
+        validate_answer_model(wrong,evidence,question)
 
 
 def test_comparison_accepts_a_csi_section_in_a_generic_file_as_specification(client, project):

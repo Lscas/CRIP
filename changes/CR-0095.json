@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0095",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground every explicit RFI/Submittal identifier in its own answer citations or citation locators.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email efficiency, accuracy and adaptability",
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "An offline reproduction proved that numeric grounding alone accepted RFI 43 cited to RFI 42 when an unrelated 43 appeared in the same passage"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-080.json", "changes/CR-0095.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective and project-question request authorize this deterministic answer-accuracy improvement.",
+  "known_limitations": [
+    "The guard validates explicit RFI/Submittal identities; it does not infer an identity from ordinary numbers or non-workflow prose.",
+    "Pure-numeric RFI leading zeros are equivalent, while prefixed, compound and Submittal identifiers remain exact.",
+    "A citation locator may ground numeric occurrences inside the exact matched workflow identity only; every occurrence outside the identity remains quote-bound even when it has the same value.",
+    "The guard does not infer chronology, authority, contractual meaning or whether all project documents were uploaded."
+  ]
+}
