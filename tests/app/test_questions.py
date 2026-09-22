@@ -513,6 +513,33 @@ def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, t
     assert json.loads(call['error'])['class'] == 'PROJECT_ANSWER'
 
 
+def test_live_answer_settles_an_opposite_disposition_error_without_retry(
+        client, project, tmp_path):
+    source='Submittal 23-01 status: REJECTED.'
+    run=_evidence(client,project,[source])
+    db=client.app.state.db
+    wrong={
+        'status':'ANSWERED','answer':'Submittal 23-01 is approved.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json={
+            'id':'question-opposite-disposition',
+            'choices':[{'finish_reason':'stop','message':{'content':json.dumps(wrong)}}],
+            'usage':{'prompt_tokens':100,'completion_tokens':20},
+        }))[1])))
+
+    with pytest.raises(InvalidModelOutput,match='question response'):
+        ProjectQuestions(db,gateway).ask(run,'What is the status of Submittal 23-01?')
+
+    call=db.one('SELECT state,response,error FROM model_calls WHERE run_id=?',(run['id'],))
+    assert len(requests)==1
+    assert call['state']=='SETTLED_ERROR' and call['response'] is None
+    assert json.loads(call['error'])['class']=='PROJECT_ANSWER'
+
+
 def test_answer_rejects_a_numeric_claim_missing_from_its_citation(client, project):
     run = _evidence(client, project, [
         'Domestic water service pipe shall be 2 inch Type L copper.',
@@ -555,6 +582,126 @@ def test_numeric_grounding_does_not_merge_comma_separated_values(client, project
 
     with pytest.raises(ValueError,match='numeric'):
         validate_answer_model(wrong,evidence,'What are the grid coordinates?')
+
+
+@pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 status: CLOSED.', 'What is the status of RFI 42?',
+     'RFI 42 is open.'),
+    ('Submittal 23-01 status: REJECTED.', 'What is the status of Submittal 23-01?',
+     'Submittal 23-01 is approved.'),
+    ('From: architect@example.test\nSubject: Submittal review\nStatus: PENDING.',
+     'What status does the email report?', 'The email reports an approved status.'),
+])
+def test_answer_rejects_a_workflow_disposition_opposite_to_its_citation(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='disposition'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 status: CLOSED.', 'What is the status of RFI 42?',
+     'RFI 42 is resolved.'),
+    ('Submittal 23-01 status: APPROVED AS NOTED.',
+     'What is the status of Submittal 23-01?', 'Submittal 23-01 is approved.'),
+    ('Submittal 23-01 status: NOT APPROVED.',
+     'What is the status of Submittal 23-01?', 'Submittal 23-01 is rejected.'),
+    ('From: architect@example.test\nSubject: Submittal review\nStatus: UNDER REVIEW.',
+     'What status does the email report?', 'The email reports a pending status.'),
+])
+def test_workflow_disposition_grounding_accepts_bounded_equivalent_wording(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_disposition_grounding_does_not_invent_an_approval_qualifier(client, project):
+    source='Submittal 23-01 status: APPROVED.'
+    question='What is the status of Submittal 23-01?'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    embellished={
+        'status':'ANSWERED','answer':'Submittal 23-01 is approved as noted.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='disposition'):
+        validate_answer_model(embellished,evidence,question)
+
+
+@pytest.mark.parametrize(('source','claim'),[
+    ('RFI 42 status: CLOSED.','RFI 42 is not closed.'),
+    ('Submittal 23-01 status: REJECTED.','Submittal 23-01 is not rejected.'),
+])
+def test_disposition_grounding_does_not_drop_negation(
+        client, project, source, claim):
+    question='What is the workflow status?'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='disposition'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','claim'),[
+    ('RFI 42 status: OPEN WAITING FOR SUBMISSION.',
+     'RFI 42 is open and pending.'),
+    ('RFI 42 status: CLOSED-DRAFT.','RFI 42 is closed and draft.'),
+    ('Submittal 23-01 status: REVIEWED.','Submittal 23-01 was reviewed.'),
+])
+def test_disposition_grounding_covers_remaining_parser_status_boundaries(
+        client, project, source, claim):
+    question='What is the workflow status?'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_disposition_grounding_uses_each_comparison_finding_own_citations(client, project):
+    run=_source_evidence(client,project,[
+        ('RFI-42-response.txt',['RFI 42 status: CLOSED.']),
+        ('Submittal-23-01.txt',['Submittal 23-01 status: APPROVED.']),
+    ])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'Compare the status of RFI 42 and Submittal 23-01.')
+    swapped={
+        'status':'ANSWERED','answer':'The sources report different dispositions.','citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'RFI-42-response.txt',
+             'statement':'RFI 42 is approved.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':'RFI 42 status: CLOSED.'}]},
+            {'source_type':'SUBMITTAL','file_name':'Submittal-23-01.txt',
+             'statement':'Submittal 23-01 is closed.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'Submittal 23-01 status: APPROVED.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains a workflow disposition'):
+        validate_answer_model(
+            swapped,evidence,'Compare the status of RFI 42 and Submittal 23-01.')
 
 
 def test_comparison_answer_rejects_a_mixed_summary_without_each_source(client, project, tmp_path):

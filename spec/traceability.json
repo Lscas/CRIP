@@ -1840,7 +1840,7 @@
       "contract_tests": [
         "tests/app/test_questions.py"
       ],
-      "test_scope": "offline_retrieval_numeric_rfi_identity_numeric_grounding_normalized_cache_structured_comparison_mocktransport_not_construction_accuracy",
+      "test_scope": "offline_retrieval_numeric_rfi_identity_numeric_and_workflow_disposition_grounding_normalized_cache_structured_comparison_mocktransport_not_construction_accuracy",
       "implemented_product_paths": [
         "app/questions.py",
         "app/gateway.py",

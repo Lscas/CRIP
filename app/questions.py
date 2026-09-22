@@ -77,6 +77,47 @@ _NUMERIC_RFI = re.compile(
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
+_DISPOSITION_PHRASES = (
+    (re.compile(r'(?i)\bnot\s+yet\s+approved\b'),frozenset({'NOT_APPROVED'})),
+    (re.compile(r'(?i)\b(?:not\s+approved|rejected|disapproved|denied)\b'),
+     frozenset({'REJECTED'})),
+    (re.compile(r'(?i)\bnot\s+closed\b'),frozenset({'NOT_CLOSED'})),
+    (re.compile(r'(?i)\bnot\s+open\b'),frozenset({'NOT_OPEN'})),
+    (re.compile(r'(?i)\bnot\s+pending\b'),frozenset({'NOT_PENDING'})),
+    (re.compile(r'(?i)\bnot\s+rejected\b'),frozenset({'NOT_REJECTED'})),
+    (re.compile(r'(?i)\b(?:not\s+answered|unanswered)\b'),frozenset({'NOT_ANSWERED'})),
+    (re.compile(r'(?i)\bnot\s+submitted\b'),frozenset({'NOT_SUBMITTED'})),
+    (re.compile(r'(?i)\bnot\s+draft\b'),frozenset({'NOT_DRAFT'})),
+    (re.compile(r'(?i)\bnot\s+(?:void(?:ed)?|cancelled|canceled)\b'),
+     frozenset({'NOT_VOID'})),
+    (re.compile(
+        r'(?i)\b(?:approved\s+(?:as\s+noted|with\s+comments)|'
+        r'make\s+corrections\s+noted|reviewed\s+as\s+noted|'
+        r'furnish\s+as\s+corrected)\b'),
+     frozenset({'APPROVED','APPROVED_AS_NOTED'})),
+    (re.compile(
+        r'(?i)\b(?:revise\s*(?:and|/)\s*resubmit|amend\s+and\s+resubmit|'
+        r'returned\s+for\s+correction)\b'),
+     frozenset({'REVISE_AND_RESUBMIT'})),
+    (re.compile(
+        r'(?i)\b(?:approved(?:\s+as\s+submitted)?|accepted|'
+        r'furnish\s+as\s+submitted|no\s+exceptions\s+taken)\b'),
+     frozenset({'APPROVED'})),
+    (re.compile(
+        r'(?i)\b(?:under\s+review|for\s+review|waiting\s+for\s+submission|pending)\b'),
+     frozenset({'PENDING'})),
+    (re.compile(r'(?i)\bsubmitted\b'),frozenset({'SUBMITTED','PENDING'})),
+    (re.compile(r'(?i)\bopen\s+answered\b'),frozenset({'OPEN','ANSWERED'})),
+    (re.compile(r'(?i)\bclosed\s*-\s*draft\b'),frozenset({'CLOSED','DRAFT'})),
+    (re.compile(r'(?i)\b(?:closed(?:\s*-\s*revised)?|resolved)\b'),
+     frozenset({'CLOSED'})),
+    (re.compile(r'(?i)\b(?:open|unresolved|outstanding)\b'),frozenset({'OPEN'})),
+    (re.compile(r'(?i)\b(?:answered|response\s+issued|official\s+response)\b'),
+     frozenset({'ANSWERED'})),
+    (re.compile(r'(?i)\breviewed\b(?!\s+as\s+noted)'),frozenset({'REVIEWED'})),
+    (re.compile(r'(?i)\b(?:void(?:ed)?|cancelled|canceled)\b'),frozenset({'VOID'})),
+    (re.compile(r'(?i)\bdraft\b'),frozenset({'DRAFT'})),
+)
 _FAMILY_SQL_FILTERS = {
     'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
@@ -262,6 +303,24 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str) -> None:
         raise ValueError(label+' contains a numeric claim absent from its citations')
 
 
+def _disposition_values(text: str) -> set[str]:
+    """Return only explicit bounded workflow dispositions, preferring longer phrases."""
+    matches=[]
+    for priority,(pattern,values) in enumerate(_DISPOSITION_PHRASES):
+        for match in pattern.finditer(text):
+            matches.append((match.start(),-(match.end()-match.start()),priority,match.end(),values))
+    occupied=[];found=set()
+    for start,_,_,end,values in sorted(matches):
+        if any(start<used_end and end>used_start for used_start,used_end in occupied):continue
+        occupied.append((start,end));found.update(values)
+    return found
+
+
+def _require_disposition_support(claim: str, quotes: list[str], label: str) -> None:
+    if _disposition_values(claim)-_disposition_values(' '.join(quotes)):
+        raise ValueError(label+' contains a workflow disposition absent from its citations')
+
+
 def _selection_order(ranked: list[tuple], diversify: bool) -> list[tuple]:
     if not diversify:return ranked
     distinct=[];remaining=[];seen=set()
@@ -422,9 +481,11 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             finding_quotes.append(item['quote'])
         if value['status']=='ANSWERED':
             _require_numeric_support(finding['statement'],finding_quotes,'source finding')
+            _require_disposition_support(finding['statement'],finding_quotes,'source finding')
         answer_quotes.extend(finding_quotes)
     if value['status']=='ANSWERED':
         _require_numeric_support(value['answer'],answer_quotes,'answer')
+        _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:
             raise ValueError('a comparison answer requires source findings')
