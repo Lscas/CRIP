@@ -768,8 +768,8 @@ def _date_values(text: str) -> set[str]:
     return {value for _,_,value in _date_occurrences(text)}
 
 
-def _date_role_values(text: str) -> set[tuple[str,str]]:
-    occurrences=_date_occurrences(text);values=set()
+def _date_role_occurrences(text: str) -> list[tuple[str,str,int,int]]:
+    occurrences=_date_occurrences(text);values=[]
     for start,end,date_value in occurrences:
         prefix=text[max(0,start-96):start];suffix=text[end:end+96]
         roles={role for role,pattern in _DATE_ROLE_PREFIXES if pattern.search(prefix)}
@@ -781,7 +781,28 @@ def _date_role_values(text: str) -> set[tuple[str,str]]:
                 statement=text[left:right]
                 roles.update(role for role,pattern in _DATE_ROLE_ANY
                              if pattern.search(statement))
-        values.update((role,date_value) for role in roles)
+        values.extend((role,date_value,start,end) for role in roles)
+    return sorted(set(values))
+
+
+def _date_role_values(text: str) -> set[tuple[str,str]]:
+    return {(role,date_value) for role,date_value,_,_ in _date_role_occurrences(text)}
+
+
+def _workflow_date_role_values(text: str, identity_text: str | None = None
+                               ) -> set[tuple[tuple[str,str],str,str]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    values=set()
+    for role,date_value,start,end in _date_role_occurrences(text):
+        left,right=statement_span(text,start,end)
+        statement_identities=_workflow_identities(text[left:right])
+        if identity_text is None:
+            identities=statement_identities or all_identities
+        else:
+            identities=(statement_identities if len(statement_identities)==1 else
+                        all_identities if not statement_identities and len(all_identities)==1
+                        else set())
+        values.update((identity,role,date_value) for identity in identities)
     return values
 
 
@@ -790,13 +811,26 @@ def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
         raise ValueError(label+' contains a date absent from its citations')
 
 
-def _require_date_role_support(claim: str, quotes: list[str], label: str) -> None:
-    supported=set()
-    for quote in quotes:supported.update(_date_role_values(quote))
+def _require_date_role_support(claim: str, quotes: list[str], label: str,
+                               identity_citations: list[str] | None = None) -> None:
+    supported=set();supported_scoped=set()
+    identity_citations=identity_citations or quotes
+    for index,quote in enumerate(quotes):
+        supported.update(_date_role_values(quote))
+        identity_text=(identity_citations[index] if index<len(identity_citations) else quote)
+        supported_scoped.update(_workflow_date_role_values(quote,identity_text))
     claimed=_date_role_values(claim)
     if claimed-supported:
         raise ValueError(label+' contains a date role absent from its citations')
-    for role,_ in claimed:
+    claimed_scoped=_workflow_date_role_values(claim)
+    if claimed_scoped-supported_scoped:
+        raise ValueError(label+' contains a workflow date role absent from its citations')
+    scoped_pairs={(role,date_value) for _,role,date_value in claimed_scoped}
+    for identity,role,_ in claimed_scoped:
+        if len({date_value for source_identity,source_role,date_value in supported_scoped
+                if source_identity==identity and source_role==role})>1:
+            raise ValueError(label+' cites multiple dates for one workflow date role')
+    for role,date_value in claimed-scoped_pairs:
         if len({date_value for source_role,date_value in supported if source_role==role})>1:
             raise ValueError(label+' cites multiple dates for one date role')
 
@@ -1121,7 +1155,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             _require_workflow_identity_support(
                 finding['statement'],finding_identity_texts,'source finding')
             _require_date_support(finding['statement'],finding_quotes,'source finding')
-            _require_date_role_support(finding['statement'],finding_quotes,'source finding')
+            _require_date_role_support(
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_numeric_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
@@ -1144,7 +1179,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
-        _require_date_role_support(value['answer'],answer_quotes,'answer')
+        _require_date_role_support(
+            value['answer'],answer_quotes,'answer',answer_identity_texts)
         _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts)
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):

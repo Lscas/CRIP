@@ -728,6 +728,78 @@ def test_date_role_grounding_rejects_multiple_dates_for_the_same_role(client, pr
         validate_answer_model(selected,evidence,'When was Submittal 23-01 approved?')
 
 
+@pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 issued 2024-01-05. RFI 43 due 2024-02-10.',
+     'When is RFI 42 due?', 'RFI 42 is due 2024-02-10.'),
+    ('Submittal 23-01 issued 2024-01-05. Submittal 23-02 approved 2024-02-10.',
+     'When was Submittal 23-01 approved?',
+     'Submittal 23-01 was approved 2024-02-10.'),
+])
+def test_date_role_rejects_a_date_borrowed_from_another_workflow_identity(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':claim,'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow date role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','question','claim'),[
+    ('RFI 42 due 2024-01-05. RFI 43 due 2024-02-10.',
+     'When is RFI 42 due?', 'RFI 42 is due 2024-01-05.'),
+    ('Submittal 23-01 approved 2024-01-05. Submittal 23-02 approved 2024-02-10.',
+     'When was Submittal 23-01 approved?',
+     'Submittal 23-01 was approved 2024-01-05.'),
+])
+def test_date_role_allows_independent_dates_for_distinct_workflow_identities(
+        client, project, source, question, claim):
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED','answer':claim,'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_date_role_uses_one_exact_workflow_identity_from_the_citation_locator(
+        client, project):
+    source='Due date: 2024-01-05.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    grounded={'status':'ANSWERED','answer':'RFI 42 is due January 5, 2024.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,'When is RFI 42 due?')
+
+
+def test_date_role_rejects_an_unscoped_multi_workflow_locator(client, project):
+    source='Due date: 2024-01-05.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    evidence[0]['locator']['section']='RFI 42 / RFI 43'
+    wrong={'status':'ANSWERED','answer':'RFI 42 is due January 5, 2024.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow date role'):
+        validate_answer_model(wrong,evidence,'When is RFI 42 due?')
+
+
+def test_date_role_reuses_exact_numeric_rfi_normalization(client, project):
+    source='Request for Information No. 0042 Due Date: 2024-01-05.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'When is RFI 42 due?')
+    grounded={'status':'ANSWERED','answer':'RFI 42 is due January 5, 2024.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,'When is RFI 42 due?')
+
+
 def test_status_question_still_rejects_submitted_and_approved_history(client, project):
     source='Submittal 23-01 submitted 2024-03-01 and approved 2024-03-08.'
     run=_evidence(client,project,[source])
@@ -1197,6 +1269,32 @@ def test_comparison_date_role_must_be_grounded_in_its_own_source_finding(
     }
 
     with pytest.raises(ValueError,match='date role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_comparison_date_role_cannot_borrow_another_workflow_identity(
+        client, project):
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',['Specification issued 2024-01-05.']),
+        ('RFI-log.txt',['RFI 42 issued 2024-01-05. RFI 43 due 2024-02-10.']),
+    ])
+    question='Compare the specification date and RFI 42 due date.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The sources contain project dates.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification was issued 2024-01-05.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification issued 2024-01-05.'}]},
+            {'source_type':'RFI','file_name':'RFI-log.txt',
+             'statement':'RFI 42 is due 2024-02-10.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 issued 2024-01-05. RFI 43 due 2024-02-10.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='workflow date role'):
         validate_answer_model(wrong,evidence,question)
 
 
