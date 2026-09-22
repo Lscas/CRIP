@@ -11,7 +11,8 @@ import pytest
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
-    ProjectQuestions, _workflow_identities, _workflow_index_status_conflicts,
+    ProjectQuestions, _numeric_unit_values, _workflow_identities,
+    _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_workflow_status_inventory, requested_workflow_status_item,
@@ -1571,6 +1572,118 @@ def test_email_answer_rejects_pressure_as_compressive_strength(client, project):
            'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
 
     with pytest.raises(ValueError,match='measurement property'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_answer_rejects_insulation_unit_as_pipe_diameter_unit(client, project):
+    source=('RFI 42 response: Pipe diameter is 2 inch. '
+            'Insulation thickness is 2 mm.')
+    run=_evidence(client,project,[source])
+    question='What pipe diameter does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires a 2 mm pipe diameter.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='property unit'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source_unit','answer_unit'),[
+    ('inch','inches'),('in.','"'),('"','in.'),('feet','ft'),
+])
+def test_answer_accepts_formatting_equivalent_measurement_units(
+        client, project, source_unit, answer_unit):
+    source=f'RFI 42 response: Pipe diameter is 2 {source_unit}.'
+    run=_evidence(client,project,[source])
+    question='What pipe diameter does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED',
+            'answer':f'RFI 42 requires a 2 {answer_unit} pipe diameter.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+@pytest.mark.parametrize(('property_name','source_value','answer_value'),[
+    ('pipe diameter','2mm','2 mm'),
+    ('compressive strength','150MPa','150 MPa'),
+])
+def test_answer_accepts_compact_recognized_measurement_units(
+        client, project, property_name, source_value, answer_value):
+    source=f'RFI 42 response: {property_name.title()} is {source_value}.'
+    run=_evidence(client,project,[source])
+    question=f'What {property_name} does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED',
+            'answer':f'RFI 42 requires {answer_value} {property_name}.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_compact_measurement_units_are_allowlisted():
+    assert _numeric_unit_values('Thickness 2mm; strength 150MPa; flow 4L/s.')=={
+        ('2','MM'),('150','MPA'),('4','LPS')}
+    assert _numeric_unit_values('Model 2model; speed 2m/s.')==set()
+
+
+def test_source_finding_rejects_submittal_height_unit_as_width_unit(
+        client, project):
+    spec='Specification requires listed equipment dimensions.'
+    submittal='Submittal 23-01 equipment width is 24 inch. Height is 24 mm.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 equipment dimensions.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources describe equipment dimensions.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires listed equipment dimensions.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 equipment width is 24 mm.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='property unit'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_property_unit_cannot_be_recombined_across_rfis(client, project):
+    source=('RFI 42 response: Pipe diameter is 2 inch. '
+            'RFI 42 insulation thickness is 2 mm. '
+            'RFI 43 response: Pipe diameter is 2 mm.')
+    run=_evidence(client,project,[source])
+    question='What pipe diameter does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires a 2 mm pipe diameter.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow property unit'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_answer_rejects_pressure_unit_as_strength_unit(client, project):
+    source=('From: engineer@example.test\nSubject: RFI 42 response\n'
+            'High pressure is 150 psi. Compressive strength is 150 MPa.')
+    run=_source_evidence(client,project,[('rfi-42-response.eml',[source])])
+    question='What compressive strength does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='Email > Current Body'
+    wrong={'status':'ANSWERED','answer':'RFI 42 requires 150 psi compressive strength.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='property unit'):
         validate_answer_model(wrong,evidence,question)
 
 

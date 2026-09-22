@@ -154,8 +154,14 @@ _EXACT_WORKFLOW_STATUS_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*(?:what|which)\s+(?:status|disposition)\s+is\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
-_NUMERIC_VALUE = re.compile(
-    r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
+_NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
+_NUMERIC_VALUE = re.compile(rf'(?<!\w){_NUMERIC_LITERAL}(?!\w)')
+_COMPACT_MEASUREMENT_UNIT_SUFFIX = (
+    r'(?:inch(?:es)?|in\.|feet|foot|ft\.?|mm|cm|m|psi|kpa|mpa|bar|gpm|cfm|'
+    r'lpm|l\s*/\s*s|pounds?|lbs?|kilograms?|kgs?|tons?)')
+_COMPACT_NUMERIC_UNIT = re.compile(
+    r'(?i)(?<!\w)(?P<number>'+_NUMERIC_LITERAL+r')'
+    r'(?='+_COMPACT_MEASUREMENT_UNIT_SUFFIX+r'(?=$|[\s,.;:)\]}]))')
 _MEASUREMENT_ROLE_PATTERNS = (
     ('SIZE',re.compile(r'(?i)\b(?:(?:nominal|pipe|tube|duct|conduit)\s+)?'
                        r'(?:size|diameter|dimensions?)\b')),
@@ -172,9 +178,20 @@ _MEASUREMENT_ROLE_PATTERNS = (
     ('TEMPERATURE',re.compile(r'(?i)\btemperature\b')),
     ('WEIGHT',re.compile(r'(?i)\bweight\b')),
 )
-_DIMENSION_UNIT_AFTER = re.compile(
-    r'(?ix)^\s*[-–]?\s*(?:(?:inch(?:es)?|in\.?|feet|foot|ft\.?|millimeters?|mm|'
-    r'centimeters?|cm|meters?|m)\b|["″\'′])')
+_MEASUREMENT_UNIT_AFTER = re.compile(r'''(?ix)^\s*[-–]?\s*(?:
+    (?P<INCH>inch(?:es)?|in\.|["″])
+    |(?P<FOOT>feet|foot|ft\.?|['′])
+    |(?P<MM>millimeters?|mm)
+    |(?P<CM>centimeters?|cm)
+    |(?P<METER>meters?|m)
+    |(?P<PSI>psi)|(?P<KPA>kpa)|(?P<MPA>mpa)|(?P<BAR>bar)
+    |(?P<GPM>gpm)|(?P<CFM>cfm)|(?P<LPM>lpm)|(?P<LPS>l\s*/\s*s)
+    |(?P<PERCENT>percent|%)
+    |(?P<POUND>pounds?|lbs?)|(?P<KG>kilograms?|kgs?)|(?P<TON>tons?)
+    |(?P<FAHRENHEIT>°\s*f|deg(?:ree)?s?\s*f)
+    |(?P<CELSIUS>°\s*c|deg(?:ree)?s?\s*c)
+)(?=$|[\s,.;:)\]}]|[x×]\s*\d)''')
+_DIMENSION_UNITS = frozenset({'INCH','FOOT','MM','CM','METER'})
 _DIMENSION_OBJECTS = (
     ('SIZE',re.compile(r'(?i)\b(?:pipe|tube|tubing|duct|conduit|opening)\b')),
     ('THICKNESS',re.compile(r'(?i)\b(?:insulation|membrane|coating|liner)\b')),
@@ -750,21 +767,44 @@ def _source_key(evidence: dict) -> tuple[str,str]:
 
 def _numeric_occurrences(text: str) -> list[tuple[int,int,str]]:
     """Canonicalize explicit numeric literals without inferring conversions."""
+    raw={(match.start(),match.end(),match.group()) for match in _NUMERIC_VALUE.finditer(text)}
+    raw.update((match.start('number'),match.end('number'),match['number'])
+               for match in _COMPACT_NUMERIC_UNIT.finditer(text))
     values=[]
-    for match in _NUMERIC_VALUE.finditer(text):
-        token=match.group().replace(',','')
+    for start,end,raw_token in sorted(raw):
+        token=raw_token.replace(',','')
         parts=token.split('/')
         normalized=[]
         for part in parts:
             whole,dot,fraction=part.partition('.')
             whole=str(int(whole));fraction=fraction.rstrip('0')
             normalized.append(whole+(dot+fraction if fraction else ''))
-        values.append((match.start(),match.end(),'/'.join(normalized)))
+        values.append((start,end,'/'.join(normalized)))
     return values
 
 
 def _numeric_values(text: str) -> set[str]:
     return {value for _,_,value in _numeric_occurrences(text)}
+
+
+def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
+    match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
+    if not match:return None
+    return next(name for name,value in match.groupdict().items() if value is not None)
+
+
+def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
+    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    values=[]
+    for start,end,numeric_value in _numeric_occurrences(text):
+        if any(left<=start and end<=right for left,right in identifier_spans):continue
+        _,right=statement_span(text,start,end);unit=_unit_after(text,end,right)
+        if unit:values.append((numeric_value,unit,start,end))
+    return values
+
+
+def _numeric_unit_values(text: str) -> set[tuple[str,str]]:
+    return {(value,unit) for value,unit,_,_ in _numeric_unit_occurrences(text)}
 
 
 def _span_distance(first: tuple[int,int], second: tuple[int,int]) -> int:
@@ -798,7 +838,7 @@ def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
                 if _span_distance((label[1],label[2]),(start,end))==label_distance:
                     values.append((label[0],numeric_value,start,end))
                     continue
-        if not _DIMENSION_UNIT_AFTER.search(text[end:min(right,end+24)]):continue
+        if _unit_after(text,end,right) not in _DIMENSION_UNITS:continue
         objects=[(role,match.start(),match.end()) for role,pattern in _DIMENSION_OBJECTS
                  for match in pattern.finditer(text,left,right)
                  if _span_distance((start,end),(match.start(),match.end()))<=48]
@@ -812,6 +852,19 @@ def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
 
 def _numeric_property_values(text: str) -> set[tuple[str,str]]:
     return {(role,value) for role,value,_,_ in _numeric_property_occurrences(text)}
+
+
+def _numeric_property_unit_occurrences(text: str) -> list[tuple[str,str,str,int,int]]:
+    units={(start,end):(value,unit)
+           for value,unit,start,end in _numeric_unit_occurrences(text)}
+    return [(role,value,units[(start,end)][1],start,end)
+            for role,value,start,end in _numeric_property_occurrences(text)
+            if (start,end) in units and units[(start,end)][0]==value]
+
+
+def _numeric_property_unit_values(text: str) -> set[tuple[str,str,str]]:
+    return {(role,value,unit)
+            for role,value,unit,_,_ in _numeric_property_unit_occurrences(text)}
 
 
 def _date_occurrences(text: str) -> list[tuple[int,int,str]]:
@@ -859,11 +912,13 @@ def _date_role_values(text: str) -> set[tuple[str,str]]:
     return {(role,date_value) for role,date_value,_,_ in _date_role_occurrences(text)}
 
 
-def _workflow_date_role_values(text: str, identity_text: str | None = None
-                               ) -> set[tuple[tuple[str,str],str,str]]:
+def _workflow_scoped_values(text: str, occurrences: list[tuple],
+                            identity_text: str | None = None) -> set[tuple]:
+    """Attach one local value relationship to one exact workflow scope."""
     all_identities=_workflow_identities(text if identity_text is None else identity_text)
     values=set()
-    for role,date_value,start,end in _date_role_occurrences(text):
+    for occurrence in occurrences:
+        *relationship,start,end=occurrence
         left,right=statement_span(text,start,end)
         statement_identities=_workflow_identities(text[left:right])
         if identity_text is None:
@@ -872,8 +927,13 @@ def _workflow_date_role_values(text: str, identity_text: str | None = None
             identities=(statement_identities if len(statement_identities)==1 else
                         all_identities if not statement_identities and len(all_identities)==1
                         else set())
-        values.update((identity,role,date_value) for identity in identities)
+        values.update((identity,*relationship) for identity in identities)
     return values
+
+
+def _workflow_date_role_values(text: str, identity_text: str | None = None
+                               ) -> set[tuple[tuple[str,str],str,str]]:
+    return _workflow_scoped_values(text,_date_role_occurrences(text),identity_text)
 
 
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
@@ -924,38 +984,28 @@ def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
 def _workflow_numeric_values(text: str, identity_text: str | None = None
                              ) -> set[tuple[tuple[str,str],str]]:
     """Keep non-identifier numbers attached to one exact workflow scope."""
-    all_identities=_workflow_identities(text if identity_text is None else identity_text)
     identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
-    values=set()
-    for start,end,numeric_value in _numeric_occurrences(text):
-        if any(left<=start and end<=right for left,right in identifier_spans):continue
-        left,right=statement_span(text,start,end)
-        statement_identities=_workflow_identities(text[left:right])
-        if identity_text is None:
-            identities=statement_identities or all_identities
-        else:
-            identities=(statement_identities if len(statement_identities)==1 else
-                        all_identities if not statement_identities and len(all_identities)==1
-                        else set())
-        values.update((identity,numeric_value) for identity in identities)
-    return values
+    occurrences=[(numeric_value,start,end)
+                 for start,end,numeric_value in _numeric_occurrences(text)
+                 if not any(left<=start and end<=right for left,right in identifier_spans)]
+    return _workflow_scoped_values(text,occurrences,identity_text)
+
+
+def _workflow_numeric_unit_values(text: str, identity_text: str | None = None
+                                  ) -> set[tuple[tuple[str,str],str,str]]:
+    return _workflow_scoped_values(text,_numeric_unit_occurrences(text),identity_text)
 
 
 def _workflow_numeric_property_values(text: str, identity_text: str | None = None
                                       ) -> set[tuple[tuple[str,str],str,str]]:
-    all_identities=_workflow_identities(text if identity_text is None else identity_text)
-    values=set()
-    for role,numeric_value,start,end in _numeric_property_occurrences(text):
-        left,right=statement_span(text,start,end)
-        statement_identities=_workflow_identities(text[left:right])
-        if identity_text is None:
-            identities=statement_identities or all_identities
-        else:
-            identities=(statement_identities if len(statement_identities)==1 else
-                        all_identities if not statement_identities and len(all_identities)==1
-                        else set())
-        values.update((identity,role,numeric_value) for identity in identities)
-    return values
+    return _workflow_scoped_values(text,_numeric_property_occurrences(text),identity_text)
+
+
+def _workflow_numeric_property_unit_values(
+        text: str, identity_text: str | None = None
+        ) -> set[tuple[tuple[str,str],str,str,str]]:
+    return _workflow_scoped_values(
+        text,_numeric_property_unit_occurrences(text),identity_text)
 
 
 def _require_numeric_support(claim: str, quotes: list[str], label: str,
@@ -966,22 +1016,31 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
     supported_identities=_workflow_identities_in(identity_citations)
     identifier_spans=[(start,end) for identity,start,end in _workflow_identity_spans(claim)
                       if identity in supported_identities]
-    for match in _NUMERIC_VALUE.finditer(claim):
-        value=next(iter(_numeric_values(match.group())))
+    for start,end,value in _numeric_occurrences(claim):
         if value in quote_values:continue
-        if any(start<=match.start() and match.end()<=end for start,end in identifier_spans):continue
+        if any(left<=start and end<=right for left,right in identifier_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
-    supported_scoped=set()
+    supported_scoped=set();supported_units=set();supported_scoped_units=set()
     supported_properties=set();supported_scoped_properties=set()
+    supported_property_units=set();supported_scoped_property_units=set()
     for index,quote in enumerate(quotes):
         identity_text=(identity_citations[index] if index<len(identity_citations) else quote)
         supported_scoped.update(_workflow_numeric_values(quote,identity_text))
+        supported_units.update(_numeric_unit_values(quote))
+        supported_scoped_units.update(_workflow_numeric_unit_values(quote,identity_text))
         supported_properties.update(_numeric_property_values(quote))
         supported_scoped_properties.update(
             _workflow_numeric_property_values(quote,identity_text))
+        supported_property_units.update(_numeric_property_unit_values(quote))
+        supported_scoped_property_units.update(
+            _workflow_numeric_property_unit_values(quote,identity_text))
     if _workflow_numeric_values(claim)-supported_scoped:
         raise ValueError(label+' contains a workflow numeric claim absent from its citations')
+    if _numeric_unit_values(claim)-supported_units:
+        raise ValueError(label+' contains a measurement unit absent from its citations')
+    if _workflow_numeric_unit_values(claim)-supported_scoped_units:
+        raise ValueError(label+' contains a workflow measurement unit absent from its citations')
     supported_roles={role for role,_ in supported_properties}
     claimed_properties={value for value in _numeric_property_values(claim)
                         if value[0] in supported_roles}
@@ -991,6 +1050,15 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
                                if value[1] in supported_roles}
     if claimed_scoped_properties-supported_scoped_properties:
         raise ValueError(label+' contains a workflow measurement property absent from its citations')
+    claimed_property_units={value for value in _numeric_property_unit_values(claim)
+                            if value[0] in supported_roles}
+    if claimed_property_units-supported_property_units:
+        raise ValueError(label+' contains a property unit absent from its citations')
+    claimed_scoped_property_units={
+        value for value in _workflow_numeric_property_unit_values(claim)
+        if value[1] in supported_roles}
+    if claimed_scoped_property_units-supported_scoped_property_units:
+        raise ValueError(label+' contains a workflow property unit absent from its citations')
 
 
 def _citation_identity_text(evidence: dict, quote: str) -> str:
