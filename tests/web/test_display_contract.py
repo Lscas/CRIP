@@ -88,6 +88,7 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert "a.href='/api/documents/'+source.document_id+'/file'" in source
     assert "workflowCodeLabel('status',status.status)" in source
     assert "workflowClassification.source.'+source.classification_source" in source
+    assert "if(source.citation)row.append(questionCitation(source.citation,data))" in source
     assert "finding.append(questionCitation(citation,data))" in source
     assert "questionSourceLabels[item.source_type]" in source
     assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source

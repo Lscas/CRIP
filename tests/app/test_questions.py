@@ -1073,13 +1073,17 @@ def test_paid_question_is_blocked_before_http_while_an_analysis_is_active(client
 @pytest.mark.parametrize(('kind','identifier','role','statuses'),[
     ('RFI','42','RESPONSE',('OPEN','CLOSED')),
     ('SUBMITTAL','23-01','SUBMITTAL',('PENDING','REJECTED')),
+    ('SUBMITTAL','23-02','SUBMITTAL',('APPROVED AS NOTED','APPROVED')),
 ])
 def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
         client, project, tmp_path, kind, identifier, role, statuses):
     question=f'What is the status of {kind.title()} {identifier}?'
     run=_evidence(client,project,[f'{kind} {identifier} status: {statuses[0]}.'])
+    current=client.app.state.db.one('''SELECT e.document_id,d.name FROM evidence e
+                                       JOIN documents d ON d.id=e.document_id
+                                       WHERE e.run_id=?''',(run['id'],))
     workflow_index=build_workflow_index([
-        {'document_id':'D-CURRENT','name':'current.eml','summary':{
+        {'document_id':current['document_id'],'name':current['name'],'summary':{
             'document_type':'EMAIL','workflow_contexts':[{
                 'workflow_type':kind,'identifier':identifier,'role':role,'status':statuses[0]}]}},
         {'document_id':'D-ARCHIVE','name':'archive.eml','classification_source':'MANUAL','summary':{
@@ -1096,18 +1100,51 @@ def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
     assert result['status']=='INSUFFICIENT_EVIDENCE'
     assert f'{kind} {identifier}' in result['answer'] and result['retrieved_count']==1
     assert all(status in result['answer'] for status in statuses)
-    assert 'current.eml' in result['answer'] and 'archive.eml' in result['answer']
+    assert current['name'] in result['answer'] and 'archive.eml' in result['answer']
     assert '[detected]' in result['answer'] and '[manual correction]' in result['answer']
     conflict=result['workflow_conflicts'][0]
     assert conflict['workflow_type']==kind and conflict['identifier']==identifier
     assert {item['status'] for item in conflict['statuses']}==set(statuses)
     assert {source['file_name'] for item in conflict['statuses']
-            for source in item['sources']}=={'current.eml','archive.eml'}
+            for source in item['sources']}=={current['name'],'archive.eml'}
     assert {source['classification_source'] for item in conflict['statuses']
             for source in item['sources']}=={'DETECTED','MANUAL'}
+    detected=next(source for item in conflict['statuses'] for source in item['sources']
+                  if source['classification_source']=='DETECTED')
+    assert detected['citation']['quote']==f'{kind} {identifier} status: {statuses[0]}.'
+    assert all('citation' not in source for item in conflict['statuses']
+               for source in item['sources'] if source['classification_source']=='MANUAL')
     assert requests==[]
     assert client.app.state.db.all(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_conflict_citation_does_not_borrow_another_workflow_status(
+        client, project, tmp_path):
+    run=_evidence(client,project,['RFI 42 status: OPEN.\nRFI 43 status: CLOSED.'])
+    current=client.app.state.db.one('''SELECT e.document_id,d.name FROM evidence e
+                                       JOIN documents d ON d.id=e.document_id
+                                       WHERE e.run_id=?''',(run['id'],))
+    workflow_index=build_workflow_index([
+        {'document_id':current['document_id'],'name':current['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[
+                {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'OPEN'},
+                {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'CLOSED'},
+            ]}},
+    ])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+
+    result=ProjectQuestions(client.app.state.db,gateway).ask(
+        run,'What is the status of RFI 42?',workflow_index)
+
+    sources={item['status']:item['sources'][0]
+             for item in result['workflow_conflicts'][0]['statuses']}
+    assert sources['OPEN']['citation']['quote']=='RFI 42 status: OPEN.'
+    assert 'citation' not in sources['CLOSED']
+    assert requests==[]
 
 
 def test_full_workflow_status_guard_is_exact_and_ignores_role_only_ambiguity():
@@ -1165,4 +1202,8 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
     assert 'RFI 42' in result['answer']
     assert {source['file_name'] for item in result['workflow_conflicts'][0]['statuses']
             for source in item['sources']}=={'current.eml','archive.eml'}
+    sources={source['file_name']:source for item in result['workflow_conflicts'][0]['statuses']
+             for source in item['sources']}
+    assert sources['current.eml']['citation']['quote']=='RFI 42 status: OPEN.'
+    assert 'citation' not in sources['archive.eml']
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]

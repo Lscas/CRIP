@@ -141,7 +141,7 @@ function renderQuestionAnswer(question,data){
   const conflict=el('section',null,'question-finding');conflict.append(el('h4',item.label));
   (item.statuses||[]).forEach(status=>{
    const sources=el('div',null,'question-citation');sources.append(el('strong',workflowCodeLabel('status',status.status)));
-   (status.sources||[]).forEach(source=>{const a=el('a',source.file_name,'link evidence-button');a.href='/api/documents/'+source.document_id+'/file';a.target='_blank';a.rel='noopener';sources.append(a,el('small',I.t('workflowClassification.source.'+source.classification_source)));});
+   (status.sources||[]).forEach(source=>{const row=el('div',null,'question-conflict-source'),a=el('a',source.file_name,'link evidence-button');a.href='/api/documents/'+source.document_id+'/file';a.target='_blank';a.rel='noopener';row.append(a,el('small',I.t('workflowClassification.source.'+source.classification_source)));if(source.citation)row.append(questionCitation(source.citation,data));sources.append(row);});
    conflict.append(sources);
   });
   article.append(conflict);

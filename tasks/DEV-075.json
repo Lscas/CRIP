@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 10000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a detected workflow conflict source that has only a file link despite exact immutable parser text.",
+    "Attach a citation only when a non-vision statement ties the exact workflow identity to the matching longest bounded status phrase, or its fragment or locator is scoped to that identity alone.",
+    "Do not borrow a status phrase that belongs to another RFI or Submittal in the same fragment.",
+    "Manual corrections and detected summaries without an exact source phrase must remain visibly uncited.",
+    "Bound the local evidence read and do not call a model, reserve budget or infer chronology and authority."
+  ],
+  "task_id": "DEV-075",
+  "title": "Attach exact citations to detected workflow status conflicts",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "web/app.js", "web/style.css", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "tasks/DEV-003.json", "tasks/DEV-075.json", "changes/CR-0090.json", "README.md",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Upgrade detected workflow conflict provenance from a file link to an exact immutable source quote and locator without fabricating support for manual or metadata-only states."
+}

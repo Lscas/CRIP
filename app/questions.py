@@ -31,6 +31,7 @@ _MAX_IDENTIFIER_CANDIDATES = 12
 _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
+_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES = 32
 _EQUIVALENT_GROUPS = (
     ('accept','accepted','acceptance','approve','approved','approval'),
     ('answer','answered','reply','replied','response','responded'),
@@ -425,8 +426,8 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str) -> None:
         raise ValueError(label+' contains a numeric claim absent from its citations')
 
 
-def _disposition_matches(text: str) -> list[tuple[str,frozenset[str]]]:
-    """Return longest non-overlapping bounded disposition phrases."""
+def _disposition_match_spans(text: str) -> list[tuple[str,frozenset[str],int,int]]:
+    """Return longest non-overlapping bounded disposition phrases and spans."""
     matches=[]
     for priority,(pattern,primary,values) in enumerate(_DISPOSITION_PHRASES):
         for match in pattern.finditer(text):
@@ -435,8 +436,12 @@ def _disposition_matches(text: str) -> list[tuple[str,frozenset[str]]]:
     occupied=[];found=[]
     for start,_,_,end,primary,values in sorted(matches):
         if any(start<used_end and end>used_start for used_start,used_end in occupied):continue
-        occupied.append((start,end));found.append((primary,values))
+        occupied.append((start,end));found.append((primary,values,start,end))
     return found
+
+
+def _disposition_matches(text: str) -> list[tuple[str,frozenset[str]]]:
+    return [(primary,values) for primary,values,_,_ in _disposition_match_spans(text)]
 
 
 def _disposition_values(text: str) -> set[str]:
@@ -467,6 +472,52 @@ def _retrieved_scope(evidence: list[dict], *, source_type: str | None = None,
         if identity is not None and identity not in _evidence_workflow_identities(item):continue
         scoped.append(_evidence_disposition_text(item))
     return scoped
+
+
+def _attach_workflow_status_citations(db: Database, run_id: str, conflicts: list[dict]) -> None:
+    """Attach exact parser-text spans; manual corrections remain explicitly uncited."""
+    sources=[source for conflict in conflicts for item in conflict['statuses']
+             for source in item['sources'] if source['classification_source']=='DETECTED']
+    document_ids=list(dict.fromkeys(source['document_id'] for source in sources
+                                   if source['document_id']))[:_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES]
+    if not document_ids:return
+    placeholders=','.join('?' for _ in document_ids)
+    rows=db.all(f'''SELECT e.document_id,e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY e.document_id,e.id''',[run_id,*document_ids])
+    by_document={document_id:[] for document_id in document_ids}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];by_document[row['document_id']].append(evidence)
+    for conflict in conflicts:
+        identity=(conflict['workflow_type'],conflict['identifier'])
+        for item in conflict['statuses']:
+            primaries={primary for primary,_ in _disposition_matches(item['status'])}
+            if not primaries:continue
+            for source in item['sources']:
+                if source['classification_source']!='DETECTED':continue
+                for evidence in by_document.get(source['document_id'],[]):
+                    text=str(evidence.get('raw_text') or '')
+                    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+                    raw_identities=_workflow_identities(text)
+                    locator_identities=_workflow_identities(str(locator.get('section') or ''))
+                    match=None
+                    for primary,_,position,end in _disposition_match_spans(text):
+                        if primary not in primaries:continue
+                        start,finish=statement_span(text,position,end)
+                        statement_identities=_workflow_identities(text[start:finish])
+                        if (statement_identities=={identity}
+                                or (not statement_identities and raw_identities=={identity})
+                                or (not statement_identities and not raw_identities
+                                    and locator_identities=={identity})):
+                            match=(start,finish);break
+                    if match:
+                        source['citation']=citation(evidence,*match,role='CONTEXT')
+                        break
 
 
 def _selection_order(ranked: list[tuple], diversify: bool) -> list[tuple]:
@@ -688,6 +739,7 @@ class ProjectQuestions:
         evidence=retrieve_evidence(self.db,run,question)
         conflicts=_workflow_index_status_conflicts(question,workflow_index)
         if conflicts:
+            _attach_workflow_status_citations(self.db,run['id'],conflicts)
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':_workflow_status_conflict_answer(conflicts),
                     'citations':[],'source_findings':[],

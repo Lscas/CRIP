@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0090",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Attach exact immutable parser-text citations to detected workflow conflict sources.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The user requires evidence to appear with the corresponding result",
+    "A synthetic fixture proved that detected workflow conflicts exposed only file-level provenance despite exact immutable evidence"
+  ],
+  "affected_paths": [
+    "app/questions.py", "web/app.js", "web/style.css", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "tasks/DEV-003.json", "tasks/DEV-075.json", "changes/CR-0090.json", "README.md",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective and inline-evidence requirement authorize this deterministic citation improvement.",
+  "known_limitations": [
+    "Citation lookup is bounded to the first 32 distinct detected conflict documents; every source still retains file-level provenance.",
+    "A source without an exact identity-plus-status phrase in parser/OCR text remains uncited even if its document summary contains a detected status.",
+    "A status phrase naming another workflow in the same fragment remains uncited for the requested workflow.",
+    "Manual classification corrections intentionally do not receive parser-text citations.",
+    "The guard preserves ambiguity and does not determine chronology, revision precedence, authority or contractual correctness."
+  ]
+}
