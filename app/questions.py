@@ -106,6 +106,36 @@ _WORKFLOW_COUNT_TYPES = (
     ('SUBMITTAL',re.compile(r'(?i)\bsubmittals\b')),
     ('EMAIL',re.compile(r'(?i)\be-?mails\b')),
 )
+_WORKFLOW_STATUS_TYPES = _WORKFLOW_COUNT_TYPES[:2]
+_WORKFLOW_STATUS_CATEGORY = r'(?:rfis|requests\s+for\s+information|submittals)'
+_WORKFLOW_STATUS_CATEGORIES = rf'{_WORKFLOW_STATUS_CATEGORY}(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+){_WORKFLOW_STATUS_CATEGORY})*'
+_WORKFLOW_STATUS_TEXT = r'[a-z]+(?:[\s/-]+[a-z]+){0,4}?'
+_WORKFLOW_STATUS_COUNT_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:how\s+many|(?:what\s+is\s+)?(?:the\s+)?
+        (?:count|number|total(?:\s+number)?)\s+of|count(?:\s+the)?)\s+
+        (?P<status>{_WORKFLOW_STATUS_TEXT})\s+(?P<categories>{_WORKFLOW_STATUS_CATEGORIES})
+        (?:\s+(?:are\s+there|(?:are\s+)?in\s+(?:this|the)\s+(?:run|analysis|project)))?
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*how\s+many\s+(?P<categories>{_WORKFLOW_STATUS_CATEGORIES})
+        (?:\s+that)?\s+are\s+(?P<status>{_WORKFLOW_STATUS_TEXT})
+        (?:\s+in\s+(?:this|the)\s+(?:run|analysis|project))?\s*[?!.]*\s*$'''),
+)
+_WORKFLOW_STATUS_LIST_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:list|show)(?:\s+me)?(?:\s+the)?(?:\s+all)?\s+
+        (?P<status>{_WORKFLOW_STATUS_TEXT})\s+(?P<categories>{_WORKFLOW_STATUS_CATEGORIES})
+        (?:\s+in\s+(?:this|the)\s+(?:run|analysis|project))?\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show)(?:\s+me)?(?:\s+the)?(?:\s+all)?\s+
+        (?P<categories>{_WORKFLOW_STATUS_CATEGORIES})\s+
+        (?:that\s+are|with\s+(?:the\s+)?status)\s+(?P<status>{_WORKFLOW_STATUS_TEXT})
+        (?:\s+in\s+(?:this|the)\s+(?:run|analysis|project))?\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+(?P<categories>{_WORKFLOW_STATUS_CATEGORIES})
+        \s+are\s+(?P<status>{_WORKFLOW_STATUS_TEXT})
+        (?:\s+in\s+(?:this|the)\s+(?:run|analysis|project))?\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+(?P<status>{_WORKFLOW_STATUS_TEXT})\s+
+        (?P<categories>{_WORKFLOW_STATUS_CATEGORIES})\s+are\s+
+        (?:in|included\s+in)\s+(?:this|the)\s+(?:run|analysis|project)
+        \s*[?!.]*\s*$'''),
+)
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _DISPOSITION_PHRASES = (
@@ -336,12 +366,15 @@ def requires_workflow_status_index(question: str) -> bool:
     return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
 
 
+def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
+    found=[(hit.start(),kind) for kind,pattern in types if (hit:=pattern.search(categories))]
+    return tuple(kind for _,kind in sorted(found))
+
+
 def _requested_workflow_types(match: re.Match | None) -> tuple[str,...]:
     if not match:return ()
     categories=next(value for value in match.groupdict().values() if value is not None)
-    found=[(hit.start(),kind) for kind,pattern in _WORKFLOW_COUNT_TYPES
-           if (hit:=pattern.search(categories))]
-    return tuple(kind for _,kind in sorted(found))
+    return _workflow_types_in(categories)
 
 
 def requested_workflow_counts(question: str) -> tuple[str,...]:
@@ -354,8 +387,27 @@ def requested_workflow_list(question: str) -> tuple[str,...]:
     return _requested_workflow_types(_WORKFLOW_LIST_QUESTION.fullmatch(question))
 
 
+def requested_workflow_status_inventory(question: str) -> tuple[str,tuple[str,...],str] | None:
+    """Return mode, workflow types and one exact bounded status filter."""
+    for mode,patterns in (('COUNT',_WORKFLOW_STATUS_COUNT_QUESTIONS),
+                          ('LIST',_WORKFLOW_STATUS_LIST_QUESTIONS)):
+        for pattern in patterns:
+            match=pattern.fullmatch(question)
+            if not match:continue
+            status=' '.join(match.group('status').split())
+            dispositions=_disposition_match_spans(status)
+            if len(dispositions)!=1 or dispositions[0][2:]!=(0,len(status)):continue
+            requested=_workflow_types_in(match.group('categories'),_WORKFLOW_STATUS_TYPES)
+            status_filter=dispositions[0][0]
+            supported={'RFI':_DISPOSITION_GROUPS[1],'SUBMITTAL':_DISPOSITION_GROUPS[0]}
+            if requested and all(status_filter in supported[kind] for kind in requested):
+                return mode,requested,status_filter
+    return None
+
+
 def requires_workflow_inventory(question: str) -> bool:
-    return bool(requested_workflow_counts(question) or requested_workflow_list(question))
+    return bool(requested_workflow_counts(question) or requested_workflow_list(question)
+                or requested_workflow_status_inventory(question))
 
 
 def _workflow_inventory_values(workflow_index: dict) -> dict[str,list[str]]:
@@ -376,7 +428,71 @@ def _workflow_inventory_values(workflow_index: dict) -> dict[str,list[str]]:
     return values
 
 
+def _workflow_status_inventory_answer(question: str, workflow_index: dict) -> dict | None:
+    request=requested_workflow_status_inventory(question)
+    if not request:return None
+    mode,requested,status_filter=request
+    found={kind:{'values':[],'ambiguous_values':[]} for kind in requested}
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict) or item.get('kind') not in found:continue
+        identifier=item.get('identifier');statuses=set()
+        if not identifier:continue
+        for member in item.get('members',[]):
+            if not isinstance(member,dict) or member.get('source')!='PRIMARY':continue
+            status=member.get('status')
+            if isinstance(status,str):
+                statuses.update(value for raw in status.split(' / ')
+                                if (value:=' '.join(raw.upper().split())))
+        supports=any(any(primary==status_filter or status_filter in values
+                         for primary,values in _disposition_matches(status))
+                     for status in statuses)
+        if supports:
+            ambiguous=(len(statuses)>1 or any(
+                len({primary for primary,_ in _disposition_matches(status)})>1
+                for status in statuses))
+            key='ambiguous_values' if ambiguous else 'values'
+            found[item['kind']][key].append(str(identifier))
+    label=status_filter.replace('_',' ');entries=[];lines=[]
+    units={'RFI':'RFI identifier','SUBMITTAL':'Submittal identifier'}
+    for kind in requested:
+        values=found[kind]['values'];ambiguous=found[kind]['ambiguous_values']
+        entry={'kind':kind,'status':status_filter,'count':len(values),
+               'ambiguous_count':len(ambiguous)}
+        unit=units[kind]+('' if len(values)==1 else 's')
+        if mode=='COUNT':
+            lines.append(f'{len(values)} {unit} have one explicit status supporting {label}.')
+            if ambiguous:
+                ambiguous_unit=units[kind]+('' if len(ambiguous)==1 else 's')
+                verb='contains' if len(ambiguous)==1 else 'contain'
+                excluded='is' if len(ambiguous)==1 else 'are'
+                lines.append(f'{len(ambiguous)} additional {ambiguous_unit} {verb} a '
+                             f'{label}-supporting status plus another explicit status and '
+                             f'{excluded} excluded as ambiguous.')
+        else:
+            shown=values[:_MAX_WORKFLOW_INVENTORY_VALUES]
+            ambiguous_shown=ambiguous[:_MAX_WORKFLOW_INVENTORY_VALUES]
+            entry.update({'values':shown,'truncated':len(values)>len(shown),
+                          'ambiguous_values':ambiguous_shown,
+                          'ambiguous_truncated':len(ambiguous)>len(ambiguous_shown)})
+            qualifier=(f'{len(values)}; first {len(shown)} shown'
+                       if entry['truncated'] else str(len(values)))
+            lines.append(f"{unit} with one explicit status supporting {label} ({qualifier}): "
+                         f"{', '.join(shown) if shown else 'none'}.")
+            if ambiguous:
+                ambiguous_unit=units[kind]+('' if len(ambiguous)==1 else 's')
+                ambiguous_qualifier=(f'{len(ambiguous)}; first {len(ambiguous_shown)} shown'
+                                     if entry['ambiguous_truncated'] else str(len(ambiguous)))
+                lines.append(f"Ambiguous {ambiguous_unit} containing a {label}-supporting status "
+                             f"({ambiguous_qualifier}): {', '.join(ambiguous_shown)}.")
+        entries.append(entry)
+    return {'answer':('The complete workflow index for the selected analysis run contains:\n'
+                      +'\n'.join(lines)),'workflow_status_inventory':entries}
+
+
 def _workflow_inventory_answer(question: str, workflow_index: dict | None) -> dict | None:
+    if isinstance(workflow_index,dict):
+        status_answer=_workflow_status_inventory_answer(question,workflow_index)
+        if status_answer:return status_answer
     requested=requested_workflow_counts(question);mode='COUNT'
     if not requested:requested=requested_workflow_list(question);mode='LIST'
     if not requested or not isinstance(workflow_index,dict):return None

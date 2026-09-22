@@ -13,9 +13,9 @@ from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _workflow_index_status_conflicts, expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requires_source_diversity, requires_workflow_inventory,
-    requires_workflow_status_index, retrieve_evidence, search_query_terms,
-    validate_answer_model,
+    requested_workflow_status_inventory, requires_source_diversity,
+    requires_workflow_inventory, requires_workflow_status_index, retrieve_evidence,
+    search_query_terms, validate_answer_model,
 )
 from app.settings import ROOT, Settings
 from app.workflows import build_workflow_index
@@ -1215,7 +1215,6 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
     ('How many RFIs, Submittals, and Emails are in this run?',('RFI','SUBMITTAL','EMAIL')),
     ('What is the number of requests for information?',('RFI',)),
     ('Count the e-mails in the project.',('EMAIL',)),
-    ('How many open RFIs?',()),
     ('How many RFI documents are there?',()),
     ('How many RFIs mention concrete?',()),
     ('How many RFI 42 responses are there?',()),
@@ -1230,13 +1229,35 @@ def test_workflow_inventory_question_boundary(question,expected):
     ('Show me the e-mails.',('EMAIL',)),
     ('Which RFIs and Submittals are in this project?',('RFI','SUBMITTAL')),
     ('What Emails are included in the analysis?',('EMAIL',)),
-    ('List open RFIs.',()),
     ('List RFI documents.',()),
     ('List RFI 42 responses.',()),
     ('List RFIs mentioning concrete.',()),
 ])
 def test_workflow_inventory_list_question_boundary(question,expected):
     assert requested_workflow_list(question)==expected
+    assert requires_workflow_inventory(question) is bool(expected)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('How many open RFIs are in this run?',('COUNT',('RFI',),'OPEN')),
+    ('How many open RFIs?',('COUNT',('RFI',),'OPEN')),
+    ('How many RFIs are open?',('COUNT',('RFI',),'OPEN')),
+    ('Count the pending Submittals.',('COUNT',('SUBMITTAL',),'PENDING')),
+    ('Show me pending Submittals.',('LIST',('SUBMITTAL',),'PENDING')),
+    ('List open RFIs.',('LIST',('RFI',),'OPEN')),
+    ('List all approved as noted Submittals in this run.',
+     ('LIST',('SUBMITTAL',),'APPROVED_AS_NOTED')),
+    ('List all Submittals that are approved as noted.',
+     ('LIST',('SUBMITTAL',),'APPROVED_AS_NOTED')),
+    ('Which rejected Submittals are in this project?',('LIST',('SUBMITTAL',),'REJECTED')),
+    ('How many open Emails?',None),
+    ('How many approved RFIs?',None),
+    ('List closed Submittals.',None),
+    ('How many very open RFIs?',None),
+    ('List RFI 42 responses.',None),
+])
+def test_workflow_status_inventory_question_boundary(question,expected):
+    assert requested_workflow_status_inventory(question)==expected
     assert requires_workflow_inventory(question) is bool(expected)
 
 
@@ -1302,6 +1323,68 @@ def test_workflow_inventory_answer_skips_retrieval_and_live_provider(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 
+def test_workflow_status_inventory_uses_explicit_status_and_preserves_conflicts(
+        client, project, tmp_path, monkeypatch):
+    run=_evidence(client,project,['RFI and Submittal status inventory.'])
+    rows=[
+        ('MAIL-1','rfi-1.eml','RFI','1','RESPONSE','OPEN','EMAIL'),
+        ('RFI-2','rfi-2.pdf','RFI','2','RESPONSE','CLOSED','RFI_RESPONSE'),
+        ('RFI-3A','rfi-3-open.pdf','RFI','3','RESPONSE','OPEN','RFI_RESPONSE'),
+        ('RFI-3B','rfi-3-closed.pdf','RFI','3','RESPONSE','CLOSED','RFI_RESPONSE'),
+        ('RFI-4','rfi-4.pdf','RFI','4','RESPONSE','OPEN FOR REVIEW','RFI_RESPONSE'),
+        ('RFI-5','rfi-5.pdf','RFI','5','RESPONSE','OPEN CLOSED','RFI_RESPONSE'),
+        ('SUB-1','sub-1.pdf','SUBMITTAL','23-01','SUBMITTAL','PENDING','SUBMITTAL'),
+        ('SUB-2','sub-2.pdf','SUBMITTAL','23-02','SUBMITTAL','SUBMITTED','SUBMITTAL'),
+        ('SUB-3','sub-3.pdf','SUBMITTAL','23-03','SUBMITTAL','APPROVED AS NOTED','SUBMITTAL'),
+        ('SUB-4','sub-4.pdf','SUBMITTAL','23-04','SUBMITTAL','APPROVED','SUBMITTAL'),
+        ('SUB-5A','sub-5-approved.pdf','SUBMITTAL','23-05','SUBMITTAL','APPROVED','SUBMITTAL'),
+        ('SUB-5B','sub-5-rejected.pdf','SUBMITTAL','23-05','SUBMITTAL','REJECTED','SUBMITTAL'),
+    ]
+    index=build_workflow_index([
+        {'document_id':document_id,'name':name,'summary':{
+            'document_type':document_type,'workflow_contexts':[{
+                'workflow_type':kind,'identifier':identifier,'role':role,'status':status}]}}
+        for document_id,name,kind,identifier,role,status,document_type in rows])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),client.app.state.db,
+                    httpx.Client(transport=httpx.MockTransport(
+                        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    service=ProjectQuestions(client.app.state.db,gateway)
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('status inventory read evidence'))
+
+    opened=service.ask(run,'How many open RFIs are in this run?',index)
+    assert opened['workflow_status_inventory']==[
+        {'kind':'RFI','status':'OPEN','count':2,'ambiguous_count':2}]
+    assert '2 RFI identifiers' in opened['answer'] and 'excluded as ambiguous' in opened['answer']
+    listed=service.ask(run,'List all open RFIs in this run.',index)
+    assert listed['workflow_status_inventory']==[{
+        'kind':'RFI','status':'OPEN','count':2,'ambiguous_count':2,
+        'values':['1','4'],'truncated':False,
+        'ambiguous_values':['3','5'],'ambiguous_truncated':False}]
+    approved=service.ask(run,'How many approved Submittals are in this run?',index)
+    assert approved['workflow_status_inventory']==[
+        {'kind':'SUBMITTAL','status':'APPROVED','count':2,'ambiguous_count':1}]
+    approved_as_noted=service.ask(
+        run,'List all approved as noted Submittals in this run.',index)
+    assert approved_as_noted['workflow_status_inventory'][0]['values']==['23-03']
+    assert approved_as_noted['workflow_status_inventory'][0]['ambiguous_count']==0
+    pending=service.ask(run,'Count the pending Submittals.',index)
+    assert pending['workflow_status_inventory'][0]['count']==2
+    large=build_workflow_index([
+        {'document_id':f'OPEN-{number}','name':f'open-{number}.pdf','summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':str(number),'role':'RESPONSE','status':'OPEN'}]}}
+        for number in range(1,56)])
+    large_result=service.ask(run,'List all open RFIs in this run.',large)
+    assert large_result['workflow_status_inventory'][0]['count']==55
+    assert len(large_result['workflow_status_inventory'][0]['values'])==50
+    assert large_result['workflow_status_inventory'][0]['truncated'] is True
+    assert requests==[]
+    assert client.app.state.db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
 def test_question_api_loads_complete_workflow_index_for_inventory_count(
         client, project, monkeypatch):
     run=_source_evidence(client,project,[
@@ -1313,7 +1396,7 @@ def test_question_api_loads_complete_workflow_index_for_inventory_count(
         'SELECT id,name FROM documents WHERE project_id=?',(project['id'],))}
     summaries={
         'question.eml':{'document_type':'EMAIL','workflow_contexts':[
-            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]},
+            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]},
         'response.pdf':{'document_type':'RFI_RESPONSE','workflow_contexts':[
             {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]},
         'submittal.pdf':{'document_type':'SUBMITTAL','workflow_contexts':[
@@ -1343,3 +1426,8 @@ def test_question_api_loads_complete_workflow_index_for_inventory_count(
         {'kind':'SUBMITTAL','total':1,'values':['23-01'],'truncated':False},
         {'kind':'EMAIL','total':2,'values':['coordination.eml','question.eml'],'truncated':False},
     ]
+    filtered=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'How many open RFIs are in this run?'})
+    assert filtered.status_code==200
+    assert filtered.json()['workflow_status_inventory']==[
+        {'kind':'RFI','status':'OPEN','count':0,'ambiguous_count':1}]

@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0093",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Answer strict explicit-status RFI/Submittal inventory questions from the complete cached index without retrieval or a model call.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email efficiency, accuracy and adaptability",
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "Current source inspection proved that common status-filtered inventory questions still fell through to an eight-passage evidence window and model path"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-078.json", "changes/CR-0093.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective and project-question request authorize this deterministic completeness, accuracy and cost improvement.",
+  "known_limitations": [
+    "Only strict English count/list forms containing one bounded RFI/Submittal disposition use this path.",
+    "A status must apply to every requested workflow type; incompatible combinations stay on the evidence/model path.",
+    "A group with multiple distinct explicit statuses is never counted as confirmed even if every phrase could support the broad filter.",
+    "Email-derived RFI/Submittal contexts participate, but Email messages do not receive an inferred semantic status.",
+    "Confirmed and ambiguous lists each expose at most 50 ordered identifiers while retaining complete totals."
+  ]
+}
