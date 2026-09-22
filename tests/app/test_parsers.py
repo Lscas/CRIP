@@ -753,7 +753,9 @@ def test_eml_html_blockquote_is_history_not_current_body(tmp_path):
 
 
 @pytest.mark.parametrize('wrapper',['class="gmail_quote gmail_quote_container"',
-                                    'id="divRplyFwdMsg"'])
+                                    'id="divRplyFwdMsg"',
+                                    'class="yahoo_quoted"',
+                                    'class="protonmail_quote"'])
 def test_eml_common_html_reply_wrappers_are_history_and_current_text_resumes(tmp_path,wrapper):
     message=EmailMessage();message['Subject']='Submittal 23-09-23';message.set_content(
         '<html><body><p>Status: Pending</p><p>Current note.</p>'

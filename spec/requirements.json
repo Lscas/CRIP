@@ -185,7 +185,7 @@
         "Current body/history stay separate; addresses cannot create groups, while routing/history evidence remains reviewable but skips model extraction and cannot create current requirements or properties.",
         "An Outlook-style From block with Sent, Date, To or Subject starts quoted history whether labels share a line or use adjacent lines.",
         "Visible HTML text outside a closed blockquote remains current message evidence even when quoted history appears between two current reply passages.",
-        "Gmail quote classes and Outlook divRplyFwdMsg delimit HTML history; text after a matching close resumes as current evidence.",
+        "Exact Gmail, Yahoo and Proton quote classes plus Outlook divRplyFwdMsg delimit HTML history; text after a matching close resumes as current evidence.",
         "Exact -- plus trailing space and Gmail gmail_signature create reviewable signature evidence excluded from workflow routing and extraction; closed HTML signatures resume current text.",
         "Message-ID, In-Reply-To and References accept only bounded RFC-style angle-bracketed local@domain tokens and store accepted values only as local hashes; raw identifiers are never persisted.",
         "Multiple accepted Message-IDs set a conflict flag while missing or malformed values remain standalone; multi-value In-Reply-To preserves each exact accepted relationship.",

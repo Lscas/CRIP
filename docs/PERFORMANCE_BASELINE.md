@@ -61,7 +61,7 @@ A synthetic RFI reply retains headers, current body and quoted history but now e
 
 ## CR-0053 HTML reply-wrapper accuracy fixture
 
-Synthetic Gmail and Outlook quote wrappers previously leaked historical `Approved` text beside current `Pending`. They now create reviewable history, resume current text after closure and stay outside extraction. This is an offline structural check, not mailbox or live-model validation.
+Synthetic Gmail, Yahoo, Proton and Outlook quote wrappers previously leaked historical `Approved` text beside current `Pending`. They now create reviewable history, resume current text after closure and stay outside extraction. This is an offline structural check, not mailbox or live-model validation.
 
 ## CR-0054 signature-boundary accuracy fixture
 

@@ -24,7 +24,7 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-47'
+PARSER_VERSION='multisource-48'
 PAGE_ROUTER_VERSION='pdf-page-router-1'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
@@ -407,7 +407,8 @@ class _PlainHTML(HTMLParser):
         tag=tag.casefold();values={str(key).casefold():str(value or '') for key,value in attrs}
         classes={value.casefold() for value in values.get('class','').split()}
         quoted=(tag=='blockquote' or (tag=='div' and
-                (bool(classes & {'gmail_quote','gmail_quote_container'}) or
+                (bool(classes & {'gmail_quote','gmail_quote_container',
+                                 'yahoo_quoted','protonmail_quote'}) or
                  values.get('id','').casefold()=='divrplyfwdmsg')))
         signature=(tag=='div' and 'gmail_signature' in classes and not quoted)
         if tag in {'script','style','noscript'}:self.hidden+=1
