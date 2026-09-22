@@ -540,6 +540,34 @@ def test_live_answer_settles_an_opposite_disposition_error_without_retry(
     assert json.loads(call['error'])['class']=='PROJECT_ANSWER'
 
 
+def test_live_answer_settles_a_conflicting_disposition_error_without_retry(
+        client, project, tmp_path):
+    sources=['Submittal 23-01 status: PENDING.','Submittal 23-01 status: REJECTED.']
+    run=_evidence(client,project,sources)
+    db=client.app.state.db
+    wrong={
+        'status':'ANSWERED','answer':'Submittal 23-01 is rejected.',
+        'source_findings':[],
+        'citations':[{'evidence_id':f'EV-QA-{index}','quote':source}
+                     for index,source in enumerate(sources,1)],
+    }
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json={
+            'id':'question-conflicting-disposition',
+            'choices':[{'finish_reason':'stop','message':{'content':json.dumps(wrong)}}],
+            'usage':{'prompt_tokens':110,'completion_tokens':20},
+        }))[1])))
+
+    with pytest.raises(InvalidModelOutput,match='question response'):
+        ProjectQuestions(db,gateway).ask(run,'What is the status of Submittal 23-01?')
+
+    call=db.one('SELECT state,response,error FROM model_calls WHERE run_id=?',(run['id'],))
+    assert len(requests)==1
+    assert call['state']=='SETTLED_ERROR' and call['response'] is None
+    assert json.loads(call['error'])['class']=='PROJECT_ANSWER'
+
+
 def test_answer_rejects_a_numeric_claim_missing_from_its_citation(client, project):
     run = _evidence(client, project, [
         'Domestic water service pipe shall be 2 inch Type L copper.',
@@ -702,6 +730,152 @@ def test_disposition_grounding_uses_each_comparison_finding_own_citations(client
     with pytest.raises(ValueError,match='source finding contains a workflow disposition'):
         validate_answer_model(
             swapped,evidence,'Compare the status of RFI 42 and Submittal 23-01.')
+
+
+@pytest.mark.parametrize(('sources','question','claim'),[
+    (['RFI 42 status: OPEN.','RFI 42 status: CLOSED.'],
+     'What is the status of RFI 42?','RFI 42 is closed.'),
+    (['Submittal 23-01 status: PENDING.','Submittal 23-01 status: REJECTED.'],
+     'What is the status of Submittal 23-01?','Submittal 23-01 is rejected.'),
+    (['Submittal 23-01 status: APPROVED.',
+      'Submittal 23-01 status: APPROVED AS NOTED.'],
+     'What is the status of Submittal 23-01?','Submittal 23-01 is approved as noted.'),
+    (['Submittal 23-01 status: PENDING.','Submittal 23-01 status: SUBMITTED.'],
+     'What is the status of Submittal 23-01?','Submittal 23-01 is pending.'),
+    (['From: architect@example.test\nSubject: Submittal review\nStatus: PENDING.',
+      'From: contractor@example.test\nSubject: Submittal review\nStatus: APPROVED.'],
+     'What status does the email report?','The email reports an approved status.'),
+])
+def test_answer_rejects_a_silent_choice_between_conflicting_cited_dispositions(
+        client, project, sources, question, claim):
+    run=_evidence(client,project,sources)
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    selected={item['raw_text']:item['evidence_id'] for item in evidence}
+    ambiguous={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':selected[source],'quote':source} for source in sources],
+    }
+
+    with pytest.raises(ValueError,match='conflicting'):
+        validate_answer_model(ambiguous,evidence,question)
+
+
+@pytest.mark.parametrize(('sources','question','claim'),[
+    (['RFI 42 status: OPEN.','RFI 42 status: CLOSED.'],
+     'What is the status of RFI 42?','RFI 42 is closed.'),
+    (['Submittal 23-01 status: PENDING.','Submittal 23-01 status: REJECTED.'],
+     'What is the status of Submittal 23-01?','Submittal 23-01 is rejected.'),
+    (['From: architect@example.test\nSubject: Submittal review\nStatus: PENDING.',
+      'From: contractor@example.test\nSubject: Submittal review\nStatus: APPROVED.'],
+     'What status does the email report?','The email reports an approved status.'),
+])
+def test_answer_cannot_hide_a_conflicting_retrieved_disposition_by_omitting_its_citation(
+        client, project, sources, question, claim):
+    run=_evidence(client,project,sources)
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    selected=next(item for item in evidence if item['raw_text']==sources[-1])
+    hidden={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':selected['evidence_id'],'quote':sources[-1]}],
+    }
+
+    with pytest.raises(ValueError,match='conflicting'):
+        validate_answer_model(hidden,evidence,question)
+
+
+@pytest.mark.parametrize(('sources','question','claim'),[
+    (['Request for Information No. 0042 status: CLOSED.','RFI 43 status: OPEN.'],
+     'What is the status of RFI 42?','RFI 42 is closed.'),
+    (['Submittal 23-01 status: APPROVED.','Submittal 23-02 status: REJECTED.'],
+     'What is the status of Submittal 23-01?','Submittal 23-01 is approved.'),
+])
+def test_retrieved_disposition_conflicts_remain_isolated_by_exact_workflow_identity(
+        client, project, sources, question, claim):
+    run=_evidence(client,project,sources)
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    selected=next(item for item in evidence if item['raw_text']==sources[0])
+    grounded={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':selected['evidence_id'],'quote':sources[0]}],
+    }
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_source_finding_cannot_hide_a_conflicting_retrieved_disposition(
+        client, project):
+    question='Compare the status of RFI 42 and Submittal 23-01.'
+    run=_source_evidence(client,project,[
+        ('RFI-42-response.txt',['RFI 42 status: OPEN.','RFI 42 status: CLOSED.']),
+        ('Submittal-23-01.txt',['Submittal 23-01 status: APPROVED.']),
+    ])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    hidden={
+        'status':'ANSWERED','answer':'The RFI is closed and the Submittal is approved.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'RFI-42-response.txt',
+             'statement':'RFI 42 is closed.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':'RFI 42 status: CLOSED.'}]},
+            {'source_type':'SUBMITTAL','file_name':'Submittal-23-01.txt',
+             'statement':'Submittal 23-01 is approved.',
+             'citations':[{'evidence_id':'EV-SOURCE-3',
+                           'quote':'Submittal 23-01 status: APPROVED.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='retrieved source finding cites conflicting'):
+        validate_answer_model(hidden,evidence,question)
+
+
+def test_comparison_keeps_different_source_dispositions_isolated(client, project):
+    question='Compare the status of RFI 42 and Submittal 23-01.'
+    run=_source_evidence(client,project,[
+        ('RFI-42-response.txt',['RFI 42 status: CLOSED.']),
+        ('Submittal-23-01.txt',['Submittal 23-01 status: APPROVED.']),
+    ])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    comparison={
+        'status':'ANSWERED',
+        'answer':'The RFI is closed while the Submittal is approved.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'RFI-42-response.txt',
+             'statement':'RFI 42 is closed.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':'RFI 42 status: CLOSED.'}]},
+            {'source_type':'SUBMITTAL','file_name':'Submittal-23-01.txt',
+             'statement':'Submittal 23-01 is approved.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'Submittal 23-01 status: APPROVED.'}]},
+        ],
+    }
+
+    validate_answer_model(comparison,evidence,question)
+
+
+def test_comparison_uses_question_identity_when_a_finding_omits_the_number(
+        client, project):
+    question='Compare the status of RFI 42 and Submittal 23-01.'
+    run=_source_evidence(client,project,[
+        ('combined-rfis.txt',['RFI 42 status: CLOSED.','RFI 43 status: OPEN.']),
+        ('Submittal-23-01.txt',['Submittal 23-01 status: APPROVED.']),
+    ])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    comparison={
+        'status':'ANSWERED','answer':'The RFI is closed while the Submittal is approved.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'combined-rfis.txt',
+             'statement':'The RFI is closed.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':'RFI 42 status: CLOSED.'}]},
+            {'source_type':'SUBMITTAL','file_name':'Submittal-23-01.txt',
+             'statement':'The Submittal is approved.',
+             'citations':[{'evidence_id':'EV-SOURCE-3',
+                           'quote':'Submittal 23-01 status: APPROVED.'}]},
+        ],
+    }
+
+    validate_answer_model(comparison,evidence,question)
 
 
 def test_comparison_answer_rejects_a_mixed_summary_without_each_source(client, project, tmp_path):

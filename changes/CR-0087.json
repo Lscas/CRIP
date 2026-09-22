@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0087",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Preserve conflicting retrieved workflow dispositions instead of publishing a silent winner.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The workflow reviewer already marks distinct exact statuses ambiguous and infers no precedence",
+    "Question-answer fixtures proved that cited or retrieved open/closed, pending/rejected and pending/approved evidence could previously be reduced to one answer"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "prompts/project-question/system.md",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-072.json", "changes/CR-0087.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective explicitly authorizes continued accuracy and multi-content adaptability improvements.",
+  "known_limitations": [
+    "Conflict detection is limited to the bounded evidence retrieved for one question and is not a full-project counterevidence search.",
+    "Only explicit bounded English workflow dispositions and exact RFI/Submittal markers are recognized; semantic email-thread status inference remains unsupported.",
+    "The guard preserves ambiguity and does not determine chronology, revision precedence, authority or contractual correctness.",
+    "Synthetic offline validation does not establish construction accuracy or live-provider behavior."
+  ]
+}

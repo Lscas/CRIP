@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 406,
+  "file_count_excluding_manifest": 408,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -47,13 +47,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 40879,
-      "sha256": "6ea434e7be801a3c61b01c521a799743a394f146b25a49db049bd06aa1d80242"
+      "bytes": 41618,
+      "sha256": "390e6fffd160c966d4efcf22666d0bc1b0853def8eb59309a00e0138bf941110"
     },
     {
       "path": "README.md",
-      "bytes": 16055,
-      "sha256": "b126108124955d322469ca974f2d6f5641ca5cb78fd7f3cfafbaea231cb665b5"
+      "bytes": 16278,
+      "sha256": "70ffba76e1170baf2fcdfac1ce67caf9c9b7c60b627b8dea7e3c3d52ae42bd62"
     },
     {
       "path": "VERSION",
@@ -142,8 +142,8 @@
     },
     {
       "path": "app/questions.py",
-      "bytes": 26796,
-      "sha256": "4b8fdd11e1fcab2d365163f074ac3bc8e21f3f6db3b9555e1df9b801d4702dc4"
+      "bytes": 32842,
+      "sha256": "0fe9c5bfbe73e357b2fad8da41af30d939452712c758724bfd4c7bf675ab1ae8"
     },
     {
       "path": "app/remote_access.py",
@@ -626,6 +626,11 @@
       "sha256": "078cd5700e0d47d4904d626c4596e2121abcd7ddf009c37b820fbe332951ac12"
     },
     {
+      "path": "changes/CR-0087.json",
+      "bytes": 1873,
+      "sha256": "9b17d20485edc88fe0489adb1e381b961b0bc820e6962387616ca603a23502bb"
+    },
+    {
       "path": "config/assembly_rules.json",
       "bytes": 1239,
       "sha256": "60011fb0cd460307099ddba8327ebf2858908e061d9d41668f8a8bf6b52ba8a6"
@@ -707,13 +712,13 @@
     },
     {
       "path": "docs/DEV_STATE.md",
-      "bytes": 14226,
-      "sha256": "3c2ed4f5ae4c3ff46746c30ac4e7bdfa70270be1afa1944411e5c744553f9336"
+      "bytes": 14749,
+      "sha256": "657e946b93b8d63831c8c5f896627eea507d5b444119829fb998cb2d50fc6f2c"
     },
     {
       "path": "docs/EVIDENCE_VALIDATION.md",
-      "bytes": 22600,
-      "sha256": "49bb308e0a2b6c562d840174d2293ad8b139989a69648b8631442e7fb3670f2a"
+      "bytes": 23384,
+      "sha256": "c99e6f3c57a04402e7c1065745e068567cd566f3678791ddad4776a5ff56882e"
     },
     {
       "path": "docs/EVIDENCE_VERIFICATION.md",
@@ -767,8 +772,8 @@
     },
     {
       "path": "docs/PROJECT_QUESTIONS.md",
-      "bytes": 11972,
-      "sha256": "3164890f481a780327af3187aadc2e820d20511e1ceae902cbb2d64801b932e5"
+      "bytes": 13432,
+      "sha256": "4aee908bc4e4940eadaf4063dcf5b46a54fa75b86ba7513659e5f20e7c273565"
     },
     {
       "path": "docs/PROVIDER_INTEGRATION.md",
@@ -787,8 +792,8 @@
     },
     {
       "path": "docs/REQUIREMENTS.md",
-      "bytes": 45174,
-      "sha256": "77a78ea2e55522e87cbb5753d68de265d06752b93bd001f84097eb45bd4c0510"
+      "bytes": 45533,
+      "sha256": "1110510523cfbe9773942d3d0099f76205a1d6d3790186c0335d67595a307919"
     },
     {
       "path": "docs/REVIEW_RESOLUTION.md",
@@ -1022,8 +1027,8 @@
     },
     {
       "path": "prompts/project-question/system.md",
-      "bytes": 2878,
-      "sha256": "0a6ce1836bfda6eb0d7a4b5cf21178158a5ae437cacd23cf265bae3b205616e9"
+      "bytes": 3281,
+      "sha256": "e97126d8b835a4337e4ece2c1b757b20e707fdc13c2475d98e7bffa104976865"
     },
     {
       "path": "pytest.ini",
@@ -1372,8 +1377,8 @@
     },
     {
       "path": "spec/requirements.json",
-      "bytes": 74271,
-      "sha256": "b9b21202d5f540d19e432d80a5e5823a27c54e33e92f8e2148b8ba06fcfd634c"
+      "bytes": 74638,
+      "sha256": "f0306363dbe020dc2adbbb11f4961e17f00bd0198dc34974b3c2ad6f76fbfee1"
     },
     {
       "path": "spec/schemas/change-record.schema.json",
@@ -1457,8 +1462,8 @@
     },
     {
       "path": "spec/traceability.json",
-      "bytes": 62872,
-      "sha256": "a11af894a600b965d101eabe2f0e80f922d5cdcffb0fb7bf82072c118ee4ebec"
+      "bytes": 62903,
+      "sha256": "d2ced79017412420104db173e7cae8aa37ec05ff4f4fabd883759314622ff6f6"
     },
     {
       "path": "start-custom-model.ps1",
@@ -1856,6 +1861,11 @@
       "sha256": "ba7c3b86d8a096fb8204553e57b84742166e349b25d0db382f67051e8ee5906b"
     },
     {
+      "path": "tasks/DEV-072.json",
+      "bytes": 1646,
+      "sha256": "2977ab36b26c37f5de1650aabd077bbbe34a69e9e649d747ec2bd537f7f56319"
+    },
+    {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",
       "bytes": 833224,
       "sha256": "8cded5162ea2b5d851dde61fbd24806dd9137d6af4a6e31d1ef1a346541a3fc3"
@@ -1942,8 +1952,8 @@
     },
     {
       "path": "tests/app/test_questions.py",
-      "bytes": 40608,
-      "sha256": "5417f158f683a0f152622f45748219413bddd1365842349e8036796280092b5e"
+      "bytes": 49049,
+      "sha256": "9be2a80e61bcd5a27b5ad599744288b851ea341729d065067f8e27e810df8406"
     },
     {
       "path": "tests/app/test_remote_access.py",

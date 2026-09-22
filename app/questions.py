@@ -75,49 +75,97 @@ _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
+_WORKFLOW_MARKER = re.compile(
+    r'(?i)\b(?P<kind>request\s+for\s+information|rfi|submittal|submission)\b'
+    r'(?P<tail>[^\r\n]{0,120})')
+_STATUS_INTENT = re.compile(
+    r'(?i)\b(?:status|disposition|approved|rejected|pending|open|closed|answered|'
+    r'reviewed|void|revise\s+(?:and|/)\s*resubmit)\b')
 _NUMERIC_VALUE = re.compile(
     r'(?<!\w)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?(?!\w)')
 _DISPOSITION_PHRASES = (
-    (re.compile(r'(?i)\bnot\s+yet\s+approved\b'),frozenset({'NOT_APPROVED'})),
+    (re.compile(r'(?i)\bnot\s+yet\s+approved\b'),'NOT_APPROVED',
+     frozenset({'NOT_APPROVED'})),
     (re.compile(r'(?i)\b(?:not\s+approved|rejected|disapproved|denied)\b'),
-     frozenset({'REJECTED'})),
-    (re.compile(r'(?i)\bnot\s+closed\b'),frozenset({'NOT_CLOSED'})),
-    (re.compile(r'(?i)\bnot\s+open\b'),frozenset({'NOT_OPEN'})),
-    (re.compile(r'(?i)\bnot\s+pending\b'),frozenset({'NOT_PENDING'})),
-    (re.compile(r'(?i)\bnot\s+rejected\b'),frozenset({'NOT_REJECTED'})),
-    (re.compile(r'(?i)\b(?:not\s+answered|unanswered)\b'),frozenset({'NOT_ANSWERED'})),
-    (re.compile(r'(?i)\bnot\s+submitted\b'),frozenset({'NOT_SUBMITTED'})),
-    (re.compile(r'(?i)\bnot\s+draft\b'),frozenset({'NOT_DRAFT'})),
+     'REJECTED',frozenset({'REJECTED'})),
+    (re.compile(r'(?i)\bnot\s+closed\b'),'NOT_CLOSED',frozenset({'NOT_CLOSED'})),
+    (re.compile(r'(?i)\bnot\s+open\b'),'NOT_OPEN',frozenset({'NOT_OPEN'})),
+    (re.compile(r'(?i)\bnot\s+pending\b'),'NOT_PENDING',frozenset({'NOT_PENDING'})),
+    (re.compile(r'(?i)\bnot\s+rejected\b'),'NOT_REJECTED',frozenset({'NOT_REJECTED'})),
+    (re.compile(r'(?i)\b(?:not\s+answered|unanswered)\b'),'NOT_ANSWERED',
+     frozenset({'NOT_ANSWERED'})),
+    (re.compile(r'(?i)\bnot\s+submitted\b'),'NOT_SUBMITTED',
+     frozenset({'NOT_SUBMITTED'})),
+    (re.compile(r'(?i)\bnot\s+draft\b'),'NOT_DRAFT',frozenset({'NOT_DRAFT'})),
     (re.compile(r'(?i)\bnot\s+(?:void(?:ed)?|cancelled|canceled)\b'),
-     frozenset({'NOT_VOID'})),
+     'NOT_VOID',frozenset({'NOT_VOID'})),
     (re.compile(
         r'(?i)\b(?:approved\s+(?:as\s+noted|with\s+comments)|'
         r'make\s+corrections\s+noted|reviewed\s+as\s+noted|'
         r'furnish\s+as\s+corrected)\b'),
-     frozenset({'APPROVED','APPROVED_AS_NOTED'})),
+     'APPROVED_AS_NOTED',frozenset({'APPROVED','APPROVED_AS_NOTED'})),
     (re.compile(
         r'(?i)\b(?:revise\s*(?:and|/)\s*resubmit|amend\s+and\s+resubmit|'
         r'returned\s+for\s+correction)\b'),
-     frozenset({'REVISE_AND_RESUBMIT'})),
+     'REVISE_AND_RESUBMIT',frozenset({'REVISE_AND_RESUBMIT'})),
     (re.compile(
         r'(?i)\b(?:approved(?:\s+as\s+submitted)?|accepted|'
         r'furnish\s+as\s+submitted|no\s+exceptions\s+taken)\b'),
-     frozenset({'APPROVED'})),
+     'APPROVED',frozenset({'APPROVED'})),
+    (re.compile(
+        r'(?i)\bopen\s+(?:for\s+(?:manager|review|coordinator)|in\s+review|'
+        r'waiting\s+for\s+submission)\b'),
+     'OPEN_PENDING',frozenset({'OPEN','PENDING'})),
     (re.compile(
         r'(?i)\b(?:under\s+review|for\s+review|waiting\s+for\s+submission|pending)\b'),
-     frozenset({'PENDING'})),
-    (re.compile(r'(?i)\bsubmitted\b'),frozenset({'SUBMITTED','PENDING'})),
-    (re.compile(r'(?i)\bopen\s+answered\b'),frozenset({'OPEN','ANSWERED'})),
-    (re.compile(r'(?i)\bclosed\s*-\s*draft\b'),frozenset({'CLOSED','DRAFT'})),
-    (re.compile(r'(?i)\b(?:closed(?:\s*-\s*revised)?|resolved)\b'),
+     'PENDING',frozenset({'PENDING'})),
+    (re.compile(r'(?i)\bsubmitted\b'),'SUBMITTED',frozenset({'SUBMITTED','PENDING'})),
+    (re.compile(r'(?i)\bopen\s+answered\b'),'OPEN_ANSWERED',
+     frozenset({'OPEN','ANSWERED'})),
+    (re.compile(r'(?i)\bclosed\s*-\s*draft\b'),'CLOSED_DRAFT',
+     frozenset({'CLOSED','DRAFT'})),
+    (re.compile(r'(?i)\bclosed\s*-\s*revised\b'),'CLOSED_REVISED',
      frozenset({'CLOSED'})),
-    (re.compile(r'(?i)\b(?:open|unresolved|outstanding)\b'),frozenset({'OPEN'})),
+    (re.compile(r'(?i)\b(?:closed|resolved)\b'),'CLOSED',frozenset({'CLOSED'})),
+    (re.compile(r'(?i)\b(?:open|unresolved|outstanding)\b'),'OPEN',
+     frozenset({'OPEN'})),
     (re.compile(r'(?i)\b(?:answered|response\s+issued|official\s+response)\b'),
-     frozenset({'ANSWERED'})),
-    (re.compile(r'(?i)\breviewed\b(?!\s+as\s+noted)'),frozenset({'REVIEWED'})),
-    (re.compile(r'(?i)\b(?:void(?:ed)?|cancelled|canceled)\b'),frozenset({'VOID'})),
-    (re.compile(r'(?i)\bdraft\b'),frozenset({'DRAFT'})),
+     'ANSWERED',frozenset({'ANSWERED'})),
+    (re.compile(r'(?i)\breviewed\b(?!\s+as\s+noted)'),'REVIEWED',
+     frozenset({'REVIEWED'})),
+    (re.compile(r'(?i)\b(?:void(?:ed)?|cancelled|canceled)\b'),'VOID',
+     frozenset({'VOID'})),
+    (re.compile(r'(?i)\bdraft\b'),'DRAFT',frozenset({'DRAFT'})),
 )
+_DISPOSITION_GROUPS = (
+    ('APPROVED','APPROVED_AS_NOTED','REVISE_AND_RESUBMIT','REJECTED',
+     'PENDING','SUBMITTED','REVIEWED'),
+    ('OPEN','OPEN_ANSWERED','OPEN_PENDING','CLOSED','CLOSED_DRAFT','CLOSED_REVISED',
+     'ANSWERED','DRAFT','SUBMITTED','REJECTED','VOID','PENDING'),
+)
+_CONFLICTING_DISPOSITION_PAIRS = frozenset(
+    frozenset({left,right}) for group in _DISPOSITION_GROUPS
+    for index,left in enumerate(group) for right in group[index+1:]
+) | frozenset({
+    frozenset({'APPROVED','NOT_APPROVED'}),
+    frozenset({'APPROVED_AS_NOTED','NOT_APPROVED'}),
+    frozenset({'CLOSED','NOT_CLOSED'}),
+    frozenset({'CLOSED_DRAFT','NOT_CLOSED'}),
+    frozenset({'CLOSED_REVISED','NOT_CLOSED'}),
+    frozenset({'OPEN','NOT_OPEN'}),
+    frozenset({'OPEN_ANSWERED','NOT_OPEN'}),
+    frozenset({'OPEN_PENDING','NOT_OPEN'}),
+    frozenset({'PENDING','NOT_PENDING'}),
+    frozenset({'OPEN_PENDING','NOT_PENDING'}),
+    frozenset({'SUBMITTED','NOT_PENDING'}),
+    frozenset({'REJECTED','NOT_REJECTED'}),
+    frozenset({'ANSWERED','NOT_ANSWERED'}),
+    frozenset({'OPEN_ANSWERED','NOT_ANSWERED'}),
+    frozenset({'SUBMITTED','NOT_SUBMITTED'}),
+    frozenset({'DRAFT','NOT_DRAFT'}),
+    frozenset({'CLOSED_DRAFT','NOT_DRAFT'}),
+    frozenset({'VOID','NOT_VOID'}),
+})
 _FAMILY_SQL_FILTERS = {
     'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
@@ -249,6 +297,27 @@ def _workflow_search_aliases(searchable: str) -> str:
     return searchable+' '+aliases if aliases else searchable
 
 
+def _workflow_identities(text: str) -> set[tuple[str,str]]:
+    identities=set()
+    for match in _WORKFLOW_MARKER.finditer(text):
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        identifier=normalize_identifier(workflow,match.group('tail'))
+        if identifier:identities.add((workflow,identifier))
+    return identities
+
+
+def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
+    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+    return _workflow_identities(
+        str(locator.get('section') or '')+'\n'+str(evidence.get('raw_text') or ''))
+
+
+def _evidence_disposition_text(evidence: dict) -> str:
+    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+    return str(locator.get('section') or '')+'\n'+str(evidence.get('raw_text') or '')
+
+
 def _source_family(evidence: dict) -> str:
     name=str(evidence.get('file_name') or '').casefold()
     locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
@@ -303,22 +372,48 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str) -> None:
         raise ValueError(label+' contains a numeric claim absent from its citations')
 
 
-def _disposition_values(text: str) -> set[str]:
-    """Return only explicit bounded workflow dispositions, preferring longer phrases."""
+def _disposition_matches(text: str) -> list[tuple[str,frozenset[str]]]:
+    """Return longest non-overlapping bounded disposition phrases."""
     matches=[]
-    for priority,(pattern,values) in enumerate(_DISPOSITION_PHRASES):
+    for priority,(pattern,primary,values) in enumerate(_DISPOSITION_PHRASES):
         for match in pattern.finditer(text):
-            matches.append((match.start(),-(match.end()-match.start()),priority,match.end(),values))
-    occupied=[];found=set()
-    for start,_,_,end,values in sorted(matches):
+            matches.append((match.start(),-(match.end()-match.start()),priority,
+                            match.end(),primary,values))
+    occupied=[];found=[]
+    for start,_,_,end,primary,values in sorted(matches):
         if any(start<used_end and end>used_start for used_start,used_end in occupied):continue
-        occupied.append((start,end));found.update(values)
+        occupied.append((start,end));found.append((primary,values))
+    return found
+
+
+def _disposition_values(text: str) -> set[str]:
+    """Return supported claim values while preserving phrase specificity separately."""
+    found=set()
+    for _,values in _disposition_matches(text):found.update(values)
     return found
 
 
 def _require_disposition_support(claim: str, quotes: list[str], label: str) -> None:
     if _disposition_values(claim)-_disposition_values(' '.join(quotes)):
         raise ValueError(label+' contains a workflow disposition absent from its citations')
+
+
+def _require_unambiguous_dispositions(quotes: list[str], label: str) -> None:
+    values={primary for primary,_ in _disposition_matches(' '.join(quotes))}
+    if any(pair.issubset(values) for pair in _CONFLICTING_DISPOSITION_PAIRS):
+        raise ValueError(label+' cites conflicting workflow dispositions without precedence')
+
+
+def _retrieved_scope(evidence: list[dict], *, source_type: str | None = None,
+                     file_name: str | None = None,
+                     identity: tuple[str,str] | None = None) -> list[str]:
+    scoped=[]
+    for item in evidence:
+        if source_type is not None and _source_family(item)!=source_type:continue
+        if file_name is not None and item.get('file_name')!=file_name:continue
+        if identity is not None and identity not in _evidence_workflow_identities(item):continue
+        scoped.append(_evidence_disposition_text(item))
+    return scoped
 
 
 def _selection_order(ranked: list[tuple], diversify: bool) -> list[tuple]:
@@ -458,13 +553,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     allowed={item['evidence_id']:item for item in evidence}
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
-    answer_quotes=[]
+    top_level_quotes=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
         if source is None:raise ValueError('citation is outside the retrieved evidence scope')
         exact_quote(source,item['quote'])
-        answer_quotes.append(item['quote'])
-    finding_sources=[]
+        top_level_quotes.append(item['quote'])
+    answer_quotes=list(top_level_quotes)
+    finding_sources=[];question_targets=_workflow_identities(question)
+    status_intent=bool(_STATUS_INTENT.search(question) or _disposition_values(value['answer']))
     for finding in value['source_findings']:
         key=(finding['source_type'],finding['file_name'])
         if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
@@ -480,10 +577,33 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             exact_quote(source,item['quote'])
             finding_quotes.append(item['quote'])
         if value['status']=='ANSWERED':
+            _require_unambiguous_dispositions(finding_quotes,'source finding')
+            if status_intent or _disposition_values(finding['statement']):
+                targets=_workflow_identities(finding['statement']) or {
+                    target for target in question_targets if target[0]==finding['source_type']}
+                retrieved=_retrieved_scope(
+                    evidence,source_type=finding['source_type'],file_name=finding['file_name'])
+                if targets:
+                    retrieved=[text for text in retrieved
+                               if _workflow_identities(text)&targets]
+                if retrieved:
+                    _require_unambiguous_dispositions(retrieved,'retrieved source finding')
             _require_numeric_support(finding['statement'],finding_quotes,'source finding')
             _require_disposition_support(finding['statement'],finding_quotes,'source finding')
         answer_quotes.extend(finding_quotes)
     if value['status']=='ANSWERED':
+        if top_level_quotes:_require_unambiguous_dispositions(top_level_quotes,'answer')
+        if not value['source_findings'] and status_intent:
+            targets=_workflow_identities(question) or _workflow_identities(value['answer'])
+            if targets:
+                for target in targets:
+                    retrieved=_retrieved_scope(evidence,identity=target)
+                    if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
+            else:
+                families=_requested_source_families(question)
+                retrieved=(_retrieved_scope(evidence,source_type=families[0])
+                           if len(families)==1 else _retrieved_scope(evidence))
+                if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_numeric_support(value['answer'],answer_quotes,'answer')
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
