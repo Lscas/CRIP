@@ -18,8 +18,36 @@
         "required": ["evidence_id", "quote"],
         "additionalProperties": false
       }
+    },
+    "source_findings": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_type": {"enum": ["SPECIFICATION", "RFI", "SUBMITTAL", "EMAIL", "OTHER"]},
+          "file_name": {"type": "string", "minLength": 1, "maxLength": 240},
+          "statement": {"type": "string", "minLength": 1, "maxLength": 1500},
+          "citations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidence_id": {"type": "string", "minLength": 1, "maxLength": 160},
+                "quote": {"type": "string", "minLength": 1, "maxLength": 1800}
+              },
+              "required": ["evidence_id", "quote"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["source_type", "file_name", "statement", "citations"],
+        "additionalProperties": false
+      }
     }
   },
-  "required": ["status", "answer", "citations"],
+  "required": ["status", "answer", "citations", "source_findings"],
   "additionalProperties": false
 }

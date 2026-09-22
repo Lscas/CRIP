@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Add Trunk Tools-style project Q&A grounded in existing files and continue improving accuracy across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an accepted comparison summary that cites only one of two named source families.",
+    "Return one source-matched finding per named family while preserving the compact ordinary-question response.",
+    "Verify exact quotes, file names, deterministic source types, CSI Specification locators, cache recovery and inline browser rendering.",
+    "Use synthetic offline evidence and MockTransport only."
+  ],
+  "task_id": "DEV-068",
+  "title": "Make cross-source project answers auditable",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/gateway.py", "prompts/project-question/system.md",
+    "spec/schemas/project-answer.schema.json", "tests/app/test_questions.py",
+    "web/app.js", "web/style.css", "tests/web/test_display_contract.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "tasks/DEV-068.json", "changes/CR-0083.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python -m pytest tests/web/test_display_contract.py -q",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Require every named source in a comparison answer to remain visibly and exactly tied to its own project-file evidence."
+}

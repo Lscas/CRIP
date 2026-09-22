@@ -81,8 +81,11 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert byid['question-form'][0] == 'form'
     assert byid['project-question'][1]['maxlength'] == '1000'
     assert "api(`/projects/${state.project}/questions`,'POST'" in source
-    assert "source.append(quote,location,open);article.append(source)" in source
+    assert "source.append(quote,location,open);return source" in source
     assert "showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id)" in source
+    assert "const findings=data.source_findings||[]" in source
+    assert "finding.append(questionCitation(citation,data))" in source
+    assert "questionSourceLabels[item.source_type]" in source
     assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source
     assert "citationLocation({file_name:null,locator:e.locator})" in source
     assert 'innerHTML' not in source

@@ -69,6 +69,7 @@ _QUERY_SOURCE_PATTERNS = (
 _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
+_CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
 _FAMILY_SQL_FILTERS = {
     'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
@@ -82,7 +83,9 @@ _FAMILY_SQL_FILTERS = {
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'submittal %'
         OR LOWER(d.name) LIKE '%submittal%')''',
     'SPECIFICATION':'''(LOWER(d.name) LIKE '%spec%'
-        OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%spec%')''',
+        OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%spec%'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.locator.section'),''))) GLOB '[0-9][0-9] [0-9][0-9]*'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.locator.section'),''))) GLOB 'section [0-9][0-9] [0-9][0-9]*')''',
 }
 
 
@@ -166,7 +169,7 @@ def _source_family(evidence: dict) -> str:
         return 'SUBMITTAL'
     if (_term_pattern('spec').search(name) or _term_pattern('specification').search(name)
             or _term_pattern('spec').search(section)
-            or _term_pattern('specification').search(section)):
+            or _term_pattern('specification').search(section) or _CSI_SECTION.search(section)):
         return 'SPECIFICATION'
     return 'OTHER'
 
@@ -297,15 +300,37 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
     return selected
 
 
-def validate_answer_model(value: dict, evidence: list[dict]) -> None:
+def validate_answer_model(value: dict, evidence: list[dict], question: str = '') -> None:
     validate_schema('project-answer',value)
     allowed={item['evidence_id']:item for item in evidence}
-    if value['status']=='ANSWERED' and not value['citations']:
+    if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
         if source is None:raise ValueError('citation is outside the retrieved evidence scope')
         exact_quote(source,item['quote'])
+    finding_sources=[]
+    for finding in value['source_findings']:
+        key=(finding['source_type'],finding['file_name'])
+        if key in finding_sources:raise ValueError('comparison contains a duplicate source finding')
+        finding_sources.append(key)
+        for item in finding['citations']:
+            source=allowed.get(item['evidence_id'])
+            if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
+            if source.get('file_name')!=finding['file_name']:
+                raise ValueError('source finding file name does not match its evidence')
+            if _source_family(source)!=finding['source_type']:
+                raise ValueError('source finding type does not match its evidence')
+            exact_quote(source,item['quote'])
+    if value['status']=='ANSWERED' and requires_source_diversity(question):
+        if not value['source_findings']:
+            raise ValueError('a comparison answer requires source findings')
+        requested=set(_requested_source_families(question))
+        represented={source_type for source_type,_ in finding_sources}
+        if len(requested)>=2 and not requested.issubset(represented):
+            raise ValueError('comparison answer omitted a requested source family')
+        if len(requested)<2 and len(finding_sources)<2:
+            raise ValueError('a comparison answer requires at least two distinct sources')
 
 
 def _context_citation(evidence: dict) -> dict:
@@ -327,16 +352,24 @@ class ProjectQuestions:
         if not evidence:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':'The analyzed project files do not contain enough matching evidence to answer this question.',
-                    'citations':[],'retrieved_count':0,'cached':False}
+                    'citations':[],'source_findings':[],'retrieved_count':0,'cached':False}
         if self.gateway.s.provider=='mock':
             return {'run_id':run['id'],'question':question,'status':'MODEL_DISABLED',
                     'answer':'Mock mode retrieved possible source passages but did not generate an answer. Configure a live API or local model to answer from these files.',
                     'citations':[_context_citation(item) for item in evidence[:3]],
-                    'retrieved_count':len(evidence),'cached':False}
+                    'source_findings':[],'retrieved_count':len(evidence),'cached':False}
         result=self.gateway.answer(run,question,evidence)
-        validate_answer_model(result.data,evidence)
+        validate_answer_model(result.data,evidence,question)
         by_id={item['evidence_id']:item for item in evidence}
         citations=[exact_quote(by_id[item['evidence_id']],item['quote']) for item in result.data['citations']]
+        findings=[]
+        for item in result.data['source_findings']:
+            findings.append({
+                'source_type':item['source_type'],'file_name':item['file_name'],
+                'statement':item['statement'],
+                'citations':[exact_quote(by_id[citation_item['evidence_id']],citation_item['quote'])
+                             for citation_item in item['citations']],
+            })
         return {'run_id':run['id'],'question':question,'status':result.data['status'],
-                'answer':result.data['answer'],'citations':citations,
+                'answer':result.data['answer'],'citations':citations,'source_findings':findings,
                 'retrieved_count':len(evidence),'cached':result.cached}

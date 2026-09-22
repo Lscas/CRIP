@@ -1840,7 +1840,7 @@
       "contract_tests": [
         "tests/app/test_questions.py"
       ],
-      "test_scope": "offline_retrieval_mock_and_mocktransport_not_construction_accuracy",
+      "test_scope": "offline_retrieval_structured_comparison_mock_and_mocktransport_not_construction_accuracy",
       "implemented_product_paths": [
         "app/questions.py",
         "app/gateway.py",

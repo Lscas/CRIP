@@ -894,7 +894,8 @@ class Gateway:
                      self.answer_prompt_hash,question,[(item['evidence_id'],item.get('prompt_text',item['raw_text'])) for item in evidence]]
         task_family='answer:'+hashlib.sha256(dumps(fingerprint).encode()).hexdigest()
         task=paid_task_key(task_family,0)
-        recovered=self._recover_terminal(run['id'],task,lambda value:validate_answer_model(value,evidence))
+        recovered=self._recover_terminal(
+            run['id'],task,lambda value:validate_answer_model(value,evidence,question))
         if recovered is not None:return recovered
         recent=self._family_calls(run['id'],task_family)
         self._guard_family_before_request(recent,task,0,'This project question')
@@ -920,7 +921,7 @@ class Gateway:
             if choice.get('finish_reason')!='stop':raise ValueError('question output was truncated')
             text=choice.get('message',{}).get('content')
             if not isinstance(text,str) or len(text)>50000:raise ValueError('question response was empty or too large')
-            data=json.loads(text);validate_answer_model(data,evidence)
+            data=json.loads(text);validate_answer_model(data,evidence,question)
         except Exception as exc:
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('PROJECT_ANSWER',exc))

@@ -11,6 +11,7 @@ from app.db import BudgetError, Database
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, expanded_query_terms, requires_source_diversity, retrieve_evidence,
+    validate_answer_model,
 )
 from app.settings import ROOT, Settings
 from .conftest import upload
@@ -345,7 +346,8 @@ def test_mock_question_returns_retrieval_context_without_fabricated_answer(clien
 def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
     run = _evidence(client, project, ['Domestic water service pipe shall be 2 inch Type L copper.'])
     db = client.app.state.db
-    response_data = {'status': 'ANSWERED', 'answer': 'Use 2 inch Type L copper.', 'citations': [{
+    response_data = {'status': 'ANSWERED', 'answer': 'Use 2 inch Type L copper.',
+                     'source_findings': [], 'citations': [{
         'evidence_id': 'EV-QA-1',
         'quote': 'Domestic water service pipe shall be 2 inch Type L copper.'
     }]}
@@ -379,7 +381,7 @@ def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
 def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, tmp_path):
     run = _evidence(client, project, ['Domestic water service pipe shall be 2 inch Type L copper.'])
     db = client.app.state.db
-    bad = {'status': 'ANSWERED', 'answer': 'Use PVC.', 'citations': [
+    bad = {'status': 'ANSWERED', 'answer': 'Use PVC.', 'source_findings': [], 'citations': [
         {'evidence_id': 'EV-QA-1', 'quote': 'Domestic water service pipe shall be PVC.'}]}
     gateway = Gateway(_live_settings(tmp_path), db, httpx.Client(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json={
@@ -394,6 +396,141 @@ def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, t
     call = db.one('SELECT state,response,error FROM model_calls WHERE run_id=?', (run['id'],))
     assert call['state'] == 'SETTLED_ERROR' and call['response'] is None
     assert json.loads(call['error'])['class'] == 'PROJECT_ANSWER'
+
+
+def test_comparison_answer_rejects_a_mixed_summary_without_each_source(client, project, tmp_path):
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', ['Specification requires 2 inch Type L copper pipe.']),
+        ('RFI-42-response.txt', ['RFI 42 response requires 3 inch Type L copper pipe.']),
+    ])
+    db = client.app.state.db
+    incomplete = {
+        'status': 'ANSWERED',
+        'answer': 'The specification requires 2 inch pipe and RFI 42 changes it to 3 inch.',
+        'source_findings': [{
+            'source_type': 'SPECIFICATION',
+            'file_name': 'project-spec.txt',
+            'statement': 'The specification requires 2 inch Type L copper pipe.',
+            'citations': [{
+                'evidence_id': 'EV-SOURCE-1',
+                'quote': 'Specification requires 2 inch Type L copper pipe.',
+            }],
+        }],
+        'citations': [],
+    }
+    gateway = Gateway(_live_settings(tmp_path), db, httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={
+            'id': 'question-incomplete-comparison',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(incomplete)}}],
+            'usage': {'prompt_tokens': 120, 'completion_tokens': 30},
+        }))))
+
+    with pytest.raises(InvalidModelOutput, match='question response'):
+        ProjectQuestions(db, gateway).ask(
+            run, 'Compare the specification and RFI 42 pipe requirements.')
+
+
+def test_comparison_answer_returns_each_source_with_inline_evidence(client, project, tmp_path):
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', ['Specification requires 2 inch Type L copper pipe.']),
+        ('RFI-42-response.txt', ['RFI 42 response requires 3 inch Type L copper pipe.']),
+    ])
+    db = client.app.state.db
+    comparison = {
+        'status': 'ANSWERED',
+        'answer': 'RFI 42 increases the specified pipe size from 2 inches to 3 inches.',
+        'citations': [],
+        'source_findings': [
+            {
+                'source_type': 'SPECIFICATION',
+                'file_name': 'project-spec.txt',
+                'statement': 'The specification requires 2 inch Type L copper pipe.',
+                'citations': [{
+                    'evidence_id': 'EV-SOURCE-1',
+                    'quote': 'Specification requires 2 inch Type L copper pipe.',
+                }],
+            },
+            {
+                'source_type': 'RFI',
+                'file_name': 'RFI-42-response.txt',
+                'statement': 'RFI 42 requires 3 inch Type L copper pipe.',
+                'citations': [{
+                    'evidence_id': 'EV-SOURCE-2',
+                    'quote': 'RFI 42 response requires 3 inch Type L copper pipe.',
+                }],
+            },
+        ],
+    }
+    requests=[]
+    gateway = Gateway(_live_settings(tmp_path), db, httpx.Client(transport=httpx.MockTransport(
+        lambda request: (requests.append(request), httpx.Response(200, json={
+            'id': 'question-valid-comparison',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(comparison)}}],
+            'usage': {'prompt_tokens': 160, 'completion_tokens': 60},
+        }))[1])))
+    service=ProjectQuestions(db,gateway)
+
+    result=service.ask(run,'Compare the specification and RFI 42 pipe requirements.')
+    recovered=service.ask(run,'Compare the specification and RFI 42 pipe requirements.')
+
+    assert result['citations']==[]
+    assert [item['source_type'] for item in result['source_findings']]==['SPECIFICATION','RFI']
+    assert result['source_findings'][1]['citations'][0]['quote'].startswith('RFI 42 response')
+    assert recovered['cached'] is True and len(requests)==1
+
+
+def test_comparison_source_type_must_match_the_cited_file(client, project):
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', ['Specification requires 2 inch Type L copper pipe.']),
+        ('RFI-42-response.txt', ['RFI 42 response requires 3 inch Type L copper pipe.']),
+    ])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'Compare the specification and RFI 42 pipe requirements.')
+    mislabeled={
+        'status':'ANSWERED','answer':'The sources differ.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'project-spec.txt','statement':'Two inch pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification requires 2 inch Type L copper pipe.'}]},
+            {'source_type':'RFI','file_name':'RFI-42-response.txt','statement':'Three inch pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 response requires 3 inch Type L copper pipe.'}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='type does not match'):
+        validate_answer_model(
+            mislabeled,evidence,'Compare the specification and RFI 42 pipe requirements.')
+
+
+def test_comparison_accepts_a_csi_section_in_a_generic_file_as_specification(client, project):
+    run = _source_evidence(client, project, [
+        ('combined-project.pdf', ['Domestic water pipe shall be 2 inch Type L copper.']),
+        ('RFI-42-response.txt', ['RFI 42 response requires 3 inch Type L copper pipe.']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,payload FROM evidence WHERE run_id=? ORDER BY id LIMIT 1',(run['id'],))
+    payload=json.loads(row['payload'])
+    payload['locator']['section']='Section 22 11 16'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    evidence=retrieve_evidence(
+        db,run,'Compare the specification and RFI 42 pipe requirements.')
+    comparison={
+        'status':'ANSWERED','answer':'RFI 42 increases the pipe size.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'combined-project.pdf',
+             'statement':'The specification requires 2 inch Type L copper pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Domestic water pipe shall be 2 inch Type L copper.'}]},
+            {'source_type':'RFI','file_name':'RFI-42-response.txt',
+             'statement':'RFI 42 requires 3 inch Type L copper pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'RFI 42 response requires 3 inch Type L copper pipe.'}]},
+        ],
+    }
+
+    validate_answer_model(
+        comparison,evidence,'Compare the specification and RFI 42 pipe requirements.')
 
 
 def test_question_api_rejects_cross_project_run(client, project):

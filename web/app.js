@@ -127,15 +127,28 @@ function citationLocation(item){
  if(locator.text_line_start)parts.push('Lines '+locator.text_line_start+(locator.text_line_end&&locator.text_line_end!==locator.text_line_start?'–'+locator.text_line_end:''));
  return parts.filter(Boolean).join(' · ');
 }
+const questionSourceLabels={SPECIFICATION:'Specification',RFI:'RFI',SUBMITTAL:'Submittal',EMAIL:'Email',OTHER:'Other source'};
+function questionCitation(item,data){
+ const source=el('div',null,'question-citation'),quote=el('blockquote',item.quote),location=el('small',citationLocation(item));
+ const open=elT('button','ask.source',{},'link evidence-button');
+ open.onclick=error(()=>showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id));
+ source.append(quote,location,open);return source;
+}
 function renderQuestionAnswer(question,data){
  const article=el('article',null,'question-answer');article.append(el('h3',question),el('p',data.answer));
- if(!data.citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
- data.citations.forEach(item=>{
-  const source=el('div',null,'question-citation'),quote=el('blockquote',item.quote),location=el('small',citationLocation(item));
-  const open=elT('button','ask.source',{},'link evidence-button');
-  open.onclick=error(()=>showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id));
-  source.append(quote,location,open);article.append(source);
+ const findings=data.source_findings||[],findingCitations=new Set();
+ findings.forEach(item=>{
+  const finding=el('section',null,'question-finding');
+  finding.append(el('h4',(questionSourceLabels[item.source_type]||'Source')+' · '+item.file_name),el('p',item.statement));
+  (item.citations||[]).forEach(citation=>{
+   findingCitations.add(citation.evidence_id+'\n'+citation.quote);
+   finding.append(questionCitation(citation,data));
+  });
+  article.append(finding);
  });
+ const citations=(data.citations||[]).filter(item=>!findingCitations.has(item.evidence_id+'\n'+item.quote));
+ if(!findings.length&&!citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
+ citations.forEach(item=>article.append(questionCitation(item,data)));
  $('question-results').prepend(article);
 }
 function diagnosticText(call){
