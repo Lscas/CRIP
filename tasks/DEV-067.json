@@ -1,0 +1,31 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability for RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce comparison results being filled by one highly repetitive specification source.",
+    "Activate diversity only for explicit comparison intent or at least two named supported source families.",
+    "Use small named-family supplement searches before one-passage-per-document/workflow selection; preserve ordinary relevance order and existing context limits.",
+    "Validate with synthetic offline evidence only."
+  ],
+  "task_id": "DEV-067",
+  "title": "Diversify evidence for cross-source project questions",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/**",
+    "docs/PROJECT_QUESTIONS.md", "tasks/DEV-067.json", "changes/CR-0082.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/benchmark_question_search.py",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep relevant Specification, RFI, Submittal and Email sources in comparison-question context without degrading ordinary questions."
+}

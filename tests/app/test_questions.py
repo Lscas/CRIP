@@ -9,7 +9,9 @@ import pytest
 
 from app.db import BudgetError, Database
 from app.gateway import Gateway, InvalidModelOutput
-from app.questions import ProjectQuestions, expanded_query_terms, retrieve_evidence
+from app.questions import (
+    ProjectQuestions, expanded_query_terms, requires_source_diversity, retrieve_evidence,
+)
 from app.settings import ROOT, Settings
 from .conftest import upload
 
@@ -31,6 +33,29 @@ def _evidence(client, project, rows):
                        json.dumps(payload), 'EXTRACTED', None, ''))
     with db.connect(True) as connection:
         connection.executemany('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)', values)
+    return client.app.state.runner.get(run['id'])
+
+
+def _source_evidence(client, project, sources):
+    documents=[]
+    for name,rows in sources:
+        document=upload(client,project['id'],name,(name+' source').encode())
+        documents.append((name,document,rows))
+    run=client.app.state.runner.create(project['id'])
+    db=client.app.state.db
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    base=json.loads(Path('examples/evidence.json').read_text(encoding='utf-8'))[0]
+    values=[];index=0
+    for name,document,rows in documents:
+        for text in rows:
+            index+=1;eid=f'EV-SOURCE-{index}'
+            payload={**base,'evidence_id':eid,'tenant_id':'local','project_id':project['id'],
+                     'input_snapshot_id':run['snapshot_id'],'document_id':document['document_id'],
+                     'raw_text':text,'locator':{**base['locator'],'section':name}}
+            values.append((run['id']+':'+eid,run['id'],project['id'],document['document_id'],
+                           json.dumps(payload),'EXTRACTED',None,''))
+    with db.connect(True) as connection:
+        connection.executemany('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',values)
     return client.app.state.runner.get(run['id'])
 
 
@@ -129,6 +154,63 @@ def test_query_expansion_is_bounded_and_never_adds_opposite_status():
     assert len(expanded) <= 24
     assert {'approved', 'response', 'message'}.issubset(expanded)
     assert 'rejected' not in expanded
+
+
+def test_comparison_question_keeps_spec_rfi_submittal_and_email_sources(client, project):
+    repeated = [
+        'Specification comparison note: pipe requirements reference RFI 42, '
+        'Submittal 23-01, and the email response.'
+    ] * 10
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', repeated),
+        ('RFI-42-response.txt', ['RFI 42 response: Use 2 inch Type L copper pipe.']),
+        ('Submittal-23-01.txt', ['Submittal 23-01: Type L copper pipe approved as noted.']),
+        ('architect-email.eml', [
+            'From: architect@example.com\nSubject: RFI 42 response\nUse Type L copper pipe.']),
+    ])
+
+    found = retrieve_evidence(
+        client.app.state.db,
+        run,
+        'Compare the pipe requirements in the specification, RFI 42, '
+        'Submittal 23-01, and the email response.',
+    )
+
+    assert {item['file_name'] for item in found} == {
+        'project-spec.txt', 'RFI-42-response.txt', 'Submittal-23-01.txt',
+        'architect-email.eml',
+    }
+
+
+def test_source_diversity_requires_comparison_or_multiple_named_sources():
+    assert requires_source_diversity('Compare the pipe requirements.') is True
+    assert requires_source_diversity('What do the specification and RFI 42 require?') is True
+    assert requires_source_diversity('What is the pipe size?') is False
+
+
+def test_non_comparison_question_keeps_relevance_first_results(client, project):
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', ['Pipe size shall be 2 inch Type L copper.'] * 8),
+        ('RFI-42-response.txt', ['RFI 42 mentions copper piping.']),
+    ])
+
+    found = retrieve_evidence(client.app.state.db, run, 'What is the pipe size?')
+
+    assert len(found) == 8
+    assert {item['file_name'] for item in found} == {'project-spec.txt'}
+
+
+def test_comparison_diversifies_workflow_sections_inside_one_document(client, project):
+    rows = [
+        'Specification comparison note: pipe requirements reference RFI 42 response.'
+    ] * 200
+    rows.append('RFI 42 response: Use 2 inch Type L copper pipe.')
+    run = _evidence(client, project, rows)
+
+    found = retrieve_evidence(
+        client.app.state.db, run, 'Compare the specification requirements and RFI 42 response.')
+
+    assert 'EV-QA-201' in {item['evidence_id'] for item in found}
 
 
 def test_retrieval_fallback_does_not_apply_row_order_cutoff(client, project):

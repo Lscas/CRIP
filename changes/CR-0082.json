@@ -1,0 +1,30 @@
+{
+  "change_id": "CR-0082",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Prevent one repetitive source from filling every evidence slot in cross-source project questions.",
+  "decision_refs": [
+    "The active goal requires continued accuracy and adaptability across RFI, Submittal and Email content",
+    "A synthetic comparison returned eight specification passages and omitted all RFI, Submittal and Email sources",
+    "Ordinary non-comparison questions must retain relevance-first behavior"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/requirements.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "tasks/DEV-067.json",
+    "changes/CR-0082.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/benchmark_question_search.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active improvement goal explicitly covers project efficiency, accuracy and RFI/Submittal/Email adaptability.",
+  "known_limitations": [
+    "Source-family inference is deterministic from file names, exact workflow headers and evidence locators; it does not establish contractual authority.",
+    "Diversity can only select evidence that matches the question terms and deterministic source markers; it does not infer an unstated relationship.",
+    "Validation uses synthetic offline evidence and does not establish construction accuracy on customer documents."
+  ]
+}

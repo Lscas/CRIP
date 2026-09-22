@@ -25,6 +25,7 @@ _STOP = frozenset({
 _MAX_QUERY_TERMS = 10
 _MAX_SEARCH_TERMS = 24
 _MAX_CANDIDATES = 160
+_MAX_FAMILY_CANDIDATES = 12
 _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
@@ -57,6 +58,32 @@ _PHRASE_ALIASES = (
     (re.compile(r'\bproduct\s+data\b',re.I),
      ('product','data'),('product data','submittal')),
 )
+_COMPARISON_INTENT = re.compile(
+    r'\b(?:compare|comparison|difference|differences|differ|changed|changes|versus|vs|across)\b',re.I)
+_QUERY_SOURCE_PATTERNS = (
+    ('SPECIFICATION',re.compile(r'\b(?:spec|specification|specifications)\b',re.I)),
+    ('RFI',re.compile(r'\b(?:rfi|request\s+for\s+information)\b',re.I)),
+    ('SUBMITTAL',re.compile(r'\b(?:submittal|shop\s+drawing|product\s+data)\b',re.I)),
+    ('EMAIL',re.compile(r'\b(?:email|e-mail|message|correspondence)\b',re.I)),
+)
+_RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
+_SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
+_EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
+_FAMILY_SQL_FILTERS = {
+    'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
+        OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
+        OR (LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'from:%'
+            AND INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),'subject:')>0))''',
+    'RFI':'''(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%rfi%'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'rfi %'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'request for information %'
+        OR LOWER(d.name) LIKE '%rfi%')''',
+    'SUBMITTAL':'''(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%submittal%'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'submittal %'
+        OR LOWER(d.name) LIKE '%submittal%')''',
+    'SPECIFICATION':'''(LOWER(d.name) LIKE '%spec%'
+        OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%spec%')''',
+}
 
 
 def question_terms(question: str) -> list[str]:
@@ -93,6 +120,15 @@ def expanded_query_terms(question: str, terms: list[str] | None = None) -> list[
     return expanded
 
 
+def requires_source_diversity(question: str) -> bool:
+    if _COMPARISON_INTENT.search(question):return True
+    return len(_requested_source_families(question))>=2
+
+
+def _requested_source_families(question: str) -> tuple[str,...]:
+    return tuple(family for family,pattern in _QUERY_SOURCE_PATTERNS if pattern.search(question))
+
+
 @lru_cache(maxsize=256)
 def _term_pattern(term: str) -> re.Pattern:
     return re.compile(r'(?<![a-z0-9])'+re.escape(term)+r'(?![a-z0-9])',re.I)
@@ -111,13 +147,55 @@ def _concept_match(searchable: str, token_counts: Counter,
     return None
 
 
+def _source_family(evidence: dict) -> str:
+    name=str(evidence.get('file_name') or '').casefold()
+    locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+    section=str(locator.get('section') or '').casefold()
+    text=str(evidence.get('raw_text') or '')
+    if name.endswith(('.eml','.msg')) or section.startswith('email >'):
+        return 'EMAIL'
+    if _term_pattern('rfi').search(section) or _RFI_HEADER.search(text):return 'RFI'
+    if _term_pattern('submittal').search(section) or _SUBMITTAL_HEADER.search(text):
+        return 'SUBMITTAL'
+    if _EMAIL_HEADER.search(text) and re.search(r'(?im)^\s*subject:',text):return 'EMAIL'
+    if (_term_pattern('rfi').search(name)
+            or re.search(r'\brequest[ ._-]+for[ ._-]+information\b',name)):
+        return 'RFI'
+    if (_term_pattern('submittal').search(name)
+            or re.search(r'\b(?:shop[ ._-]+drawing|product[ ._-]+data)\b',name)):
+        return 'SUBMITTAL'
+    if (_term_pattern('spec').search(name) or _term_pattern('specification').search(name)
+            or _term_pattern('spec').search(section)
+            or _term_pattern('specification').search(section)):
+        return 'SPECIFICATION'
+    return 'OTHER'
+
+
+def _source_key(evidence: dict) -> tuple[str,str]:
+    document=str(evidence.get('_source_document_id') or evidence.get('document_id')
+                 or evidence.get('file_name') or evidence.get('evidence_id'))
+    return document,_source_family(evidence)
+
+
+def _selection_order(ranked: list[tuple], diversify: bool) -> list[tuple]:
+    if not diversify:return ranked
+    distinct=[];remaining=[];seen=set()
+    for item in ranked:
+        key=_source_key(item[3])
+        if key in seen:remaining.append(item)
+        else:seen.add(key);distinct.append(item)
+    return [*distinct,*remaining]
+
+
 def _fts_query(terms: list[str]) -> str:
     return ' OR '.join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms)
 
 
-def _candidate_rows(db: Database, run_id: str, terms: list[str]) -> list[dict]:
+def _candidate_rows(db: Database, run_id: str, terms: list[str],
+                    diversify: bool = False, source_families: tuple[str,...] = ()) -> list[dict]:
     if getattr(db,'evidence_search_available',False):
-        return db.all('''SELECT e.payload,d.name AS file_name,
+        query='''SELECT e.id AS evidence_row_id,e.payload,d.name AS file_name,
+                        e.document_id AS source_document_id,
                                 bm25(evidence_search,2,1.5,1) AS search_rank
                          FROM evidence_search
                          JOIN evidence e ON e.rowid=evidence_search.rowid
@@ -125,12 +203,28 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str]) -> list[dict]:
                          WHERE evidence_search MATCH ? AND e.run_id=?
                            AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
                            AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
-                         ORDER BY search_rank,e.rowid LIMIT ?''',
-                      [_fts_query(terms),run_id,_MAX_CANDIDATES])
+                         {family_filter}
+                         ORDER BY search_rank,e.rowid LIMIT ?'''
+        match=_fts_query(terms)
+        rows=db.all(query.format(family_filter=''),[match,run_id,_MAX_CANDIDATES])
+        if not diversify:return rows
+        seen={row['evidence_row_id'] for row in rows}
+        families=(source_families if len(source_families)>=2
+                  else tuple(_FAMILY_SQL_FILTERS))
+        for family in families:
+            family_filter=_FAMILY_SQL_FILTERS[family]
+            extra=db.all(query.format(family_filter='AND '+family_filter),
+                         [match,run_id,_MAX_FAMILY_CANDIDATES])
+            for row in extra:
+                if row['evidence_row_id'] not in seen:
+                    rows.append(row);seen.add(row['evidence_row_id'])
+        return rows
     # FTS5 is optional.  The compatibility path favors complete results over
     # row-order truncation.  One local scan is also cheaper than repeating
     # JSON extraction for every expanded term and locator field.
-    return db.all('''SELECT e.payload,d.name AS file_name FROM evidence e
+    return db.all('''SELECT e.id AS evidence_row_id,e.payload,d.name AS file_name,
+                            e.document_id AS source_document_id
+                     FROM evidence e
                      JOIN documents d ON d.id=e.document_id
                      WHERE e.run_id=?
                        AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
@@ -161,7 +255,9 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         return []
     concepts=_query_concepts(question,terms)
     search_terms=expanded_query_terms(question,terms)
-    rows=_candidate_rows(db,run['id'],search_terms)
+    source_families=_requested_source_families(question)
+    diversify=requires_source_diversity(question)
+    rows=_candidate_rows(db,run['id'],search_terms,diversify,source_families)
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -188,11 +284,12 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         score+=min(6,len(concept_hits))
         if len(concept_hits)==len(concepts):score+=8
         evidence={**evidence,'file_name':row['file_name'],
-                  'prompt_text':_window(text,actual_matches),'_question_terms':actual_matches}
+                  'prompt_text':_window(text,actual_matches),'_question_terms':actual_matches,
+                  '_source_document_id':row['source_document_id']}
         ranked.append((score,len(concept_hits),evidence['evidence_id'],evidence))
     ranked.sort(key=lambda item:(-item[0],-item[1],item[2]))
     selected=[];used=0
-    for _,_,_,evidence in ranked:
+    for _,_,_,evidence in _selection_order(ranked,diversify):
         size=len(evidence['prompt_text'])
         if selected and used+size>_MAX_CONTEXT_CHARS:continue
         selected.append(evidence);used+=size

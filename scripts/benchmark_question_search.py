@@ -17,6 +17,7 @@ from app.questions import retrieve_evidence
 
 TARGET = 'RFI 42 response: Domestic water service pipe shall be 2 inch Type L copper.'
 QUESTION = 'What does RFI 42 require for the water service pipe material and size?'
+COMPARISON_QUESTION = 'Compare the specification water pipe requirements and RFI 42 response.'
 
 
 def best_ms(load, iterations: int) -> float:
@@ -58,7 +59,11 @@ def measure(rows: int, iterations: int) -> dict:
             database.evidence_search_available=True
             return retrieve_evidence(database,run,QUESTION)
 
-        scan_rows=fallback();fts_rows=full_text()
+        def full_text_comparison():
+            database.evidence_search_available=True
+            return retrieve_evidence(database,run,COMPARISON_QUESTION)
+
+        scan_rows=fallback();fts_rows=full_text();comparison_rows=full_text_comparison()
         result={
             'fixture_rows':rows,
             'iterations':iterations,
@@ -67,8 +72,11 @@ def measure(rows: int, iterations: int) -> dict:
             'fts_results':len(fts_rows),
             'complete_scan_ms_per_query':round(best_ms(fallback,iterations),3),
             'fts_ms_per_query':round(best_ms(full_text,iterations),3),
+            'fts_comparison_ms_per_query':round(best_ms(full_text_comparison,iterations),3),
             'complete_scan_found_exact':bool(scan_rows and scan_rows[0]['evidence_id']==f'EV-{rows}'),
             'fts_found_exact':bool(fts_rows and fts_rows[0]['evidence_id']==f'EV-{rows}'),
+            'fts_comparison_found_exact':any(
+                item['evidence_id']==f'EV-{rows}' for item in comparison_rows),
             'paid_api_calls':0,
         }
         result['query_speedup']=round(
