@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce the blocked workflow-status response naming no actual status or source file.",
+    "Reuse the conflict members already present in the terminal workflow index; do not query evidence or call a model.",
+    "Render status, source-file and detected/manual provenance directly below the answer without displaying internal document IDs or response HTML.",
+    "Keep exact workflow identity isolation and do not infer chronology, authority or a winning status."
+  ],
+  "task_id": "DEV-074",
+  "title": "Show workflow conflict sources inline with project answers",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "web/app.js", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "tasks/DEV-003.json", "tasks/DEV-074.json", "changes/CR-0089.json", "README.md",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep blocked workflow-status answers actionable by placing each conflicting status and original source file directly with the answer."
+}

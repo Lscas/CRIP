@@ -136,6 +136,16 @@ function questionCitation(item,data){
 }
 function renderQuestionAnswer(question,data){
  const article=el('article',null,'question-answer');article.append(el('h3',question),el('p',data.answer));
+ const workflowConflicts=data.workflow_conflicts||[];
+ workflowConflicts.forEach(item=>{
+  const conflict=el('section',null,'question-finding');conflict.append(el('h4',item.label));
+  (item.statuses||[]).forEach(status=>{
+   const sources=el('div',null,'question-citation');sources.append(el('strong',workflowCodeLabel('status',status.status)));
+   (status.sources||[]).forEach(source=>{const a=el('a',source.file_name,'link evidence-button');a.href='/api/documents/'+source.document_id+'/file';a.target='_blank';a.rel='noopener';sources.append(a,el('small',I.t('workflowClassification.source.'+source.classification_source)));});
+   conflict.append(sources);
+  });
+  article.append(conflict);
+ });
  const findings=data.source_findings||[],findingCitations=new Set();
  findings.forEach(item=>{
   const finding=el('section',null,'question-finding');
@@ -147,7 +157,7 @@ function renderQuestionAnswer(question,data){
   article.append(finding);
  });
  const citations=(data.citations||[]).filter(item=>!findingCitations.has(item.evidence_id+'\n'+item.quote));
- if(!findings.length&&!citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
+ if(!workflowConflicts.length&&!findings.length&&!citations.length)article.append(elT('p','ask.noCitation',{},'muted'));
  citations.forEach(item=>article.append(questionCitation(item,data)));
  $('question-results').prepend(article);
 }

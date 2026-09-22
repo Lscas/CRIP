@@ -1082,7 +1082,7 @@ def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
         {'document_id':'D-CURRENT','name':'current.eml','summary':{
             'document_type':'EMAIL','workflow_contexts':[{
                 'workflow_type':kind,'identifier':identifier,'role':role,'status':statuses[0]}]}},
-        {'document_id':'D-ARCHIVE','name':'archive.eml','summary':{
+        {'document_id':'D-ARCHIVE','name':'archive.eml','classification_source':'MANUAL','summary':{
             'document_type':'EMAIL','workflow_contexts':[{
                 'workflow_type':kind,'identifier':identifier,'role':role,'status':statuses[1]}]}},
     ])
@@ -1095,6 +1095,16 @@ def test_full_workflow_index_blocks_a_status_conflict_hidden_from_retrieval(
 
     assert result['status']=='INSUFFICIENT_EVIDENCE'
     assert f'{kind} {identifier}' in result['answer'] and result['retrieved_count']==1
+    assert all(status in result['answer'] for status in statuses)
+    assert 'current.eml' in result['answer'] and 'archive.eml' in result['answer']
+    assert '[detected]' in result['answer'] and '[manual correction]' in result['answer']
+    conflict=result['workflow_conflicts'][0]
+    assert conflict['workflow_type']==kind and conflict['identifier']==identifier
+    assert {item['status'] for item in conflict['statuses']}==set(statuses)
+    assert {source['file_name'] for item in conflict['statuses']
+            for source in item['sources']}=={'current.eml','archive.eml'}
+    assert {source['classification_source'] for item in conflict['statuses']
+            for source in item['sources']}=={'DETECTED','MANUAL'}
     assert requests==[]
     assert client.app.state.db.all(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
@@ -1153,4 +1163,6 @@ def test_question_api_uses_email_workflow_index_beyond_retrieved_passages(client
     assert result['status']=='INSUFFICIENT_EVIDENCE'
     assert result['retrieved_count']==1 and result['citations']==[]
     assert 'RFI 42' in result['answer']
+    assert {source['file_name'] for item in result['workflow_conflicts'][0]['statuses']
+            for source in item['sources']}=={'current.eml','archive.eml'}
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]

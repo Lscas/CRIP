@@ -311,7 +311,7 @@ def requires_workflow_status_index(question: str) -> bool:
     return bool(_STATUS_INTENT.search(question) and _workflow_identities(question))
 
 
-def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[str]:
+def _workflow_index_status_conflicts(question: str, workflow_index: dict | None) -> list[dict]:
     """Find exact requested workflow IDs with multiple explicit indexed statuses."""
     if not requires_workflow_status_index(question) or not isinstance(workflow_index,dict):return []
     targets=_workflow_identities(question)
@@ -322,15 +322,42 @@ def _workflow_index_status_conflicts(question: str, workflow_index: dict | None)
         kind=item.get('kind')
         identifier=normalize_identifier(kind,item.get('identifier'))
         if (kind,identifier) not in targets:continue
-        statuses=set()
+        statuses={}
         for member in item.get('members',[]):
             if not isinstance(member,dict) or member.get('source')!='PRIMARY':continue
             status=member.get('status')
             if isinstance(status,str):
-                statuses.update(value.strip().upper() for value in status.split(' / ')
-                                if value.strip())
-        if len(statuses)>1:conflicts.append(f'{kind} {identifier}')
+                for value in (value.strip().upper() for value in status.split(' / ')):
+                    if value:
+                        statuses.setdefault(value,{})[str(member.get('document_id') or '')]={
+                            'file_name':str(member.get('file_name') or 'Unknown file'),
+                            'classification_source':str(
+                                member.get('classification_source') or 'DETECTED')}
+        if len(statuses)>1:
+            conflicts.append({'workflow_type':kind,'identifier':identifier,
+                              'label':f'{kind} {identifier}','statuses':[
+                                  {'status':status,'sources':[
+                                      {'document_id':document_id,**source}
+                                      for document_id,source in sorted(files.items(),key=lambda pair:(
+                                          pair[1]['file_name'].casefold(),pair[0]))]}
+                                  for status,files in sorted(statuses.items())]})
     return conflicts
+
+
+def _workflow_status_conflict_answer(conflicts: list[dict]) -> str:
+    details=[]
+    for conflict in conflicts:
+        values=[]
+        for item in conflict['statuses']:
+            files=[source['file_name']+' ['+('manual correction'
+                   if source['classification_source']=='MANUAL' else 'detected')+']'
+                   for source in item['sources']]
+            extra=(f', plus {len(files)-3} more files' if len(files)>3 else '')
+            values.append(f"{item['status']} ({', '.join(files[:3])}{extra})")
+        details.append(f"{conflict['label']}: {'; '.join(values)}.")
+    return ('The current workflow status cannot be established because the complete project '
+            'workflow index contains conflicting explicit statuses. '
+            +' '.join(details)+' Review the original source files.')
 
 
 def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
@@ -662,20 +689,21 @@ class ProjectQuestions:
         conflicts=_workflow_index_status_conflicts(question,workflow_index)
         if conflicts:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
-                    'answer':('The current workflow status cannot be established because the complete '
-                              'project workflow index contains conflicting explicit statuses for '
-                              +', '.join(conflicts)+'. Review the original source sections.'),
+                    'answer':_workflow_status_conflict_answer(conflicts),
                     'citations':[],'source_findings':[],
+                    'workflow_conflicts':conflicts,
                     'retrieved_count':len(evidence),'cached':False}
         if not evidence:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':'The analyzed project files do not contain enough matching evidence to answer this question.',
-                    'citations':[],'source_findings':[],'retrieved_count':0,'cached':False}
+                    'citations':[],'source_findings':[],'workflow_conflicts':[],
+                    'retrieved_count':0,'cached':False}
         if self.gateway.s.provider=='mock':
             return {'run_id':run['id'],'question':question,'status':'MODEL_DISABLED',
                     'answer':'Mock mode retrieved possible source passages but did not generate an answer. Configure a live API or local model to answer from these files.',
                     'citations':[_context_citation(item) for item in evidence[:3]],
-                    'source_findings':[],'retrieved_count':len(evidence),'cached':False}
+                    'source_findings':[],'workflow_conflicts':[],
+                    'retrieved_count':len(evidence),'cached':False}
         result=self.gateway.answer(run,question,evidence)
         validate_answer_model(result.data,evidence,question)
         by_id={item['evidence_id']:item for item in evidence}
@@ -690,4 +718,4 @@ class ProjectQuestions:
             })
         return {'run_id':run['id'],'question':question,'status':result.data['status'],
                 'answer':result.data['answer'],'citations':citations,'source_findings':findings,
-                'retrieved_count':len(evidence),'cached':result.cached}
+                'workflow_conflicts':[],'retrieved_count':len(evidence),'cached':result.cached}

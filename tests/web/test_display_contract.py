@@ -84,6 +84,10 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert "source.append(quote,location,open);return source" in source
     assert "showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id)" in source
     assert "const findings=data.source_findings||[]" in source
+    assert "const workflowConflicts=data.workflow_conflicts||[]" in source
+    assert "a.href='/api/documents/'+source.document_id+'/file'" in source
+    assert "workflowCodeLabel('status',status.status)" in source
+    assert "workflowClassification.source.'+source.classification_source" in source
     assert "finding.append(questionCitation(citation,data))" in source
     assert "questionSourceLabels[item.source_type]" in source
     assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source
