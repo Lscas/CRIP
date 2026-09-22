@@ -1364,6 +1364,99 @@ def test_locator_grounded_workflow_id_does_not_ground_another_number(
         validate_answer_model(wrong,evidence,'What pipe size does RFI 42 require?')
 
 
+def test_answer_rejects_a_number_borrowed_from_another_rfi(client, project):
+    source='RFI 42 response: Use 2 inch pipe. RFI 43 response: Use 4 inch pipe.'
+    run=_evidence(client,project,[source])
+    question='What pipe size does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'RFI 42 requires 4 inch pipe.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow numeric'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_answer_accepts_numbers_scoped_to_their_own_rfis(client, project):
+    source='RFI 42 response: Use 2 inch pipe. RFI 43 response: Use 4 inch pipe.'
+    run=_evidence(client,project,[source])
+    question='What pipe size does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={
+        'status':'ANSWERED','answer':'RFI 42 requires 2 inch pipe.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
+@pytest.mark.parametrize(('locator_section','accepted'),[
+    ('RFI 0042 > RESPONSE',True),
+    ('RFI 42 / RFI 43',False),
+])
+def test_locator_scopes_a_number_only_with_one_exact_rfi(
+        client, project, locator_section, accepted):
+    source='Pipe size shall be 2 inch Type L copper.'
+    run=_evidence(client,project,[source])
+    question='What pipe size does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']=locator_section
+    answer={
+        'status':'ANSWERED','answer':'RFI 42 requires 2 inch Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    if accepted:
+        validate_answer_model(answer,evidence,question)
+    else:
+        with pytest.raises(ValueError,match='workflow numeric'):
+            validate_answer_model(answer,evidence,question)
+
+
+def test_source_finding_rejects_a_number_borrowed_from_another_submittal(
+        client, project):
+    spec='Specification requires Type L copper pipe.'
+    submittals=('Submittal 23-01 requires 2 inch pipe. '
+                'Submittal 23-02 requires 4 inch pipe.')
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittals.txt',[submittals])])
+    question='Compare the specification and Submittal 23-01 pipe requirements.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The sources describe Type L copper pipe.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires Type L copper pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittals.txt',
+             'statement':'Submittal 23-01 requires 4 inch pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittals}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='workflow numeric'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_identifier_number_is_not_a_property_value(client, project):
+    source='RFI 42 response: Use Type L copper pipe.'
+    run=_evidence(client,project,[source])
+    question='What pipe material does RFI 42 require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={
+        'status':'ANSWERED','answer':'RFI 42 requires Type L copper pipe.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
 def test_prefixed_rfi_identifiers_remain_exact_in_answer_citations(client, project):
     source='RFI ARC-0042 response: Use Type L copper. Reference ARC-42 remains open.'
     run=_evidence(client,project,[source])

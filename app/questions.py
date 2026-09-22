@@ -725,23 +725,23 @@ def _source_key(evidence: dict) -> tuple[str,str]:
     return document,_source_family(evidence)
 
 
-def _numeric_values(text: str) -> set[str]:
+def _numeric_occurrences(text: str) -> list[tuple[int,int,str]]:
     """Canonicalize explicit numeric literals without inferring conversions."""
-    values=set()
+    values=[]
     for match in _NUMERIC_VALUE.finditer(text):
         token=match.group().replace(',','')
         parts=token.split('/')
         normalized=[]
         for part in parts:
-            if part.count('.')<=1:
-                whole,dot,fraction=part.partition('.')
-                whole=str(int(whole))
-                fraction=fraction.rstrip('0')
-                normalized.append(whole+(dot+fraction if fraction else ''))
-            else:
-                normalized.append(part)
-        values.add('/'.join(normalized))
+            whole,dot,fraction=part.partition('.')
+            whole=str(int(whole));fraction=fraction.rstrip('0')
+            normalized.append(whole+(dot+fraction if fraction else ''))
+        values.append((match.start(),match.end(),'/'.join(normalized)))
     return values
+
+
+def _numeric_values(text: str) -> set[str]:
+    return {value for _,_,value in _numeric_occurrences(text)}
 
 
 def _date_occurrences(text: str) -> list[tuple[int,int,str]]:
@@ -851,10 +851,32 @@ def _workflow_identities_in(values: list[str]) -> set[tuple[str,str]]:
     return identities
 
 
+def _workflow_numeric_values(text: str, identity_text: str | None = None
+                             ) -> set[tuple[tuple[str,str],str]]:
+    """Keep non-identifier numbers attached to one exact workflow scope."""
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    identifier_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    values=set()
+    for start,end,numeric_value in _numeric_occurrences(text):
+        if any(left<=start and end<=right for left,right in identifier_spans):continue
+        left,right=statement_span(text,start,end)
+        statement_identities=_workflow_identities(text[left:right])
+        if identity_text is None:
+            identities=statement_identities or all_identities
+        else:
+            identities=(statement_identities if len(statement_identities)==1 else
+                        all_identities if not statement_identities and len(all_identities)==1
+                        else set())
+        values.update((identity,numeric_value) for identity in identities)
+    return values
+
+
 def _require_numeric_support(claim: str, quotes: list[str], label: str,
-                             identity_citations: list[str] | None = None) -> None:
+                             identity_citations: list[str] | None = None,
+                             scope_workflow: bool = True) -> None:
     quote_values=_numeric_values(' '.join(quotes))
-    supported_identities=_workflow_identities_in(identity_citations or [])
+    identity_citations=identity_citations or quotes
+    supported_identities=_workflow_identities_in(identity_citations)
     identifier_spans=[(start,end) for identity,start,end in _workflow_identity_spans(claim)
                       if identity in supported_identities]
     for match in _NUMERIC_VALUE.finditer(claim):
@@ -862,6 +884,13 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
         if value in quote_values:continue
         if any(start<=match.start() and match.end()<=end for start,end in identifier_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
+    if not scope_workflow:return
+    supported_scoped=set()
+    for index,quote in enumerate(quotes):
+        identity_text=(identity_citations[index] if index<len(identity_citations) else quote)
+        supported_scoped.update(_workflow_numeric_values(quote,identity_text))
+    if _workflow_numeric_values(claim)-supported_scoped:
+        raise ValueError(label+' contains a workflow numeric claim absent from its citations')
 
 
 def _citation_identity_text(evidence: dict, quote: str) -> str:
@@ -1181,7 +1210,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         _require_date_support(value['answer'],answer_quotes,'answer')
         _require_date_role_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts)
-        _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts)
+        _require_numeric_support(value['answer'],answer_quotes,'answer',answer_identity_texts,
+                                 scope_workflow=not value['source_findings'])
         _require_disposition_support(value['answer'],answer_quotes,'answer')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:
