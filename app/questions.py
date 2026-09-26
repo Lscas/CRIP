@@ -99,6 +99,16 @@ _CLAUSE_IDENTIFIER = re.compile(
     r'(?i)\b(?P<kind>paragraph|para\.?|clause|article)\b\.?'
     r'(?:\s+(?:(?:no\.?|number)\s*)?|\s*[:#=-]\s*)'
     r'(?P<label>\d{1,3}(?:\.\d{1,3}){1,5}[a-z]?)(?!\w)(?!\.\d)')
+_EMAIL_ADDRESS = re.compile(
+    r"(?i)(?<![a-z0-9.!#$%&'*+/=?^_`{|}~-])"
+    r"(?P<local>[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*)@"
+    r'(?P<domain>[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+    r'(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){1,10})(?![a-z0-9-])')
+_EMAIL_HEADER_ROLE = re.compile(r'(?i)^\s*(?P<role>from|to|cc|bcc|reply-to)\s*:')
+_EMAIL_PROSE_ROLES = (
+    ('FROM',re.compile(r'(?i)\b(?:from|sender(?:\s+(?:is|was))?|sent\s+by|came\s+from)\s*[:=<([]?\s*$')),
+    ('TO',re.compile(r'(?i)\b(?:to|recipient(?:\s+(?:is|was))?)\s*[:=<([]?\s*$')),
+)
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
@@ -865,6 +875,36 @@ def _clause_identifier_values(text: str) -> set[str]:
     return {value for value,_,_ in _clause_identifier_occurrences(text)}
 
 
+def _email_address_occurrences(text: str) -> list[tuple[str,int,int]]:
+    values=[]
+    for match in _EMAIL_ADDRESS.finditer(text):
+        local=match['local'];domain=match['domain'].casefold()
+        if len(local)>64 or len(local)+len(domain)+1>254:continue
+        values.append((local+'@'+domain,match.start(),match.end()))
+    return sorted(set(values),key=lambda value:(value[1],value[2],value[0]))
+
+
+def _email_address_values(text: str) -> set[str]:
+    return {value for value,_,_ in _email_address_occurrences(text)}
+
+
+def _email_address_role_occurrences(text: str) -> list[tuple[str,str,int,int]]:
+    values=[]
+    role_names={'from':'FROM','to':'TO','cc':'CC','bcc':'BCC','reply-to':'REPLY_TO'}
+    for address,start,end in _email_address_occurrences(text):
+        line_start=max(text.rfind('\n',0,start),text.rfind('\r',0,start))+1
+        prefix=text[line_start:start]
+        header=_EMAIL_HEADER_ROLE.match(prefix)
+        roles=({role_names[header['role'].casefold()]} if header else
+               {role for role,pattern in _EMAIL_PROSE_ROLES if pattern.search(prefix[-96:])})
+        values.extend((role,address,start,end) for role in roles)
+    return sorted(set(values))
+
+
+def _email_address_role_values(text: str) -> set[tuple[str,str]]:
+    return {(role,address) for role,address,_,_ in _email_address_role_occurrences(text)}
+
+
 def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
     match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
     if not match:return None
@@ -877,6 +917,7 @@ def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _clause_identifier_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _email_address_occurrences(text))
     values=[]
     for start,end,numeric_value in _numeric_occurrences(text):
         if any(left<=start and end<=right for left,right in reserved_spans):continue
@@ -900,6 +941,7 @@ def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _clause_identifier_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _email_address_occurrences(text))
     numerics=[value for value in _numeric_occurrences(text)
               if not any(left<=value[0] and value[1]<=right
                          for left,right in reserved_spans)]
@@ -1042,6 +1084,16 @@ def _workflow_clause_identifier_values(text: str, identity_text: str | None = No
     return _workflow_scoped_values(text,_clause_identifier_occurrences(text),identity_text)
 
 
+def _workflow_email_address_values(text: str, identity_text: str | None = None
+                                   ) -> set[tuple[tuple[str,str],str]]:
+    return _workflow_scoped_values(text,_email_address_occurrences(text),identity_text)
+
+
+def _workflow_email_address_role_values(text: str, identity_text: str | None = None
+                                        ) -> set[tuple[tuple[str,str],str,str]]:
+    return _workflow_scoped_values(text,_email_address_role_occurrences(text),identity_text)
+
+
 def _require_spec_section_support(
         claim: str, quotes: list[str], label: str,
         identity_citations: list[str] | None = None,
@@ -1104,6 +1156,29 @@ def _require_clause_identifier_support(
         raise ValueError(label+' contains a workflow clause identifier absent from its citations')
 
 
+def _require_email_address_support(
+        claim: str, quotes: list[str], label: str,
+        identity_citations: list[str] | None = None,
+        scope_workflow: bool = True) -> None:
+    identity_citations=identity_citations or quotes
+    supported=set();supported_scoped=set();supported_roles=set();supported_scoped_roles=set()
+    for index,quote in enumerate(quotes):
+        identity_text=(identity_citations[index] if index<len(identity_citations) else quote)
+        supported.update(_email_address_values(quote))
+        supported_scoped.update(_workflow_email_address_values(quote,identity_text))
+        supported_roles.update(_email_address_role_values(quote))
+        supported_scoped_roles.update(_workflow_email_address_role_values(quote,identity_text))
+    if _email_address_values(claim)-supported:
+        raise ValueError(label+' contains an email address absent from its citations')
+    if _email_address_role_values(claim)-supported_roles:
+        raise ValueError(label+' contains an email address role absent from its citations')
+    if not scope_workflow:return
+    if _workflow_email_address_values(claim)-supported_scoped:
+        raise ValueError(label+' contains a workflow email address absent from its citations')
+    if _workflow_email_address_role_values(claim)-supported_scoped_roles:
+        raise ValueError(label+' contains a workflow email address role absent from its citations')
+
+
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
     if _date_values(claim)-_date_values(' '.join(quotes)):
         raise ValueError(label+' contains a date absent from its citations')
@@ -1157,6 +1232,7 @@ def _workflow_numeric_values(text: str, identity_text: str | None = None
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _clause_identifier_occurrences(text))
+    reserved_spans.extend((start,end) for _,start,end in _email_address_occurrences(text))
     occurrences=[(numeric_value,start,end)
                  for start,end,numeric_value in _numeric_occurrences(text)
                  if not any(left<=start and end<=right for left,right in reserved_spans)]
@@ -1208,6 +1284,9 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
         supported_clauses.update(_clause_identifier_values(context))
     clause_spans=[(start,end) for value,start,end in _clause_identifier_occurrences(claim)
                   if value in supported_clauses]
+    supported_emails=_email_address_values(' '.join(quotes))
+    email_spans=[(start,end) for value,start,end in _email_address_occurrences(claim)
+                 if value in supported_emails]
     for start,end,value in _numeric_occurrences(claim):
         if value in quote_values:continue
         if any(left<=start and end<=right for left,right in identifier_spans):continue
@@ -1215,6 +1294,7 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
         if any(left<=start and end<=right for left,right in revision_spans):continue
         if any(left<=start and end<=right for left,right in drawing_spans):continue
         if any(left<=start and end<=right for left,right in clause_spans):continue
+        if any(left<=start and end<=right for left,right in email_spans):continue
         raise ValueError(label+' contains a numeric claim absent from its citations')
     if not scope_workflow:return
     supported_scoped=set();supported_units=set();supported_scoped_units=set()
@@ -1575,6 +1655,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_drawing_texts,'source finding')
             _require_clause_identifier_support(
                 finding['statement'],finding_clause_texts,'source finding')
+            _require_email_address_support(
+                finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_date_role_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
@@ -1613,6 +1695,9 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             scope_workflow=not value['source_findings'])
         _require_clause_identifier_support(
             value['answer'],answer_clause_texts,'answer',
+            scope_workflow=not value['source_findings'])
+        _require_email_address_support(
+            value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
         _require_date_support(value['answer'],answer_quotes,'answer')
         _require_date_role_support(

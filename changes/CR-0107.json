@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0107",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground explicit Email addresses as atomic values and keep bounded sender/recipient roles scoped to workflows, source findings and exact citations.",
+  "decision_refs": [
+    "The user requested a Trunk Tools-style ability to ask questions and answer from existing project files",
+    "The existing project-question route already supplies bounded selected-run evidence and inline sources",
+    "An offline reproduction proved that a sender address could be recombined from cited From and To addresses"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-087.json",
+    "tasks/DEV-092.json", "changes/CR-0107.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested file-grounded project questions modeled on Trunk Tools.",
+  "known_limitations": [
+    "The address parser intentionally covers conventional ASCII dot-atom local parts and dotted DNS-style domains; quoted local parts, domain literals, SMTPUTF8 and undotted internal domains remain outside the guard.",
+    "Address roles are recognized only from explicit From, To, Cc, Bcc and Reply-To headers or bounded sender/recipient prose immediately before an address.",
+    "The guard does not infer mailbox ownership, thread participation, contractual authority, identity equivalence or whether every relevant project file was parsed."
+  ]
+}

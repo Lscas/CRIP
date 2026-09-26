@@ -12,7 +12,8 @@ from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
-    _numeric_unit_values, _revision_label_values,
+    _email_address_role_values, _email_address_values, _numeric_unit_values,
+    _revision_label_values,
     _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -348,6 +349,25 @@ def test_retrieval_indexes_updated_sheet_locator(client, project):
 
     assert found and found[0]['evidence_id'] == 'EV-QA-1'
     assert fallback and fallback[0]['evidence_id'] == 'EV-QA-1'
+
+
+def test_retrieval_keeps_a_late_exact_paragraph_locator_under_candidate_pressure(
+        client, project):
+    rows=['Paragraph requirements 2 3 1 general note.' for _ in range(160)]
+    rows.append('Required hydrostatic test duration is 2 hours.')
+    run=_evidence(client,project,rows)
+    db=client.app.state.db
+    row=db.one('SELECT id,payload FROM evidence WHERE run_id=? ORDER BY rowid DESC LIMIT 1',
+               (run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['paragraph']='2.3.1'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+
+    found=retrieve_evidence(db,run,'What does Paragraph 2.3.1 require?')
+    db.evidence_search_available=False
+    fallback=retrieve_evidence(db,run,'What does Paragraph 2.3.1 require?')
+
+    assert found and found[0]['evidence_id']=='EV-QA-161'
+    assert fallback and fallback[0]['evidence_id']=='EV-QA-161'
 
 
 def test_excluded_vision_output_cannot_crowd_out_source_evidence(client, project):
@@ -2107,6 +2127,112 @@ def test_clause_identifier_parser_requires_an_explicit_dotted_label():
     assert _clause_identifier_values(
         'Paragraph 2.3.1; Para. 2.3.1; Clause No. 4.5.6; Article: 1.2a')=={
             'PARAGRAPH:2.3.1','CLAUSE:4.5.6','ARTICLE:1.2A'}
+
+
+def test_answer_rejects_recombined_email_address(client, project):
+    source=('From: architect@example.test\nTo: owner@project.test\n'
+            'Subject: RFI 42 response')
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Who sent the RFI 42 response?')
+    wrong={'status':'ANSWERED',
+           'answer':'The RFI 42 response came from architect@project.test.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email address absent'):
+        validate_answer_model(wrong,evidence,'Who sent the RFI 42 response?')
+
+
+def test_answer_accepts_email_domain_case_formatting(client, project):
+    source='From: architect@EXAMPLE.TEST\nSubject: RFI 42 response'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Who sent the RFI 42 response?')
+    answer={'status':'ANSWERED',
+            'answer':'The RFI 42 response came from architect@example.test.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,'Who sent the RFI 42 response?')
+
+
+def test_email_local_part_case_remains_exact(client, project):
+    source='From: Architect@example.test\nSubject: RFI 42 response'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Who sent the RFI 42 response?')
+    wrong={'status':'ANSWERED',
+           'answer':'The RFI 42 response came from architect@example.test.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email address absent'):
+        validate_answer_model(wrong,evidence,'Who sent the RFI 42 response?')
+
+
+def test_email_header_role_cannot_be_swapped(client, project):
+    source='From: architect@example.test\nTo: owner@project.test'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Who is the email sender?')
+    grounded={'status':'ANSWERED','answer':'The sender was architect@example.test.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+    wrong={**grounded,'answer':'The sender was owner@project.test.'}
+
+    validate_answer_model(grounded,evidence,'Who is the email sender?')
+    with pytest.raises(ValueError,match='email address role'):
+        validate_answer_model(wrong,evidence,'Who is the email sender?')
+
+
+def test_email_address_stays_with_its_workflow(client, project):
+    source=('RFI 42 response came from architect@example.test. '
+            'Submittal 23-01 response came from vendor@project.test.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,'Who sent the RFI 42 response?')
+    wrong={'status':'ANSWERED',
+           'answer':'RFI 42 response came from vendor@project.test.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow email address'):
+        validate_answer_model(wrong,evidence,'Who sent the RFI 42 response?')
+
+
+def test_submittal_finding_cannot_borrow_specification_email_address(
+        client, project):
+    spec='Specification contact: designer@example.test.'
+    submittal='Submittal 23-01 contact: vendor@project.test.'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[spec]),('submittal-23-01.txt',[submittal])])
+    question='Compare the specification and Submittal 23-01 contacts.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    next(item for item in evidence if item['file_name']=='submittal-23-01.txt')[
+        'locator']['section']='Submittal 23-01 > REVIEW'
+    wrong={
+        'status':'ANSWERED','answer':'The sources list different contacts.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':spec,
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':spec}]},
+            {'source_type':'SUBMITTAL','file_name':'submittal-23-01.txt',
+             'statement':'Submittal 23-01 contact: designer@example.test.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='email address absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_address_parser_is_bounded_and_preserves_header_roles():
+    text=('From: Architect <architect@EXAMPLE.TEST>\n'
+          'To: owner@project.test\nCc: reviewer@example.test')
+    assert _email_address_values(text)=={
+        'architect@example.test','owner@project.test','reviewer@example.test'}
+    assert _email_address_role_values(text)=={
+        ('FROM','architect@example.test'),('TO','owner@project.test'),
+        ('CC','reviewer@example.test')}
+    assert _email_address_values(
+        'name@localhost bad..dots@example.test user@bad_domain.test')==set()
 
 
 def test_source_finding_rejects_submittal_height_unit_as_width_unit(
