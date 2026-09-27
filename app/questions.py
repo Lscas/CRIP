@@ -95,7 +95,7 @@ _REVISION_LABEL_WEAK = re.compile(
     r'(?=[a-z0-9._/-]*\d)[a-z0-9]+(?:[._/-][a-z0-9]+)*|'
     r'ifc|ifb|as[- ]built))(?!\w)')
 _DRAWING_IDENTIFIER = re.compile(
-    r'(?i)(?:\bsheet\b|\bdrawing\b|\bdwg\.?|\bdetail\b)'
+    r'(?i)(?P<kind>\bsheet\b|\bdrawing\b|\bdwg\.?|\bdetail\b)'
     r'(?:\s+(?:(?:no\.?|number)\s*)?|\s*[:#=-]\s*)'
     r'(?P<label>(?=[a-z0-9._/\-–—]*\d)[a-z0-9]+'
     r'(?:[._/\-–—][a-z0-9]+)*)(?!\w)')
@@ -284,6 +284,21 @@ _EXACT_SUBMITTAL_FIELD_QUESTIONS = (
         (?:review(?:er)?\s+comments?|comments?)\s+(?:on|of|for)\s+
         {_WORKFLOW_EXACT_ITEM}
     )\s*[?!.]*\s*$''')),
+)
+_WORKFLOW_DRAWING_REFERENCE_KIND = (
+    r'(?P<drawing_kind>drawing\s+references?|drawings?|sheets?|details?|'
+    r'sheets?\s+(?:and|or)\s+details?)'
+)
+_EXACT_WORKFLOW_DRAWING_REFERENCE_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_WORKFLOW_DRAWING_REFERENCE_KIND}\s+
+        (?:does|did)\s+{_WORKFLOW_EXACT_ITEM}\s+(?:reference|mention|list)
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_WORKFLOW_DRAWING_REFERENCE_KIND}\s+
+        (?:are|were)\s+(?:referenced|mentioned|listed)\s+(?:in|by|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        {_WORKFLOW_DRAWING_REFERENCE_KIND}\s+(?:for|in|referenced\s+by)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
 _SUBMITTAL_FIELD_LABELS = {
     'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
@@ -946,6 +961,29 @@ def requested_rfi_spec_section(question: str) -> str | None:
 
 def requires_rfi_spec_section_index(question: str) -> bool:
     return requested_rfi_spec_section(question) is not None
+
+
+def requested_workflow_drawing_references(question: str) -> tuple[str,str,str] | None:
+    """Recognize one exact workflow request for explicit drawing-reference identifiers."""
+    for pattern in _EXACT_WORKFLOW_DRAWING_REFERENCE_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if not identifier:continue
+        requested_kind=match.group('drawing_kind').casefold()
+        scope=('ALL' if 'reference' in requested_kind or ' and ' in requested_kind
+               or ' or ' in requested_kind else
+               'DETAIL' if requested_kind.startswith('detail') else 'DRAWING')
+        return workflow,identifier,scope
+    return None
+
+
+def requires_workflow_drawing_reference_index(question: str) -> bool:
+    return requested_workflow_drawing_references(question) is not None
 
 
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
@@ -1626,6 +1664,75 @@ def _rfi_spec_section_answer(
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary evidence records the Spec Section for {label} as "{value}".'),
         'citations':citations}
+
+
+def _workflow_drawing_reference_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """List explicit Sheet/Drawing/Detail references in one exact workflow scope."""
+    request=requested_workflow_drawing_references(question)
+    if not request:return None
+    workflow,identifier,scope=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The drawing references for {label} were not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    terms=(('detail',) if scope=='DETAIL' else ('sheet','drawing','dwg')
+           if scope=='DRAWING' else ('sheet','drawing','dwg','detail'))
+    placeholders=','.join('?' for _ in document_ids)
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids,*terms])
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The drawing references for {label} were not answered locally because more than '
+            '32 candidate source passages require review.'),'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        if _workflow_identities(section)!={target}:continue
+        for match in _DRAWING_IDENTIFIER.finditer(text):
+            source_kind=match.group('kind').casefold().rstrip('.')
+            if scope=='DETAIL' and source_kind!='detail':continue
+            if scope=='DRAWING' and source_kind=='detail':continue
+            value=match.group('label').upper().translate(str.maketrans({'–':'-','—':'-'}))
+            if len(value)>32 or re.fullmatch(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',value):continue
+            left,right=statement_span(text,match.start(),match.end());quote=text[left:right]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            entry=found.setdefault(value,{'display':match.group(0),'citations':[]})
+            item=citation(evidence,left,right,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(citation_item.get('evidence_id'),citation_item.get('quote'))
+                           for citation_item in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[];seen=set()
+    for entry in found.values():
+        for item in entry['citations']:
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in seen:seen.add(key);citations.append(item)
+    if len(found)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} contains more than {_MAX_RESULTS} explicit requested drawing references. '
+            'Review the cited primary sources.'),'citations':citations}
+    kind_name=('details' if scope=='DETAIL' else 'drawings or sheets' if scope=='DRAWING'
+               else 'drawing, sheet or detail references')
+    values='; '.join(entry['display'] for entry in found.values())
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary evidence explicitly references these {kind_name} for '
+        f'{label}: {values}.'),'citations':citations}
 
 
 def _workflow_date_answer(
@@ -3687,6 +3794,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(rfi_spec_section['citations']),'cached':False}
+        drawing_references=_workflow_drawing_reference_answer(
+            self.db,run['id'],question,workflow_index)
+        if drawing_references:
+            return {'run_id':run['id'],'question':question,**drawing_references,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(drawing_references['citations']),'cached':False}
         submittal_field=_submittal_field_answer(
             self.db,run['id'],question,workflow_index)
         if submittal_field:

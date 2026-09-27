@@ -1108,6 +1108,15 @@ A strict direct request for one exact RFI Spec Section should reuse explicit lab
 - Bounded English direct-question forms name one exact RFI and request its Spec or Specification Section. Existing non-vision evidence from at most 32 indexed primary files may return locally only when an explicit Spec Section or Specification Section label is scoped to that exact RFI. Matching normalized values across Question, Response and current Email-body primary sources merge with every exact inline citation and zero provider or budget action.
 - Different explicit values, another or multiple RFI identities in the same value, quoted Email history, vision narration, more than 32 primary files or more than 32 candidate passages return insufficient evidence or remain on ordinary grounded Q&A as appropriate. Unlabelled CSI numbers cannot supply the field; the shortcut does not infer applicability, hierarchy, revision, status or controlling authority and adds no dependency or second index.
 
+## FR-QA-WORKFLOW-DRAWING-REFERENCE-LOCAL-001 · Answer exact workflow drawing-reference questions locally
+
+优先级：P0；状态：implemented
+
+Strict questions asking which explicit drawings, sheets or details one exact RFI or Submittal references should reuse its indexed primary evidence before model dispatch.
+
+- Bounded English questions name one exact RFI or Submittal and request drawings/sheets, details, or all drawing references. Existing non-vision evidence from at most 32 indexed primary files may return at most eight distinct explicitly prefixed Sheet, Drawing, Dwg or Detail identifiers only when each statement is scoped to that exact workflow item. Equivalent prefixes and dash glyphs deduplicate by complete identifier, current Email-body primary scopes may participate, and every result retains exact inline citations with zero provider or budget action.
+- Another or multiple workflow identities in the supporting statement, quoted Email history, vision narration, more than 32 primary files, more than 32 candidate passages or more than eight distinct requested identifiers fail closed. Missing explicit references remain on ordinary grounded Q&A; the shortcut does not infer an unlabelled code, applicability, discipline, revision, chronology, authority or controlling source and adds no dependency or second index.
+
 ## FR-QA-SUBMITTAL-FIELD-LOCAL-001 · Answer explicit Submittal fields locally
 
 优先级：P0；状态：implemented
