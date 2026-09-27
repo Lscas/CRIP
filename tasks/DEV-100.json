@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce an Email Date-header answer that borrows a Received date from the same exact citation.",
+    "Keep each explicit Email date or Date-header claim equal to one complete cited Date header value.",
+    "Reject timestamp recombination and cross-Email source-finding borrowing.",
+    "Do not treat Received, body dates or RFI/Submittal form Date fields as Email Date headers.",
+    "Require an explicit complete header value when an answered question asks for one or more Email dates or Date headers.",
+    "For a natural sent-date question, require that Date header or a separately labelled exact Sent date rather than Received or body text.",
+    "Preserve weekday, date, time, seconds, numeric offset and comments without timezone conversion or delivery-time inference.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-100",
+  "title": "Ground Email Date-header claims",
+  "requirement_ids": ["FR-QA-EMAIL-DATE-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-100.json",
+    "changes/CR-0115.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent Email Date-header values from being omitted, recombined or borrowed from Received, body, workflow-form or another Email source while retaining exact readable timestamp output."
+}

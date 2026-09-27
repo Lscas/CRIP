@@ -1486,6 +1486,19 @@
       ],
       "decision_source": "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-EMAIL-DATE-001",
+      "title": "Ground Email Date-header answers",
+      "statement": "Explicit Email date and Date-header answers must remain tied to one complete Date header value from Email evidence in the same answer or source-finding scope.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Every explicit Email date or Date-header claim in an ordinary answer or source finding equals one complete Date header value in that scope's exact quotations from evidence conservatively classified as Email; a Received value, body date or RFI/Submittal form Date field cannot ground the claim. Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the value are formatting-equivalent, while weekday, date, time, seconds, numeric offset and comments stay exact; headers cannot be recombined or borrowed across source findings.",
+        "An answered question explicitly asking for one or more Email dates or Date headers states each header explicitly in the answer or corresponding source findings. A natural sent-date question states that complete Date header or a separately labelled exact Sent date; the validator does not decode or unfold new source formats, convert time zones, infer delivery or transport time, choose the current thread message or determine authority."
+      ],
+      "decision_source": "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

@@ -1044,3 +1044,12 @@ Explicit Email participant display names must remain complete and paired with th
 
 - Every explicit Email sender, recipient, From, To, Cc, Bcc or Reply-To display-name claim in an ordinary answer or source finding equals one complete same-role header value in that scope's exact quotations from evidence conservatively classified as Email; an RFI or Submittal form's From or To field cannot ground an Email-participant answer. Case, repeated whitespace and outer quotation marks are formatting-equivalent, while names cannot be recombined, role-swapped or borrowed across source findings.
 - An answered sender or recipient question using Email evidence states each requested role explicitly as a supported display name or already validated address in the answer or corresponding source findings; the validator does not infer identity from an address, company, title, signature, thread position or authority.
+
+## FR-QA-EMAIL-DATE-001 · Ground Email Date-header answers
+
+优先级：P0；状态：implemented
+
+Explicit Email date and Date-header answers must remain tied to one complete Date header value from Email evidence in the same answer or source-finding scope.
+
+- Every explicit Email date or Date-header claim in an ordinary answer or source finding equals one complete Date header value in that scope's exact quotations from evidence conservatively classified as Email; a Received value, body date or RFI/Submittal form Date field cannot ground the claim. Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the value are formatting-equivalent, while weekday, date, time, seconds, numeric offset and comments stay exact; headers cannot be recombined or borrowed across source findings.
+- An answered question explicitly asking for one or more Email dates or Date headers states each header explicitly in the answer or corresponding source findings. A natural sent-date question states that complete Date header or a separately labelled exact Sent date; the validator does not decode or unfold new source formats, convert time zones, infer delivery or transport time, choose the current thread message or determine authority.

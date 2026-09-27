@@ -14,6 +14,7 @@ from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
     _email_address_role_values, _email_address_values,
+    _email_date_header_claim_values, _email_date_header_values,
     _email_header_participant_role_values, _email_participant_claim_role_values,
     _numeric_unit_values,
     _requested_source_families, _revision_label_values, _source_family,
@@ -2600,6 +2601,148 @@ def test_workflow_form_subject_does_not_ground_an_email_subject(
 
     with pytest.raises(ValueError,match='email subject absent'):
         validate_answer_model(wrong,evidence,question)
+
+
+def test_email_date_header_cannot_borrow_a_received_date(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Date: January 5, 2024\nReceived: January 6, 2024\n'
+            'Subject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email Date header?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED',
+              'answer':'Email Date header: January 5, 2024.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+    wrong={**grounded,'answer':'Email Date header: January 6, 2024.'}
+
+    validate_answer_model(grounded,evidence,question)
+    with pytest.raises(ValueError,match='email Date header'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_date_header_accepts_formatting_only_changes(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Date: Tue, 5 Jan 2024 10:30:00 -0500\nSubject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='When was the email sent?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED',
+            'answer':'Email Date header: “tue, 5  jan 2024 10:30:00 -0500”.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_email_sent_date_question_accepts_an_explicit_sent_value(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Sent: January 5, 2024\nSubject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='When was the email sent?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED','answer':'The email was sent January 5, 2024.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_email_sent_date_question_rejects_an_evasive_answer(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Date: January 5, 2024\nReceived: January 6, 2024\n'
+            'Subject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='When was the email sent?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evasive={'status':'ANSWERED','answer':'The message has a January date.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires a Date header or Sent value'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_email_date_header_cannot_be_recombined(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Date: Tue, 5 Jan 2024 10:30:00 -0500\n'
+            'Date: Wed, 6 Jan 2024 11:45:00 -0500\nSubject: RFI thread')
+    run=_source_evidence(client,project,[('thread.eml',[source])])
+    question='What are the email Date headers?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED',
+           'answer':'Email Date header: Tue, 5 Jan 2024 11:45:00 -0500.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email Date header'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_date_header_question_requires_an_explicit_header_value(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Date: January 5, 2024\nSubject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email date?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evasive={'status':'ANSWERED','answer':'The message is dated in January.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit header value'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_email_source_finding_cannot_borrow_another_date_header(client, project):
+    first=('From: Alice Architect <alice@example.test>\n'
+           'Date: January 5, 2024\nSubject: Domestic Water Pipe')
+    second=('From: Bob Builder <bob@example.test>\n'
+            'Date: January 6, 2024\nSubject: Fire Alarm Coordination')
+    run=_source_evidence(client,project,[
+        ('water.eml',[first]),('fire-alarm.eml',[second])])
+    question='Compare the email Date headers for Domestic Water Pipe and Fire Alarm Coordination.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The Email Date headers are different.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'water.eml',
+             'statement':'Email Date header: January 6, 2024.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':first}]},
+            {'source_type':'EMAIL','file_name':'fire-alarm.eml',
+             'statement':'Email Date header: January 6, 2024.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':second}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains an email Date header'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','file_name'),[
+    ('RFI 42\nDate: January 5, 2024\nQuestion: Can Type L copper be used?','RFI-42.txt'),
+    ('Submittal 23-01\nDate: January 5, 2024\nStatus: PENDING','Submittal-23-01.txt'),
+])
+def test_workflow_form_date_does_not_ground_an_email_date_header(
+        client, project, source, file_name):
+    run=_source_evidence(client,project,[(file_name,[source])])
+    question='What is the email Date header?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'Email Date header: January 5, 2024.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email Date header'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_date_header_parser_is_bounded_and_exact():
+    text=('Date: Tue, 5 Jan 2024 10:30:00 -0500\n'
+          'Received: Wed, 6 Jan 2024 11:45:00 -0500')
+
+    assert _email_date_header_values(text)=={'tue, 5 jan 2024 10:30:00 -0500'}
+    assert _email_date_header_claim_values(
+        'Email Date header: “TUE, 5  JAN 2024 10:30:00 -0500”.')=={
+            'tue, 5 jan 2024 10:30:00 -0500'}
 
 
 def test_answer_rejects_recombined_email_address(client, project):
