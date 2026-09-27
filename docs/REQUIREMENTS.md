@@ -1145,3 +1145,13 @@ Strict questions asking which analyzed project files contain one exact RFI or Su
 - Bounded English questions naming one exact RFI or Submittal may list at most eight associated analyzed files across supported source formats. Primary workflow sources and explicit references are labelled separately, and every returned file has one exact non-vision source quotation for that same normalized identifier with zero provider or budget action.
 - Email members reuse the current-header/body evidence boundary, so quoted history and signatures cannot prove a relationship. Non-Email members exclude vision narration. Pure-numeric RFI leading zeros normalize while prefixed, compound and Submittal identifiers remain exact.
 - Missing exact source text, duplicate associated file names, more than eight files or more than 32 candidate passages in one file returns insufficient evidence. Filenames and classification labels cannot substitute for source text; the implementation does not infer applicability, authority, chronology or contractual effect and adds no dependency or second index.
+
+## FR-QA-EMAIL-THREAD-LOCAL-001 · Answer exact Email thread membership questions locally
+
+优先级：P0；状态：implemented
+
+Strict questions asking which messages share the indexed thread of one exact named EML or MSG file should reuse the complete hash-only Email workflow index before evidence retrieval.
+
+- Bounded English questions naming one exact .eml or .msg file list at most eight messages in the existing deterministic parent-before-reply order with answer_basis WORKFLOW_INDEX, zero evidence retrieval and zero provider or budget action.
+- File matching is exact and case-insensitive; names containing spaces require quotes, and path or wildcard input is never expanded. A standalone indexed message is reported honestly, while unresolved external references are shown only as a count and raw Message-ID values are never exposed.
+- Missing or duplicate exact file names, no indexed thread, multiple thread membership, incomplete or duplicate members, more than eight messages, an unsupported state, or an ambiguous duplicate/self-reference/cycle returns insufficient evidence. Ambiguous groups retain bounded file names and parser-generated warnings for review; the implementation does not connect to a mailbox or infer participants, chronology beyond exact headers, delivery, authority or contractual effect.

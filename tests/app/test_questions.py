@@ -23,7 +23,7 @@ from app.questions import (
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_email_header, requested_email_workflow_relations,
+    requested_email_header, requested_email_thread, requested_email_workflow_relations,
     requested_single_email_header,
     requested_rfi_content, requested_submittal_field,
     requested_workflow_date_item, requested_workflow_document_relations,
@@ -31,7 +31,8 @@ from app.questions import (
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_email_header_index, requires_email_workflow_relation_index,
+    requires_email_header_index, requires_email_thread_index,
+    requires_email_workflow_relation_index,
     requires_rfi_content_index,
     requires_submittal_field_index,
     requires_single_email_header_index,
@@ -4818,6 +4819,169 @@ def test_question_api_loads_workflow_index_for_project_file_relationship(
     assert 'project-spec.pdf (Specification; explicit reference)' in result['answer']
     assert result['citations'][0]['quote']==(
         'Coordinate RFI 42 before releasing the piping package.')
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Which emails are in the same thread as reply.eml?','reply.eml'),
+    ('What messages are in reply.msg\'s thread?','reply.msg'),
+    ('List the emails in the same thread as "Coordination Reply.eml".',
+     'Coordination Reply.eml'),
+    ('Show me the email thread containing reply.eml.','reply.eml'),
+    ('What is the thread for email file reply.msg?','reply.msg'),
+    ('Which emails are in the same thread as ../reply.eml?',None),
+    ('Which emails are in the same thread as *.eml?',None),
+    ('Which emails are in the same thread as reply.pdf?',None),
+    ('Which emails reference RFI 42?',None),
+])
+def test_email_thread_question_boundary(question,expected):
+    assert requested_email_thread(question)==expected
+    assert requires_email_thread_index(question) is bool(expected)
+
+
+def test_email_thread_question_returns_header_order_without_model_or_evidence_read(
+        monkeypatch):
+    parent='MSG-'+'a'*24;reply='MSG-'+'b'*24;external='MSG-'+'c'*24
+    index=build_workflow_index([
+        {'document_id':'D-PARENT','name':'z-parent.eml','summary':{
+            'document_type':'EMAIL','email_thread':{
+                'message_key':parent,'parent_message_key':None,'reference_keys':[]}}},
+        {'document_id':'D-REPLY','name':'a-reply.eml','summary':{
+            'document_type':'EMAIL','email_thread':{
+                'message_key':reply,'parent_message_key':parent,
+                'reference_keys':[parent,external]}}},
+    ])
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('Email thread question read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-THREAD','status':'COMPLETED'},
+        'Which emails are in the same thread as a-reply.eml?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='WORKFLOW_INDEX'
+    assert '2 messages in header-derived order: z-parent.eml; a-reply.eml' in result['answer']
+    assert '1 hashed header reference to messages not present in this run' in result['answer']
+    assert result['citations']==[] and result['retrieved_count']==0
+
+
+def test_email_thread_question_answers_a_standalone_indexed_message(monkeypatch):
+    index=build_workflow_index([{'document_id':'D-ONLY','name':'only.eml','summary':{
+        'document_type':'EMAIL','email_thread':{
+            'message_key':None,'parent_message_key':None,'reference_keys':[]}}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-SINGLE-THREAD','status':'COMPLETED'},
+        'Show me the email thread containing only.eml.',index)
+
+    assert result['status']=='ANSWERED'
+    assert 'only analyzed message in its indexed Email thread' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_thread_question_fails_closed_on_a_header_cycle(monkeypatch):
+    first='MSG-'+'a'*24;second='MSG-'+'b'*24
+    index=build_workflow_index([
+        {'document_id':'D-A','name':'a.eml','summary':{'document_type':'EMAIL',
+         'email_thread':{'message_key':first,'parent_message_key':second,
+                         'reference_keys':[]}}},
+        {'document_id':'D-B','name':'b.eml','summary':{'document_type':'EMAIL',
+         'email_thread':{'message_key':second,'parent_message_key':first,
+                         'reference_keys':[]}}},
+    ])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-CYCLE','status':'COMPLETED'},
+        'Which messages are in a.eml\'s thread?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'is ambiguous' in result['answer']
+    assert 'Retained files for review: a.eml; b.eml' in result['answer']
+    assert 'form a cycle' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_thread_question_rejects_duplicate_exact_file_names_before_read(
+        monkeypatch):
+    index=build_workflow_index([
+        {'document_id':'D-1','name':'same.eml','summary':{'document_type':'EMAIL',
+         'email_thread':{'message_key':None,'parent_message_key':None,
+                         'reference_keys':[]}}},
+        {'document_id':'D-2','name':'SAME.EML','summary':{'document_type':'EMAIL',
+         'email_thread':{'message_key':None,'parent_message_key':None,
+                         'reference_keys':[]}}},
+    ])
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('duplicate Email thread read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-DUPLICATE-THREAD','status':'COMPLETED'},
+        'Show me the email thread containing same.eml.',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 analyzed Email files named "same.eml"' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_thread_question_caps_members_before_read(monkeypatch):
+    index={'items':[{'kind':'EMAIL_THREAD','state':'LINKED','warnings':[],
+                    'external_reference_count':0,'members':[
+        {'document_id':f'D-{value}','file_name':f'{value}.eml','document_type':'EMAIL',
+         'role':'MESSAGE','source':'PRIMARY'} for value in range(9)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large Email thread read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-LARGE-THREAD','status':'COMPLETED'},
+        'Which emails are in the same thread as 0.eml?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains more than 8 messages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_email_thread_question(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('parent.eml',['Subject: Coordination']),
+        ('reply.eml',['Subject: Re: Coordination']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT DISTINCT e.document_id,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    documents={row['name']:row['document_id'] for row in rows}
+    parent='MSG-'+'a'*24;reply='MSG-'+'b'*24
+    summaries={
+        'parent.eml':{'document_type':'EMAIL','email_thread':{
+            'message_key':parent,'parent_message_key':None,'reference_keys':[]}},
+        'reply.eml':{'document_type':'EMAIL','email_thread':{
+            'message_key':reply,'parent_message_key':parent,'reference_keys':[parent]}},
+    }
+    for name,document_id in documents.items():
+        db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+            run['id'],document_id,'SUCCESS',json.dumps(summaries[name])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email thread API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],
+        'question':'Which emails are in the same thread as reply.eml?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert 'parent.eml; reply.eml' in result['answer']
+    assert result['answer_basis']=='WORKFLOW_INDEX' and result['retrieved_count']==0
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

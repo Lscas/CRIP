@@ -1631,6 +1631,20 @@
       ],
       "decision_source": "The user requested Trunk Tools-style questions answered from existing project files and the active objective requires accurate cross-format RFI, Submittal and Email support.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-EMAIL-THREAD-LOCAL-001",
+      "title": "Answer exact Email thread membership questions locally",
+      "statement": "Strict questions asking which messages share the indexed thread of one exact named EML or MSG file should reuse the complete hash-only Email workflow index before evidence retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions naming one exact .eml or .msg file list at most eight messages in the existing deterministic parent-before-reply order with answer_basis WORKFLOW_INDEX, zero evidence retrieval and zero provider or budget action.",
+        "File matching is exact and case-insensitive; names containing spaces require quotes, and path or wildcard input is never expanded. A standalone indexed message is reported honestly, while unresolved external references are shown only as a count and raw Message-ID values are never exposed.",
+        "Missing or duplicate exact file names, no indexed thread, multiple thread membership, incomplete or duplicate members, more than eight messages, an unsupported state, or an ambiguous duplicate/self-reference/cycle returns insufficient evidence. Ambiguous groups retain bounded file names and parser-generated warnings for review; the implementation does not connect to a mailbox or infer participants, chronology beyond exact headers, delivery, authority or contractual effect."
+      ],
+      "decision_source": "The active objective requires efficient and accurate Email support alongside RFI and Submittal questions, using existing project files rather than a mailbox connection.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

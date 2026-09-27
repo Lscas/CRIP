@@ -493,6 +493,23 @@ _EXACT_WORKFLOW_DOCUMENT_RELATION_QUESTIONS = (
            (?:are\s+)?linked\s+to)\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_EXACT_EMAIL_THREAD_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?:e-?mails?|e-?mail\s+files?|messages?)\s+are\s+in\s+
+        (?:the\s+)?same\s+(?:e-?mail\s+)?thread\s+as\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?:e-?mails?|e-?mail\s+files?|messages?)\s+are\s+in\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})(?:'s|’s)\s+
+        (?:e-?mail\s+)?thread\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        (?:e-?mails?|e-?mail\s+files?|messages?)\s+in\s+
+        (?:the\s+)?same\s+(?:e-?mail\s+)?thread\s+as\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:show(?:\s+me)?|what\s+is)\s+(?:the\s+)?
+        (?:e-?mail\s+)?thread\s+(?:containing|for)\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+)
 _EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
     r'(?im)^[ \t]*(?P<role>from|to|cc|bcc|reply-to)[ \t]*:[ \t]*'
     r'(?P<value>[^\r\n]{1,4000})[ \t]*$')
@@ -1010,6 +1027,18 @@ def requested_workflow_document_relations(question: str) -> tuple[str,str] | Non
 
 def requires_workflow_document_relation_index(question: str) -> bool:
     return requested_workflow_document_relations(question) is not None
+
+
+def requested_email_thread(question: str) -> str | None:
+    """Recognize one bounded Email-thread request naming one exact EML/MSG file."""
+    for pattern in _EXACT_EMAIL_THREAD_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if match and (file_name:=_requested_email_file(match)):return file_name
+    return None
+
+
+def requires_email_thread_index(question: str) -> bool:
+    return requested_email_thread(question) is not None
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -1556,6 +1585,82 @@ def _workflow_email_documents(workflow_index: dict | None) -> list[dict]:
                                  or file_name.casefold().endswith(('.eml','.msg')))):
                 found[str(document_id)]={'document_id':str(document_id),'file_name':file_name}
     return sorted(found.values(),key=lambda value:(value['file_name'].casefold(),value['document_id']))
+
+
+def _email_thread_answer(question: str, workflow_index: dict | None) -> dict | None:
+    """List one exact Email file's hash-linked thread without reading evidence or a model."""
+    requested_file=requested_email_thread(question)
+    if not requested_file:return None
+    matches=[document for document in _workflow_email_documents(workflow_index)
+             if document['file_name'].casefold()==requested_file.casefold()]
+    if not matches:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run does not contain an analyzed Email file named '
+            f'"{requested_file}".'),'citations':[]}
+    if len(matches)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run contains {len(matches)} analyzed Email files named '
+            f'"{requested_file}". Select the source in the file list before relying on its '
+            'thread relationship.'),'citations':[]}
+    document_id=matches[0]['document_id'];threads=[]
+    for item in (workflow_index or {}).get('items',[]):
+        if not isinstance(item,dict) or item.get('kind')!='EMAIL_THREAD':continue
+        members=[member for member in item.get('members',[]) if isinstance(member,dict)]
+        if any(str(member.get('document_id'))==document_id for member in members):
+            threads.append((item,members))
+    if not threads:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Email file "{requested_file}" does not have an indexed Email thread. '
+            'Message-ID, In-Reply-To or References metadata may be missing or unsupported.'),
+            'citations':[]}
+    if len(threads)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Email file "{requested_file}" appears in multiple indexed Email threads. '
+            'Review the Workflow relationships section before relying on the grouping.'),
+            'citations':[]}
+    thread,members=threads[0]
+    ordered=[]
+    for member in members:
+        member_id=member.get('document_id');file_name=member.get('file_name')
+        if not member_id or not file_name:continue
+        ordered.append({'document_id':str(member_id),'file_name':str(file_name)})
+    if len(ordered)!=len(members) or not ordered:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The indexed Email thread for "{requested_file}" has incomplete file members.'),
+            'citations':[]}
+    if len(ordered)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The indexed Email thread for "{requested_file}" contains more than '
+            f'{_MAX_RESULTS} messages. Review the complete Workflow relationships section.'),
+            'citations':[]}
+    if (len({member['document_id'] for member in ordered})!=len(ordered)
+            or len({member['file_name'].casefold() for member in ordered})!=len(ordered)):
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The indexed Email thread for "{requested_file}" contains duplicate file members. '
+            'Review the source list before relying on the thread order.'),'citations':[]}
+    if thread.get('state') not in {'SINGLE','LINKED','AMBIGUOUS'}:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The indexed Email thread for "{requested_file}" has an unsupported state. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    names='; '.join(member['file_name'] for member in ordered)
+    external=thread.get('external_reference_count')
+    external_note=(f' It also has {external} hashed header reference'
+                   f'{"s" if external!=1 else ""} to messages not present in this run.'
+                   if type(external) is int and external>0 else '')
+    if thread.get('state')=='AMBIGUOUS':
+        warnings=[str(value) for value in thread.get('warnings',[]) if value][:3]
+        reason=(' Reasons: '+'; '.join(warnings) if warnings else '')
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The indexed Email thread containing "{requested_file}" is ambiguous, so its '
+            f'order cannot be relied on. Retained files for review: {names}.{reason}'
+            f'{external_note}'),'citations':[]}
+    if len(ordered)==1:
+        answer=(f'Email file "{requested_file}" is the only analyzed message in its indexed '
+                f'Email thread.{external_note}')
+    else:
+        answer=(f'The indexed Email thread containing "{requested_file}" has {len(ordered)} '
+                f'messages in header-derived order: {names}.{external_note}')
+    return {'status':'ANSWERED','answer':answer,'citations':[]}
 
 
 def _current_email_workflow_citations(
@@ -3275,6 +3380,12 @@ class ProjectQuestions:
         if inventory:
             return {'run_id':run['id'],'question':question,'status':'ANSWERED',**inventory,
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':0,'cached':False}
+        email_thread=_email_thread_answer(question,workflow_index)
+        if email_thread:
+            return {'run_id':run['id'],'question':question,**email_thread,
+                    'answer_basis':'WORKFLOW_INDEX','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
         email_relationship=_email_workflow_relationship_answer(
