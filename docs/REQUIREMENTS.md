@@ -1130,7 +1130,8 @@ Strict date-role questions for one exact RFI or Submittal should reuse existing 
 
 优先级：P0；状态：implemented
 
-Strict questions asking which RFIs or Submittals one Email references should reuse the complete workflow index and exact current Email evidence before model retrieval.
+Strict questions asking which RFIs or Submittals one Email references, or which Emails reference one exact workflow item, should reuse the complete workflow index and exact current Email evidence before model retrieval.
 
 - Bounded English questions may target the only analyzed Email or one exact named .eml or .msg file and request RFI, Submittal or both relationship types. Indexed primary context and explicit reference members return separately labelled with exact citations from current non-vision EMAIL > HEADERS or EMAIL > BODY text and zero provider or budget action.
-- Multiple otherwise-unspecified Emails, missing or duplicate exact file names, more than eight requested associations, more than 32 current passages, or any indexed association lacking exact current source text returns insufficient evidence. Quoted history, signatures, filenames and vision narration cannot prove a relationship; the implementation does not infer applicability, authority, chronology or contractual effect and adds no dependency or second index.
+- A reverse question naming one exact RFI or Submittal may list at most eight associated Email files, each labelled as primary context or explicit reference and supported by one exact current header/body citation. Pure-numeric RFI leading zeros normalize while prefixed, compound and Submittal identifiers remain exact.
+- Multiple otherwise-unspecified Emails, missing or duplicate exact file names, more than eight requested associations, more than 32 current passages per Email, or any indexed association lacking exact current source text returns insufficient evidence. Quoted history, signatures, filenames and vision narration cannot prove a relationship; the implementation does not infer applicability, authority, chronology or contractual effect and adds no dependency or second index.

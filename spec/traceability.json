@@ -2085,7 +2085,7 @@
       "contract_tests": [
         "tests/app/test_questions.py"
       ],
-      "test_scope": "offline_exact_email_workflow_relationship_local_answer_and_fail_closed_boundaries",
+      "test_scope": "offline_bidirectional_exact_email_workflow_relationship_local_answer_and_fail_closed_boundaries",
       "implemented_product_paths": [
         "app/questions.py",
         "app/main.py"

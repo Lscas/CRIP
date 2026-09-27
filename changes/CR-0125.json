@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0125",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-WORKFLOW-RELATION-LOCAL-001"],
+  "summary": "Answer strict reverse RFI/Submittal-to-Email relationship questions from exact current project evidence.",
+  "decision_refs": [
+    "The active objective requires adaptable file-grounded support across RFI, Submittal and Email",
+    "The complete workflow index already maps one workflow item to all Email members",
+    "The forward relationship path provides a reusable exact current-Email citation boundary"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-110.json", "changes/CR-0125.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact RFI or Submittal use the reverse shortcut.",
+    "Every returned Email requires one exact current header/body quotation.",
+    "Quoted history, signatures, filenames, vision narration, more than eight Emails and more than 32 current passages per Email fail closed.",
+    "The shortcut does not infer applicability, chronology, contractual effect or authority."
+  ]
+}

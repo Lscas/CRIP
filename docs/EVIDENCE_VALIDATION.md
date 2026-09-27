@@ -1,5 +1,11 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-26 reverse workflow-to-Email relationship verification
+
+- Fourteen focused offline cases cover singular/plural Email wording, exact RFI/Submittal selection, pure-numeric RFI leading-zero equivalence, prefixed and spaced identifiers, primary-context/reference labels, one citation per Email, unrelated-workflow exclusion, quoted-history rejection, the eight-Email ceiling, the 32-passage-per-Email ceiling and route-level workflow-index loading.
+- The shared current-Email citation helper was also rerun against all thirteen forward Email-to-workflow cases. Synthetic transports and ordinary retrieval hooks fail if reached, and successful reverse answers create no model-call row.
+- No customer file, credential, `.local` data, mailbox, paid provider or external project system was accessed.
+
 ## 2026-09-26 local Email workflow relationship verification
 
 - Thirteen focused offline cases cover strict named/single-Email question forms, singular/plural RFI and Submittal categories, exact case-insensitive file selection, primary-context versus explicit-reference labels, exact current-header/body citations, path/wildcard rejection, multi-Email ambiguity, quoted-history rejection and route-level workflow-index loading.
