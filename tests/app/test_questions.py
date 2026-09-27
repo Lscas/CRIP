@@ -24,10 +24,12 @@ from app.questions import (
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_email_header, requested_single_email_header,
+    requested_rfi_content,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_email_header_index, requires_single_email_header_index,
+    requires_email_header_index, requires_rfi_content_index,
+    requires_single_email_header_index,
     requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
@@ -3474,6 +3476,146 @@ def test_exact_workflow_subject_question_boundary(question,expected):
     assert requires_workflow_subject_index(question) is bool(expected)
 
 
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the question in RFI 42?',('42','QUESTION')),
+    ('What does Request for Information No. 0042 ask?',('42','QUESTION')),
+    ('What question did RFI ARC-42 ask?',('ARC-42','QUESTION')),
+    ('What is the official response to RFI 42?',('42','RESPONSE')),
+    ('Show me the answer for Request for Information 0042.',('42','RESPONSE')),
+    ('How was RFI ARC-42 answered?',('ARC-42','RESPONSE')),
+    ('What does RFI 42 require?',None),
+    ('Compare the responses to RFI 42 and RFI 43.',None),
+    ('What is the response to Submittal 23-01?',None),
+    ('What is the response to this RFI?',None),
+])
+def test_exact_rfi_content_question_boundary(question,expected):
+    assert requested_rfi_content(question)==expected
+    assert requires_rfi_content_index(question) is bool(expected)
+
+
+def test_exact_rfi_question_and_response_use_parser_scopes_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('RFI-42.pdf',[
+        'Question:\nMay Type L copper be used?',
+        'Official Response:\nProvide Type L copper pipe.',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=? ORDER BY id',(run['id'],))
+    for row,section in zip(rows,('RFI 42 > QUESTION','RFI 42 > RESPONSE')):
+        payload=json.loads(row['payload']);payload['locator']['section']=section
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],'name':'RFI-42.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[
+            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None},
+            {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+        ]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact RFI content used retrieval'))
+
+    question=ProjectQuestions(db,gateway).ask(run,'What is the question in RFI 42?',index)
+    response=ProjectQuestions(db,gateway).ask(run,'What is the official response to RFI 42?',index)
+
+    assert question['status']=='ANSWERED' and question['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'May Type L copper be used?' in question['answer']
+    assert [item['quote'] for item in question['citations']]==[
+        'Question:\nMay Type L copper be used?']
+    assert response['status']=='ANSWERED'
+    assert 'Provide Type L copper pipe.' in response['answer']
+    assert [item['quote'] for item in response['citations']]==[
+        'Official Response:\nProvide Type L copper pipe.']
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_rfi_content_blocks_multiple_same_role_sources_before_evidence_read(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','file_name':'first.pdf','role':'RESPONSE','source':'PRIMARY'},
+        {'document_id':'D-2','file_name':'second.pdf','role':'RESPONSE','source':'PRIMARY'},
+    ]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('ambiguous RFI content read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('ambiguous RFI content used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-RFI','status':'COMPLETED'},'What is the response to RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert '2 primary sources share that explicit role' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_rfi_content_passage_cap_fails_closed_before_parsing(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','file_name':'response.pdf','role':'RESPONSE','source':'PRIMARY'},
+    ]}]}
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('RFI passage cap used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-RFI-CAP','status':'COMPLETED'},'What is the response to RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 source passages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_rfi_content_character_cap_fails_closed(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[
+        f'Response part {number}: '+('x'*1580) for number in range(12)
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],
+        'name':'RFI-42-response.pdf','summary':{'document_type':'RFI_RESPONSE',
+        'workflow_contexts':[{'workflow_type':'RFI','identifier':'42','role':'RESPONSE',
+                              'status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('RFI character cap used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the response to RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'exceeds 18,000 characters' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_rfi_content_excludes_quoted_email_history(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('reply.eml',[
+        'Response:\nUse an obsolete product.',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload'])
+    payload['locator']['section']='EMAIL > QUOTED HISTORY > RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'reply.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('empty quoted-history evidence called provider'))))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'What is the response to RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
 def test_exact_workflow_subject_uses_primary_file_evidence_without_model_or_retrieval(
         client, project, tmp_path, monkeypatch):
     run=_source_evidence(client,project,[
@@ -3613,6 +3755,33 @@ def test_question_api_loads_workflow_index_for_an_exact_subject(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Subject: Domestic Water Pipe Product Data'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_workflow_index_for_exact_rfi_response(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-response.pdf',['Official Response:\nProvide Type L copper pipe.']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'RFI_RESPONSE','workflow_contexts':[{
+        'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact RFI response route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the response to RFI 42?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Official Response:\nProvide Type L copper pipe.'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

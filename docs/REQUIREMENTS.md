@@ -1089,3 +1089,12 @@ A strict header question naming one exact analyzed .eml or .msg file should use 
 
 - Bounded English Subject, sender/From, recipient/To and Date questions may name one exact .eml or .msg file. The complete terminal-run workflow index is matched case-insensitively without fuzzy search; a unique match uses only existing non-vision EMAIL > HEADERS evidence and retains exact citations, conflict handling, the 32-passage cap and zero provider or budget action.
 - File names containing spaces require quotation marks. Directory separators and wildcard tokens do not enter the local shortcut. Zero matches and duplicate exact file names return insufficient evidence before source evidence is read; the implementation does not scan the filesystem, access a mailbox, add a dependency or infer identity, authority, delivery time or thread position.
+
+## FR-QA-RFI-CONTENT-LOCAL-001 · Answer exact RFI Question and Response requests locally
+
+优先级：P0；状态：implemented
+
+A strict direct request for one exact RFI Question or Official Response should reuse existing parser-scoped project evidence before model dispatch.
+
+- Bounded English direct-question forms name one exact RFI and request either its Question or Response. The complete terminal-run workflow index must identify exactly one primary source with that explicit role, and only existing non-vision passages whose locator contains the same exact RFI identity and role may return locally with exact inline citations and zero provider or budget action.
+- Current Email-body RFI scopes may participate, while quoted Email history cannot donate content. Multiple same-role primary sources return insufficient evidence before evidence access; more than 32 matching passages or 18,000 characters fails closed. Missing parser-scoped content falls through to ordinary grounded Q&A, and the shortcut does not interpret requirements, compare items, decide chronology or select controlling authority.

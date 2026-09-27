@@ -1551,6 +1551,19 @@
       ],
       "decision_source": "The active objective requires adaptable Email question support for realistic projects containing more than one message.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-RFI-CONTENT-LOCAL-001",
+      "title": "Answer exact RFI Question and Response requests locally",
+      "statement": "A strict direct request for one exact RFI Question or Official Response should reuse existing parser-scoped project evidence before model dispatch.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English direct-question forms name one exact RFI and request either its Question or Response. The complete terminal-run workflow index must identify exactly one primary source with that explicit role, and only existing non-vision passages whose locator contains the same exact RFI identity and role may return locally with exact inline citations and zero provider or budget action.",
+        "Current Email-body RFI scopes may participate, while quoted Email history cannot donate content. Multiple same-role primary sources return insufficient evidence before evidence access; more than 32 matching passages or 18,000 characters fails closed. Missing parser-scoped content falls through to ordinary grounded Q&A, and the shortcut does not interpret requirements, compare items, decide chronology or select controlling authority."
+      ],
+      "decision_source": "The active objective requests Trunk Tools-style file-grounded questions with faster and more accurate support across RFI, Submittal and Email content.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

@@ -243,6 +243,23 @@ _EXACT_WORKFLOW_SUBJECT_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*what\s+is\s+{_WORKFLOW_EXACT_ITEM}(?:'s|’s)\s+
         subject(?:\s+line)?\s*[?!.]*\s*$'''),
 )
+_EXACT_RFI_CONTENT_QUESTIONS = (
+    ('QUESTION',re.compile(rf'''(?ix)^\s*(?:
+        (?:what\s+is|show(?:\s+me)?|tell\s+me)\s+(?:the\s+)?question\s+
+            (?:in|for|of)\s+{_WORKFLOW_EXACT_ITEM}
+    )\s*[?!.]*\s*$''')),
+    ('QUESTION',re.compile(rf'''(?ix)^\s*what\s+question\s+(?:does|did)\s+
+        {_WORKFLOW_EXACT_ITEM}\s+ask\s*[?!.]*\s*$''')),
+    ('QUESTION',re.compile(rf'''(?ix)^\s*what\s+does\s+{_WORKFLOW_EXACT_ITEM}\s+
+        ask\s*[?!.]*\s*$''')),
+    ('RESPONSE',re.compile(rf'''(?ix)^\s*(?:
+        (?:what\s+is|what\s+was|show(?:\s+me)?|tell\s+me)\s+(?:the\s+)?
+            (?:official\s+)?(?:response|answer|reply)\s+(?:to|for|of)\s+
+            {_WORKFLOW_EXACT_ITEM}
+    )\s*[?!.]*\s*$''')),
+    ('RESPONSE',re.compile(rf'''(?ix)^\s*how\s+was\s+{_WORKFLOW_EXACT_ITEM}\s+
+        answered\s*[?!.]*\s*$''')),
+)
 _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
     ('SUBJECT',re.compile(r'''(?ix)^\s*(?:
         what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+subject(?:\s+line)?|
@@ -669,6 +686,22 @@ def requires_workflow_subject_index(question: str) -> bool:
     return requested_workflow_subject_item(question) is not None
 
 
+def requested_rfi_content(question: str) -> tuple[str,str] | None:
+    """Recognize one direct Question or Response request for one exact RFI."""
+    for role,pattern in _EXACT_RFI_CONTENT_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match or not match.group('kind').casefold().startswith(('rfi','request')):continue
+        raw_identifier=match.group('identifier')
+        if re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier('RFI',raw_identifier)
+        if identifier:return identifier,role
+    return None
+
+
+def requires_rfi_content_index(question: str) -> bool:
+    return requested_rfi_content(question) is not None
+
+
 def requested_single_email_header(question: str) -> str | None:
     """Recognize an exact header question that refers to one otherwise-unspecified Email."""
     return next((field for field,pattern in _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS
@@ -1005,6 +1038,74 @@ def _workflow_index_exact_subject(
     value=next(iter(found.values()))['value']
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary file records the Subject for {label} as "{value}".'),
+        'citations':citations}
+
+
+def _workflow_index_rfi_role_documents(
+        identifier: str, role: str, workflow_index: dict | None) -> list[dict]:
+    if not isinstance(workflow_index,dict):return []
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict) or item.get('kind')!='RFI':continue
+        if normalize_identifier('RFI',item.get('identifier'))!=identifier:continue
+        return [member for member in item.get('members',[])
+                if isinstance(member,dict) and member.get('source')=='PRIMARY'
+                and member.get('role') in {role,'MIXED'} and member.get('document_id')]
+    return []
+
+
+def _rfi_content_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return explicit parser-scoped RFI Question or Response text without a model call."""
+    request=requested_rfi_content(question)
+    if not request:return None
+    identifier,role=request;target=('RFI',identifier);label=f'RFI {identifier}'
+    documents=_workflow_index_rfi_role_documents(identifier,role,workflow_index)
+    if not documents:return None
+    if len(documents)>1:
+        files=', '.join(f'"{str(item.get("file_name") or "Unknown file")}"'
+                        for item in documents[:3])
+        extra=f', plus {len(documents)-3} more files' if len(documents)>3 else ''
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {role.title()} for {label} was not answered locally because '
+            f'{len(documents)} primary sources share that explicit role: {files}{extra}. '
+            'Review the original sources.'),'citations':[]}
+    document_id=str(documents[0]['document_id'])
+    needle=f'rfi {identifier} > {role}'.casefold()
+    rows=db.all('''SELECT e.payload,d.name AS file_name
+                   FROM evidence e JOIN documents d ON d.id=e.document_id
+                   WHERE e.run_id=? AND e.document_id=?
+                     AND instr(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')),?)>0
+                     AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                     AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                   ORDER BY e.rowid LIMIT 33''',(run_id,document_id,needle))
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {role.title()} for {label} was not answered locally because more than 32 '
+            'source passages require review.'),'citations':[]}
+    passages=[];citations=[];total=0;seen=set()
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        if _workflow_identities(section)!={target}:continue
+        if (target,role) not in _workflow_rfi_role_values(section):continue
+        start=len(text)-len(text.lstrip());end=len(text.rstrip())
+        if start>=end:continue
+        value=text[start:end];key=' '.join(value.split()).casefold()
+        if key in seen:continue
+        seen.add(key);total+=len(value)
+        if total>_MAX_CONTEXT_CHARS:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The {role.title()} for {label} was not answered locally because its '
+                f'explicit source text exceeds {_MAX_CONTEXT_CHARS:,} characters.'),
+                'citations':[]}
+        passages.append(value);citations.append(citation(evidence,start,end,role='CONTEXT'))
+    if not passages:return None
+    content='\n\n'.join(passages)
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary source records the {role.title()} for {label} as:\n\n{content}'),
         'citations':citations}
 
 
@@ -2445,6 +2546,12 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(email_header['citations']),'cached':False}
+        rfi_content=_rfi_content_answer(self.db,run['id'],question,workflow_index)
+        if rfi_content:
+            return {'run_id':run['id'],'question':question,**rfi_content,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(rfi_content['citations']),'cached':False}
         exact_subject=_workflow_index_exact_subject(
             self.db,run['id'],question,workflow_index)
         if exact_subject:
