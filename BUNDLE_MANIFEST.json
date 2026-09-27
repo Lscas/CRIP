@@ -812,8 +812,8 @@
     },
     {
       "path": "changes/CR-0124.json",
-      "bytes": 1759,
-      "sha256": "e2aba36aaf8b2fefcc2718a46475aa03638eaaacc64cd6eb140ee50bea7c72cf"
+      "bytes": 1751,
+      "sha256": "1e4e8e3197ae60f8d054d4241af75e01aebb2cf5af802e2cd68b924aea16bd92"
     },
     {
       "path": "config/assembly_rules.json",

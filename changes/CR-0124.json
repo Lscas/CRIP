@@ -19,7 +19,7 @@
   "tests": [
     "tests/app/test_questions.py",
     "scripts/check_spec_sync.py",
-    "scripts/context_pack.py DEV-109",
+    "scripts/context_pack.py",
     "scripts/run_checks.py"
   ],
   "product_implementation_changed": true,
