@@ -28,6 +28,7 @@ from app.questions import (
     requested_email_thread, requested_email_workflow_relations,
     requested_single_email_header,
     requested_rfi_content, requested_rfi_spec_section, requested_submittal_field,
+    requested_workflow_clause_references,
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
@@ -41,6 +42,7 @@ from app.questions import (
     requires_rfi_spec_section_index,
     requires_submittal_field_index,
     requires_single_email_header_index,
+    requires_workflow_clause_reference_index,
     requires_workflow_date_index,
     requires_workflow_document_relation_index,
     requires_workflow_drawing_reference_index,
@@ -3992,6 +3994,212 @@ def test_exact_workflow_drawing_reference_caps_candidate_passages_before_parsing
 
 
 @pytest.mark.parametrize(('question','expected'),[
+    ('Which paragraphs does RFI 42 reference?',('RFI','42','PARAGRAPH')),
+    ('What clauses are mentioned in Submission 23-01?',('SUBMITTAL','23-01','CLAUSE')),
+    ('List the articles referenced by Request for Information No. 0042.',
+     ('RFI','42','ARTICLE')),
+    ('Which paragraphs, clauses, and articles does Submittal MEP-023 reference?',
+     ('SUBMITTAL','MEP-023','ALL')),
+    ('Show me the paras for RFI 42-1.',('RFI','42-1','PARAGRAPH')),
+    ('Which paragraph applies to RFI 42?',None),
+    ('Compare the clauses referenced by RFI 42 and RFI 43.',None),
+    ('Which articles does this Submittal reference?',None),
+])
+def test_exact_workflow_clause_reference_question_boundary(question,expected):
+    assert requested_workflow_clause_references(question)==expected
+    assert requires_workflow_clause_reference_index(question) is bool(expected)
+
+
+def test_exact_workflow_clause_references_merge_typed_primary_sources_without_model(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',[
+            'RFI 42: Follow Paragraph 2.3.1 and Clause 4.5.6.']),
+        ('RFI-42-response.pdf',[
+            'Para. 2.3.1 remains applicable; coordinate Article 1.2a.']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=? ORDER BY d.name''',
+                (run['id'],))
+    summaries=[]
+    for row in rows:
+        payload=json.loads(row['payload'])
+        role='QUESTION' if 'question' in row['name'].casefold() else 'RESPONSE'
+        payload['locator']['section']=f'RFI 42 > {role}'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        summaries.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':f'RFI_{role}','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':role,'status':None}]}})
+    index=build_workflow_index(summaries)
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('clause references used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'Which paragraphs, clauses, and articles does RFI 42 reference?',index)
+
+    assert result['status']=='ANSWERED' and result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'Paragraph 2.3.1' in result['answer']
+    assert 'Clause 4.5.6' in result['answer'] and 'Article 1.2a' in result['answer']
+    assert result['answer'].casefold().count('2.3.1')==1
+    assert {item['quote'] for item in result['citations']}=={
+        'RFI 42: Follow Paragraph 2.3.1 and Clause 4.5.6.',
+        'Para. 2.3.1 remains applicable; coordinate Article 1.2a.'}
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_paragraph_request_keeps_reference_types_distinct(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('RFI-42.pdf',[
+        'RFI 42: Follow Paragraph 2.3.1 and Article 2.3.1.',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('paragraph references used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which paragraphs does RFI 42 reference?',index)
+
+    assert result['status']=='ANSWERED'
+    assert 'Paragraph 2.3.1' in result['answer'] and 'Article 2.3.1' not in result['answer']
+
+
+def test_exact_submittal_clause_reference_accepts_current_email_body(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('review.eml',[
+        'Submittal 23-01 references Clause 3.4.5 for coordination.',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload'])
+    payload['locator']['section']='EMAIL > BODY > SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'review.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL',
+            'status':'PENDING'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email clause reference used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which clauses does Submittal 23-01 reference?',index)
+
+    assert result['status']=='ANSWERED' and 'Clause 3.4.5' in result['answer']
+    assert result['citations'][0]['quote']==(
+        'Submittal 23-01 references Clause 3.4.5 for coordination.')
+
+
+@pytest.mark.parametrize('section',[
+    'EMAIL > QUOTED HISTORY > RFI 42',
+    'RFI 43',
+])
+def test_exact_workflow_clause_reference_does_not_borrow_wrong_or_quoted_scope(
+        client, project, monkeypatch, section):
+    run=_source_evidence(client,project,[('reply.eml',['Follow Paragraph 2.3.1.'])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'reply.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which paragraphs does RFI 42 reference?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_clause_reference_rejects_multi_identity_statement(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('combined.pdf',[
+        'RFI 42 and RFI 43 reference Paragraph 2.3.1.',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'combined.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which paragraphs does RFI 42 reference?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_clause_reference_caps_distinct_values(monkeypatch):
+    text='RFI 42: '+', '.join(f'Paragraph 2.3.{value}' for value in range(1,10))+'.'
+    evidence={'evidence_id':'EV-CLAUSES','document_id':'D-1','file_sha256':'a'*64,
+              'raw_text':text,'locator':{'section':'RFI 42'}}
+    class ClauseDatabase:
+        def all(self,*_args,**_kwargs):return [{'payload':json.dumps(evidence),
+                                               'file_name':'rfi.pdf'}]
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','file_name':'rfi.pdf','source':'PRIMARY'}]}]}
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('large clause list used retrieval'))
+
+    result=ProjectQuestions(ClauseDatabase(),object()).ask(
+        {'id':'RUN-MANY-CLAUSES','status':'COMPLETED'},
+        'Which paragraphs does RFI 42 reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 8 explicit requested paragraph, clause or article references' in result['answer']
+    assert len(result['citations'])==1
+
+
+def test_exact_workflow_clause_reference_caps_primary_sources_before_evidence_read():
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':f'D-{value}','file_name':f'{value}.pdf','source':'PRIMARY'}
+        for value in range(33)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large clause question read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-LARGE-CLAUSE','status':'COMPLETED'},
+        'Which clauses does Submittal 23-01 reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_workflow_clause_reference_caps_candidate_passages_before_parsing():
+    class LargeDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','file_name':'rfi.pdf','source':'PRIMARY'}]}]}
+
+    result=ProjectQuestions(LargeDatabase(),object()).ask(
+        {'id':'RUN-LARGE-CLAUSE-EVIDENCE','status':'COMPLETED'},
+        'Which clauses does RFI 42 reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in result['answer']
+    assert result['citations']==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
     ('What is the Spec Section for Submittal 23-01?',('23-01','SPEC_SECTION')),
     ('What specification section does Submission 23 05 00 - 01 reference?',
      ('23 05 00-01','SPEC_SECTION')),
@@ -4393,6 +4601,34 @@ def test_question_api_loads_workflow_index_for_exact_drawing_references(
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert 'Sheet A1.01' in result['answer']
     assert result['citations'][0]['quote']=='RFI 42 response: Coordinate Sheet A1.01.'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_workflow_index_for_exact_clause_references(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-response.pdf',['RFI 42 response: Follow Paragraph 2.3.1.']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'RFI_RESPONSE','workflow_contexts':[{
+        'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('clause route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'Which paragraphs does RFI 42 reference?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'Paragraph 2.3.1' in result['answer']
+    assert result['citations'][0]['quote']=='RFI 42 response: Follow Paragraph 2.3.1.'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

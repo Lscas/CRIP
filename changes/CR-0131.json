@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0131",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-CLAUSE-REFERENCE-LOCAL-001"],
+  "summary": "Answer strict exact RFI/Submittal Paragraph, Clause and Article-reference questions from typed same-workflow primary evidence before model dispatch.",
+  "decision_refs": [
+    "The active objective requires efficient accurate questions across RFI, Submittal and Email content",
+    "The shared answer validator already defines an atomic typed dotted-reference boundary",
+    "The existing workflow index and immutable evidence can answer exact reference lists without a second index or provider cost"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-116.json", "changes/CR-0131.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact RFI or Submittal and an explicit reference type use the local shortcut.",
+    "Only typed dotted Paragraph, Para, Clause or Article values in exact primary evidence participate; unlabelled and date-shaped values do not.",
+    "More than eight distinct references, wrong or multiple workflow scope, quoted history, vision narration and more than 32 primary files or candidate passages fail closed.",
+    "The shortcut does not infer hierarchy, applicability, revision, chronology, authority or which source controls."
+  ]
+}

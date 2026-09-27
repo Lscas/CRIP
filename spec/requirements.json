@@ -1592,6 +1592,19 @@
       "spec_section": "docs/PROJECT_QUESTIONS.md"
     },
     {
+      "id": "FR-QA-WORKFLOW-CLAUSE-REFERENCE-LOCAL-001",
+      "title": "Answer exact workflow paragraph and clause-reference questions locally",
+      "statement": "Strict questions asking which explicit Paragraph, Clause or Article identifiers one exact RFI or Submittal references should reuse its indexed primary evidence before model dispatch.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions name one exact RFI or Submittal and request Paragraph/Para, Clause, Article or all three reference types. Existing non-vision evidence from at most 32 indexed primary files may return at most eight distinct explicitly typed dotted identifiers only when each statement is scoped to that exact workflow item. Para and Paragraph deduplicate while Paragraph, Clause and Article remain distinct; current Email-body primary scopes may participate, and every result retains exact inline citations with zero provider or budget action.",
+        "Another or multiple workflow identities in the supporting statement, quoted Email history, vision narration, date-shaped or unlabelled values, more than 32 primary files, more than 32 candidate passages or more than eight distinct requested identifiers fail closed. Missing explicit references remain on ordinary grounded Q&A; the shortcut does not infer applicability, hierarchy, revision, chronology, authority or controlling source and adds no dependency or second index."
+      ],
+      "decision_source": "The active objective requires accurate adaptable questions across RFI, Submittal and Email content, and the existing atomic typed-clause guard already defines the safe explicit reference boundary.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
       "id": "FR-QA-SUBMITTAL-FIELD-LOCAL-001",
       "title": "Answer explicit Submittal fields locally",
       "statement": "A strict direct request for one exact Submittal Spec Section, Description or Review Comments value should reuse explicit labelled project evidence before model dispatch.",

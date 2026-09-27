@@ -1117,6 +1117,15 @@ Strict questions asking which explicit drawings, sheets or details one exact RFI
 - Bounded English questions name one exact RFI or Submittal and request drawings/sheets, details, or all drawing references. Existing non-vision evidence from at most 32 indexed primary files may return at most eight distinct explicitly prefixed Sheet, Drawing, Dwg or Detail identifiers only when each statement is scoped to that exact workflow item. Equivalent prefixes and dash glyphs deduplicate by complete identifier, current Email-body primary scopes may participate, and every result retains exact inline citations with zero provider or budget action.
 - Another or multiple workflow identities in the supporting statement, quoted Email history, vision narration, more than 32 primary files, more than 32 candidate passages or more than eight distinct requested identifiers fail closed. Missing explicit references remain on ordinary grounded Q&A; the shortcut does not infer an unlabelled code, applicability, discipline, revision, chronology, authority or controlling source and adds no dependency or second index.
 
+## FR-QA-WORKFLOW-CLAUSE-REFERENCE-LOCAL-001 · Answer exact workflow paragraph and clause-reference questions locally
+
+优先级：P0；状态：implemented
+
+Strict questions asking which explicit Paragraph, Clause or Article identifiers one exact RFI or Submittal references should reuse its indexed primary evidence before model dispatch.
+
+- Bounded English questions name one exact RFI or Submittal and request Paragraph/Para, Clause, Article or all three reference types. Existing non-vision evidence from at most 32 indexed primary files may return at most eight distinct explicitly typed dotted identifiers only when each statement is scoped to that exact workflow item. Para and Paragraph deduplicate while Paragraph, Clause and Article remain distinct; current Email-body primary scopes may participate, and every result retains exact inline citations with zero provider or budget action.
+- Another or multiple workflow identities in the supporting statement, quoted Email history, vision narration, date-shaped or unlabelled values, more than 32 primary files, more than 32 candidate passages or more than eight distinct requested identifiers fail closed. Missing explicit references remain on ordinary grounded Q&A; the shortcut does not infer applicability, hierarchy, revision, chronology, authority or controlling source and adds no dependency or second index.
+
 ## FR-QA-SUBMITTAL-FIELD-LOCAL-001 · Answer explicit Submittal fields locally
 
 优先级：P0；状态：implemented

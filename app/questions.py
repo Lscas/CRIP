@@ -300,6 +300,21 @@ _EXACT_WORKFLOW_DRAWING_REFERENCE_QUESTIONS = (
         {_WORKFLOW_DRAWING_REFERENCE_KIND}\s+(?:for|in|referenced\s+by)\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_WORKFLOW_CLAUSE_REFERENCE_KIND = (
+    r'(?P<clause_kind>paragraphs?\s*,\s*clauses?\s*,?\s*(?:and\s+)?articles?|'
+    r'paragraphs?|paras?\.?|clauses?|articles?)'
+)
+_EXACT_WORKFLOW_CLAUSE_REFERENCE_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_WORKFLOW_CLAUSE_REFERENCE_KIND}\s+
+        (?:does|did)\s+{_WORKFLOW_EXACT_ITEM}\s+(?:reference|mention|list)
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_WORKFLOW_CLAUSE_REFERENCE_KIND}\s+
+        (?:are|were)\s+(?:referenced|mentioned|listed)\s+(?:in|by|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        {_WORKFLOW_CLAUSE_REFERENCE_KIND}\s+(?:for|in|referenced\s+by)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+)
 _SUBMITTAL_FIELD_LABELS = {
     'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
     'DESCRIPTION':r'(?:submittal\s+description|description)',
@@ -984,6 +999,29 @@ def requested_workflow_drawing_references(question: str) -> tuple[str,str,str] |
 
 def requires_workflow_drawing_reference_index(question: str) -> bool:
     return requested_workflow_drawing_references(question) is not None
+
+
+def requested_workflow_clause_references(question: str) -> tuple[str,str,str] | None:
+    """Recognize one exact workflow request for typed dotted references."""
+    for pattern in _EXACT_WORKFLOW_CLAUSE_REFERENCE_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if not identifier:continue
+        requested_kind=match.group('clause_kind').casefold()
+        scope=('ALL' if ',' in requested_kind else 'PARAGRAPH'
+               if requested_kind.startswith(('paragraph','para')) else
+               'CLAUSE' if requested_kind.startswith('clause') else 'ARTICLE')
+        return workflow,identifier,scope
+    return None
+
+
+def requires_workflow_clause_reference_index(question: str) -> bool:
+    return requested_workflow_clause_references(question) is not None
 
 
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
@@ -1729,6 +1767,82 @@ def _workflow_drawing_reference_answer(
             'Review the cited primary sources.'),'citations':citations}
     kind_name=('details' if scope=='DETAIL' else 'drawings or sheets' if scope=='DRAWING'
                else 'drawing, sheet or detail references')
+    values='; '.join(entry['display'] for entry in found.values())
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary evidence explicitly references these {kind_name} for '
+        f'{label}: {values}.'),'citations':citations}
+
+
+def _workflow_clause_reference_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """List explicit typed dotted references in one exact workflow scope."""
+    request=requested_workflow_clause_references(question)
+    if not request:return None
+    workflow,identifier,scope=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The paragraph, clause or article references for {label} were not answered '
+            f'locally because more than {_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary '
+            'files share that identifier. Review the Workflow relationships section.'),
+            'citations':[]}
+    terms=(('paragraph','para') if scope=='PARAGRAPH' else (scope.casefold(),)
+           if scope!='ALL' else ('paragraph','para','clause','article'))
+    placeholders=','.join('?' for _ in document_ids)
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids,*terms])
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The paragraph, clause or article references for {label} were not answered '
+            'locally because more than 32 candidate source passages require review.'),
+            'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        if _workflow_identities(section)!={target}:continue
+        for match in _CLAUSE_IDENTIFIER.finditer(text):
+            source_kind=('PARAGRAPH' if match.group('kind').casefold().startswith('para')
+                         else match.group('kind').upper())
+            if scope!='ALL' and source_kind!=scope:continue
+            value=match.group('label').upper()
+            if re.fullmatch(r'\d{4}\.\d{1,2}\.\d{1,2}',value):continue
+            left,right=statement_span(text,match.start(),match.end());quote=text[left:right]
+            line_start=max(text.rfind('\n',0,left),text.rfind('\r',0,left))+1
+            if text[line_start:left].rstrip().casefold().endswith('para.'):
+                left=line_start;quote=text[left:right]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            key=source_kind+':'+value
+            entry=found.setdefault(key,{'display':match.group(0),'citations':[]})
+            item=citation(evidence,left,right,role='CONTEXT')
+            citation_key=(item.get('evidence_id'),item.get('quote'))
+            if citation_key not in {
+                    (citation_item.get('evidence_id'),citation_item.get('quote'))
+                    for citation_item in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[];seen=set()
+    for entry in found.values():
+        for item in entry['citations']:
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in seen:seen.add(key);citations.append(item)
+    if len(found)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} contains more than {_MAX_RESULTS} explicit requested paragraph, clause '
+            'or article references. Review the cited primary sources.'),'citations':citations}
+    kind_name=(scope.title().lower()+'s' if scope!='ALL'
+               else 'paragraph, clause or article references')
     values='; '.join(entry['display'] for entry in found.values())
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary evidence explicitly references these {kind_name} for '
@@ -3801,6 +3915,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(drawing_references['citations']),'cached':False}
+        clause_references=_workflow_clause_reference_answer(
+            self.db,run['id'],question,workflow_index)
+        if clause_references:
+            return {'run_id':run['id'],'question':question,**clause_references,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(clause_references['citations']),'cached':False}
         submittal_field=_submittal_field_answer(
             self.db,run['id'],question,workflow_index)
         if submittal_field:
