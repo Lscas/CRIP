@@ -1726,6 +1726,20 @@
       ],
       "decision_source": "The active objective requires faster and more accurate file-grounded questions across RFI, Submittal and Email content while keeping explicit actions distinct from recommendations and ordinary prose.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-WORKFLOW-METADATA-LOCAL-001",
+      "title": "Answer exact workflow coordination metadata locally",
+      "statement": "Strict questions for one exact RFI or Submittal Ball in Court, Priority, Discipline or Location field should reuse explicit workflow-scoped primary evidence before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions name one exact RFI or Submittal and one supported coordination field. Existing non-vision evidence from at most 32 indexed primary files may return locally only when an explicit line-leading Ball in Court/Ball-In-Court, Priority, Discipline or Location label is scoped to that exact workflow item. Each role remains distinct; one complete value returns with exact inline citations and zero provider or budget action, while equivalent Ball-in-Court punctuation and case/whitespace merge and different values fail closed.",
+        "Current Email-body primary workflow scopes may participate. Assigned To, Responsible Party, Email Priority/Importance headers, quoted history, signatures, ordinary prose, another or multiple workflow identity, vision narration, more than 32 primary files or more than 32 candidate passages cannot produce the local answer. A recognized strict question with no supported explicit field fails closed before ordinary retrieval.",
+        "The shared final-answer validator preserves the exact workflow identity, field role and complete value in ordinary answers and source findings. It rejects omissions, role swaps, Email-prefixed substitution, cross-item or cross-source borrowing and conflicting cited values. The implementation does not infer responsibility, applicability, routing, urgency, trade, place, approval, chronology, authority or action ownership and adds no dependency, parser change or second index."
+      ],
+      "decision_source": "The active objective requires faster and more accurate file-grounded questions across RFI, Submittal and Email content, and Ball in Court must remain distinct from assignment or inferred responsibility.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

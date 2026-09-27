@@ -23,6 +23,7 @@ from app.questions import (
     _spec_section_values, _workflow_identities,
     _workflow_party_claim_values, _workflow_party_source_values,
     _workflow_action_claim_values, _workflow_action_source_values,
+    _workflow_metadata_claim_values, _workflow_metadata_source_values,
     _workflow_subject_claim_values, _workflow_subject_source_values,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -35,7 +36,7 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
-    requested_workflow_action, requested_workflow_party,
+    requested_workflow_action, requested_workflow_metadata, requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
@@ -53,7 +54,8 @@ from app.questions import (
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
-    requires_workflow_action_index, requires_workflow_party_index,
+    requires_workflow_action_index, requires_workflow_metadata_index,
+    requires_workflow_party_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -7288,3 +7290,279 @@ def test_named_email_action_question_cannot_borrow_another_file(client, project)
 
     with pytest.raises(ValueError,match='requires an explicit current-body field'):
         validate_answer_model(borrowed,evidence,question)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Who has the ball in court for RFI 42?',('RFI','42','BALL_IN_COURT')),
+    ('What is the Ball in Court field for Request for Information No. 0042?',
+     ('RFI','42','BALL_IN_COURT')),
+    ('What is the priority of RFI ARC-42?',('RFI','ARC-42','PRIORITY')),
+    ('Show me the Discipline field for Submittal 23-01.',
+     ('SUBMITTAL','23-01','DISCIPLINE')),
+    ('What is the location for Submission MEP-023?',
+     ('SUBMITTAL','MEP-023','LOCATION')),
+    ('Who should have the ball in court for RFI 42?',None),
+    ('What is the priority of RFI 42 and RFI 43?',None),
+    ('Where is RFI 42 located?',None),
+    ('What is the email priority?',None),
+])
+def test_exact_workflow_metadata_question_boundary(question,expected):
+    assert requested_workflow_metadata(question)==expected
+    assert requires_workflow_metadata_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source'),[
+    ('RFI-42.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','Who has the ball in court for RFI 42?',
+     'Ball in Court: Project Architect'),
+    ('RFI-ARC-42.pdf','RFI_QUESTION',
+     {'workflow_type':'RFI','identifier':'ARC-42','role':'QUESTION','status':'OPEN'},
+     'RFI ARC-42 > QUESTION','What is the priority of RFI ARC-42?',
+     'Priority: High'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','What is the discipline for Submittal 23-01?',
+     'Discipline: Mechanical'),
+    ('Submittal-MEP-023.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'MEP-023','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL MEP-023','What is the location for Submittal MEP-023?',
+     'Location: Level 2 Mechanical Room'),
+])
+def test_exact_workflow_metadata_answers_from_explicit_field_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context, section,
+        question, source):
+    run=_source_evidence(client,project,[(file_name,[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+        lambda *_args,**_kwargs:pytest.fail('workflow metadata used ordinary retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source
+    assert source.split(': ',1)[1] in result['answer']
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_metadata_merges_alias_format_and_blocks_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Ball in Court: Project Architect']),
+        ('RFI-42-response.pdf',['Ball-In-Court: project architect']),
+        ('RFI-42-addendum.pdf',['Ball in Court: General Contractor']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('metadata conflict used retrieval'))
+
+    merged=ProjectQuestions(db,object()).ask(
+        run,'Who has the ball in court for RFI 42?',build_workflow_index(contexts[:2]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'Who has the ball in court for RFI 42?',build_workflow_index(contexts))
+
+    assert merged['status']=='ANSWERED' and len(merged['citations'])==2
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in conflicted['answer']
+    assert len(conflicted['citations'])==3
+
+
+@pytest.mark.parametrize(('section','source'),[
+    ('RFI 42 > RESPONSE','The project architect currently has the ball.'),
+    ('RFI 42 > RESPONSE','Assigned To: Project Architect'),
+    ('RFI 42 > RESPONSE','Email Priority: High'),
+    ('EMAIL > HEADERS > RFI 42','Priority: High'),
+    ('EMAIL > QUOTED HISTORY > RFI 42','Priority: High'),
+    ('EMAIL > SIGNATURE > RFI 42','Priority: High'),
+    ('RFI 43 > RESPONSE','Priority: High'),
+])
+def test_exact_workflow_metadata_does_not_infer_or_cross_scope(
+        client, project, monkeypatch, section, source):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42-response.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+        lambda *_args,**_kwargs:pytest.fail('unsupported metadata used ordinary retrieval'))
+    question=('Who has the ball in court for RFI 42?'
+              if 'ball' in source.casefold() or source.startswith('Assigned')
+              else 'What is the priority of RFI 42?')
+
+    result=ProjectQuestions(db,object()).ask(run,question,index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE' and result['citations']==[]
+
+
+def test_exact_workflow_metadata_accepts_current_email_body(client, project, monkeypatch):
+    source='Priority: Urgent'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY > RFI 42'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+        lambda *_args,**_kwargs:pytest.fail('current Email metadata used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What is the priority of RFI 42?',index)
+
+    assert result['status']=='ANSWERED' and result['citations'][0]['quote']==source
+
+
+def test_workflow_metadata_caps_fail_before_unbounded_work(monkeypatch):
+    primary_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    passage_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('metadata primary-file cap read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('metadata cap used retrieval'))
+
+    primary=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-METADATA-CAP','status':'COMPLETED'},
+        'What is the priority of RFI 42?',primary_index)
+    passages=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-METADATA-CAP','status':'COMPLETED'},
+        'What is the priority of RFI 42?',passage_index)
+
+    assert primary['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in primary['answer']
+    assert passages['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in passages['answer']
+
+
+@pytest.mark.parametrize('question',[
+    'What action is required for RFI 42?',
+    'What is the priority of RFI 42?',
+    'What action is required in the email?',
+])
+def test_strict_action_and_metadata_questions_fail_closed_without_indexed_primary_source(
+        monkeypatch, question):
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('missing indexed source read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('missing indexed source used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-NO-PRIMARY','status':'COMPLETED'},question,{'items':[]})
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[] and result['retrieved_count']==0
+
+
+def test_question_api_loads_workflow_index_for_exact_workflow_metadata(
+        client, project, monkeypatch):
+    source='Discipline: Electrical'
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('metadata API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the discipline for Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json();assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']==source
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_metadata_parser_preserves_identity_role_and_complete_value():
+    source=('RFI 42\nPriority: High\n'
+            'RFI 43\nLocation: Level 2 Mechanical Room')
+
+    assert _workflow_metadata_source_values(source)=={
+        (('RFI','42'),'PRIORITY','high'),
+        (('RFI','43'),'LOCATION','level 2 mechanical room')}
+    assert _workflow_metadata_claim_values(
+        'RFI 42 Priority: “High”.')=={(('RFI','42'),'PRIORITY','high')}
+
+
+def test_answer_accepts_same_exact_workflow_metadata_field(client, project):
+    source='Ball in Court: Project Architect'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='Who has the ball in court for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    grounded={'status':'ANSWERED','answer':'RFI 42 Ball in Court: “Project Architect”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+@pytest.mark.parametrize(('source','answer'),[
+    ('Priority: High','RFI 42 Priority: “Low”.'),
+    ('Discipline: Mechanical','RFI 42 Location: “Mechanical”.'),
+    ('Assigned To: Project Architect','RFI 42 Ball in Court: “Project Architect”.'),
+    ('Email Priority: High','RFI 42 Email Priority: “High”.'),
+])
+def test_answer_rejects_inferred_role_swapped_or_email_workflow_metadata(
+        client, project, source, answer):
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='What is the priority of RFI 42?'
+    row=client.app.state.db.one(
+        '''SELECT e.payload,d.name FROM evidence e JOIN documents d ON d.id=e.document_id
+           WHERE e.run_id=?''',(run['id'],))
+    item=json.loads(row['payload']);item['file_name']=row['name']
+    item['locator']['section']='RFI 42 > RESPONSE';evidence=[item]
+    wrong={'status':'ANSWERED','answer':answer,'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_metadata_question_requires_explicit_scoped_field_and_no_conflict(
+        client, project):
+    source='Priority: High'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='What is the priority of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    evasive={'status':'ANSWERED','answer':'The item is marked high.','source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit scoped field'):
+        validate_answer_model(evasive,evidence,question)
+
+    conflict='Priority: High\nPriority: Urgent'
+    conflict_run=_source_evidence(client,project,[('RFI-42-conflict.pdf',[conflict])])
+    conflict_evidence=retrieve_evidence(client.app.state.db,conflict_run,question)
+    conflict_evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    selected={'status':'ANSWERED','answer':'RFI 42 Priority: “High”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':conflict}]}
+    with pytest.raises(ValueError,match='conflicting workflow metadata field values'):
+        validate_answer_model(selected,conflict_evidence,question)
