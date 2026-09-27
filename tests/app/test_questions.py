@@ -13,7 +13,7 @@ from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
     _email_address_role_values, _email_address_values, _numeric_unit_values,
-    _revision_label_values,
+    _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -275,7 +275,83 @@ def test_comparison_question_keeps_spec_rfi_submittal_and_email_sources(client, 
 def test_source_diversity_requires_comparison_or_multiple_named_sources():
     assert requires_source_diversity('Compare the pipe requirements.') is True
     assert requires_source_diversity('What do the specification and RFI 42 require?') is True
+    assert requires_source_diversity(
+        'What do Drawing A1.01 and the specification require?') is True
+    assert requires_source_diversity('Which sheet applies to RFI 42?') is False
     assert requires_source_diversity('What is the pipe size?') is False
+
+
+def test_drawing_and_specification_question_keeps_both_sources_under_candidate_pressure(
+        client, project):
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[
+            'Specification rated wall requirements reference Drawing A1.01.' for _ in range(160)]),
+        ('architectural-drawings.pdf',[
+            'Drawing A1.01 rated wall type W1 requires a fire-rated assembly.']),
+    ])
+    question='What do Drawing A1.01 and the specification require for the rated wall?'
+
+    db=client.app.state.db
+    found=retrieve_evidence(db,run,question)
+    db.evidence_search_available=False
+    fallback=retrieve_evidence(db,run,question)
+
+    for result in (found,fallback):
+        assert {item['file_name'] for item in result}>={
+            'project-spec.txt','architectural-drawings.pdf'}
+        assert {_source_family(item) for item in result}>={'SPECIFICATION','DRAWING'}
+
+
+def test_drawing_comparison_requires_a_drawing_finding(client, project):
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',['Specification requires a fire-rated wall assembly.']),
+        ('architectural-drawings.pdf',[
+            'Drawing A1.01 labels wall type W1 as fire rated.']),
+    ])
+    question='What do Drawing A1.01 and the specification require for the rated wall?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={
+        'status':'ANSWERED','answer':'Both sources require a fire-rated wall.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification requires a fire-rated wall assembly.',
+             'citations':[{'evidence_id':'EV-SOURCE-1',
+                           'quote':'Specification requires a fire-rated wall assembly.'}]},
+            {'source_type':'DRAWING','file_name':'architectural-drawings.pdf',
+             'statement':'Drawing A1.01 labels wall type W1 as fire rated.',
+             'citations':[{'evidence_id':'EV-SOURCE-2',
+                           'quote':'Drawing A1.01 labels wall type W1 as fire rated.'}]},
+        ],
+    }
+
+    validate_answer_model(grounded,evidence,question)
+    with pytest.raises(ValueError,match='omitted a requested source family'):
+        validate_answer_model(
+            {**grounded,'source_findings':grounded['source_findings'][:1]},evidence,question)
+
+
+def test_shop_drawing_stays_submittal_unless_another_drawing_is_named():
+    assert set(_requested_source_families(
+        'What do the shop drawing and specification require?'))=={
+            'SUBMITTAL','SPECIFICATION'}
+    assert set(_requested_source_families(
+        'Compare the shop drawing, architectural drawings, and specification.'))=={
+            'SUBMITTAL','DRAWING','SPECIFICATION'}
+
+
+@pytest.mark.parametrize(('evidence','expected'),[
+    ({'file_name':'A101.pdf','raw_text':'Rated wall type W1.',
+      'locator':{'sheet':'A1.01','section':None}},'DRAWING'),
+    ({'file_name':'coordination.dwg','raw_text':'Layer schedule.',
+      'locator':{'sheet':None,'section':None}},'DRAWING'),
+    ({'file_name':'project-spec.txt','raw_text':'Sheet A1.01 is referenced.',
+      'locator':{'sheet':None,'section':'Section 07 84 00'}},'SPECIFICATION'),
+    ({'file_name':'shop-drawing-23-01.pdf','raw_text':'Product dimensions.',
+      'locator':{'sheet':'SD1.01','section':None}},'SUBMITTAL'),
+])
+def test_drawing_source_family_uses_bounded_signals_after_stronger_types(evidence,expected):
+    assert _source_family(evidence)==expected
 
 
 def test_non_comparison_question_keeps_relevance_first_results(client, project):

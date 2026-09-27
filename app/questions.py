@@ -65,15 +65,18 @@ _PHRASE_ALIASES = (
 )
 _COMPARISON_INTENT = re.compile(
     r'\b(?:compare|comparison|difference|differences|differ|changed|changes|versus|vs|across)\b',re.I)
+_SHOP_DRAWING_QUERY = re.compile(r'\bshop\s+drawings?\b',re.I)
 _QUERY_SOURCE_PATTERNS = (
     ('SPECIFICATION',re.compile(r'\b(?:spec|specification|specifications)\b',re.I)),
     ('RFI',re.compile(r'\b(?:rfi|request\s+for\s+information)\b',re.I)),
     ('SUBMITTAL',re.compile(r'\b(?:submittal|shop\s+drawing|product\s+data)\b',re.I)),
     ('EMAIL',re.compile(r'\b(?:email|e-mail|message|correspondence)\b',re.I)),
+    ('DRAWING',re.compile(r'\b(?:drawings|sheets|plans|plan\s+set)\b',re.I)),
 )
 _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
+_DRAWING_HEADER = re.compile(r'(?im)^\s*(?:sheet|drawing|dwg\.?|detail)\b')
 _CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
 _SPEC_SECTION_VALUE = re.compile(r'''(?ix)(?<!\w)
     (?:section|csi(?:\s+section)?|spec(?:ification)?(?:\s+section)?)
@@ -371,6 +374,18 @@ _FAMILY_SQL_FILTERS = {
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%spec%'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.locator.section'),''))) GLOB '[0-9][0-9] [0-9][0-9]*'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.locator.section'),''))) GLOB 'section [0-9][0-9] [0-9][0-9]*')''',
+    'DRAWING':'''(COALESCE(TRIM(json_extract(e.payload,'$.locator.sheet')),'')!=''
+        OR LOWER(d.name) LIKE '%.dwg' OR LOWER(d.name) LIKE '%.dxf'
+        OR LOWER(d.name) LIKE '%.dgn' OR LOWER(d.name) LIKE '%.rvt'
+        OR LOWER(d.name) LIKE '%.ifc'
+        OR (LOWER(d.name) LIKE '%drawing%'
+            AND LOWER(d.name) NOT GLOB '*shop*drawing*')
+        OR LOWER(d.name) LIKE '%plan-set%' OR LOWER(d.name) LIKE '%plan_set%'
+        OR LOWER(d.name) LIKE '%plans%' OR LOWER(d.name) LIKE '%sheet%'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'sheet %'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'drawing %'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'dwg %'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'detail %')''',
 }
 
 
@@ -459,7 +474,10 @@ def requires_source_diversity(question: str) -> bool:
 
 
 def _requested_source_families(question: str) -> tuple[str,...]:
-    return tuple(family for family,pattern in _QUERY_SOURCE_PATTERNS if pattern.search(question))
+    drawing_text=_SHOP_DRAWING_QUERY.sub('',question)
+    return tuple(family for family,pattern in _QUERY_SOURCE_PATTERNS
+                 if ((pattern.search(drawing_text) or _DRAWING_IDENTIFIER.search(drawing_text))
+                     if family=='DRAWING' else pattern.search(question)))
 
 
 @lru_cache(maxsize=256)
@@ -790,6 +808,12 @@ def _source_family(evidence: dict) -> str:
             or _term_pattern('spec').search(section)
             or _term_pattern('specification').search(section) or _CSI_SECTION.search(section)):
         return 'SPECIFICATION'
+    sheet=str(locator.get('sheet') or '').strip()
+    if (sheet or name.endswith(('.dwg','.dxf','.dgn','.rvt','.ifc'))
+            or _term_pattern('drawing').search(name) or _term_pattern('drawings').search(name)
+            or _term_pattern('plans').search(name) or _term_pattern('sheet').search(name)
+            or _term_pattern('sheets').search(name) or _DRAWING_HEADER.search(text)):
+        return 'DRAWING'
     return 'OTHER'
 
 

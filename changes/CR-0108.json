@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0108",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Add Drawing as a first-class bounded project-question source family while preserving Shop Drawing as Submittal and excluding model-vision narration.",
+  "decision_refs": [
+    "The user requested file-grounded project questions modeled on Trunk Tools",
+    "The active objective requires accuracy and adaptability across construction content including RFI, Submittal and Email",
+    "An offline reproduction proved that a question naming Drawing and Specification recognized only Specification and classified Drawing evidence as OTHER"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/schemas/project-answer.schema.json",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-087.json", "tasks/DEV-088.json", "tasks/DEV-093.json",
+    "changes/CR-0108.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective and explicit Trunk Tools-style file-grounded question request authorize bounded source coverage improvements.",
+  "known_limitations": [
+    "Drawing classification is conservative and deterministic; it does not infer document type from arbitrary prose or inspect image pixels.",
+    "Text-layer/OCR/CAD evidence remains eligible, but MODEL_VISION_OUTPUT and VISION evidence remain excluded from project questions.",
+    "The source-family label does not determine drawing applicability, discipline, revision, contractual authority or precedence."
+  ]
+}

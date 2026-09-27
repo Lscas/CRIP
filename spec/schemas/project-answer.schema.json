@@ -25,7 +25,7 @@
       "items": {
         "type": "object",
         "properties": {
-          "source_type": {"enum": ["SPECIFICATION", "RFI", "SUBMITTAL", "EMAIL", "OTHER"]},
+          "source_type": {"enum": ["DRAWING", "SPECIFICATION", "RFI", "SUBMITTAL", "EMAIL", "OTHER"]},
           "file_name": {"type": "string", "minLength": 1, "maxLength": 240},
           "statement": {"type": "string", "minLength": 1, "maxLength": 1500},
           "citations": {
