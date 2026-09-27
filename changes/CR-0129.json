@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0129",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-RFI-SPEC-SECTION-LOCAL-001"],
+  "summary": "Answer strict exact RFI Spec Section questions from explicitly labelled same-RFI primary evidence before model dispatch.",
+  "decision_refs": [
+    "The active objective requires efficient and accurate file-grounded support across RFI, Submittal and Email content",
+    "Submittal already exposes an exact labelled Spec Section while RFI retained only model-backed access",
+    "The existing workflow index and immutable evidence can answer the exact field without a second index or provider cost"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-114.json", "changes/CR-0129.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact RFI and its Spec Section use the local shortcut.",
+    "Only explicit Spec Section or Specification Section labels in exact primary evidence participate; unlabeled CSI values do not.",
+    "Conflicting values, wrong or multiple RFI scope, quoted history, vision narration and more than 32 primary files or candidate passages fail closed.",
+    "The shortcut does not infer applicability, section hierarchy, revision, status or controlling authority."
+  ]
+}

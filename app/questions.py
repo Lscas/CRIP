@@ -931,6 +931,23 @@ def requires_rfi_content_index(question: str) -> bool:
     return requested_rfi_content(question) is not None
 
 
+def requested_rfi_spec_section(question: str) -> str | None:
+    """Recognize one direct labelled Spec Section request for one exact RFI."""
+    for field,pattern in _EXACT_SUBMITTAL_FIELD_QUESTIONS:
+        if field!='SPEC_SECTION':continue
+        match=pattern.fullmatch(question)
+        if not match or not match.group('kind').casefold().startswith(('rfi','request')):
+            continue
+        raw_identifier=match.group('identifier')
+        if re.search(r'\s',raw_identifier):continue
+        if identifier:=normalize_identifier('RFI',raw_identifier):return identifier
+    return None
+
+
+def requires_rfi_spec_section_index(question: str) -> bool:
+    return requested_rfi_spec_section(question) is not None
+
+
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
     """Recognize one direct labelled-field request for one exact Submittal."""
     for field,pattern in _EXACT_SUBMITTAL_FIELD_QUESTIONS:
@@ -1548,6 +1565,67 @@ def _workflow_index_primary_documents(
                 if isinstance(member,dict) and member.get('source')=='PRIMARY'
                 and member.get('document_id')]
     return []
+
+
+def _rfi_spec_section_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one explicit RFI-scoped Spec Section without interpreting nearby CSI text."""
+    identifier=requested_rfi_spec_section(question)
+    if not identifier:return None
+    target=('RFI',identifier);label=f'RFI {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Spec Section for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    placeholders=','.join('?' for _ in document_ids)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders})
+                      AND instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),'spec')>0
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids])
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Spec Section for {label} was not answered locally because more than 32 '
+            'candidate source passages require review.'),'citations':[]}
+    found={};pattern=_SUBMITTAL_FIELD_SOURCE_PATTERNS['SPEC_SECTION']
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        if _workflow_identities(section)!={target}:continue
+        for match in pattern.finditer(text):
+            group='inline' if match.group('inline') is not None else 'block'
+            start,end=match.span(group);display=' '.join(match.group(group).strip().split())
+            if not display:continue
+            quote=text[match.start():end]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            normalized=display.casefold()
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),end,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Spec Section for {label} cannot be established because the analyzed '
+            f'primary evidence contains conflicting explicit values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary evidence records the Spec Section for {label} as "{value}".'),
+        'citations':citations}
 
 
 def _workflow_date_answer(
@@ -3602,6 +3680,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(rfi_content['citations']),'cached':False}
+        rfi_spec_section=_rfi_spec_section_answer(
+            self.db,run['id'],question,workflow_index)
+        if rfi_spec_section:
+            return {'run_id':run['id'],'question':question,**rfi_spec_section,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(rfi_spec_section['citations']),'cached':False}
         submittal_field=_submittal_field_answer(
             self.db,run['id'],question,workflow_index)
         if submittal_field:

@@ -2014,6 +2014,26 @@
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
     },
     {
+      "requirement_id": "FR-QA-RFI-SPEC-SECTION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_labelled_spec_section_local_answer_and_scope_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
       "requirement_id": "FR-QA-SUBMITTAL-FIELD-LOCAL-001",
       "implementation_status": "implemented",
       "planned_product_modules": [

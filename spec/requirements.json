@@ -1566,6 +1566,19 @@
       "spec_section": "docs/PROJECT_QUESTIONS.md"
     },
     {
+      "id": "FR-QA-RFI-SPEC-SECTION-LOCAL-001",
+      "title": "Answer exact RFI Spec Section requests locally",
+      "statement": "A strict direct request for one exact RFI Spec Section should reuse explicit labelled evidence from that RFI's indexed primary sources before model dispatch.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English direct-question forms name one exact RFI and request its Spec or Specification Section. Existing non-vision evidence from at most 32 indexed primary files may return locally only when an explicit Spec Section or Specification Section label is scoped to that exact RFI. Matching normalized values across Question, Response and current Email-body primary sources merge with every exact inline citation and zero provider or budget action.",
+        "Different explicit values, another or multiple RFI identities in the same value, quoted Email history, vision narration, more than 32 primary files or more than 32 candidate passages return insufficient evidence or remain on ordinary grounded Q&A as appropriate. Unlabelled CSI numbers cannot supply the field; the shortcut does not infer applicability, hierarchy, revision, status or controlling authority and adds no dependency or second index."
+      ],
+      "decision_source": "The active objective requires efficient and accurate file-grounded support across RFI, Submittal and Email content, while Submittal already exposes the corresponding exact labelled field.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
       "id": "FR-QA-SUBMITTAL-FIELD-LOCAL-001",
       "title": "Answer explicit Submittal fields locally",
       "statement": "A strict direct request for one exact Submittal Spec Section, Description or Review Comments value should reuse explicit labelled project evidence before model dispatch.",

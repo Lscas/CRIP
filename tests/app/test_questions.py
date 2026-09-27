@@ -27,7 +27,7 @@ from app.questions import (
     requested_email_attachment_relations, requested_email_header,
     requested_email_thread, requested_email_workflow_relations,
     requested_single_email_header,
-    requested_rfi_content, requested_submittal_field,
+    requested_rfi_content, requested_rfi_spec_section, requested_submittal_field,
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_email_relations,
     requested_workflow_status_inventory, requested_workflow_status_item,
@@ -37,6 +37,7 @@ from app.questions import (
     requires_email_thread_index,
     requires_email_workflow_relation_index,
     requires_rfi_content_index,
+    requires_rfi_spec_section_index,
     requires_submittal_field_index,
     requires_single_email_header_index,
     requires_workflow_date_index,
@@ -3643,6 +3644,147 @@ def test_exact_rfi_content_excludes_quoted_email_history(
 
 
 @pytest.mark.parametrize(('question','expected'),[
+    ('What is the Spec Section for RFI 42?','42'),
+    ('What specification section does Request for Information No. 0042 reference?','42'),
+    ('Show me the specification section for RFI ARC-42.','ARC-42'),
+    ('What spec section does RFI 42-1 use?','42-1'),
+    ('What is the Spec Section for Submittal 23-01?',None),
+    ('What is the description of RFI 42?',None),
+    ('Compare the Spec Sections for RFI 42 and RFI 43.',None),
+    ('What is the Spec Section for this RFI?',None),
+])
+def test_exact_rfi_spec_section_question_boundary(question,expected):
+    assert requested_rfi_spec_section(question)==expected
+    assert requires_rfi_spec_section_index(question) is bool(expected)
+
+
+def test_exact_rfi_spec_section_merges_matching_labelled_primary_evidence(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Spec Section: 22 11 16 - Domestic Water Piping']),
+        ('RFI-42-response.pdf',['Specification Section: 22  11 16 - Domestic  Water Piping']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=? ORDER BY d.name''',
+                (run['id'],))
+    summaries=[]
+    for row in rows:
+        payload=json.loads(row['payload'])
+        role='QUESTION' if 'question' in row['name'].casefold() else 'RESPONSE'
+        payload['locator']['section']=f'RFI 42 > {role}'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        summaries.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':f'RFI_{role}','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':role,'status':None}]}})
+    index=build_workflow_index(summaries)
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact RFI Spec Section used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'What is the Spec Section for RFI 42?',index)
+
+    assert result['status']=='ANSWERED' and result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert '22 11 16 - Domestic Water Piping' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Spec Section: 22 11 16 - Domestic Water Piping',
+        'Specification Section: 22  11 16 - Domestic  Water Piping'}
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_rfi_spec_section_blocks_conflicting_primary_values(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Spec Section: 22 11 16']),
+        ('RFI-42-response.pdf',['Spec Section: 23 05 00']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=? ORDER BY d.name''',
+                (run['id'],))
+    summaries=[]
+    for row in rows:
+        payload=json.loads(row['payload'])
+        role='QUESTION' if 'question' in row['name'].casefold() else 'RESPONSE'
+        payload['locator']['section']=f'RFI 42 > {role}'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        summaries.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':f'RFI_{role}','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':role,'status':None}]}})
+    index=build_workflow_index(summaries)
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('conflicting RFI section used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the Spec Section for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Spec Section: 22 11 16','Spec Section: 23 05 00'}
+
+
+@pytest.mark.parametrize('section',[
+    'EMAIL > QUOTED HISTORY > RFI 42',
+    'RFI 43',
+])
+def test_exact_rfi_spec_section_does_not_borrow_wrong_or_quoted_scope(
+        client, project, monkeypatch, section):
+    run=_source_evidence(client,project,[('reply.eml',['Spec Section: 22 11 16'])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'reply.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the Spec Section for RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_rfi_spec_section_caps_primary_sources_before_evidence_read():
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{value}','file_name':f'{value}.pdf','source':'PRIMARY'}
+        for value in range(33)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large RFI section question read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-LARGE-RFI','status':'COMPLETED'},
+        'What is the Spec Section for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_rfi_spec_section_caps_candidate_passages_before_parsing():
+    class LargeDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','file_name':'rfi.pdf','source':'PRIMARY'}]}]}
+
+    result=ProjectQuestions(LargeDatabase(),object()).ask(
+        {'id':'RUN-LARGE-RFI-EVIDENCE','status':'COMPLETED'},
+        'What is the Spec Section for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in result['answer']
+    assert result['citations']==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
     ('What is the Spec Section for Submittal 23-01?',('23-01','SPEC_SECTION')),
     ('What specification section does Submission 23 05 00 - 01 reference?',
      ('23 05 00-01','SPEC_SECTION')),
@@ -3988,6 +4130,34 @@ def test_question_api_loads_workflow_index_for_exact_rfi_response(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Official Response:\nProvide Type L copper pipe.'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_workflow_index_for_exact_rfi_spec_section(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Spec Section: 22 11 16 - Domestic Water Piping']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > QUESTION'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'RFI_QUESTION','workflow_contexts':[{
+        'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact RFI section route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the Spec Section for RFI 42?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==(
+        'Spec Section: 22 11 16 - Domestic Water Piping')
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

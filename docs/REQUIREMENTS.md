@@ -1099,6 +1099,15 @@ A strict direct request for one exact RFI Question or Official Response should r
 - Bounded English direct-question forms name one exact RFI and request either its Question or Response. The complete terminal-run workflow index must identify exactly one primary source with that explicit role, and only existing non-vision passages whose locator contains the same exact RFI identity and role may return locally with exact inline citations and zero provider or budget action.
 - Current Email-body RFI scopes may participate, while quoted Email history cannot donate content. Multiple same-role primary sources return insufficient evidence before evidence access; more than 32 matching passages or 18,000 characters fails closed. Missing parser-scoped content falls through to ordinary grounded Q&A, and the shortcut does not interpret requirements, compare items, decide chronology or select controlling authority.
 
+## FR-QA-RFI-SPEC-SECTION-LOCAL-001 · Answer exact RFI Spec Section requests locally
+
+优先级：P0；状态：implemented
+
+A strict direct request for one exact RFI Spec Section should reuse explicit labelled evidence from that RFI's indexed primary sources before model dispatch.
+
+- Bounded English direct-question forms name one exact RFI and request its Spec or Specification Section. Existing non-vision evidence from at most 32 indexed primary files may return locally only when an explicit Spec Section or Specification Section label is scoped to that exact RFI. Matching normalized values across Question, Response and current Email-body primary sources merge with every exact inline citation and zero provider or budget action.
+- Different explicit values, another or multiple RFI identities in the same value, quoted Email history, vision narration, more than 32 primary files or more than 32 candidate passages return insufficient evidence or remain on ordinary grounded Q&A as appropriate. Unlabelled CSI numbers cannot supply the field; the shortcut does not infer applicability, hierarchy, revision, status or controlling authority and adds no dependency or second index.
+
 ## FR-QA-SUBMITTAL-FIELD-LOCAL-001 · Answer explicit Submittal fields locally
 
 优先级：P0；状态：implemented
