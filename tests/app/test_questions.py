@@ -20,6 +20,7 @@ from app.questions import (
     _numeric_unit_values,
     _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
+    _workflow_party_claim_values, _workflow_party_source_values,
     _workflow_subject_claim_values, _workflow_subject_source_values,
     _workflow_index_status_conflicts,
     expanded_query_terms,
@@ -32,6 +33,7 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
+    requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
@@ -48,6 +50,7 @@ from app.questions import (
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
+    requires_workflow_party_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -6485,3 +6488,339 @@ def test_question_api_loads_complete_workflow_index_for_inventory_count(
     assert filtered.status_code==200
     assert filtered.json()['workflow_status_inventory']==[
         {'kind':'RFI','status':'OPEN','count':0,'ambiguous_count':1}]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Who is assigned to RFI 42?',('RFI','42','ASSIGNED_TO')),
+    ('Who is the assignee for Request for Information No. 0042?',
+     ('RFI','42','ASSIGNED_TO')),
+    ('What is the Assigned To field for RFI ARC-42?',
+     ('RFI','ARC-42','ASSIGNED_TO')),
+    ('Who is responsible for Submittal MEP-023?',
+     ('SUBMITTAL','MEP-023','RESPONSIBLE_PARTY')),
+    ('What is the Responsible Party for Submission 23 05 00 - 01?',
+     ('SUBMITTAL','23 05 00-01','RESPONSIBLE_PARTY')),
+    ('Who submitted Submittal 23-01?',('SUBMITTAL','23-01','SUBMITTED_BY')),
+    ('What is the Submitted By field of Submittal 23-01?',
+     ('SUBMITTAL','23-01','SUBMITTED_BY')),
+    ('Who is the reviewer for Submittal 23-01?',
+     ('SUBMITTAL','23-01','REVIEWED_BY')),
+    ('Who should be assigned to RFI 42?',None),
+    ('Who is responsible for closing RFI 42?',None),
+    ('Who is assigned to RFI 42 and RFI 43?',None),
+    ('Who sent coordination.eml?',None),
+])
+def test_exact_workflow_party_question_boundary(question,expected):
+    assert requested_workflow_party(question)==expected
+    assert requires_workflow_party_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source'),[
+    ('RFI-42-question.pdf','RFI_QUESTION',
+     {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'},
+     'RFI 42 > QUESTION','Who is assigned to RFI 42?','Assigned To: Project Architect'),
+    ('RFI-42-response.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','Who is responsible for Request for Information No. 0042?',
+     'Responsible: Mechanical Contractor'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','Who submitted Submittal 23-01?',
+     'Submitter: Acme Mechanical'),
+    ('Submittal-23-01-review.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'APPROVED'},
+     'SUBMITTAL 23-01','Who is the reviewer for Submittal 23-01?',
+     'Reviewer: Jane Reviewer'),
+])
+def test_exact_workflow_party_answers_from_explicit_field_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context, section,
+        question, source):
+    run=_source_evidence(client,project,[(file_name,[source])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('party field used ordinary retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source
+    assert source.split(': ',1)[1] in result['answer']
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_party_merges_same_value_and_blocks_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Assigned To: Project Architect']),
+        ('RFI-42-response.pdf',['Assignee: project architect']),
+        ('RFI-42-email.eml',['Assigned To: General Contractor']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'EMAIL' if row['name'].endswith('.eml') else 'RFI_RESPONSE',
+            'workflow_contexts':[{'workflow_type':'RFI','identifier':'42','role':'RESPONSE',
+                                  'status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('party conflict used retrieval'))
+
+    merged=ProjectQuestions(db,object()).ask(
+        run,'Who is assigned to RFI 42?',build_workflow_index(contexts[:2]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'Who is assigned to RFI 42?',build_workflow_index(contexts))
+
+    assert merged['status']=='ANSWERED' and len(merged['citations'])==2
+    assert 'Project Architect' in merged['answer']
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in conflicted['answer']
+    assert {item['quote'] for item in conflicted['citations']}=={
+        'Assigned To: Project Architect','Assignee: project architect',
+        'Assigned To: General Contractor'}
+
+
+@pytest.mark.parametrize(('section','source'),[
+    ('RFI 42 > RESPONSE','From: architect@example.test\nTo: contractor@example.test'),
+    ('RFI 42 > RESPONSE','Ball in Court: Project Architect'),
+    ('RFI 42 > RESPONSE','The contractor is responsible for coordination.'),
+    ('EMAIL > QUOTED HISTORY > RFI 42','Responsible Party: Project Architect'),
+    ('EMAIL > SIGNATURE > RFI 42','Responsible Party: Project Architect'),
+    ('RFI 43 > RESPONSE','Responsible Party: Project Architect'),
+    ('RFI 42 > RESPONSE','Responsible Party: RFI 43 reviewer'),
+])
+def test_exact_workflow_party_does_not_infer_or_cross_scope(
+        client, project, monkeypatch, section, source):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[source])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42-response.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+
+    result=ProjectQuestions(db,object()).ask(run,'Who is responsible for RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_party_accepts_current_email_body(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Assigned To: Project Architect',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY > RFI 42'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('current Email party used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'Who is assigned to RFI 42?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']=='Assigned To: Project Architect'
+
+
+def test_exact_workflow_party_primary_document_cap_fails_before_evidence_read(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('party document cap read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('party document cap used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-PARTY-CAP','status':'COMPLETED'},'Who is assigned to RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_workflow_party_passage_cap_fails_closed(monkeypatch):
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('party passage cap used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-PARTY-CAP','status':'COMPLETED'},
+        'Who submitted Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_exact_workflow_party(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('Submittal-23-01.pdf',['Reviewed By: Project Architect']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL',
+        'status':'APPROVED'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('party API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'Who reviewed Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Reviewed By: Project Architect'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_party_parser_preserves_identity_role_and_complete_value():
+    source=('RFI 42\nAssigned To: Project Architect\n'
+            'RFI 43\nAssigned To: General Contractor')
+
+    assert _workflow_party_source_values(source)=={
+        (('RFI','42'),'ASSIGNED_TO','project architect'),
+        (('RFI','43'),'ASSIGNED_TO','general contractor')}
+    assert _workflow_party_claim_values(
+        'RFI 42 Assigned To: “Project Architect”.')=={
+            (('RFI','42'),'ASSIGNED_TO','project architect')}
+
+
+def test_answer_accepts_same_exact_workflow_party_field(client, project):
+    source='Assigned To: Project Architect'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='Who is assigned to RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > QUESTION'
+    grounded={'status':'ANSWERED','answer':'RFI 42 Assigned To: “Project Architect”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+@pytest.mark.parametrize(('source','answer','error'),[
+    ('Assigned To: Project Architect',
+     'RFI 42 Assigned To: “General Contractor”.','workflow party field absent'),
+    ('Submitted By: Acme Mechanical',
+     'Submittal 23-01 Reviewed By: “Acme Mechanical”.','workflow party field absent'),
+    ('Ball in Court: Project Architect',
+     'RFI 42 Assigned To: “Project Architect”.','workflow party field absent'),
+    ('The contractor is responsible for coordination.',
+     'RFI 42 Responsible Party: “Contractor”.','workflow party field absent'),
+])
+def test_answer_rejects_inferred_or_role_swapped_workflow_party(
+        client, project, source, answer, error):
+    identity=('SUBMITTAL 23-01' if answer.startswith('Submittal') else 'RFI 42')
+    question=('Who reviewed Submittal 23-01?' if answer.startswith('Submittal')
+              else 'Who is assigned to RFI 42?')
+    run=_source_evidence(client,project,[('workflow.pdf',[source])])
+    row=client.app.state.db.one(
+        '''SELECT e.payload,d.name FROM evidence e JOIN documents d ON d.id=e.document_id
+           WHERE e.run_id=?''',(run['id'],))
+    item=json.loads(row['payload']);item['file_name']=row['name']
+    item['locator']['section']=identity;evidence=[item]
+    wrong={'status':'ANSWERED','answer':answer,'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match=error):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_answer_rejects_workflow_party_borrowed_from_another_item(client, project):
+    source=('RFI 42\nAssigned To: Project Architect\n'
+            'RFI 43\nAssigned To: General Contractor')
+    run=_source_evidence(client,project,[('RFI-log.pdf',[source])])
+    question='Who is assigned to RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 Assigned To: “General Contractor”.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow party field absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_answer_rejects_conflicting_workflow_party_values(client, project):
+    source='Assigned To: Project Architect\nAssigned To: General Contractor'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='Who is assigned to RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > QUESTION'
+    selected={'status':'ANSWERED','answer':'RFI 42 Assigned To: “Project Architect”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='conflicting workflow party field values'):
+        validate_answer_model(selected,evidence,question)
+
+
+def test_workflow_party_question_requires_explicit_scoped_field(client, project):
+    source='Assigned To: Project Architect'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='Who is assigned to RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > QUESTION'
+    evasive={'status':'ANSWERED','answer':'The project architect is listed.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit scoped field'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_workflow_party_source_finding_cannot_borrow_another_source_value(
+        client, project):
+    specification='Assigned To: Specification Coordinator'
+    rfi='Assigned To: Project Architect'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[specification]),('RFI-42.pdf',[rfi])])
+    question='Compare the specification and RFI 42 assigned parties.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    for item in evidence:
+        if item['file_name']=='RFI-42.pdf':item['locator']['section']='RFI 42 > QUESTION'
+    wrong={
+        'status':'ANSWERED','answer':'The sources list different parties.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification contains an assignment field.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':specification}]},
+            {'source_type':'RFI','file_name':'RFI-42.pdf',
+             'statement':'RFI 42 Assigned To: “Specification Coordinator”.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':rfi}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains a workflow party field'):
+        validate_answer_model(wrong,evidence,question)

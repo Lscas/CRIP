@@ -315,6 +315,53 @@ _EXACT_WORKFLOW_CLAUSE_REFERENCE_QUESTIONS = (
         {_WORKFLOW_CLAUSE_REFERENCE_KIND}\s+(?:for|in|referenced\s+by)\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_EXACT_WORKFLOW_PARTY_QUESTIONS = (
+    ('ASSIGNED_TO',re.compile(rf'''(?ix)^\s*who\s+is\s+(?:the\s+)?(?:assigned\s+to|assignee\s+for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('ASSIGNED_TO',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:assigned\s+to|assignee)\s+(?:field\s+)?(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('RESPONSIBLE_PARTY',re.compile(rf'''(?ix)^\s*who\s+is\s+responsible\s+for\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('RESPONSIBLE_PARTY',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?responsible\s+party\s+(?:field\s+)?(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('SUBMITTED_BY',re.compile(rf'''(?ix)^\s*who\s+submitted\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('SUBMITTED_BY',re.compile(rf'''(?ix)^\s*who\s+is\s+(?:the\s+)?submitter\s+(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('SUBMITTED_BY',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:submitted\s+by|submitter)\s+(?:field\s+)?(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('REVIEWED_BY',re.compile(rf'''(?ix)^\s*who\s+reviewed\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('REVIEWED_BY',re.compile(rf'''(?ix)^\s*who\s+is\s+(?:the\s+)?reviewer\s+(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('REVIEWED_BY',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:reviewed\s+by|reviewer)\s+(?:field\s+)?(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+)
+_WORKFLOW_PARTY_FIELD_LABELS = {
+    'ASSIGNED_TO':r'(?:assigned\s+to|assignee)',
+    'RESPONSIBLE_PARTY':r'(?:responsible\s+party|responsible)',
+    'SUBMITTED_BY':r'(?:submitted\s+by|submitter)',
+    'REVIEWED_BY':r'(?:reviewed\s+by|reviewer)',
+}
+_WORKFLOW_PARTY_SQL_TERMS = {
+    'ASSIGNED_TO':('assigned','assignee'),
+    'RESPONSIBLE_PARTY':('responsible',),
+    'SUBMITTED_BY':('submitted','submitter'),
+    'REVIEWED_BY':('reviewed','reviewer'),
+}
+_WORKFLOW_PARTY_SOURCE_PATTERNS = {
+    role:re.compile(rf'''(?imx)^[ \t]*(?:{label})[ \t]*:[ \t]*
+        (?P<value>[^\r\n]{{1,200}}?)[ \t]*$''')
+    for role,label in _WORKFLOW_PARTY_FIELD_LABELS.items()
+}
+_WORKFLOW_PARTY_CLAIM_PREFIXES = tuple(
+    (role,re.compile(rf'(?i)\b(?:{label})\s*:\s*'))
+    for role,label in _WORKFLOW_PARTY_FIELD_LABELS.items()
+)
 _SUBMITTAL_FIELD_LABELS = {
     'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
     'DESCRIPTION':r'(?:submittal\s+description|description)',
@@ -1022,6 +1069,24 @@ def requested_workflow_clause_references(question: str) -> tuple[str,str,str] | 
 
 def requires_workflow_clause_reference_index(question: str) -> bool:
     return requested_workflow_clause_references(question) is not None
+
+
+def requested_workflow_party(question: str) -> tuple[str,str,str] | None:
+    """Recognize one direct request for one explicit workflow party field."""
+    for role,pattern in _EXACT_WORKFLOW_PARTY_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier,role
+    return None
+
+
+def requires_workflow_party_index(question: str) -> bool:
+    return requested_workflow_party(question) is not None
 
 
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
@@ -1847,6 +1912,72 @@ def _workflow_clause_reference_answer(
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary evidence explicitly references these {kind_name} for '
         f'{label}: {values}.'),'citations':citations}
+
+
+def _workflow_party_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one exact printed workflow-party field without inferring responsibility."""
+    request=requested_workflow_party(question)
+    if not request:return None
+    workflow,identifier,role=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The requested party for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    terms=_WORKFLOW_PARTY_SQL_TERMS[role]
+    placeholders=','.join('?' for _ in document_ids)
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids,*terms])
+    names={'ASSIGNED_TO':'Assigned To','RESPONSIBLE_PARTY':'Responsible Party',
+           'SUBMITTED_BY':'Submitted By','REVIEWED_BY':'Reviewed By'}
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} was not answered locally because more than '
+            '32 candidate source passages require review.'),'citations':[]}
+    found={};pattern=_WORKFLOW_PARTY_SOURCE_PATTERNS[role]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        upper_section=section.upper()
+        if 'EMAIL > QUOTED HISTORY' in upper_section or 'EMAIL > SIGNATURE' in upper_section:
+            continue
+        if _workflow_identities(section)!={target}:continue
+        for match in pattern.finditer(text):
+            display=' '.join(match.group('value').strip().split())
+            if not display:continue
+            quote=text[match.start():match.end()]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            normalized=display.casefold()
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),match.end(),role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} cannot be established because the analyzed '
+            f'primary evidence contains conflicting explicit values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':(
+        f'{label} {names[role]}: "{value}".'),
+        'citations':citations}
 
 
 def _workflow_date_answer(
@@ -2858,6 +2989,57 @@ def _workflow_subject_claim_values(text: str) -> set[tuple[tuple[str,str],str]]:
     return values
 
 
+def _normalize_workflow_party_value(
+        value: str, *, strip_answer_punctuation: bool = False) -> str | None:
+    normalized=' '.join(value.strip().split())
+    quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+    if len(normalized)>=2 and normalized[-1:]==quote_pairs.get(normalized[:1]):
+        normalized=normalized[1:-1].strip()
+    if strip_answer_punctuation and normalized[-1:] in '.!?':
+        normalized=normalized[:-1].rstrip()
+    return normalized.casefold() if normalized and len(normalized)<=200 else None
+
+
+def _workflow_party_source_values(
+        text: str, identity_text: str | None = None
+        ) -> set[tuple[tuple[str,str],str,str]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    identity_spans=_workflow_identity_spans(text);values=set()
+    for role,pattern in _WORKFLOW_PARTY_SOURCE_PATTERNS.items():
+        for match in pattern.finditer(text):
+            value=_normalize_workflow_party_value(match.group('value'))
+            if not value:continue
+            preceding=[item for item in identity_spans
+                       if item[2]<=match.start() and match.start()-item[2]<=500]
+            if preceding:
+                identities={preceding[-1][0]}
+            else:
+                identities=all_identities if len(all_identities)==1 else set()
+            values.update((identity,role,value) for identity in identities)
+    return values
+
+
+def _workflow_party_claim_values(text: str) -> set[tuple[tuple[str,str],str,str]]:
+    occurrences=[]
+    for role,pattern in _WORKFLOW_PARTY_CLAIM_PREFIXES:
+        for match in pattern.finditer(text):
+            start=match.end()
+            while start<len(text) and text[start] in ' \t':start+=1
+            quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+            closing=quote_pairs.get(text[start:start+1])
+            close=(text.find(closing,start+1,min(len(text),start+202)) if closing else -1)
+            quoted=(close>=0 and '\n' not in text[start+1:close]
+                    and '\r' not in text[start+1:close])
+            if quoted:
+                raw=text[start+1:close];end=close+1
+            else:
+                _,end=statement_span(text,start,start);raw=text[start:end]
+            value=_normalize_workflow_party_value(
+                raw,strip_answer_punctuation=not quoted)
+            if value:occurrences.append((role,value,match.start(),end))
+    return _workflow_scoped_values(text,occurrences)
+
+
 def _is_email_subject_question(question: str) -> bool:
     if not _EMAIL_SUBJECT_INTENT.search(question):return False
     return not (_workflow_identities(question)
@@ -3199,6 +3381,21 @@ def _require_workflow_subject_support(
         supported.update(_workflow_subject_source_values(quote,identity_text))
     if _workflow_subject_claim_values(claim)-supported:
         raise ValueError(label+' contains a workflow subject absent from its citations')
+
+
+def _require_workflow_party_support(
+        claim: str, contexts: list[tuple[str,str]], label: str) -> None:
+    supported=set()
+    for quote,identity_text in contexts:
+        supported.update(_workflow_party_source_values(quote,identity_text))
+    claimed=_workflow_party_claim_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains a workflow party field absent from its citations')
+    for identity,role,_ in claimed:
+        values={value for source_identity,source_role,value in supported
+                if source_identity==identity and source_role==role}
+        if len(values)>1:
+            raise ValueError(label+' cites conflicting workflow party field values')
 
 
 def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
@@ -3724,6 +3921,9 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_email_quotes,'source finding')
             _require_workflow_subject_support(
                 finding['statement'],finding_workflow_subject_contexts,'source finding')
+            _require_workflow_party_support(
+                finding['statement'],list(zip(finding_quotes,finding_identity_texts)),
+                'source finding')
             _require_email_participant_support(
                 finding['statement'],finding_email_quotes,'source finding')
             _require_email_date_header_support(
@@ -3776,6 +3976,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         _require_email_subject_support(value['answer'],answer_email_quotes,'answer')
         _require_workflow_subject_support(
             value['answer'],answer_workflow_subject_contexts,'answer')
+        _require_workflow_party_support(
+            value['answer'],list(zip(answer_quotes,answer_identity_texts)),'answer')
         _require_email_participant_support(value['answer'],answer_email_quotes,'answer')
         _require_email_date_header_support(value['answer'],answer_email_quotes,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
@@ -3801,6 +4003,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             if workflow_subject_targets-{identity for identity,_ in claims}:
                 raise ValueError(
                     'an answered workflow subject question requires an explicit scoped subject')
+        if party_request:=requested_workflow_party(question):
+            target=(party_request[0],party_request[1]);requested_role=party_request[2]
+            claims=set(_workflow_party_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_workflow_party_claim_values(finding['statement']))
+            if not any(identity==target and role==requested_role
+                       for identity,role,_ in claims):
+                raise ValueError(
+                    'an answered workflow party question requires an explicit scoped field')
         if (_EMAIL_DATE_INTENT.search(question)
                 and not any(_email_date_header_claim_values(text) for text in (
                     value['answer'],*(finding['statement'] for finding in value['source_findings'])))):
@@ -3922,6 +4133,12 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(clause_references['citations']),'cached':False}
+        workflow_party=_workflow_party_answer(self.db,run['id'],question,workflow_index)
+        if workflow_party:
+            return {'run_id':run['id'],'question':question,**workflow_party,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(workflow_party['citations']),'cached':False}
         submittal_field=_submittal_field_answer(
             self.db,run['id'],question,workflow_index)
         if submittal_field:
