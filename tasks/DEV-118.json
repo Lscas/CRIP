@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the complete terminal-run workflow index to bound one exact RFI or Submittal or one selected Email.",
+    "Accept only explicit Action Required, Required Action, Next Action or Action Item labels in the correct workflow or current Email-body scope.",
+    "Apply the same identity, role and complete-value contract to ordinary answers and comparison source findings.",
+    "Fail closed on missing fields, conflicts, cross-scope borrowing, headers, quoted history, signatures, ordinary prose, vision narration and oversized source sets.",
+    "Do not infer applicability, responsibility, approval, chronology, authority or action ownership."
+  ],
+  "task_id": "DEV-118",
+  "title": "Answer and ground exact workflow and Email action fields",
+  "requirement_ids": ["FR-QA-ACTION-FIELD-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-118.json",
+    "changes/CR-0133.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-118",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return bounded exact workflow and Email action fields without provider cost and reject unsupported identity, role, value or source-scope borrowing in every answer scope."
+}

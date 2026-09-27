@@ -15,17 +15,19 @@ from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
     _email_address_role_values, _email_address_values,
+    _email_action_claim_values, _email_action_source_values,
     _email_date_header_claim_values, _email_date_header_values,
     _email_header_participant_role_values, _email_participant_claim_role_values,
     _numeric_unit_values,
     _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
     _workflow_party_claim_values, _workflow_party_source_values,
+    _workflow_action_claim_values, _workflow_action_source_values,
     _workflow_subject_claim_values, _workflow_subject_source_values,
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_email_attachment_relations, requested_email_header,
+    requested_email_action, requested_email_attachment_relations, requested_email_header,
     requested_email_thread, requested_email_workflow_relations,
     requested_single_email_header,
     requested_rfi_content, requested_rfi_spec_section, requested_submittal_field,
@@ -33,11 +35,12 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
-    requested_workflow_party,
+    requested_workflow_action, requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_email_attachment_relation_index, requires_email_header_index,
+    requires_email_action_index, requires_email_attachment_relation_index,
+    requires_email_header_index,
     requires_email_thread_index,
     requires_email_workflow_relation_index,
     requires_rfi_content_index,
@@ -50,7 +53,7 @@ from app.questions import (
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
-    requires_workflow_party_index,
+    requires_workflow_action_index, requires_workflow_party_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -6824,3 +6827,464 @@ def test_workflow_party_source_finding_cannot_borrow_another_source_value(
 
     with pytest.raises(ValueError,match='source finding contains a workflow party field'):
         validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What action is required for RFI 42?',('RFI','42','ACTION_REQUIRED')),
+    ('What is the Required Action field for Request for Information No. 0042?',
+     ('RFI','42','ACTION_REQUIRED')),
+    ('What is the next action for Submittal 23-01?',
+     ('SUBMITTAL','23-01','NEXT_ACTION')),
+    ('What is the action item for Submission MEP-023?',
+     ('SUBMITTAL','MEP-023','ACTION_ITEM')),
+    ('What should we do for RFI 42?',None),
+    ('What action is required for RFI 42 and RFI 43?',None),
+    ('What are the action items for Submittal 23-01?',None),
+    ('What action is required in the email?',None),
+])
+def test_exact_workflow_action_question_boundary(question,expected):
+    assert requested_workflow_action(question)==expected
+    assert requires_workflow_action_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What action is required in the email?',('ACTION_REQUIRED',None)),
+    ('What is the Required Action field for this email?',('ACTION_REQUIRED',None)),
+    ('What is the next action in the email?',('NEXT_ACTION',None)),
+    ('What is the action item for this email?',('ACTION_ITEM',None)),
+    ('What is the next action in email file second.eml?',('NEXT_ACTION','second.eml')),
+    ('What is the action item for "coordination note.eml"?',
+     ('ACTION_ITEM','coordination note.eml')),
+    ('What action is required in C:\\mail\\coordination.eml?',None),
+    ('What action is required in *.eml?',None),
+    ('What action is required in first.eml and second.eml?',None),
+    ('What action is required for RFI 42?',None),
+])
+def test_exact_email_action_question_boundary(question,expected):
+    assert requested_email_action(question)==expected
+    assert requires_email_action_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source'),[
+    ('RFI-42.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','What action is required for RFI 42?',
+     'Action Required: Issue revised detail A5.2'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','What is the next action for Submittal 23-01?',
+     'Next Action: Contractor to resubmit product data'),
+    ('Submittal-MEP-023.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'MEP-023','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL MEP-023','What is the action item for Submittal MEP-023?',
+     'Action Item: Verify motor voltage before release'),
+])
+def test_exact_workflow_action_answers_from_explicit_field_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context, section,
+        question, source):
+    run=_source_evidence(client,project,[(file_name,[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('action field used ordinary retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source
+    assert source.split(': ',1)[1] in result['answer']
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_action_merges_same_value_and_blocks_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Action Required: Issue revised detail A5.2']),
+        ('RFI-42-response.pdf',['Required Action: issue revised detail a5.2']),
+        ('RFI-42-addendum.pdf',['Action Required: Submit structural calculation']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'RFI_RESPONSE',
+            'workflow_contexts':[{'workflow_type':'RFI','identifier':'42','role':'RESPONSE',
+                                  'status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('action conflict used retrieval'))
+
+    merged=ProjectQuestions(db,object()).ask(
+        run,'What action is required for RFI 42?',build_workflow_index(contexts[:2]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'What action is required for RFI 42?',build_workflow_index(contexts))
+
+    assert merged['status']=='ANSWERED' and len(merged['citations'])==2
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in conflicted['answer']
+    assert len(conflicted['citations'])==3
+
+
+@pytest.mark.parametrize(('section','source'),[
+    ('RFI 42 > RESPONSE','The contractor shall issue a revised detail.'),
+    ('RFI 42 > RESPONSE','Response: Issue a revised detail.'),
+    ('EMAIL > HEADERS > RFI 42','Action Required: Issue revised detail A5.2'),
+    ('EMAIL > QUOTED HISTORY > RFI 42','Action Required: Issue revised detail A5.2'),
+    ('EMAIL > SIGNATURE > RFI 42','Action Required: Issue revised detail A5.2'),
+    ('RFI 43 > RESPONSE','Action Required: Issue revised detail A5.2'),
+])
+def test_exact_workflow_action_does_not_infer_or_cross_scope(
+        client, project, monkeypatch, section, source):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42-response.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+        lambda *_args,**_kwargs:pytest.fail('unsupported explicit action used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What action is required for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_action_accepts_current_email_body(client, project, monkeypatch):
+    source='Action Required: Issue revised detail A5.2'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY > RFI 42'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('current Email action used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What action is required for RFI 42?',index)
+
+    assert result['status']=='ANSWERED' and result['citations'][0]['quote']==source
+
+
+def test_workflow_action_parser_preserves_identity_role_and_complete_value():
+    source=('RFI 42\nAction Required: Issue revised detail A5.2\n'
+            'RFI 43\nNext Action: Submit structural calculation')
+
+    assert _workflow_action_source_values(source)=={
+        (('RFI','42'),'ACTION_REQUIRED','issue revised detail a5.2'),
+        (('RFI','43'),'NEXT_ACTION','submit structural calculation')}
+    assert _workflow_action_claim_values(
+        'RFI 42 Action Required: “Issue revised detail A5.2”.')=={
+            (('RFI','42'),'ACTION_REQUIRED','issue revised detail a5.2')}
+
+
+def test_question_api_loads_workflow_index_for_exact_workflow_action(
+        client, project, monkeypatch):
+    source='Action Item: Verify motor voltage before release'
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('action API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the action item for Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json();assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']==source
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_answer_accepts_same_exact_workflow_action_field(client, project):
+    source='Action Required: Issue revised detail A5.2'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])]);question='What action is required for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    grounded={'status':'ANSWERED','answer':'RFI 42 Action Required: “Issue revised detail A5.2”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+@pytest.mark.parametrize(('source','answer'),[
+    ('Action Required: Issue revised detail A5.2',
+     'RFI 42 Action Required: “Submit structural calculation”.'),
+    ('Next Action: Issue revised detail A5.2',
+     'RFI 42 Action Required: “Issue revised detail A5.2”.'),
+    ('The contractor shall issue a revised detail.',
+     'RFI 42 Action Required: “Issue a revised detail”.'),
+])
+def test_answer_rejects_inferred_or_role_swapped_workflow_action(
+        client, project, source, answer):
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])]);question='What action is required for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    wrong={'status':'ANSWERED','answer':answer,'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow action field absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_action_question_requires_explicit_scoped_field(client, project):
+    source='Action Required: Issue revised detail A5.2'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])]);question='What action is required for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    evasive={'status':'ANSWERED','answer':'A revised detail is listed.','source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit scoped field'):
+        validate_answer_model(evasive,evidence,question)
+
+    email_label={**evasive,
+                 'answer':'RFI 42 Email Action Required: “Issue revised detail A5.2”.'}
+    with pytest.raises(ValueError,match='Email action field absent'):
+        validate_answer_model(email_label,evidence,question)
+
+
+def test_email_actions_answer_only_from_current_body_and_named_file(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('first.eml',['Action Required: Ignore quoted request']),
+        ('second.eml',['Next Action: Submit revised coordination drawing']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    documents=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']=(
+            'EMAIL > QUOTED HISTORY' if row['name']=='first.eml' else 'EMAIL > BODY')
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        documents.append({'document_id':row['document_id'],'name':row['name'],
+                          'summary':{'document_type':'EMAIL'}})
+    index=build_workflow_index(documents)
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email action used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the next action in email file SECOND.eml?',index)
+    ambiguous=ProjectQuestions(db,object()).ask(run,'What is the next action in the email?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']=='Next Action: Submit revised coordination drawing'
+    assert ambiguous['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 Email files' in ambiguous['answer']
+
+
+def test_email_action_blocks_non_body_sections_and_current_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Action Required: First current action','Required Action: Second current action',
+        'Action Required: Header action','Action Required: Quoted action',
+    ])]);db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=? ORDER BY id',(run['id'],))
+    sections=['EMAIL > BODY','EMAIL > BODY','EMAIL > HEADERS','EMAIL > QUOTED HISTORY']
+    for row,section in zip(rows,sections):
+        payload=json.loads(row['payload']);payload['locator']['section']=section
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],'name':'coordination.eml',
+                                'summary':{'document_type':'EMAIL'}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email action conflict used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What action is required in the email?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting current Action Required values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Action Required: First current action','Required Action: Second current action'}
+
+
+def test_question_api_loads_workflow_index_for_email_action(client, project, monkeypatch):
+    source='Action Item: Confirm access before mobilization'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],row['document_id'],'SUCCESS',json.dumps({'document_type':'EMAIL'})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email action API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the action item for the email?'})
+
+    assert response.status_code==200
+    result=response.json();assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']==source
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_email_action_parser_preserves_role_and_complete_value():
+    assert _email_action_source_values(
+        'Next Action: Submit revised coordination drawing')=={
+            ('NEXT_ACTION','submit revised coordination drawing')}
+    assert _email_action_claim_values(
+        'Email Next Action: “Submit revised coordination drawing”.')=={
+            ('NEXT_ACTION','submit revised coordination drawing')}
+
+
+def test_answer_accepts_email_action_only_from_current_body(client, project):
+    source='Next Action: Submit revised coordination drawing'
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the next action in the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='EMAIL > BODY'
+    grounded={'status':'ANSWERED',
+              'answer':'Email Next Action: “Submit revised coordination drawing”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+    evidence[0]['locator']['section']='EMAIL > QUOTED HISTORY'
+    with pytest.raises(ValueError,match='Email action field absent'):
+        validate_answer_model(grounded,evidence,question)
+
+
+def test_email_action_rejects_role_swap_and_requires_explicit_field(client, project):
+    source='Next Action: Submit revised coordination drawing'
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the next action in the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='EMAIL > BODY'
+    swapped={'status':'ANSWERED',
+             'answer':'Email Action Required: “Submit revised coordination drawing”.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+    evasive={'status':'ANSWERED','answer':'The evidence lists a next step.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='Email action field absent'):
+        validate_answer_model(swapped,evidence,question)
+    with pytest.raises(ValueError,match='requires an explicit current-body field'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_workflow_action_caps_fail_before_unbounded_work(monkeypatch):
+    primary_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    passage_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('action primary-file cap read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('action cap used retrieval'))
+
+    primary=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-ACTION-CAP','status':'COMPLETED'},
+        'What action is required for RFI 42?',primary_index)
+    passages=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-ACTION-CAP','status':'COMPLETED'},
+        'What action is required for RFI 42?',passage_index)
+
+    assert primary['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in primary['answer']
+    assert passages['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in passages['answer']
+
+
+def test_email_action_named_selection_and_passage_cap_fail_closed(monkeypatch):
+    duplicate={'items':[{'kind':'EMAIL','identifier':None,'members':[
+        {'document_id':'D-1','file_name':'duplicate.eml','document_type':'EMAIL'},
+        {'document_id':'D-2','file_name':'duplicate.eml','document_type':'EMAIL'}]}]}
+    one=build_workflow_index([
+        {'document_id':'D-1','name':'mail.eml','summary':{'document_type':'EMAIL'}}])
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('duplicate Email action read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email action cap used retrieval'))
+
+    duplicate_result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-EMAIL-ACTION','status':'COMPLETED'},
+        'What action is required in duplicate.eml?',duplicate)
+    passage_result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-EMAIL-ACTION','status':'COMPLETED'},
+        'What action is required in the email?',one)
+
+    assert duplicate_result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 analyzed Email files named "duplicate.eml"' in duplicate_result['answer']
+    assert passage_result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 current Email-body passages' in passage_result['answer']
+
+
+def test_answer_rejects_cross_item_and_conflicting_workflow_action_values(client, project):
+    source=('RFI 42\nAction Required: Issue revised detail A5.2\n'
+            'RFI 43\nAction Required: Submit structural calculation')
+    run=_source_evidence(client,project,[('RFI-log.pdf',[source])])
+    question='What action is required for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    borrowed={'status':'ANSWERED',
+              'answer':'RFI 42 Action Required: “Submit structural calculation”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow action field absent'):
+        validate_answer_model(borrowed,evidence,question)
+
+    conflict='Action Required: First action\nRequired Action: Second action'
+    conflict_run=_source_evidence(client,project,[('RFI-42.pdf',[conflict])])
+    conflict_evidence=retrieve_evidence(client.app.state.db,conflict_run,question)
+    conflict_evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    selected={'status':'ANSWERED','answer':'RFI 42 Action Required: “First action”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':conflict}]}
+    with pytest.raises(ValueError,match='conflicting workflow action field values'):
+        validate_answer_model(selected,conflict_evidence,question)
+
+
+def test_answer_rejects_conflicting_email_action_values(client, project):
+    source='Next Action: First action\nNext Action: Second action'
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the next action in the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='EMAIL > BODY'
+    selected={'status':'ANSWERED','answer':'Email Next Action: “First action”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='conflicting Email action field values'):
+        validate_answer_model(selected,evidence,question)
+
+
+def test_named_email_action_question_cannot_borrow_another_file(client, project):
+    first='Next Action: Submit revised coordination drawing'
+    second='Next Action: Confirm access before mobilization'
+    run=_source_evidence(client,project,[('first.eml',[first]),('second.eml',[second])])
+    question='What is the next action in second.eml?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    for item in evidence:item['locator']['section']='EMAIL > BODY'
+    first_evidence=next(item for item in evidence if item['file_name']=='first.eml')
+    borrowed={'status':'ANSWERED',
+              'answer':'Email Next Action: “Submit revised coordination drawing”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':first_evidence['evidence_id'],'quote':first}]}
+
+    with pytest.raises(ValueError,match='requires an explicit current-body field'):
+        validate_answer_model(borrowed,evidence,question)

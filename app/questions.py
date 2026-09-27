@@ -362,6 +362,42 @@ _WORKFLOW_PARTY_CLAIM_PREFIXES = tuple(
     (role,re.compile(rf'(?i)\b(?:{label})\s*:\s*'))
     for role,label in _WORKFLOW_PARTY_FIELD_LABELS.items()
 )
+_EXACT_WORKFLOW_ACTION_QUESTIONS = (
+    ('ACTION_REQUIRED',re.compile(rf'''(?ix)^\s*what\s+action\s+is\s+required\s+(?:of|for|in)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('ACTION_REQUIRED',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:action\s+required|required\s+action)\s+(?:field\s+)?
+        (?:of|for|in)\s+{_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('NEXT_ACTION',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?next\s+action\s+(?:field\s+)?(?:of|for|in)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('ACTION_ITEM',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?action\s+item\s+(?:field\s+)?(?:of|for|in)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+)
+_WORKFLOW_ACTION_FIELD_LABELS = {
+    'ACTION_REQUIRED':r'(?:action\s+required|required\s+action)',
+    'NEXT_ACTION':r'next\s+action',
+    'ACTION_ITEM':r'action\s+item',
+}
+_WORKFLOW_ACTION_SQL_TERMS = {
+    'ACTION_REQUIRED':('action required','required action'),
+    'NEXT_ACTION':('next action',),
+    'ACTION_ITEM':('action item',),
+}
+_WORKFLOW_ACTION_SOURCE_PATTERNS = {
+    role:re.compile(rf'''(?imx)^[ \t]*(?:{label})[ \t]*:[ \t]*
+        (?P<value>[^\r\n]{{1,1000}}?)[ \t]*$''')
+    for role,label in _WORKFLOW_ACTION_FIELD_LABELS.items()
+}
+_WORKFLOW_ACTION_CLAIM_PREFIXES = tuple(
+    (role,re.compile(rf'(?i)\b(?:{label})\s*:\s*'))
+    for role,label in _WORKFLOW_ACTION_FIELD_LABELS.items()
+)
+_EMAIL_ACTION_CLAIM_PREFIXES = tuple(
+    (role,re.compile(rf'(?i)\be-?mail\s+(?:{label})\s*:\s*'))
+    for role,label in _WORKFLOW_ACTION_FIELD_LABELS.items()
+)
 _SUBMITTAL_FIELD_LABELS = {
     'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
     'DESCRIPTION':r'(?:submittal\s+description|description)',
@@ -462,6 +498,20 @@ _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
         |where\s+should\s+replies?\s+to\s+(?:the|this)\s+e-?mail\s+be\s+sent
     )\s*[?!.]*\s*$''')),
 )
+_EXACT_SINGLE_EMAIL_ACTION_QUESTIONS = (
+    ('ACTION_REQUIRED',re.compile(r'''(?ix)^\s*(?:
+        what\s+action\s+is\s+required\s+in\s+(?:the|this)\s+e-?mail
+        |(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+(?:the\s+)?
+            (?:action\s+required|required\s+action)\s+(?:field\s+)?
+            (?:of|for|in)\s+(?:the|this)\s+e-?mail
+    )\s*[?!.]*\s*$''')),
+    ('NEXT_ACTION',re.compile(r'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?next\s+action\s+(?:field\s+)?(?:of|for|in)\s+
+        (?:the|this)\s+e-?mail\s*[?!.]*\s*$''')),
+    ('ACTION_ITEM',re.compile(r'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?action\s+item\s+(?:field\s+)?(?:of|for|in)\s+
+        (?:the|this)\s+e-?mail\s*[?!.]*\s*$''')),
+)
 _EMAIL_FILE_VALUE = (
     r'(?:"[^"/\\\r\n]{1,235}\.(?:eml|msg)"|'
     r"'[^'/\\\r\n]{1,235}\.(?:eml|msg)'|"
@@ -510,6 +560,21 @@ _EXACT_NAMED_EMAIL_HEADER_QUESTIONS = (
         |where\s+should\s+replies?\s+to\s+(?:e-?mail\s+file\s+)?
             (?P<file_b>{_EMAIL_FILE_VALUE})\s+be\s+sent
     )\s*[?!.]*\s*$''')),
+)
+_EXACT_NAMED_EMAIL_ACTION_QUESTIONS = (
+    ('ACTION_REQUIRED',re.compile(rf'''(?ix)^\s*(?:
+        what\s+action\s+is\s+required\s+in\s+(?:e-?mail\s+file\s+)?
+            (?P<file_a>{_EMAIL_FILE_VALUE})
+        |(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+(?:the\s+)?
+            (?:action\s+required|required\s+action)\s+(?:field\s+)?
+            (?:of|for|in)\s+(?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})
+    )\s*[?!.]*\s*$''')),
+    ('NEXT_ACTION',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?next\s+action\s+(?:field\s+)?(?:of|for|in)\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$''')),
+    ('ACTION_ITEM',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?action\s+item\s+(?:field\s+)?(?:of|for|in)\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$''')),
 )
 _EMAIL_WORKFLOW_RELATION_CATEGORY = (
     r'(?:rfis?|requests?\s+for\s+information|submittals?)')
@@ -1089,6 +1154,24 @@ def requires_workflow_party_index(question: str) -> bool:
     return requested_workflow_party(question) is not None
 
 
+def requested_workflow_action(question: str) -> tuple[str,str,str] | None:
+    """Recognize one direct request for one explicit workflow action field."""
+    for role,pattern in _EXACT_WORKFLOW_ACTION_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier,role
+    return None
+
+
+def requires_workflow_action_index(question: str) -> bool:
+    return requested_workflow_action(question) is not None
+
+
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
     """Recognize one direct labelled-field request for one exact Submittal."""
     for field,pattern in _EXACT_SUBMITTAL_FIELD_QUESTIONS:
@@ -1153,6 +1236,21 @@ def requested_email_header(question: str) -> tuple[str,str | None] | None:
 
 def requires_email_header_index(question: str) -> bool:
     return requested_email_header(question) is not None
+
+
+def requested_email_action(question: str) -> tuple[str,str | None] | None:
+    """Recognize one explicit current-body action field for one selected Email."""
+    for role,pattern in _EXACT_SINGLE_EMAIL_ACTION_QUESTIONS:
+        if pattern.fullmatch(question):return role,None
+    for role,pattern in _EXACT_NAMED_EMAIL_ACTION_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        if file_name:=_requested_email_file(match):return role,file_name
+    return None
+
+
+def requires_email_action_index(question: str) -> bool:
+    return requested_email_action(question) is not None
 
 
 def requires_single_email_header_index(question: str) -> bool:
@@ -1980,6 +2078,76 @@ def _workflow_party_answer(
         'citations':citations}
 
 
+def _workflow_action_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one exact printed workflow-action field without interpreting prose."""
+    request=requested_workflow_action(question)
+    if not request:return None
+    workflow,identifier,role=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The requested action for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    terms=_WORKFLOW_ACTION_SQL_TERMS[role]
+    placeholders=','.join('?' for _ in document_ids)
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids,*terms])
+    names={'ACTION_REQUIRED':'Action Required','NEXT_ACTION':'Next Action',
+           'ACTION_ITEM':'Action Item'}
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} was not answered locally because more than '
+            '32 candidate source passages require review.'),'citations':[]}
+    found={};pattern=_WORKFLOW_ACTION_SOURCE_PATTERNS[role]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        upper_section=section.upper()
+        if (_source_family(evidence)=='EMAIL'
+                and not upper_section.startswith('EMAIL > BODY')):
+            continue
+        if _workflow_identities(section)!={target}:continue
+        for match in pattern.finditer(text):
+            display=' '.join(match.group('value').strip().split())
+            if not display:continue
+            quote=text[match.start():match.end()]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            normalized=_normalize_action_value(display)
+            if not normalized:continue
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),match.end(),role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The analyzed primary evidence does not contain one supported explicit '
+            f'{names[role]} field for {label}.'),'citations':[]}
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} cannot be established because the analyzed '
+            f'primary evidence contains conflicting explicit values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':f'{label} {names[role]}: "{value}".',
+            'citations':citations}
+
+
 def _workflow_date_answer(
         db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
     """Return one explicit workflow-scoped date role without a model call."""
@@ -2642,6 +2810,77 @@ def _email_header_answer(
         'citations':citations}
 
 
+def _email_action_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one explicit current-body Email action field without interpreting prose."""
+    request=requested_email_action(question)
+    if not request:return None
+    role,requested_file=request;documents=_workflow_email_documents(workflow_index)
+    if requested_file:
+        matches=[value for value in documents
+                 if value['file_name'].casefold()==requested_file.casefold()]
+        if not matches:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run does not contain an analyzed Email file named '
+                f'"{requested_file}".'),'citations':[]}
+        if len(matches)>1:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run contains {len(matches)} analyzed Email files named '
+                f'"{requested_file}". Select the source in the file list before relying on '
+                'one action field.'),'citations':[]}
+        documents=matches
+    elif len(documents)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run contains {len(documents)} Email files. Specify the '
+            'Email file before asking for one action field.'),'citations':[]}
+    if not documents:return None
+    document=documents[0]
+    rows=db.all('''SELECT e.payload,d.name AS file_name
+                   FROM evidence e JOIN documents d ON d.id=e.document_id
+                   WHERE e.run_id=? AND e.document_id=?
+                     AND LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),''))
+                         LIKE 'email > body%'
+                     AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                     AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                   ORDER BY e.id LIMIT 33''',(run_id,document['document_id']))
+    names={'ACTION_REQUIRED':'Action Required','NEXT_ACTION':'Next Action',
+           'ACTION_ITEM':'Action Item'}
+    target=(f'Email file "{document["file_name"]}"' if requested_file
+            else 'The only analyzed Email')
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field was not answered locally because more than 32 current '
+            'Email-body passages require review.'),'citations':[]}
+    found={};pattern=_WORKFLOW_ACTION_SOURCE_PATTERNS[role]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        for match in pattern.finditer(text):
+            display=' '.join(match.group('value').strip().split())
+            normalized=_normalize_action_value(display)
+            if not normalized:continue
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),match.end(),role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target} does not contain one supported current {names[role]} field.'),
+            'citations':[]}
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target} contains conflicting current {names[role]} values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':f'Email {names[role]}: "{value}".',
+            'citations':citations}
+
+
 def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
     locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
     return _workflow_identities(
@@ -3040,6 +3279,74 @@ def _workflow_party_claim_values(text: str) -> set[tuple[tuple[str,str],str,str]
     return _workflow_scoped_values(text,occurrences)
 
 
+def _normalize_action_value(
+        value: str, *, strip_answer_punctuation: bool = False) -> str | None:
+    normalized=' '.join(value.strip().split())
+    quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+    if len(normalized)>=2 and normalized[-1:]==quote_pairs.get(normalized[:1]):
+        normalized=normalized[1:-1].strip()
+    if strip_answer_punctuation and normalized[-1:] in '.!?':
+        normalized=normalized[:-1].rstrip()
+    return normalized.casefold() if normalized and len(normalized)<=1000 else None
+
+
+def _workflow_action_source_values(
+        text: str, identity_text: str | None = None
+        ) -> set[tuple[tuple[str,str],str,str]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    identity_spans=_workflow_identity_spans(text);values=set()
+    for role,pattern in _WORKFLOW_ACTION_SOURCE_PATTERNS.items():
+        for match in pattern.finditer(text):
+            value=_normalize_action_value(match.group('value'))
+            if not value:continue
+            preceding=[item for item in identity_spans
+                       if item[2]<=match.start() and match.start()-item[2]<=500]
+            identities={preceding[-1][0]} if preceding else (
+                all_identities if len(all_identities)==1 else set())
+            values.update((identity,role,value) for identity in identities)
+    return values
+
+
+def _action_claim_values(text: str, prefixes: tuple) -> list[tuple[str,str,int,int]]:
+    occurrences=[]
+    for role,pattern in prefixes:
+        for match in pattern.finditer(text):
+            start=match.end()
+            while start<len(text) and text[start] in ' \t':start+=1
+            quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+            closing=quote_pairs.get(text[start:start+1])
+            close=(text.find(closing,start+1,min(len(text),start+1002)) if closing else -1)
+            quoted=(close>=0 and '\n' not in text[start+1:close]
+                    and '\r' not in text[start+1:close])
+            if quoted:
+                raw=text[start+1:close];end=close+1
+            else:
+                _,end=statement_span(text,start,start);raw=text[start:end]
+            value=_normalize_action_value(raw,strip_answer_punctuation=not quoted)
+            if value:occurrences.append((role,value,match.start(),end))
+    return occurrences
+
+
+def _workflow_action_claim_values(text: str) -> set[tuple[tuple[str,str],str,str]]:
+    occurrences=[occurrence for occurrence in
+                 _action_claim_values(text,_WORKFLOW_ACTION_CLAIM_PREFIXES)
+                 if not re.search(r'(?i)\be-?mail\s+$',
+                                  text[max(0,occurrence[2]-24):occurrence[2]])]
+    return _workflow_scoped_values(
+        text,occurrences)
+
+
+def _email_action_source_values(text: str) -> set[tuple[str,str]]:
+    return {(role,value) for role,pattern in _WORKFLOW_ACTION_SOURCE_PATTERNS.items()
+            for match in pattern.finditer(text)
+            if (value:=_normalize_action_value(match.group('value')))}
+
+
+def _email_action_claim_values(text: str) -> set[tuple[str,str]]:
+    return {(role,value) for role,value,_,_ in
+            _action_claim_values(text,_EMAIL_ACTION_CLAIM_PREFIXES)}
+
+
 def _is_email_subject_question(question: str) -> bool:
     if not _EMAIL_SUBJECT_INTENT.search(question):return False
     return not (_workflow_identities(question)
@@ -3396,6 +3703,42 @@ def _require_workflow_party_support(
                 if source_identity==identity and source_role==role}
         if len(values)>1:
             raise ValueError(label+' cites conflicting workflow party field values')
+
+
+def _require_workflow_action_support(
+        claim: str, contexts: list[tuple], label: str) -> None:
+    supported=set()
+    for context in contexts:
+        quote,identity_text=context[:2]
+        if len(context)>=4:
+            family,section=context[2:4]
+            if family=='EMAIL' and not str(section).casefold().startswith('email > body'):
+                continue
+        supported.update(_workflow_action_source_values(quote,identity_text))
+    claimed=_workflow_action_claim_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains a workflow action field absent from its citations')
+    for identity,role,_ in claimed:
+        values={value for source_identity,source_role,value in supported
+                if source_identity==identity and source_role==role}
+        if len(values)>1:
+            raise ValueError(label+' cites conflicting workflow action field values')
+
+
+def _require_email_action_support(
+        claim: str, contexts: list[tuple], label: str) -> None:
+    supported=set()
+    for context in contexts:
+        quote,section=context[:2]
+        if section.casefold().startswith('email > body'):
+            supported.update(_email_action_source_values(quote))
+    claimed=_email_action_claim_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains an Email action field absent from its citations')
+    for role,_ in claimed:
+        values={value for source_role,value in supported if source_role==role}
+        if len(values)>1:
+            raise ValueError(label+' cites conflicting Email action field values')
 
 
 def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
@@ -3835,6 +4178,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
     top_level_quotes=[];top_level_identity_texts=[];top_level_email_quotes=[]
+    top_level_email_action_contexts=[]
+    top_level_workflow_action_contexts=[]
     top_level_workflow_subject_contexts=[]
     top_level_drawing_texts=[];top_level_clause_texts=[]
     for item in value['citations']:
@@ -3846,7 +4191,14 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         top_level_drawing_texts.append(_citation_drawing_text(source,item['quote']))
         top_level_clause_texts.append(_citation_clause_text(source,item['quote']))
         family=_source_family(source)
-        if family=='EMAIL':top_level_email_quotes.append(item['quote'])
+        locator=source.get('locator') if isinstance(source.get('locator'),dict) else {}
+        section=str(locator.get('section') or '')
+        top_level_workflow_action_contexts.append(
+            (item['quote'],top_level_identity_texts[-1],family,section))
+        if family=='EMAIL':
+            top_level_email_quotes.append(item['quote'])
+            top_level_email_action_contexts.append(
+                (item['quote'],section,str(source.get('file_name') or '')))
         elif family in {'RFI','SUBMITTAL'}:
             top_level_workflow_subject_contexts.append(
                 (item['quote'],top_level_identity_texts[-1]))
@@ -3855,6 +4207,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     answer_drawing_texts=list(top_level_drawing_texts)
     answer_clause_texts=list(top_level_clause_texts)
     answer_email_quotes=list(top_level_email_quotes)
+    answer_email_action_contexts=list(top_level_email_action_contexts)
+    answer_workflow_action_contexts=list(top_level_workflow_action_contexts)
     answer_workflow_subject_contexts=list(top_level_workflow_subject_contexts)
     finding_sources=[];question_targets=_workflow_identities(question)
     date_question=bool(_DATE_QUESTION_INTENT.search(question)
@@ -3869,6 +4223,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         finding_sources.append(key)
         finding_quotes=[];finding_identity_texts=[]
         finding_drawing_texts=[];finding_clause_texts=[];finding_email_quotes=[]
+        finding_email_action_contexts=[]
+        finding_workflow_action_contexts=[]
         finding_workflow_subject_contexts=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
@@ -3883,7 +4239,14 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             finding_drawing_texts.append(_citation_drawing_text(source,item['quote']))
             finding_clause_texts.append(_citation_clause_text(source,item['quote']))
             family=_source_family(source)
-            if family=='EMAIL':finding_email_quotes.append(item['quote'])
+            locator=source.get('locator') if isinstance(source.get('locator'),dict) else {}
+            section=str(locator.get('section') or '')
+            finding_workflow_action_contexts.append(
+                (item['quote'],finding_identity_texts[-1],family,section))
+            if family=='EMAIL':
+                finding_email_quotes.append(item['quote'])
+                finding_email_action_contexts.append(
+                    (item['quote'],section,str(source.get('file_name') or '')))
             elif family in {'RFI','SUBMITTAL'}:
                 finding_workflow_subject_contexts.append(
                     (item['quote'],finding_identity_texts[-1]))
@@ -3924,6 +4287,10 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             _require_workflow_party_support(
                 finding['statement'],list(zip(finding_quotes,finding_identity_texts)),
                 'source finding')
+            _require_workflow_action_support(
+                finding['statement'],finding_workflow_action_contexts,'source finding')
+            _require_email_action_support(
+                finding['statement'],finding_email_action_contexts,'source finding')
             _require_email_participant_support(
                 finding['statement'],finding_email_quotes,'source finding')
             _require_email_date_header_support(
@@ -3940,6 +4307,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         answer_drawing_texts.extend(finding_drawing_texts)
         answer_clause_texts.extend(finding_clause_texts)
         answer_email_quotes.extend(finding_email_quotes)
+        answer_email_action_contexts.extend(finding_email_action_contexts)
+        answer_workflow_action_contexts.extend(finding_workflow_action_contexts)
         answer_workflow_subject_contexts.extend(finding_workflow_subject_contexts)
     if value['status']=='ANSWERED':
         if (top_level_quotes
@@ -3978,6 +4347,10 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             value['answer'],answer_workflow_subject_contexts,'answer')
         _require_workflow_party_support(
             value['answer'],list(zip(answer_quotes,answer_identity_texts)),'answer')
+        _require_workflow_action_support(
+            value['answer'],answer_workflow_action_contexts,'answer')
+        _require_email_action_support(
+            value['answer'],answer_email_action_contexts,'answer')
         _require_email_participant_support(value['answer'],answer_email_quotes,'answer')
         _require_email_date_header_support(value['answer'],answer_email_quotes,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
@@ -4012,6 +4385,32 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                        for identity,role,_ in claims):
                 raise ValueError(
                     'an answered workflow party question requires an explicit scoped field')
+        if action_request:=requested_workflow_action(question):
+            target=(action_request[0],action_request[1]);requested_role=action_request[2]
+            claims=set(_workflow_action_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_workflow_action_claim_values(finding['statement']))
+            if not any(identity==target and role==requested_role
+                       for identity,role,_ in claims):
+                raise ValueError(
+                    'an answered workflow action question requires an explicit scoped field')
+        if email_action_request:=requested_email_action(question):
+            requested_role,requested_file=email_action_request
+            claims=set(_email_action_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_email_action_claim_values(finding['statement']))
+            supported=set()
+            for context in answer_email_action_contexts:
+                quote,section=context[:2]
+                file_name=context[2] if len(context)>=3 else ''
+                if (section.casefold().startswith('email > body')
+                        and (not requested_file
+                             or file_name.casefold()==requested_file.casefold())):
+                    supported.update(_email_action_source_values(quote))
+            if not any(role==requested_role and (role,value) in supported
+                       for role,value in claims):
+                raise ValueError(
+                    'an answered Email action question requires an explicit current-body field')
         if (_EMAIL_DATE_INTENT.search(question)
                 and not any(_email_date_header_claim_values(text) for text in (
                     value['answer'],*(finding['statement'] for finding in value['source_findings'])))):
@@ -4106,6 +4505,20 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(email_header['citations']),'cached':False}
+        email_action=_email_action_answer(
+            self.db,run['id'],question,workflow_index)
+        if email_action:
+            return {'run_id':run['id'],'question':question,**email_action,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(email_action['citations']),'cached':False}
+        workflow_action=_workflow_action_answer(
+            self.db,run['id'],question,workflow_index)
+        if workflow_action:
+            return {'run_id':run['id'],'question':question,**workflow_action,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(workflow_action['citations']),'cached':False}
         rfi_content=_rfi_content_answer(self.db,run['id'],question,workflow_index)
         if rfi_content:
             return {'run_id':run['id'],'question':question,**rfi_content,

@@ -1712,6 +1712,20 @@
       ],
       "decision_source": "The active objective requires faster and more accurate file-grounded questions across RFI, Submittal and Email content without inferring project authority.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-ACTION-FIELD-LOCAL-001",
+      "title": "Answer exact workflow and Email action fields locally",
+      "statement": "Strict questions for one exact RFI/Submittal or one selected Email Action Required, Next Action or Action Item field should reuse explicit scoped project evidence before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions name one exact RFI/Submittal and request Action Required/Required Action, Next Action or Action Item. Existing non-vision evidence from at most 32 indexed primary files may return locally only when the corresponding explicit line-leading field is scoped to that exact workflow item. Action Required aliases normalize together while the other roles remain distinct; one complete value returns with exact inline citations and zero provider or budget action, and conflicts fail closed.",
+        "The only analyzed Email or one exact named .eml/.msg file supports the same roles only from current non-vision EMAIL > BODY evidence. Multiple unspecified Emails, missing or duplicate exact names, conflicting values, more than 32 current-body passages, headers, quoted history, signatures and ordinary prose fail closed. Recognized strict workflow and Email questions with no supported explicit field do not fall through to inferred prose answers.",
+        "The shared final-answer validator preserves the exact workflow identity, field role and complete value, or the exact current Email-body field role and value, in ordinary answers and source findings. It rejects omissions, role swaps, cross-item or cross-source borrowing and conflicting cited values. The implementation does not infer applicability, responsibility, approval, chronology, authority or action ownership and adds no dependency, parser change or second index."
+      ],
+      "decision_source": "The active objective requires faster and more accurate file-grounded questions across RFI, Submittal and Email content while keeping explicit actions distinct from recommendations and ordinary prose.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",
