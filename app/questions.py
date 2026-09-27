@@ -1600,11 +1600,15 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
                   '_source_document_id':row['source_document_id']}
         ranked.append((score,len(concept_hits),evidence['evidence_id'],evidence))
     ranked.sort(key=lambda item:(-item[0],-item[1],item[2]))
-    selected=[];used=0
+    selected=[];used=0;seen_content=set()
     for _,_,_,evidence in _selection_order(ranked,diversify):
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        content_key=(*_source_key(evidence),evidence['raw_text'],
+                     locator.get('section'),locator.get('sheet'),locator.get('paragraph'))
+        if content_key in seen_content:continue
         size=len(evidence['prompt_text'])
         if selected and used+size>_MAX_CONTEXT_CHARS:continue
-        selected.append(evidence);used+=size
+        selected.append(evidence);used+=size;seen_content.add(content_key)
         if len(selected)>=_MAX_RESULTS:break
     return selected
 

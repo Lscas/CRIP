@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0109",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Deduplicate exact repeated evidence inside one project-question source scope before applying model-context limits.",
+  "decision_refs": [
+    "The user requested continued CIRP speed and accuracy improvements for file-grounded project questions",
+    "An offline reproduction proved that eight identical fragments from one Specification document and scope occupied all eight context slots",
+    "Exact scope-local deduplication reduces prompt noise without fuzzy matching or removing independent provenance"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-089.json", "tasks/DEV-090.json", "tasks/DEV-094.json",
+    "changes/CR-0109.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency improvements to the existing Trunk Tools-style file-grounded question flow.",
+  "known_limitations": [
+    "Deduplication is exact and local to one document, source family and semantic locator scope; it does not detect paraphrases or near-duplicates.",
+    "A physical Page difference alone does not preserve an otherwise exact duplicate, while Section, Sheet and Paragraph differences do.",
+    "The change reduces model context only after retrieval and does not reduce parser, OCR or FTS indexing work."
+  ]
+}

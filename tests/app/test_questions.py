@@ -354,7 +354,7 @@ def test_drawing_source_family_uses_bounded_signals_after_stronger_types(evidenc
     assert _source_family(evidence)==expected
 
 
-def test_non_comparison_question_keeps_relevance_first_results(client, project):
+def test_non_comparison_question_deduplicates_exact_same_source_evidence(client, project):
     run = _source_evidence(client, project, [
         ('project-spec.txt', ['Pipe size shall be 2 inch Type L copper.'] * 8),
         ('RFI-42-response.txt', ['RFI 42 mentions copper piping.']),
@@ -362,8 +362,31 @@ def test_non_comparison_question_keeps_relevance_first_results(client, project):
 
     found = retrieve_evidence(client.app.state.db, run, 'What is the pipe size?')
 
-    assert len(found) == 8
+    assert len(found) == 1
     assert {item['file_name'] for item in found} == {'project-spec.txt'}
+
+
+def test_retrieval_keeps_identical_text_from_distinct_documents(client, project):
+    text = 'Pipe size shall be 2 inch Type L copper.'
+    run = _source_evidence(client, project, [
+        ('spec-a.txt', [text]),
+        ('spec-b.txt', [text]),
+    ])
+
+    found = retrieve_evidence(client.app.state.db, run, 'What is the pipe size?')
+
+    assert len(found) == 2
+    assert {item['file_name'] for item in found} == {'spec-a.txt', 'spec-b.txt'}
+
+
+def test_retrieval_keeps_identical_text_from_distinct_source_scopes(client, project):
+    text = 'Pipe size shall be 2 inch Type L copper.'
+    run = _evidence(client, project, [text, text])
+
+    found = retrieve_evidence(client.app.state.db, run, 'What is the pipe size?')
+
+    assert len(found) == 2
+    assert {item['locator']['section'] for item in found} == {'Section 1', 'Section 2'}
 
 
 def test_comparison_diversifies_workflow_sections_inside_one_document(client, project):
