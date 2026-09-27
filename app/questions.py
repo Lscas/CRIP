@@ -303,6 +303,47 @@ _SUBMITTAL_FIELD_SOURCE_PATTERNS = {
             [^\r\n]{{1,1000}})*)
     )''') for field,label in _SUBMITTAL_FIELD_LABELS.items()
 }
+_WORKFLOW_DATE_QUESTION_TEXT = (
+    r'(?:response\s+due(?:\s+date)?|(?:required|expected)\s+response\s+date|'
+    r'due(?:\s+date)?|issue(?:d)?\s+date|date\s+issued|issued|'
+    r'submission\s+date|submitted\s+date|date\s+submitted|submitted|'
+    r'receipt\s+date|received\s+date|date\s+received|received|'
+    r'sent\s+date|date\s+sent|sent|review(?:ed)?\s+date|date\s+reviewed|reviewed|'
+    r'approval\s+date|approved\s+date|date\s+approved|approved|'
+    r'revision\s+date|revised\s+date|date\s+revised|revised|'
+    r'response\s+(?:date|issued)|answer(?:ed)?\s+date|date\s+answered|answered)'
+)
+_EXACT_WORKFLOW_DATE_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?P<date_role>{_WORKFLOW_DATE_QUESTION_TEXT})\s+(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:when|what\s+date)\s+(?:is|was)\s+
+        {_WORKFLOW_EXACT_ITEM}\s+(?P<date_role>{_WORKFLOW_DATE_QUESTION_TEXT})
+        \s*[?!.]*\s*$'''),
+)
+_WORKFLOW_DATE_QUESTION_ROLES = (
+    ('DUE',re.compile(r'(?i)^(?:response\s+due(?:\s+date)?|'
+                      r'(?:required|expected)\s+response\s+date|due(?:\s+date)?)$')),
+    ('ISSUED',re.compile(r'(?i)^(?:issue(?:d)?\s+date|date\s+issued|issued)$')),
+    ('SUBMITTED',re.compile(r'(?i)^(?:submission\s+date|submitted\s+date|'
+                            r'date\s+submitted|submitted)$')),
+    ('RECEIVED',re.compile(r'(?i)^(?:receipt\s+date|received\s+date|'
+                           r'date\s+received|received)$')),
+    ('SENT',re.compile(r'(?i)^(?:sent\s+date|date\s+sent|sent)$')),
+    ('REVIEWED',re.compile(r'(?i)^(?:review(?:ed)?\s+date|date\s+reviewed|reviewed)$')),
+    ('APPROVED',re.compile(r'(?i)^(?:approval\s+date|approved\s+date|'
+                           r'date\s+approved|approved)$')),
+    ('REVISION',re.compile(r'(?i)^(?:revision\s+date|revised\s+date|'
+                           r'date\s+revised|revised)$')),
+    ('RESPONSE',re.compile(r'(?i)^(?:response\s+(?:date|issued)|answer\s+date|'
+                           r'answered\s+date|date\s+answered|answered)$')),
+)
+_WORKFLOW_DATE_SQL_TERMS = {
+    'DUE':('due','required response','expected response'),
+    'ISSUED':('issu',),'SUBMITTED':('submi',),
+    'RECEIVED':('receiv','receipt'),'SENT':('sent',),'REVIEWED':('review',),
+    'APPROVED':('approv',),'REVISION':('revis',),'RESPONSE':('response','answer'),
+}
 _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
     ('SUBJECT',re.compile(r'''(?ix)^\s*(?:
         what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+subject(?:\s+line)?|
@@ -795,6 +836,26 @@ def requires_submittal_field_index(question: str) -> bool:
     return requested_submittal_field(question) is not None
 
 
+def requested_workflow_date_item(question: str) -> tuple[str,str,str] | None:
+    """Recognize one exact labelled date role for one exact RFI or Submittal."""
+    for pattern in _EXACT_WORKFLOW_DATE_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        role=next((name for name,role_pattern in _WORKFLOW_DATE_QUESTION_ROLES
+                   if role_pattern.fullmatch(match.group('date_role'))),None)
+        if identifier and role:return workflow,identifier,role
+    return None
+
+
+def requires_workflow_date_index(question: str) -> bool:
+    return requested_workflow_date_item(question) is not None
+
+
 def requested_single_email_header(question: str) -> str | None:
     """Recognize an exact header question that refers to one otherwise-unspecified Email."""
     return next((field for field,pattern in _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS
@@ -1276,6 +1337,84 @@ def _submittal_field_answer(
     value=next(iter(found.values()))['value']
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary source records the {names[field]} for {label} as "{value}".'),
+        'citations':citations}
+
+
+def _workflow_index_primary_documents(
+        target: tuple[str,str], workflow_index: dict | None) -> list[dict]:
+    if not isinstance(workflow_index,dict):return []
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict):continue
+        identity=(item.get('kind'),normalize_identifier(item.get('kind'),item.get('identifier')))
+        if identity!=target:continue
+        return [member for member in item.get('members',[])
+                if isinstance(member,dict) and member.get('source')=='PRIMARY'
+                and member.get('document_id')]
+    return []
+
+
+def _workflow_date_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one explicit workflow-scoped date role without a model call."""
+    request=requested_workflow_date_item(question)
+    if not request:return None
+    workflow,identifier,role=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:return None
+    if len(documents)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The requested date for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    placeholders=','.join('?' for _ in document_ids);terms=_WORKFLOW_DATE_SQL_TERMS[role]
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 513''',
+                [run_id,*document_ids,*terms])
+    role_name=role.title()
+    if len(rows)>512:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {role_name} date for {label} was not answered locally because more than 512 '
+            'candidate source passages require review.'),'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        identity_text=_citation_identity_text(evidence,text)
+        for identity,found_role,normalized,start,end in _workflow_date_role_occurrences(
+                text,identity_text):
+            if identity!=target or found_role!=role:continue
+            left,right=statement_span(text,start,end);quote=text[left:right]
+            quote_identity=_citation_identity_text(evidence,quote)
+            if (target,role,normalized) not in _workflow_date_role_values(quote,quote_identity):
+                continue
+            display=text[start:end]
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,left,right,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {role_name} date for {label} cannot be established because the analyzed '
+            f'primary evidence contains conflicting explicit values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed project evidence records the {role_name} date for {label} as "{value}".'),
         'citations':citations}
 
 
@@ -1897,9 +2036,27 @@ def _workflow_scoped_values(text: str, occurrences: list[tuple],
     return values
 
 
+def _workflow_date_role_occurrences(text: str, identity_text: str | None = None
+                                    ) -> list[tuple[tuple[str,str],str,str,int,int]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    values=[]
+    for role,date_value,start,end in _date_role_occurrences(text):
+        left,right=statement_span(text,start,end)
+        statement_identities=_workflow_identities(text[left:right])
+        if identity_text is None:
+            identities=statement_identities or all_identities
+        else:
+            identities=(statement_identities if len(statement_identities)==1 else
+                        all_identities if not statement_identities and len(all_identities)==1
+                        else set())
+        values.extend((identity,role,date_value,start,end) for identity in identities)
+    return sorted(set(values))
+
+
 def _workflow_date_role_values(text: str, identity_text: str | None = None
                                ) -> set[tuple[tuple[str,str],str,str]]:
-    return _workflow_scoped_values(text,_date_role_occurrences(text),identity_text)
+    return {(identity,role,date_value) for identity,role,date_value,_,_
+            in _workflow_date_role_occurrences(text,identity_text)}
 
 
 def _workflow_spec_section_values(text: str, identity_text: str | None = None
@@ -2736,6 +2893,12 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(submittal_field['citations']),'cached':False}
+        workflow_date=_workflow_date_answer(self.db,run['id'],question,workflow_index)
+        if workflow_date:
+            return {'run_id':run['id'],'question':question,**workflow_date,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(workflow_date['citations']),'cached':False}
         exact_subject=_workflow_index_exact_subject(
             self.db,run['id'],question,workflow_index)
         if exact_subject:

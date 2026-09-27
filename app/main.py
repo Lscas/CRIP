@@ -33,6 +33,7 @@ from app.email_attachments import (import_email_attachment,import_email_attachme
 from app.questions import (ProjectQuestions,requires_email_header_index,
                            requires_rfi_content_index,
                            requires_submittal_field_index,
+                           requires_workflow_date_index,
                            requires_workflow_inventory,
                            requires_workflow_status_index,requires_workflow_subject_index)
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
@@ -257,6 +258,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
                              or requires_workflow_subject_index(question)
                              or requires_rfi_content_index(question)
                              or requires_submittal_field_index(question)
+                             or requires_workflow_date_index(question)
                              or requires_email_header_index(question)) else None)
         return questions.ask(run,question,workflow_index)
     @app.get('/api/analysis-runs/{rid}')

@@ -25,12 +25,14 @@ from app.questions import (
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_email_header, requested_single_email_header,
     requested_rfi_content, requested_submittal_field,
+    requested_workflow_date_item,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
     requires_email_header_index, requires_rfi_content_index,
     requires_submittal_field_index,
     requires_single_email_header_index,
+    requires_workflow_date_index,
     requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
@@ -4004,6 +4006,221 @@ def test_question_api_loads_workflow_index_for_exact_submittal_field(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Spec Section: 23 05 00 - General-Duty Valves'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the due date for RFI 42?',('RFI','42','DUE')),
+    ('What is the expected response date for RFI 42?',('RFI','42','DUE')),
+    ('When was RFI 0042 issued?',('RFI','42','ISSUED')),
+    ('What is the response date for RFI ARC-42?',('RFI','ARC-42','RESPONSE')),
+    ('What is the submission date of Submittal 23-01?',
+     ('SUBMITTAL','23-01','SUBMITTED')),
+    ('What is the receipt date for Submittal 23-01?',
+     ('SUBMITTAL','23-01','RECEIVED')),
+    ('When was Submittal 23-01 approved?',('SUBMITTAL','23-01','APPROVED')),
+    ('What is the revision date for Submission 23 05 00 - 01?',
+     ('SUBMITTAL','23 05 00-01','REVISION')),
+    ('What dates are recorded for RFI 42?',None),
+    ('When was the email sent?',None),
+    ('What is the due date for RFI 42 and RFI 43?',None),
+])
+def test_exact_workflow_date_question_boundary(question,expected):
+    assert requested_workflow_date_item(question)==expected
+    assert requires_workflow_date_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(('file_name','document_type','context','section','question','quote'),[
+    ('RFI-42-question.pdf','RFI_QUESTION',
+     {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'},
+     'RFI 42 > QUESTION','What is the due date for RFI 42?',
+     'Due Date: January 5, 2024'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','What is the submission date of Submittal 23-01?',
+     'Submission Date: 2024-02-06'),
+    ('RFI-42-response.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','What is the response date for RFI 42?',
+     'Response Date: 7 March 2024'),
+])
+def test_exact_workflow_dates_answer_locally_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context,
+        section, question, quote):
+    run=_source_evidence(client,project,[(file_name,[quote])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact workflow date used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==quote
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_date_blocks_conflicting_values_without_model(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('RFI-42.pdf',[
+        'Due Date: 2024-01-05','Response Due Date: January 6, 2024',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > QUESTION'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],'name':'RFI-42.pdf',
+        'summary':{'document_type':'RFI_QUESTION','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('conflicting workflow date used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the due date for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Due Date: 2024-01-05','Response Due Date: January 6, 2024'}
+    assert requests==[]
+
+
+def test_exact_workflow_date_accepts_equivalent_formats_across_primary_sources(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Due Date: 2024-01-05']),
+        ('RFI-42-log.pdf',['Response Due Date: January 5, 2024']),
+    ])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > QUESTION'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    documents={row['name']:row['id'] for row in db.all(
+        'SELECT id,name FROM documents WHERE project_id=?',(project['id'],))}
+    context={'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}
+    index=build_workflow_index([{
+        'document_id':document_id,'name':file_name,
+        'summary':{'document_type':'RFI_QUESTION','workflow_contexts':[context]}}
+        for file_name,document_id in documents.items()])
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('equivalent workflow dates called provider'))))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('equivalent workflow dates used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,'When is RFI 42 due?',index)
+
+    assert result['status']=='ANSWERED'
+    assert len(result['citations'])==2
+    assert {item['quote'] for item in result['citations']}=={
+        'Due Date: 2024-01-05','Response Due Date: January 5, 2024'}
+
+
+def test_exact_workflow_date_does_not_borrow_another_identity(
+        client, project, tmp_path, monkeypatch):
+    text='RFI 42 Issued: 2024-01-05. RFI 43 Due Date: 2024-01-06.'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[text])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > QUESTION'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42.pdf',
+        'summary':{'document_type':'RFI_QUESTION','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('unsupported workflow date called provider'))))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the due date for RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_date_ignores_quoted_email_history(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',['Due Date: 2024-01-05'])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload'])
+    payload['locator']['section']='EMAIL > QUOTED HISTORY > RFI 42 > QUESTION'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('quoted history date called provider'))))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the due date for RFI 42?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_workflow_date_caps_primary_files_and_candidate_passages(monkeypatch):
+    many={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    one={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('primary-file cap still read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(513)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('workflow date cap used retrieval'))
+
+    document_cap=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-DATE-DOC-CAP','status':'COMPLETED'},
+        'What is the due date for RFI 42?',many)
+    passage_cap=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-DATE-PASSAGE-CAP','status':'COMPLETED'},
+        'What is the due date for RFI 42?',one)
+
+    assert document_cap['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in document_cap['answer']
+    assert passage_cap['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 512 candidate source passages' in passage_cap['answer']
+
+
+def test_question_api_loads_workflow_index_for_exact_workflow_date(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('RFI-42.pdf',['Due Date: 2024-01-05'])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > QUESTION'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'RFI_QUESTION','workflow_contexts':[{
+        'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact workflow date route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the due date for RFI 42?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Due Date: 2024-01-05'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

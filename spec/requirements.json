@@ -1590,6 +1590,19 @@
       ],
       "decision_source": "The user explicitly requested Trunk Tools-style questions answered from existing project files, including Email alongside RFI and Submittal content.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-WORKFLOW-DATE-LOCAL-001",
+      "title": "Answer exact RFI and Submittal dates locally",
+      "statement": "Strict date-role questions for one exact RFI or Submittal should reuse existing workflow-scoped project evidence before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions for one exact RFI/Submittal Due, Issued, Submitted, Received, Sent, Reviewed, Approved, Revision or Response date reuse the complete workflow index and existing non-vision evidence. One distinct full date returns with exact inline citations and zero provider or budget action.",
+        "Equivalent ISO and English month-name formats merge. Different dates, another workflow identity, ambiguous multi-identity scope, quoted Email history, vision narration, more than 32 primary files or more than 512 role-bearing candidate passages fail closed. Missing, plural, comparison and interpretive questions stay on ordinary grounded Q&A; no deadline, chronology, current-state or authority inference is added."
+      ],
+      "decision_source": "The active objective requires faster and more accurate file-grounded support across RFI, Submittal and Email content.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

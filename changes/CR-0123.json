@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0123",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-DATE-LOCAL-001"],
+  "summary": "Answer strict exact RFI/Submittal date-role questions from existing local project evidence.",
+  "decision_refs": [
+    "The active objective prioritizes efficiency and accuracy across RFI, Submittal and Email",
+    "Existing date-role grounding already provides the required atomic and workflow-scoped semantics",
+    "The complete workflow index can bound primary sources without a new index or provider call"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-108.json", "changes/CR-0123.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-108",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency and accuracy improvements across existing RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions for one exact workflow identity and one supported explicit date role use the shortcut.",
+    "Missing, plural, comparison and interpretive date questions remain on ordinary grounded Q&A.",
+    "Quoted history, vision narration, conflicting dates, more than 32 primary files and more than 512 candidate passages fail closed.",
+    "The shortcut does not calculate deadlines, order events, infer current state or select contractual authority."
+  ]
+}

@@ -1116,3 +1116,12 @@ Strict Cc, Bcc and Reply-To questions should reuse existing current Email-header
 
 - Bounded English Cc, Bcc and Reply-To questions extend the existing local Email-header path for both one otherwise-unspecified analyzed Email and one exact named .eml or .msg file. Only existing non-vision EMAIL > HEADERS evidence may return one complete header value with exact inline citations and zero provider or budget action.
 - Multiple Email selection, exact filename, missing value, conflicting current values, quoted-history exclusion and the 32-passage ceiling retain the existing fail-closed behavior. Ordinary model-answer validation requires an explicit supported same-role name or address for Cc/Bcc/Reply-To intent. The implementation does not expand distribution lists, infer actual delivery or readership, resolve identities, access a mailbox or add a dependency or second index.
+
+## FR-QA-WORKFLOW-DATE-LOCAL-001 · Answer exact RFI and Submittal dates locally
+
+优先级：P0；状态：implemented
+
+Strict date-role questions for one exact RFI or Submittal should reuse existing workflow-scoped project evidence before model retrieval.
+
+- Bounded English questions for one exact RFI/Submittal Due, Issued, Submitted, Received, Sent, Reviewed, Approved, Revision or Response date reuse the complete workflow index and existing non-vision evidence. One distinct full date returns with exact inline citations and zero provider or budget action.
+- Equivalent ISO and English month-name formats merge. Different dates, another workflow identity, ambiguous multi-identity scope, quoted Email history, vision narration, more than 32 primary files or more than 512 role-bearing candidate passages fail closed. Missing, plural, comparison and interpretive questions stay on ordinary grounded Q&A; no deadline, chronology, current-state or authority inference is added.
