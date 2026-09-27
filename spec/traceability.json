@@ -2135,6 +2135,32 @@
         "app/workflows.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-ATTACHMENT-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py",
+        "tests/app/test_email_attachments.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py",
+        "tests/app/test_email_attachments.py"
+      ],
+      "test_scope": "offline_bidirectional_exact_email_attachment_provenance_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

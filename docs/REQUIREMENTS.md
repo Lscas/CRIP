@@ -1155,3 +1155,13 @@ Strict questions asking which messages share the indexed thread of one exact nam
 - Bounded English questions naming one exact .eml or .msg file list at most eight messages in the existing deterministic parent-before-reply order with answer_basis WORKFLOW_INDEX, zero evidence retrieval and zero provider or budget action.
 - File matching is exact and case-insensitive; names containing spaces require quotes, and path or wildcard input is never expanded. A standalone indexed message is reported honestly, while unresolved external references are shown only as a count and raw Message-ID values are never exposed.
 - Missing or duplicate exact file names, no indexed thread, multiple thread membership, incomplete or duplicate members, more than eight messages, an unsupported state, or an ambiguous duplicate/self-reference/cycle returns insufficient evidence. Ambiguous groups retain bounded file names and parser-generated warnings for review; the implementation does not connect to a mailbox or infer participants, chronology beyond exact headers, delivery, authority or contractual effect.
+
+## FR-QA-EMAIL-ATTACHMENT-RELATION-LOCAL-001 · Answer exact imported Email attachment relationship questions locally
+
+优先级：P0；状态：implemented
+
+Strict bidirectional questions between one exact named Email and its explicitly imported analyzed attachments should reuse the complete attachment-provenance workflow index before evidence retrieval.
+
+- A bounded English question naming one exact .eml or .msg file lists at most eight explicitly imported and analyzed attachment files with each source attachment index and validated MIME type. A reverse question naming one exact imported attachment file lists at most eight parent Email files with the same provenance metadata. Both directions use answer_basis WORKFLOW_INDEX with zero evidence retrieval and zero provider or budget action.
+- File matching is exact and case-insensitive; names containing spaces require quotes, while paths and wildcard tokens are rejected rather than interpreted or expanded. An empty result states only that no indexed explicit import-and-analysis relationship exists and never claims the Email contained no attachments.
+- Missing or duplicate exact names, duplicate parent names or source indexes, malformed relationship members or MIME metadata, and more than eight results fail closed. Repeated identical import records remain one relationship with an explicit count. Import provenance does not transfer workflow role, status, approval or authority from an Email to its attachment or in reverse; the implementation adds no mailbox access, evidence/model call, dependency or second index.

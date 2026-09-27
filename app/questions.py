@@ -390,6 +390,11 @@ _EMAIL_FILE_VALUE = (
     r"'[^'/\\\r\n]{1,235}\.(?:eml|msg)'|"
     r'[^\s?!./\\][^\s?!/\\]{0,234}\.(?:eml|msg))'
 )
+_PROJECT_FILE_VALUE = (
+    r'(?:"[^"/\\\r\n]{1,235}\.[a-z0-9]{1,16}"|'
+    r"'[^'/\\\r\n]{1,235}\.[a-z0-9]{1,16}'|"
+    r'[^\s?!./\\][^\s?!/\\]{0,234}\.[a-z0-9]{1,16})'
+)
 _EXACT_NAMED_EMAIL_HEADER_QUESTIONS = (
     ('SUBJECT',re.compile(rf'''(?ix)^\s*(?:
         what\s+is\s+(?:the\s+)?subject(?:\s+line)?\s+(?:of|for)\s+
@@ -509,6 +514,29 @@ _EXACT_EMAIL_THREAD_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*(?:show(?:\s+me)?|what\s+is)\s+(?:the\s+)?
         (?:e-?mail\s+)?thread\s+(?:containing|for)\s+
         (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+)
+_EXACT_EMAIL_ATTACHMENT_FORWARD_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+(?:imported|selected|analyzed)\s+
+        attachments?\s+(?:came|come)\s+from\s+(?:e-?mail\s+file\s+)?
+        (?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+attachments?\s+were\s+imported\s+
+        from\s+(?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        (?:imported|selected|analyzed)\s+attachments?\s+(?:for|from|linked\s+to)\s+
+        (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+)
+_EXACT_EMAIL_ATTACHMENT_REVERSE_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+(?:parent\s+)?e-?mails?\s+
+        (?:was|were)\s+(?:imported\s+attachment\s+)?
+        (?P<file_a>{_PROJECT_FILE_VALUE})\s+imported\s+from\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+(?:parent\s+)?e-?mails?\s+
+        (?:is|are|was|were)\s+linked\s+to\s+(?:imported\s+attachment\s+)?
+        (?P<file_a>{_PROJECT_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*what\s+e-?mail\s+did\s+(?:imported\s+attachment\s+)?
+        (?P<file_a>{_PROJECT_FILE_VALUE})\s+come\s+from\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?parent\s+
+        e-?mails?\s+for\s+(?:imported\s+attachment\s+)?
+        (?P<file_a>{_PROJECT_FILE_VALUE})\s*[?!.]*\s*$'''),
 )
 _EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
     r'(?im)^[ \t]*(?P<role>from|to|cc|bcc|reply-to)[ \t]*:[ \t]*'
@@ -950,7 +978,7 @@ def _requested_email_file(match: re.Match) -> str | None:
     file_name=next(iter(values)).strip()
     if len(file_name)>=2 and file_name[0]==file_name[-1] and file_name[0] in "\"'":
         file_name=file_name[1:-1].strip()
-    if (not file_name or '/' in file_name or '\\' in file_name
+    if (not file_name or '/' in file_name or '\\' in file_name or ':' in file_name
             or any(char in file_name for char in '*?[]')):
         return None
     return file_name
@@ -1039,6 +1067,21 @@ def requested_email_thread(question: str) -> str | None:
 
 def requires_email_thread_index(question: str) -> bool:
     return requested_email_thread(question) is not None
+
+
+def requested_email_attachment_relations(question: str) -> tuple[str,str] | None:
+    """Recognize one bounded imported Email-attachment provenance request."""
+    for direction,patterns in (('FROM_EMAIL',_EXACT_EMAIL_ATTACHMENT_FORWARD_QUESTIONS),
+                               ('TO_EMAIL',_EXACT_EMAIL_ATTACHMENT_REVERSE_QUESTIONS)):
+        for pattern in patterns:
+            match=pattern.fullmatch(question)
+            if match and (file_name:=_requested_email_file(match)):
+                return direction,file_name
+    return None
+
+
+def requires_email_attachment_relation_index(question: str) -> bool:
+    return requested_email_attachment_relations(question) is not None
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -1661,6 +1704,137 @@ def _email_thread_answer(question: str, workflow_index: dict | None) -> dict | N
         answer=(f'The indexed Email thread containing "{requested_file}" has {len(ordered)} '
                 f'messages in header-derived order: {names}.{external_note}')
     return {'status':'ANSWERED','answer':answer,'citations':[]}
+
+
+def _email_attachment_relations(workflow_index: dict | None) -> tuple[list[dict],list[dict]]:
+    """Return valid explicit attachment links plus malformed relationship hints."""
+    valid=[];invalid=[]
+    for item in (workflow_index or {}).get('items',[]):
+        if not isinstance(item,dict) or item.get('kind')!='EMAIL_ATTACHMENT':continue
+        members=[member for member in item.get('members',[]) if isinstance(member,dict)]
+        parents=[member for member in members if member.get('source')=='PARENT_EMAIL']
+        attachments=[member for member in members
+                     if member.get('source')=='SELECTED_ATTACHMENT']
+        hint={'parent_ids':{str(member.get('document_id')) for member in parents
+                            if member.get('document_id')},
+              'parent_names':{str(member.get('file_name')).casefold()
+                              for member in parents if member.get('file_name')},
+              'attachment_names':{str(member.get('file_name')).casefold()
+                                  for member in attachments if member.get('file_name')}}
+        index=item.get('attachment_index')
+        if (item.get('state')!='LINKED' or len(members)!=2 or len(parents)!=1
+                or len(attachments)!=1 or type(index) is not int or index<0):
+            invalid.append(hint);continue
+        parent,attachment=parents[0],attachments[0]
+        if not all((parent.get('document_id'),parent.get('file_name'),
+                    attachment.get('document_id'),attachment.get('file_name'))):
+            invalid.append(hint);continue
+        content_type=item.get('content_type')
+        if (not isinstance(content_type,str) or not re.fullmatch(
+                r'[a-z0-9.+-]{1,64}/[a-z0-9.+-]{1,64}',content_type,re.I)):
+            invalid.append(hint);continue
+        count=item.get('import_count',1)
+        if type(count) is not int or count<1:
+            invalid.append(hint);continue
+        valid.append({
+            'parent_id':str(parent['document_id']),'parent_file':str(parent['file_name']),
+            'attachment_id':str(attachment['document_id']),
+            'attachment_file':str(attachment['file_name']),'attachment_index':index,
+            'content_type':content_type,'import_count':count,
+        })
+    return valid,invalid
+
+
+def _email_attachment_relationship_answer(
+        question: str, workflow_index: dict | None) -> dict | None:
+    """Answer explicit selected-attachment provenance from the complete workflow index."""
+    request=requested_email_attachment_relations(question)
+    if not request:return None
+    direction,requested_file=request;relations,invalid=_email_attachment_relations(workflow_index)
+    provenance=(' These relationships record explicit import provenance only; they do not '
+                'transfer workflow role, status, approval or authority.')
+    if direction=='FROM_EMAIL':
+        matches=[document for document in _workflow_email_documents(workflow_index)
+                 if document['file_name'].casefold()==requested_file.casefold()]
+        if not matches:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run does not contain an analyzed Email file named '
+                f'"{requested_file}".'),'citations':[]}
+        if len(matches)>1:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run contains {len(matches)} analyzed Email files named '
+                f'"{requested_file}". Select the source in the file list before relying on '
+                'attachment provenance.'),'citations':[]}
+        parent_id=matches[0]['document_id']
+        if any(parent_id in item['parent_ids']
+               or requested_file.casefold() in item['parent_names'] for item in invalid):
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'Email file "{requested_file}" has an incomplete imported-attachment '
+                'relationship. Review the Workflow relationships section.'),'citations':[]}
+        selected=[relation for relation in relations if relation['parent_id']==parent_id]
+        if not selected:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'Email file "{requested_file}" has no indexed explicitly imported and '
+                'analyzed attachment relationship in this run.'),'citations':[]}
+        selected.sort(key=lambda value:(value['attachment_index'],
+                                        value['attachment_file'].casefold(),
+                                        value['attachment_id']))
+        if len(selected)>_MAX_RESULTS:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'Email file "{requested_file}" has more than {_MAX_RESULTS} indexed imported '
+                'attachment relationships. Review the complete Workflow relationships section.'),
+                'citations':[]}
+        if len({value['attachment_index'] for value in selected})!=len(selected):
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'Email file "{requested_file}" has duplicate attachment-index relationships. '
+                'Review the source list before relying on the provenance.'),'citations':[]}
+        labels=[]
+        for relation in selected:
+            details=[f'source attachment index {relation["attachment_index"]}']
+            details.append(relation['content_type'])
+            if relation['import_count']>1:
+                details.append(f'{relation["import_count"]} import records')
+            labels.append(f'{relation["attachment_file"]} ({"; ".join(details)})')
+        return {'status':'ANSWERED','answer':(
+            f'Email file "{requested_file}" has these explicitly imported and analyzed '
+            f'attachments: {"; ".join(labels)}.{provenance}'),'citations':[]}
+    matching=[relation for relation in relations
+              if relation['attachment_file'].casefold()==requested_file.casefold()]
+    matching_ids={relation['attachment_id'] for relation in matching}
+    if len(matching_ids)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run contains multiple analyzed attachment files named '
+            f'"{requested_file}". Select the source in the file list before relying on '
+            'attachment provenance.'),'citations':[]}
+    if any(requested_file.casefold() in item['attachment_names'] for item in invalid):
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Attachment file "{requested_file}" has an incomplete parent-Email '
+            'relationship. Review the Workflow relationships section.'),'citations':[]}
+    if not matching:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Attachment file "{requested_file}" has no indexed explicit parent-Email '
+            'import relationship in this run.'),'citations':[]}
+    matching.sort(key=lambda value:(value['parent_file'].casefold(),
+                                    value['attachment_index'],value['parent_id']))
+    if len(matching)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Attachment file "{requested_file}" has more than {_MAX_RESULTS} indexed parent '
+            'Email relationships. Review the complete Workflow relationships section.'),
+            'citations':[]}
+    if (len({(value['parent_id'],value['attachment_index']) for value in matching})
+            !=len(matching)
+            or len({value['parent_file'].casefold() for value in matching})!=len(matching)):
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'Attachment file "{requested_file}" has duplicate parent-Email relationships. '
+            'Review the source list before relying on the provenance.'),'citations':[]}
+    labels=[]
+    for relation in matching:
+        details=[f'source attachment index {relation["attachment_index"]}']
+        details.append(relation['content_type'])
+        labels.append(f'{relation["parent_file"]} ({"; ".join(details)})')
+    return {'status':'ANSWERED','answer':(
+        f'Attachment file "{requested_file}" has these explicit parent-Email import '
+        f'relationships: {"; ".join(labels)}.{provenance}'),'citations':[]}
 
 
 def _current_email_workflow_citations(
@@ -3385,6 +3559,12 @@ class ProjectQuestions:
         email_thread=_email_thread_answer(question,workflow_index)
         if email_thread:
             return {'run_id':run['id'],'question':question,**email_thread,
+                    'answer_basis':'WORKFLOW_INDEX','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':0,'cached':False}
+        email_attachment=_email_attachment_relationship_answer(question,workflow_index)
+        if email_attachment:
+            return {'run_id':run['id'],'question':question,**email_attachment,
                     'answer_basis':'WORKFLOW_INDEX','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}

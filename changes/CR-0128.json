@@ -1,0 +1,35 @@
+{
+  "change_id": "CR-0128",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-ATTACHMENT-RELATION-LOCAL-001"],
+  "summary": "Answer strict bidirectional questions about explicit analyzed Email attachment imports from the existing workflow index.",
+  "decision_refs": [
+    "The active objective requires adaptable file-grounded Email support alongside RFI and Submittal questions",
+    "The workflow index already preserves selected-attachment provenance after explicit import and analysis",
+    "A deterministic local answer avoids unnecessary evidence retrieval, model cost and mailbox access"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-113.json", "changes/CR-0128.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_email_attachments.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact Email or imported attachment file use the local shortcut.",
+    "Relationships exist only for attachments the reviewer explicitly selected, imported and analyzed.",
+    "Missing or duplicate target names, malformed relationships and more than eight results fail closed; repeated identical imports remain one relationship with a count.",
+    "The shortcut does not inspect a mailbox, prove that an Email had no other attachments or transfer workflow role, status, approval or authority."
+  ]
+}

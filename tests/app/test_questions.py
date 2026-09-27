@@ -1,5 +1,6 @@
 """Project-file Q&A stays run-scoped, evidence-grounded, and budgeted."""
 from decimal import Decimal
+from email.message import EmailMessage
 import hashlib
 import json
 from pathlib import Path
@@ -23,7 +24,8 @@ from app.questions import (
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_email_header, requested_email_thread, requested_email_workflow_relations,
+    requested_email_attachment_relations, requested_email_header,
+    requested_email_thread, requested_email_workflow_relations,
     requested_single_email_header,
     requested_rfi_content, requested_submittal_field,
     requested_workflow_date_item, requested_workflow_document_relations,
@@ -31,7 +33,8 @@ from app.questions import (
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_email_header_index, requires_email_thread_index,
+    requires_email_attachment_relation_index, requires_email_header_index,
+    requires_email_thread_index,
     requires_email_workflow_relation_index,
     requires_rfi_content_index,
     requires_submittal_field_index,
@@ -4981,6 +4984,255 @@ def test_question_api_loads_workflow_index_for_email_thread_question(
     result=response.json()
     assert result['status']=='ANSWERED'
     assert 'parent.eml; reply.eml' in result['answer']
+    assert result['answer_basis']=='WORKFLOW_INDEX' and result['retrieved_count']==0
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Which imported attachments came from coordination.eml?',
+     ('FROM_EMAIL','coordination.eml')),
+    ('What attachments were imported from "Coordination Email.eml"?',
+     ('FROM_EMAIL','Coordination Email.eml')),
+    ('List the selected attachments for coordination.msg.',
+     ('FROM_EMAIL','coordination.msg')),
+    ('Which email was response.pdf imported from?',('TO_EMAIL','response.pdf')),
+    ('Which parent emails are linked to imported attachment "Response Package.pdf"?',
+     ('TO_EMAIL','Response Package.pdf')),
+    ('What email did imported attachment response.pdf come from?',
+     ('TO_EMAIL','response.pdf')),
+    ('Show me the parent emails for imported attachment response.pdf.',
+     ('TO_EMAIL','response.pdf')),
+    ('Which imported attachments came from ../coordination.eml?',None),
+    ('Which email was C:response.pdf imported from?',None),
+    ('Which email was *.pdf imported from?',None),
+    ('Which attachments are in coordination.eml?',None),
+    ('Which emails are in the same thread as coordination.eml?',None),
+])
+def test_email_attachment_relationship_question_boundary(question,expected):
+    assert requested_email_attachment_relations(question)==expected
+    assert requires_email_attachment_relation_index(question) is bool(expected)
+
+
+def test_email_attachment_question_lists_selected_imports_without_model_or_evidence_read(
+        monkeypatch):
+    rows=[
+        {'document_id':'MAIL','name':'coordination.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'PDF','name':'response.pdf','summary':{'document_type':'OTHER'}},
+        {'document_id':'TXT','name':'note.txt','summary':{'document_type':'OTHER'}},
+    ]
+    links=[
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL','document_id':'PDF',
+         'attachment_index':0,'content_type':'application/pdf'},
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL','document_id':'PDF',
+         'attachment_index':0,'content_type':'application/pdf'},
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL','document_id':'TXT',
+         'attachment_index':1,'content_type':'text/plain'},
+    ]
+    index=build_workflow_index(rows,links)
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('attachment question read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment question used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-ATTACHMENTS','status':'COMPLETED'},
+        'Which imported attachments came from coordination.eml?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='WORKFLOW_INDEX'
+    assert ('response.pdf (source attachment index 0; application/pdf; 2 import records)'
+            in result['answer'])
+    assert 'note.txt (source attachment index 1; text/plain)' in result['answer']
+    assert 'do not transfer workflow role, status, approval or authority' in result['answer']
+    assert result['citations']==[] and result['retrieved_count']==0
+
+
+def test_email_attachment_question_lists_every_exact_parent_email(monkeypatch):
+    rows=[
+        {'document_id':'MAIL-A','name':'a.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'MAIL-B','name':'b.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'PDF','name':'response.pdf','summary':{'document_type':'OTHER'}},
+    ]
+    links=[
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-A','document_id':'PDF',
+         'attachment_index':0,'content_type':'application/pdf'},
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-B','document_id':'PDF',
+         'attachment_index':2,'content_type':'application/pdf'},
+    ]
+    index=build_workflow_index(rows,links)
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment question used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-PARENTS','status':'COMPLETED'},
+        'Which email was response.pdf imported from?',index)
+
+    assert result['status']=='ANSWERED'
+    assert 'a.eml (source attachment index 0; application/pdf)' in result['answer']
+    assert 'b.eml (source attachment index 2; application/pdf)' in result['answer']
+    assert result['citations']==[] and result['retrieved_count']==0
+
+
+def test_email_attachment_question_does_not_call_absence_no_attachments(monkeypatch):
+    index=build_workflow_index([{
+        'document_id':'MAIL','name':'coordination.eml','summary':{'document_type':'EMAIL'}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment question used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-NO-ATTACHMENT','status':'COMPLETED'},
+        'Which imported attachments came from coordination.eml?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'no indexed explicitly imported and analyzed attachment relationship' in result['answer']
+    assert 'has no attachments' not in result['answer']
+
+
+def test_email_attachment_question_rejects_duplicate_named_parent_before_read(
+        monkeypatch):
+    rows=[
+        {'document_id':'MAIL-A','name':'same.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'MAIL-B','name':'SAME.EML','summary':{'document_type':'EMAIL'}},
+        {'document_id':'PDF-A','name':'a.pdf','summary':{'document_type':'OTHER'}},
+        {'document_id':'PDF-B','name':'b.pdf','summary':{'document_type':'OTHER'}},
+    ]
+    links=[
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-A','document_id':'PDF-A',
+         'attachment_index':0,'content_type':'application/pdf'},
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-B','document_id':'PDF-B',
+         'attachment_index':0,'content_type':'application/pdf'},
+    ]
+    index=build_workflow_index(rows,links)
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('duplicate attachment question read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-DUPLICATE-PARENT','status':'COMPLETED'},
+        'Which imported attachments came from same.eml?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 analyzed Email files named "same.eml"' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_attachment_question_rejects_duplicate_named_attachment(monkeypatch):
+    rows=[
+        {'document_id':'MAIL-A','name':'a.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'MAIL-B','name':'b.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'PDF-A','name':'same.pdf','summary':{'document_type':'OTHER'}},
+        {'document_id':'PDF-B','name':'SAME.PDF','summary':{'document_type':'OTHER'}},
+    ]
+    links=[
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-A','document_id':'PDF-A',
+         'attachment_index':0,'content_type':'application/pdf'},
+        {'source_kind':'EMAIL_ATTACHMENT','source_document_id':'MAIL-B','document_id':'PDF-B',
+         'attachment_index':1,'content_type':'application/pdf'},
+    ]
+    index=build_workflow_index(rows,links)
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment question used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-DUPLICATE-ATTACHMENT','status':'COMPLETED'},
+        'Which parent emails are linked to imported attachment same.pdf?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'multiple analyzed attachment files named "same.pdf"' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_attachment_question_caps_selected_imports_before_read(monkeypatch):
+    items=[]
+    for value in range(9):
+        items.append({'kind':'EMAIL_ATTACHMENT','state':'LINKED','attachment_index':value,
+                      'content_type':'application/pdf','import_count':1,'members':[
+            {'document_id':'MAIL','file_name':'mail.eml','document_type':'EMAIL',
+             'role':'MESSAGE','source':'PARENT_EMAIL'},
+            {'document_id':f'ATT-{value}','file_name':f'{value}.pdf','document_type':'OTHER',
+             'role':'ATTACHMENT','source':'SELECTED_ATTACHMENT'},
+        ]})
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large attachment question read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-LARGE-ATTACHMENTS','status':'COMPLETED'},
+        'Which imported attachments came from mail.eml?',{'items':items})
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 8 indexed imported attachment relationships' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_attachment_question_caps_parent_emails_before_read(monkeypatch):
+    items=[]
+    for value in range(9):
+        items.append({'kind':'EMAIL_ATTACHMENT','state':'LINKED','attachment_index':value,
+                      'content_type':'application/pdf','import_count':1,'members':[
+            {'document_id':f'MAIL-{value}','file_name':f'{value}.eml',
+             'document_type':'EMAIL','role':'MESSAGE','source':'PARENT_EMAIL'},
+            {'document_id':'ATT','file_name':'response.pdf','document_type':'OTHER',
+             'role':'ATTACHMENT','source':'SELECTED_ATTACHMENT'},
+        ]})
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large attachment question read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-MANY-PARENTS','status':'COMPLETED'},
+        'Which email was response.pdf imported from?',{'items':items})
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 8 indexed parent Email relationships' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_attachment_question_rejects_malformed_target_relation(monkeypatch):
+    index={'items':[{'kind':'EMAIL_ATTACHMENT','state':'LINKED',
+                    'attachment_index':0,'content_type':'invalid mime','members':[
+        {'document_id':'MAIL','file_name':'mail.eml','document_type':'EMAIL',
+         'role':'MESSAGE','source':'PARENT_EMAIL'},
+        {'document_id':'ATT','file_name':'response.pdf','document_type':'OTHER',
+         'role':'ATTACHMENT','source':'SELECTED_ATTACHMENT'},
+    ]}]}
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment question used retrieval'))
+
+    result=ProjectQuestions(object(),object()).ask(
+        {'id':'RUN-MALFORMED-ATTACHMENT','status':'COMPLETED'},
+        'Which imported attachments came from mail.eml?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'incomplete imported-attachment relationship' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_email_attachment_question(
+        client, project, monkeypatch):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content('See attachment.')
+    message.add_attachment(b'%PDF-synthetic',maintype='application',subtype='pdf',
+                           filename='response.pdf')
+    source=upload(client,project['id'],'coordination.eml',message.as_bytes())
+    attachment=client.get(
+        f'/api/documents/{source["document_id"]}/email-attachments').json()['attachments'][0]
+    imported=client.post(f'/api/projects/{project["id"]}/email-attachment-imports',json={
+        'document_id':source['document_id'],'attachment_index':0,
+        'expected_sha256':attachment['sha256']}).json()
+    run=client.app.state.runner.create(project['id']);db=client.app.state.db
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],source['document_id'],'SUCCESS',json.dumps({'document_type':'EMAIL'})))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],imported['document_id'],'SUCCESS',json.dumps({'document_type':'OTHER'})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('attachment API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],
+        'question':'Which imported attachments came from coordination.eml?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert 'response.pdf (source attachment index 0; application/pdf)' in result['answer']
     assert result['answer_basis']=='WORKFLOW_INDEX' and result['retrieved_count']==0
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
