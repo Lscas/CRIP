@@ -1498,6 +1498,145 @@ def test_answer_rejects_a_workflow_identifier_assembled_from_unrelated_numbers(
             wrong,evidence,'What does RFI 42 require for the pipe material?')
 
 
+@pytest.mark.parametrize(('source_role', 'claimed_role'), [
+    ('response', 'question'),
+    ('question', 'response'),
+])
+def test_answer_rejects_an_rfi_question_response_role_swap(
+        client, project, source_role, claimed_role):
+    source=f'RFI 42 {source_role}: Use Type L copper.'
+    run=_evidence(client,project,[source])
+    question=f'What does the RFI 42 {source_role} require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']=f'RFI 42 > {source_role.upper()}'
+    wrong={
+        'status':'ANSWERED','answer':f'RFI 42 {claimed_role} requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','locator_section','claim'),[
+    ('RFI 42 official response: Use Type L copper.','Section 1',
+     'RFI 42 official response requires Type L copper.'),
+    ('RFI 42 response: Use Type L copper.','Section 1',
+     'RFI 42 answer requires Type L copper.'),
+    ('Use Type L copper.','RFI 42 > RESPONSE',
+     'RFI 42 reply requires Type L copper.'),
+    ('RFI 42 question: May Type L copper be used?','Section 1',
+     'RFI 42 question asks whether Type L copper may be used.'),
+])
+def test_answer_accepts_an_rfi_role_from_its_quote_or_exact_locator(
+        client, project, source, locator_section, claim):
+    run=_evidence(client,project,[source])
+    question='What does the source say about Type L copper?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']=locator_section
+    answer={
+        'status':'ANSWERED','answer':claim,'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_multi_identity_locator_cannot_donate_an_rfi_role(client, project):
+    source='Use Type L copper.'
+    run=_evidence(client,project,[source])
+    question='What does RFI 42 require?'
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What does the source say about Type L copper?')
+    evidence[0]['locator']['section']='RFI 42 > QUESTION / RFI 43 > RESPONSE'
+    wrong={
+        'status':'ANSWERED','answer':'RFI 42 response requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_one_statement_cannot_bypass_rfi_role_grounding_with_two_identities(
+        client, project):
+    response='RFI 42 response: Use Type L copper.'
+    question_source='RFI 43 question: May PVC be used?'
+    run=_evidence(client,project,[response,question_source])
+    question='Summarize the RFI 42 response and RFI 43 question.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED',
+        'answer':'RFI 42 question differs from the RFI 43 response.',
+        'source_findings':[],
+        'citations':[
+            {'evidence_id':'EV-QA-1','quote':response},
+            {'evidence_id':'EV-QA-2','quote':question_source},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='workflow role'):
+        validate_answer_model(wrong,evidence,question)
+
+    correct={**wrong,
+             'answer':'RFI 42 response differs from the RFI 43 question.'}
+    validate_answer_model(correct,evidence,question)
+
+
+def test_source_finding_rejects_an_rfi_role_swap(client, project):
+    source='RFI 42 question: May Type L copper be used?'
+    run=_source_evidence(client,project,[('RFI-42.txt',[source])])
+    question='What does the RFI 42 question say?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The RFI record addresses Type L copper.',
+        'citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'RFI-42.txt',
+             'statement':'RFI 42 response requires Type L copper.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='workflow role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize('source',[
+    'RFI 42 response time is 5 days. Use Type L copper.',
+    'RFI 42 official response date is 2024-01-05. Use Type L copper.',
+])
+def test_rfi_timing_labels_do_not_ground_a_response_role(client, project, source):
+    run=_evidence(client,project,[source])
+    question='What does RFI 42 require for Type L copper?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'RFI 42 reply requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='workflow role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_evidence_can_ground_an_embedded_rfi_response_role(client, project):
+    source=('From: designer@example.com\nSubject: RFI 42 reply\n'
+            'RFI 42 response: Use Type L copper.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What does the RFI 42 response require?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={
+        'status':'ANSWERED','answer':'RFI 42 reply requires Type L copper.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
 @pytest.mark.parametrize(('text','expected'),[
     ('Request for Information No. 0042 status: CLOSED.',{('RFI','42')}),
     ('RFI 42 is open; RFI 43 is closed.',{('RFI','42'),('RFI','43')}),

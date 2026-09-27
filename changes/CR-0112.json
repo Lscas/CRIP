@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0112",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground explicit RFI Question and Response roles to the same exact workflow identity in project-file answers.",
+  "decision_refs": [
+    "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content",
+    "An offline reproduction proved that the existing answer validator accepted Question and Response role swaps under the same RFI identifier",
+    "Reusing the existing exact workflow identity scoping avoids a second parser, dependency, model request or authority rule"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-097.json",
+    "changes/CR-0112.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "The guard covers explicit Question and Response wording only; it does not infer a role from general prose or Request for Information wording.",
+    "Answer, Reply and Official Response normalize to Response only for citation consistency; the change does not infer contractual authority or chronology.",
+    "Response Date and Response Time do not establish that cited text is the RFI response, and a locator naming several workflow identities remains unscoped.",
+    "The change validates model-generated answers only and does not alter source parsing, workflow classification or deterministic status answers."
+  ]
+}

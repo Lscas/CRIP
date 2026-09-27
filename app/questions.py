@@ -115,6 +115,9 @@ _EMAIL_PROSE_ROLES = (
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
+_RFI_ANSWER_ROLE = re.compile(
+    r'(?i)\b(?P<role>official\s+response|question|response|answer|reply)\b'
+    r'(?!\s+(?:date|time)\b)')
 _STATUS_INTENT = re.compile(
     r'(?i)\b(?:status|disposition|approved|rejected|pending|open|closed|answered|'
     r'reviewed|void|revise\s+(?:and|/)\s*resubmit)\b')
@@ -1126,6 +1129,35 @@ def _workflow_email_address_role_values(text: str, identity_text: str | None = N
     return _workflow_scoped_values(text,_email_address_role_occurrences(text),identity_text)
 
 
+def _rfi_role_occurrences(text: str) -> list[tuple[str,int,int]]:
+    values=[]
+    for match in _RFI_ANSWER_ROLE.finditer(text):
+        role=('QUESTION' if match.group('role').casefold()=='question' else 'RESPONSE')
+        values.append((role,match.start(),match.end()))
+    return values
+
+
+def _workflow_rfi_role_values(text: str, identity_text: str | None = None
+                              ) -> set[tuple[tuple[str,str],str]]:
+    return {value for value in _workflow_scoped_values(
+        text,_rfi_role_occurrences(text),identity_text) if value[0][0]=='RFI'}
+
+
+def _claim_rfi_role_values(text: str) -> set[tuple[tuple[str,str],str]]:
+    """Pair roles to the nearest explicit RFI when one claim names several."""
+    identities=[value for value in _workflow_identity_spans(text) if value[0][0]=='RFI']
+    values=set()
+    for role,start,end in _rfi_role_occurrences(text):
+        left,right=statement_span(text,start,end)
+        scoped=[value for value in identities if left<=value[1] and value[2]<=right]
+        if not scoped:continue
+        distances=[(max(identity_start-end,start-identity_end,0),identity)
+                   for identity,identity_start,identity_end in scoped]
+        nearest=min(distance for distance,_ in distances)
+        values.update((identity,role) for distance,identity in distances if distance==nearest)
+    return values
+
+
 def _require_spec_section_support(
         claim: str, quotes: list[str], label: str,
         identity_citations: list[str] | None = None,
@@ -1389,6 +1421,13 @@ def _citation_clause_text(evidence: dict, quote: str) -> str:
 def _require_workflow_identity_support(claim: str, citations: list[str], label: str) -> None:
     if _workflow_identities(claim)-_workflow_identities_in(citations):
         raise ValueError(label+' contains a workflow identifier absent from its citations')
+
+
+def _require_rfi_role_support(claim: str, citations: list[str], label: str) -> None:
+    supported=set()
+    for citation in citations:supported.update(_workflow_rfi_role_values(citation,citation))
+    if _claim_rfi_role_values(claim)-supported:
+        raise ValueError(label+' contains a workflow role absent from its citations')
 
 
 def _disposition_match_spans(text: str) -> list[tuple[str,frozenset[str],int,int]]:
@@ -1683,6 +1722,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                     _require_unambiguous_dispositions(retrieved,'retrieved source finding')
             _require_workflow_identity_support(
                 finding['statement'],finding_identity_texts,'source finding')
+            _require_rfi_role_support(
+                finding['statement'],finding_identity_texts,'source finding')
             _require_spec_section_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_revision_label_support(
@@ -1720,6 +1761,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                            if len(families)==1 else _retrieved_scope(evidence))
                 if retrieved:_require_unambiguous_dispositions(retrieved,'retrieved answer')
         _require_workflow_identity_support(value['answer'],answer_identity_texts,'answer')
+        _require_rfi_role_support(value['answer'],answer_identity_texts,'answer')
         _require_spec_section_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
