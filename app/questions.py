@@ -369,9 +369,14 @@ _FAMILY_SQL_FILTERS = {
     'RFI':'''(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%rfi%'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'rfi %'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'request for information %'
+        OR INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),CHAR(10)||'rfi ')>0
+        OR INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),CHAR(10)||'request for information ')>0
         OR LOWER(d.name) LIKE '%rfi%')''',
     'SUBMITTAL':'''(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%submittal%'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'submittal %'
+        OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'submission %'
+        OR INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),CHAR(10)||'submittal ')>0
+        OR INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),CHAR(10)||'submission ')>0
         OR LOWER(d.name) LIKE '%submittal%')''',
     'SPECIFICATION':'''(LOWER(d.name) LIKE '%spec%'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%spec%'

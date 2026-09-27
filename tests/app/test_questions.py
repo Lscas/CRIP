@@ -299,6 +299,40 @@ def test_generic_pdf_email_source_survives_candidate_pressure(
         assert {_source_family(item) for item in result} >= {'SPECIFICATION', 'EMAIL'}
 
 
+@pytest.mark.parametrize(('family', 'workflow_text', 'question'), [
+    ('RFI',
+     'Project correspondence.\nRFI ARC-42 response: Use Type L copper pipe.',
+     'Compare the pipe requirements in the specification and RFI ARC-42 response.'),
+    ('RFI',
+     'Project correspondence.\nRequest for Information ARC-43 response: Use copper pipe.',
+     'Compare the specification and Request for Information ARC-43 response.'),
+    ('SUBMITTAL',
+     'Project correspondence.\nSubmittal 23-01: Type L copper pipe approved as noted.',
+     'Compare the pipe requirements in the specification and Submittal 23-01.'),
+    ('SUBMITTAL',
+     'Project correspondence.\nSubmission 23-02: Copper pipe is pending review.',
+     'Compare the pipe requirements in the specification and Submittal 23-02.'),
+])
+def test_generic_pdf_workflow_heading_after_first_line_survives_candidate_pressure(
+        client, project, monkeypatch, family, workflow_text, question):
+    repeated = [f'Specification pipe requirements reference {family}.'] * 16
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', repeated),
+        ('coordination.pdf', [workflow_text]),
+    ])
+
+    db = client.app.state.db
+    monkeypatch.setattr(questions_module, '_MAX_CANDIDATES', 0)
+    found = retrieve_evidence(db, run, question)
+    db.evidence_search_available = False
+    fallback = retrieve_evidence(db, run, question)
+
+    for result in (found, fallback):
+        assert {item['file_name'] for item in result} >= {
+            'project-spec.txt', 'coordination.pdf'}
+        assert {_source_family(item) for item in result} >= {'SPECIFICATION', family}
+
+
 def test_source_diversity_requires_comparison_or_multiple_named_sources():
     assert requires_source_diversity('Compare the pipe requirements.') is True
     assert requires_source_diversity('What do the specification and RFI 42 require?') is True

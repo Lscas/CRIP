@@ -1,0 +1,31 @@
+{
+  "change_id": "CR-0111",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Retain later-line RFI and Submittal headings from generically named PDF evidence in bounded FTS source comparisons.",
+  "decision_refs": [
+    "The active objective requires accurate and adaptable project questions across RFI, Submittal and Email content",
+    "Offline reproductions proved that the multiline source classifier accepted later RFI/Submittal headings while the FTS family filters rejected them",
+    "Aligning existing bounded filters avoids fuzzy identifiers, a second index, dependency or parser change"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-091.json", "tasks/DEV-096.json", "changes/CR-0111.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only the existing exact line-leading workflow headings are added to the FTS prefilter; indented, OCR-damaged or prose-only references are not inferred.",
+    "The local ranker and source classifier still decide the final source family, so an inline reference does not become an RFI or Submittal merely because the prefilter found text.",
+    "The change affects local evidence retrieval only and does not add parsing, OCR, model calls or contractual authority rules."
+  ]
+}

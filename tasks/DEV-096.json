@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce explicit Specification comparisons whose generic PDF RFI/Submittal heading follows a cover line.",
+    "Align the existing bounded FTS filters with line-leading RFI, Request for Information, Submittal and Submission classifier signals.",
+    "Keep prefixed RFI identifiers exact and preserve the complete-scan path without fuzzy workflow inference.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-096",
+  "title": "Retain multiline generic PDF workflow sources",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-091.json", "tasks/DEV-096.json", "changes/CR-0111.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep conservatively classified later-line RFI and Submittal headings in generic PDF source comparisons when the primary FTS candidate set is full."
+}
