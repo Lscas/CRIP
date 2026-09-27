@@ -1768,6 +1768,20 @@
       ],
       "decision_source": "The active objective requires adaptable file-grounded questions across different companies' RFI and Submittal forms without weakening evidence boundaries or adding a new implementation for every label.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-CROSS-WORKFLOW-RELATION-LOCAL-001",
+      "title": "Answer exact RFI and Submittal relationships locally",
+      "statement": "Strict questions asking which Submittals one exact RFI references or which RFIs one exact Submittal references should read only explicit relationship fields from bounded workflow-scoped primary evidence before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions name one exact RFI or Submittal and request only the opposite workflow kind. Existing non-vision evidence from at most 32 indexed primary files may return locally only from an explicit line-leading Related RFI(s), RFI Reference(s), Linked RFI(s), Related Submittal(s), Submittal Reference(s) or Linked Submittal(s) field under that exact target locator. Up to eight exact related identifiers return in deterministic order with exact inline citations and zero provider or budget action; pure-numeric RFI zero padding normalizes and compound identifiers remain exact.",
+        "Current Email-body primary workflow scopes may participate. General co-occurrence, workflow-index membership, filenames, classification, Email headers, quoted history, signatures, vision narration, arbitrary prose values, another or multiple target identity, more than 32 primary files, candidate passages or explicit fields, or a ninth related identifier cannot produce an answer. Explicit None, N/A and Not applicable may support none listed; an empty marker combined with a nonempty value fails closed before ordinary retrieval.",
+        "The shared final-answer validator preserves the exact target identity, relationship direction and every related identifier in ordinary answers and source findings. It rejects omission, invention, wrong direction, cross-target or cross-source borrowing and conflicting empty/nonempty citations. The implementation adds no dependency, parser change or second index and does not infer reciprocity, applicability, authority, chronology, precedence or contractual effect."
+      ],
+      "decision_source": "The active objective requires direct accurate questions across RFI and Submittal content, while an explicit relationship field is required to avoid converting simple co-occurrence into a project relationship.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

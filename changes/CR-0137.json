@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0137",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-CROSS-WORKFLOW-RELATION-LOCAL-001"],
+  "summary": "Add strict bidirectional local RFI/Submittal relationship questions backed only by explicit same-target relationship fields, plus shared direction and identifier grounding for model-generated answers and source findings.",
+  "decision_refs": [
+    "The active objective requires efficient accurate adaptable questions across RFI, Submittal and Email content",
+    "The existing question paths covered Email-workflow and workflow-file relationships but not direct RFI-to-Submittal relationships",
+    "Explicit labelled relationship fields are stronger evidence than document co-occurrence or workflow-index membership"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-122.json",
+    "changes/CR-0137.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "The local shortcut accepts only strict English questions naming one exact target and the opposite workflow kind.",
+    "Only explicit Related RFI(s), RFI Reference(s), Linked RFI(s), Related Submittal(s), Submittal Reference(s) or Linked Submittal(s) fields under the exact target locator participate.",
+    "A value must be a bounded list of exact identifiers or one supported empty marker; arbitrary prose and ranges fail closed.",
+    "More than 32 primary files, candidate passages or relationship fields, more than eight distinct related identifiers, and conflicting empty/nonempty fields fail closed.",
+    "The implementation does not infer reciprocity, applicability, authority, chronology, precedence or contractual effect."
+  ]
+}

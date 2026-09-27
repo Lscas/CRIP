@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the complete terminal-run workflow index to bound one exact RFI or Submittal's primary sources.",
+    "Answer only the opposite workflow kind from explicit Related, Reference or Linked fields under the exact target locator.",
+    "Treat general co-occurrence, filenames, classification, Email headers, quoted history, signatures and vision narration as insufficient relationship evidence.",
+    "Normalize pure-numeric RFI zero padding only, preserve compound identifiers and fail closed on invalid, conflicting or oversized values.",
+    "Apply the same target, direction and related-identifier contract to ordinary answers and comparison source findings."
+  ],
+  "task_id": "DEV-122",
+  "title": "Answer exact RFI and Submittal relationships",
+  "requirement_ids": ["FR-QA-CROSS-WORKFLOW-RELATION-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-122.json",
+    "changes/CR-0137.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-122",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer bounded explicit RFI-to-Submittal and Submittal-to-RFI relationships locally without inferring a relationship from co-occurrence."
+}

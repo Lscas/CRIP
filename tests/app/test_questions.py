@@ -19,6 +19,7 @@ from app.questions import (
     _email_date_header_claim_values, _email_date_header_values,
     _email_header_participant_role_values, _email_participant_claim_role_values,
     _numeric_unit_values,
+    _cross_workflow_relation_claim_values, _cross_workflow_relation_source_values,
     _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
     _workflow_party_claim_values, _workflow_party_source_values,
@@ -38,6 +39,7 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
+    requested_cross_workflow_relations,
     requested_workflow_action, requested_workflow_field, requested_workflow_impact,
     requested_workflow_metadata, requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
@@ -56,6 +58,7 @@ from app.questions import (
     requires_workflow_document_relation_index,
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
+    requires_cross_workflow_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_action_index, requires_workflow_field_index,
     requires_workflow_impact_index,
@@ -5231,6 +5234,249 @@ def test_question_api_loads_workflow_index_for_reverse_email_relationship(
     assert result['status']=='ANSWERED'
     assert 'coordination.eml (explicit reference)' in result['answer']
     assert result['citations'][0]['quote']=='Coordinate RFI 42 before release.'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Which Submittals does RFI 42 reference?',('RFI','42','SUBMITTAL')),
+    ('What Submissions are related to Request for Information No. 0042?',
+     ('RFI','42','SUBMITTAL')),
+    ('Which RFIs are listed for Submittal 23-01?',('SUBMITTAL','23-01','RFI')),
+    ('Show me the Requests for Information linked to Submission MEP-023.',
+     ('SUBMITTAL','MEP-023','RFI')),
+    ('Which RFIs does RFI 42 reference?',None),
+    ('Which Submittals does RFI 42 and RFI 43 reference?',None),
+    ('Which Submittals apply to RFI 42?',None),
+    ('How are RFI 42 and Submittal 23-01 related?',None),
+])
+def test_cross_workflow_relationship_question_boundary(question,expected):
+    assert requested_cross_workflow_relations(question)==expected
+    assert requires_cross_workflow_relation_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source','answer'),[
+    ('RFI-42.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','Which Submittals does RFI 42 reference?',
+     'Related Submittals: 23-01, MEP-023',
+     'RFI 42 Related Submittals: "23-01, MEP-023".'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','Which RFIs are listed for Submittal 23-01?',
+     'RFI References: RFI 0042 and ARC-7',
+     'Submittal 23-01 Related RFIs: "42, ARC-7".'),
+])
+def test_cross_workflow_relationship_answers_explicit_fields_without_model_or_retrieval(
+        client, project, monkeypatch, file_name, document_type, context, section,
+        question, source, answer):
+    run=_source_evidence(client,project,[(file_name,[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('cross-workflow relation used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,question,index)
+
+    assert result['status']=='ANSWERED' and result['answer']==answer
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source and result['retrieved_count']==1
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_cross_workflow_relationship_does_not_infer_general_cooccurrence(
+        client, project, monkeypatch):
+    source='RFI 42 discusses coordination near Submittal 23-01.'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}],
+            'workflow_references':[{'workflow_type':'SUBMITTAL','identifier':'23-01'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('cooccurrence used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which Submittals does RFI 42 reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'General co-occurrence is not treated as a relationship' in result['answer']
+    assert result['citations']==[]
+
+
+def test_cross_workflow_relationship_supports_explicit_empty_and_blocks_conflict(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Related Submittal(s): N/A']),
+        ('RFI-42-response.pdf',['Submittal Reference: 23-01']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=? ORDER BY d.name''',
+                (run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('empty relation used retrieval'))
+
+    empty=ProjectQuestions(db,object()).ask(
+        run,'Which Submittals does RFI 42 reference?',build_workflow_index(contexts[:1]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'Which Submittals does RFI 42 reference?',build_workflow_index(contexts))
+
+    assert empty['status']=='ANSWERED'
+    assert empty['answer']=='RFI 42 Related Submittals: none listed.'
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'both an empty marker and workflow identifiers' in conflicted['answer']
+    assert len(conflicted['citations'])==2
+
+
+@pytest.mark.parametrize(('section','answered'),[
+    ('EMAIL > BODY > RFI 42',True),
+    ('EMAIL > HEADERS > RFI 42',False),
+    ('EMAIL > QUOTED HISTORY > RFI 42',False),
+    ('EMAIL > SIGNATURE > RFI 42',False),
+])
+def test_cross_workflow_relationship_email_scope_boundary(
+        client, project, monkeypatch, section, answered):
+    source='Related Submittal: 23-01'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email relation used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which Submittals does RFI 42 reference?',index)
+
+    assert (result['status']=='ANSWERED') is answered
+    assert bool(result['citations']) is answered
+
+
+def test_cross_workflow_relationship_caps_identifiers_and_candidate_passages(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    primary_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    class IdentifierDatabase:
+        def all(self,*_args,**_kwargs):
+            payload={'evidence_id':'EV-1','raw_text':(
+                'Related Submittals: '+', '.join(f'S-{number}' for number in range(1,10))),
+                'document_id':'D-1','file_sha256':'0'*64,
+                'locator':{'section':'RFI 42 > RESPONSE'}}
+            return [{'payload':json.dumps(payload),'file_name':'RFI-42.pdf'}]
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('primary relationship cap read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('relationship cap used retrieval'))
+
+    identifiers=ProjectQuestions(IdentifierDatabase(),object()).ask(
+        {'id':'RUN-REL-CAP','status':'COMPLETED'},
+        'Which Submittals does RFI 42 reference?',index)
+    passages=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-REL-CAP','status':'COMPLETED'},
+        'Which Submittals does RFI 42 reference?',index)
+    primaries=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-REL-CAP','status':'COMPLETED'},
+        'Which Submittals does RFI 42 reference?',primary_index)
+
+    assert identifiers['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 8 explicit Related Submittals' in identifiers['answer']
+    assert 'more than 32 candidate source passages' in passages['answer']
+    assert 'more than 32 primary files' in primaries['answer']
+
+
+def test_cross_workflow_relationship_parsers_and_answer_validator(client, project):
+    source='Related Submittals: 23-01, MEP-023'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'Which Submittals does RFI 42 reference?')
+    assert len(evidence)==1
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    expected={(('RFI','42'),'SUBMITTAL','23-01'),
+              (('RFI','42'),'SUBMITTAL','MEP-023')}
+    assert _cross_workflow_relation_source_values(
+        source,'RFI 42 > RESPONSE')==expected
+    assert _cross_workflow_relation_claim_values(
+        'RFI 42 Related Submittals: "23-01, MEP-023".')==expected
+    valid={'status':'ANSWERED','answer':(
+        'RFI 42 Related Submittals: "23-01, MEP-023".'),
+        'citations':[{'evidence_id':evidence[0]['evidence_id'],'quote':source}],
+        'source_findings':[]}
+    validate_answer_model(valid,evidence,'Which Submittals does RFI 42 reference?')
+
+    invented={**valid,'answer':'RFI 42 Related Submittals: "23-01, MEP-999".'}
+    omitted={**valid,'answer':'RFI 42 has an explicit relationship field.'}
+    with pytest.raises(ValueError,match='cross-workflow relationship absent'):
+        validate_answer_model(invented,evidence,'Which Submittals does RFI 42 reference?')
+    with pytest.raises(ValueError,match='requires an explicit scoped relationship'):
+        validate_answer_model(omitted,evidence,'Which Submittals does RFI 42 reference?')
+
+
+def test_cross_workflow_validator_blocks_conflict_and_cross_source_borrowing(client, project):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Related Submittals: None']),
+        ('RFI-42-response.pdf',['Related Submittals: 23-01']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.payload,d.name FROM evidence e JOIN documents d
+                   ON d.id=e.document_id WHERE e.run_id=? ORDER BY d.name''',(run['id'],))
+    evidence=[]
+    for row in rows:
+        item=json.loads(row['payload']);item['file_name']=row['name']
+        item['locator']['section']='RFI 42 > RESPONSE';evidence.append(item)
+    by_file={item['file_name']:item for item in evidence}
+    question='Which Submittals does RFI 42 reference?'
+    conflicted={'status':'ANSWERED','answer':'RFI 42 Related Submittals: "23-01".',
+        'citations':[{'evidence_id':by_file['RFI-42-response.pdf']['evidence_id'],
+                      'quote':'Related Submittals: 23-01'}],
+        'source_findings':[]}
+    borrowed={'status':'ANSWERED','answer':'The source reports one relationship.',
+        'citations':[],'source_findings':[{
+            'source_type':'RFI','file_name':'RFI-42-question.pdf',
+            'statement':'RFI 42 Related Submittals: "23-01".',
+            'citations':[{'evidence_id':by_file['RFI-42-question.pdf']['evidence_id'],
+                          'quote':'Related Submittals: None'}]}]}
+
+    with pytest.raises(ValueError,match='conflicting empty and nonempty'):
+        validate_answer_model(conflicted,evidence,question)
+    with pytest.raises(ValueError,match='cross-workflow relationship absent'):
+        validate_answer_model(borrowed,evidence,question)
+
+
+def test_question_api_loads_workflow_index_for_cross_workflow_relationship(
+        client, project, monkeypatch):
+    source='Related Submittal: 23-01'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],row['document_id'],'SUCCESS',json.dumps({'document_type':'RFI_RESPONSE',
+            'workflow_contexts':[{'workflow_type':'RFI','identifier':'42',
+                                  'role':'RESPONSE','status':'ANSWERED'}]})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('cross-workflow API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'Which Submittals does RFI 42 reference?'})
+
+    assert response.status_code==200
+    assert response.json()['answer']=='RFI 42 Related Submittals: "23-01".'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

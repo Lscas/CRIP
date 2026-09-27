@@ -31,6 +31,7 @@ from app.connectors import ExternalConnectors
 from app.email_attachments import (import_email_attachment,import_email_attachments,
                                    list_email_attachments)
 from app.questions import (ProjectQuestions,requires_email_attachment_relation_index,
+                           requires_cross_workflow_relation_index,
                            requires_email_action_index,
                            requires_email_header_index,
                            requires_email_thread_index,
@@ -286,6 +287,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
                              or requires_email_thread_index(question)
                              or requires_email_workflow_relation_index(question)
                              or requires_workflow_email_relation_index(question)
+                             or requires_cross_workflow_relation_index(question)
                              or requires_email_action_index(question)
                              or requires_email_header_index(question)) else None)
         return questions.ask(run,question,workflow_index)

@@ -700,6 +700,43 @@ _EXACT_WORKFLOW_EMAIL_RELATION_QUESTIONS = (
         (?:(?:associated|linked)\s+with|linked\s+to|referencing|mentioning)\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_RELATED_WORKFLOW_CATEGORY = (
+    r'(?P<related_kind>rfis?|requests?\s+for\s+information|submittals?|submissions?)')
+_EXACT_CROSS_WORKFLOW_RELATION_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_RELATED_WORKFLOW_CATEGORY}\s+
+        (?:does|did)\s+{_WORKFLOW_EXACT_ITEM}\s+(?:reference|mention|list)
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+{_RELATED_WORKFLOW_CATEGORY}\s+
+        (?:are|were)\s+(?:referenced|mentioned|listed|related|linked)\s+
+        (?:in|by|for|to)\s+{_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        {_RELATED_WORKFLOW_CATEGORY}\s+(?:referenced|mentioned|listed|related|linked)\s+
+        (?:in|by|for|to)\s+{_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+)
+_WORKFLOW_RELATED_FIELD_LABELS = {
+    'RFI':r'(?:(?:related|linked)\s+rfi(?:s|\(s\))?|rfi\s+(?:reference|references))',
+    'SUBMITTAL':(
+        r'(?:(?:related|linked)\s+submittal(?:s|\(s\))?|'
+        r'submittal\s+(?:reference|references))'),
+}
+_WORKFLOW_RELATED_FIELD_SOURCE_PATTERNS = {
+    kind:re.compile(rf'''(?imx)^[ \t]*(?:{label})[ \t]*:[ \t]*
+        (?P<value>[^\r\n]{{1,500}}?)[ \t]*$''')
+    for kind,label in _WORKFLOW_RELATED_FIELD_LABELS.items()
+}
+_WORKFLOW_RELATED_SQL_TERMS = {
+    'RFI':('related rfi','linked rfi','rfi reference'),
+    'SUBMITTAL':(
+        'related submittal','linked submittal','submittal reference'),
+}
+_RELATED_WORKFLOW_EMPTY_VALUES = frozenset({'none','n/a','not applicable'})
+_NO_RELATED_WORKFLOW = '<NONE>'
+_CROSS_WORKFLOW_RELATION_CLAIM = re.compile(rf'''(?ix)
+    \b(?P<kind>rfi|submittal)(?:\s+(?:(?:no\.?|number)\s*)?[#:-]?\s*|[-:#]\s*)
+    (?P<identifier>{_WORKFLOW_EXACT_IDENTIFIER})\s+
+    related\s+(?P<related_kind>rfis|submittals)\s*:\s*
+    (?P<value>"[^"\r\n]{{1,500}}"|none\s+listed)\s*[.!]?
+''')
 _WORKFLOW_DOCUMENT_RELATION_CATEGORY = (
     r'(?:(?:project|source)\s+files?|documents?|files?)')
 _EXACT_WORKFLOW_DOCUMENT_RELATION_QUESTIONS = (
@@ -1423,6 +1460,27 @@ def requested_workflow_email_relations(question: str) -> tuple[str,str] | None:
 
 def requires_workflow_email_relation_index(question: str) -> bool:
     return requested_workflow_email_relations(question) is not None
+
+
+def requested_cross_workflow_relations(question: str) -> tuple[str,str,str] | None:
+    """Recognize one exact RFI-to-Submittal or Submittal-to-RFI request."""
+    for pattern in _EXACT_CROSS_WORKFLOW_RELATION_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        related=('RFI' if match.group('related_kind').casefold().startswith(('rfi','request'))
+                 else 'SUBMITTAL')
+        if workflow==related:continue
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier,related
+    return None
+
+
+def requires_cross_workflow_relation_index(question: str) -> bool:
+    return requested_cross_workflow_relations(question) is not None
 
 
 def requested_workflow_document_relations(question: str) -> tuple[str,str] | None:
@@ -2956,6 +3014,152 @@ def _workflow_email_relationship_answer(
         'citations':citations}
 
 
+def _related_workflow_value(
+        value: str, related_kind: str) -> tuple[list[str],bool,bool]:
+    """Parse a complete explicit relationship-field value without interpreting prose."""
+    normalized=' '.join(value.strip().strip('"\'“”‘’').split())
+    if normalized.casefold() in _RELATED_WORKFLOW_EMPTY_VALUES:return [],True,True
+    pieces=re.split(r'\s*(?:,|;|\band\b)\s*',normalized,flags=re.I)
+    prefix=(r'(?:rfi|request\s+for\s+information)' if related_kind=='RFI'
+            else r'(?:submittal|submission)')
+    identifiers=[]
+    for piece in pieces:
+        raw=re.sub(rf'(?i)^\s*{prefix}(?:\s+(?:(?:no\.?|number)\s*)?'
+                   r'[#:-]?\s*|[-:#]\s*)', '', piece, count=1).strip()
+        raw=re.sub(r'^[#:\-]\s*','',raw).strip()
+        if not re.fullmatch(_WORKFLOW_EXACT_IDENTIFIER,raw,re.I):return [],False,False
+        if related_kind=='RFI' and re.search(r'\s',raw):return [],False,False
+        identifier=normalize_identifier(related_kind,raw)
+        if not identifier:return [],False,False
+        if identifier not in identifiers:identifiers.append(identifier)
+    return identifiers,False,bool(identifiers)
+
+
+def _cross_workflow_relation_source_values(
+        text: str, section: str) -> set[tuple[tuple[str,str],str,str]]:
+    """Return exact workflow relationships from labelled fields in one exact target scope."""
+    targets=_workflow_identities(section)
+    if len(targets)!=1:return set()
+    target=next(iter(targets));values=set()
+    for related_kind,pattern in _WORKFLOW_RELATED_FIELD_SOURCE_PATTERNS.items():
+        if target[0]==related_kind:continue
+        for match in pattern.finditer(text):
+            identifiers,empty,valid=_related_workflow_value(match.group('value'),related_kind)
+            if not valid:continue
+            if empty:values.add((target,related_kind,_NO_RELATED_WORKFLOW))
+            else:values.update((target,related_kind,identifier) for identifier in identifiers)
+    return values
+
+
+def _cross_workflow_relation_claim_values(
+        text: str) -> set[tuple[tuple[str,str],str,str]]:
+    """Read only the canonical relationship claim form used by the answer contract."""
+    values=set()
+    for match in _CROSS_WORKFLOW_RELATION_CLAIM.finditer(text):
+        workflow=match.group('kind').upper()
+        related_kind=('RFI' if match.group('related_kind').casefold()=='rfis' else 'SUBMITTAL')
+        if workflow==related_kind:continue
+        identifier=normalize_identifier(workflow,match.group('identifier'))
+        raw=match.group('value')
+        if raw.casefold().startswith('none'):
+            if identifier:values.add(((workflow,identifier),related_kind,_NO_RELATED_WORKFLOW))
+            continue
+        identifiers,empty,valid=_related_workflow_value(raw[1:-1],related_kind)
+        if identifier and valid and not empty:
+            values.update(((workflow,identifier),related_kind,value) for value in identifiers)
+    return values
+
+
+def _cross_workflow_relation_value_spans(text: str) -> list[tuple[int,int]]:
+    return [(match.start('value'),match.end('value'))
+            for match in _CROSS_WORKFLOW_RELATION_CLAIM.finditer(text)]
+
+
+def _cross_workflow_relationship_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Answer an exact cross-workflow relationship only from explicit labelled fields."""
+    request=requested_cross_workflow_relations(question)
+    if not request:return None
+    workflow,identifier,related_kind=request;target=(workflow,identifier)
+    target_label=f'{workflow if workflow=="RFI" else "Submittal"} {identifier}'
+    related_label='RFIs' if related_kind=='RFI' else 'Submittals'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target_label} does not have one indexed primary source in this analysis run.'),
+            'citations':[]}
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Related {related_label} for {target_label} were not answered locally because '
+            f'more than {_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that '
+            'identifier.'),'citations':[]}
+    placeholders=','.join('?' for _ in document_ids)
+    raw_expr="LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),''))"
+    term_clause=' OR '.join(f'instr({raw_expr},?)>0'
+                            for _ in _WORKFLOW_RELATED_SQL_TERMS[related_kind])
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders})
+                      AND ({term_clause})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[
+                        run_id,*document_ids,*_WORKFLOW_RELATED_SQL_TERMS[related_kind]])
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Related {related_label} for {target_label} were not answered locally because '
+            'more than 32 candidate source passages require review.'),'citations':[]}
+    values={};empty=False;citations=[];invalid=[];seen=set()
+    pattern=_WORKFLOW_RELATED_FIELD_SOURCE_PATTERNS[related_kind]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        section=str(locator.get('section') or '');family=_source_family(evidence)
+        if _workflow_identities(section)!={target}:continue
+        if family=='EMAIL' and not section.casefold().startswith('email > body'):continue
+        for match in pattern.finditer(text):
+            parsed,is_empty,valid=_related_workflow_value(match.group('value'),related_kind)
+            item=citation(evidence,match.start(),match.end(),role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in seen:
+                seen.add(key);citations.append(item)
+            if not valid:invalid.append(item);continue
+            empty=empty or is_empty
+            for related_identifier in parsed:values.setdefault(related_identifier,related_identifier)
+    if len(citations)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Related {related_label} for {target_label} were not answered locally because '
+            'more than 32 explicit relationship fields require review.'),'citations':[]}
+    if invalid:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Related {related_label} for {target_label} cannot be established because an '
+            'explicit relationship field contains a value that is not a bounded workflow '
+            'identifier list.'),'citations':citations}
+    if empty and values:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Related {related_label} for {target_label} cannot be established because the '
+            'explicit relationship fields contain both an empty marker and workflow '
+            'identifiers.'),'citations':citations}
+    if len(values)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target_label} has more than {_MAX_RESULTS} explicit Related {related_label}. '
+            'Review the cited relationship fields.'),'citations':citations}
+    if not values and not empty:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target_label} has no explicit Related {related_label} field in its analyzed '
+            'primary evidence. General co-occurrence is not treated as a relationship.'),
+            'citations':[]}
+    if empty:
+        answer=f'{target_label} Related {related_label}: none listed.'
+    else:
+        ordered=sorted(values,key=lambda value:(value.casefold(),value))
+        answer=f'{target_label} Related {related_label}: "{", ".join(ordered)}".'
+    return {'status':'ANSWERED','answer':answer,'citations':citations}
+
+
 def _workflow_document_citations(
         db: Database, run_id: str, documents: list[dict],
         target: tuple[str,str]) -> tuple[dict[str,list[dict]],bool]:
@@ -3847,6 +4051,7 @@ def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
 
 def _numeric_unit_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend(_cross_workflow_relation_value_spans(text))
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
@@ -3871,6 +4076,7 @@ def _span_distance(first: tuple[int,int], second: tuple[int,int]) -> int:
 def _numeric_property_occurrences(text: str) -> list[tuple[str,str,int,int]]:
     """Pair explicit measurement labels with their mutually nearest number."""
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend(_cross_workflow_relation_value_spans(text))
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
@@ -4288,6 +4494,26 @@ def _require_requested_workflow_field_support(
             raise ValueError(label+' cites conflicting workflow field values')
 
 
+def _require_cross_workflow_relation_support(
+        claim: str, contexts: list[tuple], label: str) -> None:
+    supported=set()
+    for context in contexts:
+        quote=context[0]
+        family=context[2] if len(context)>=3 else ''
+        section=context[3] if len(context)>=4 else ''
+        if family=='EMAIL' and not str(section).casefold().startswith('email > body'):
+            continue
+        supported.update(_cross_workflow_relation_source_values(quote,str(section)))
+    claimed=_cross_workflow_relation_claim_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains a cross-workflow relationship absent from its citations')
+    for target,related_kind,_ in claimed:
+        values={value for source_target,source_kind,value in supported
+                if source_target==target and source_kind==related_kind}
+        if _NO_RELATED_WORKFLOW in values and len(values)>1:
+            raise ValueError(label+' cites conflicting empty and nonempty workflow relationships')
+
+
 def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
     supported=set()
     for quote in quotes:supported.update(_email_header_participant_role_values(quote))
@@ -4351,6 +4577,7 @@ def _workflow_numeric_values(text: str, identity_text: str | None = None
                              ) -> set[tuple[tuple[str,str],str]]:
     """Keep non-identifier numbers attached to one exact workflow scope."""
     reserved_spans=[(start,end) for _,start,end in _workflow_identity_spans(text)]
+    reserved_spans.extend(_cross_workflow_relation_value_spans(text))
     reserved_spans.extend((start,end) for _,start,end in _spec_section_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _revision_label_occurrences(text))
     reserved_spans.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
@@ -4842,6 +5069,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_workflow_action_contexts,'source finding')
             _require_requested_workflow_field_support(
                 finding['statement'],finding_workflow_action_contexts,question,'source finding')
+            _require_cross_workflow_relation_support(
+                finding['statement'],finding_workflow_action_contexts,'source finding')
             _require_email_action_support(
                 finding['statement'],finding_email_action_contexts,'source finding')
             _require_email_participant_support(
@@ -4908,6 +5137,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             value['answer'],answer_workflow_action_contexts,'answer')
         _require_requested_workflow_field_support(
             value['answer'],answer_workflow_action_contexts,question,'answer')
+        _require_cross_workflow_relation_support(
+            value['answer'],answer_workflow_action_contexts,'answer')
         _require_email_action_support(
             value['answer'],answer_email_action_contexts,'answer')
         _require_email_participant_support(value['answer'],answer_email_quotes,'answer')
@@ -4979,6 +5210,30 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             if not any(identity==target for identity,_ in claims):
                 raise ValueError(
                     'an answered workflow field question requires an explicit scoped field')
+        if relation_request:=requested_cross_workflow_relations(question):
+            target=(relation_request[0],relation_request[1]);related_kind=relation_request[2]
+            claims=set(_cross_workflow_relation_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_cross_workflow_relation_claim_values(finding['statement']))
+            if not any(identity==target and kind==related_kind
+                       for identity,kind,_ in claims):
+                raise ValueError(
+                    'an answered cross-workflow question requires an explicit scoped relationship')
+            retrieved_relationships=set()
+            for source in evidence:
+                locator=source.get('locator') if isinstance(source.get('locator'),dict) else {}
+                section=str(locator.get('section') or '')
+                if (_source_family(source)=='EMAIL'
+                        and not section.casefold().startswith('email > body')):
+                    continue
+                retrieved_relationships.update(_cross_workflow_relation_source_values(
+                    str(source.get('raw_text') or ''),section))
+            retrieved_values={relationship for source_target,source_kind,relationship
+                              in retrieved_relationships
+                              if source_target==target and source_kind==related_kind}
+            if _NO_RELATED_WORKFLOW in retrieved_values and len(retrieved_values)>1:
+                raise ValueError(
+                    'retrieved evidence contains conflicting empty and nonempty workflow relationships')
         if email_action_request:=requested_email_action(question):
             requested_role,requested_file=email_action_request
             claims=set(_email_action_claim_values(value['answer']))
@@ -5076,6 +5331,14 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(workflow_email_relationship['citations']),'cached':False}
+        cross_workflow_relationship=_cross_workflow_relationship_answer(
+            self.db,run['id'],question,workflow_index)
+        if cross_workflow_relationship:
+            return {'run_id':run['id'],'question':question,**cross_workflow_relationship,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(cross_workflow_relationship['citations']),
+                    'cached':False}
         workflow_document_relationship=_workflow_document_relationship_answer(
             self.db,run['id'],question,workflow_index)
         if workflow_document_relationship:
