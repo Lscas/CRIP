@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the existing workflow index for exact cross-format source lookup.",
+    "Require one exact same-identifier quotation for every returned file.",
+    "Reuse the current Email citation boundary and exclude non-Email vision narration.",
+    "Fail closed on missing text, duplicate names and bounded source ceilings.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-111",
+  "title": "Answer exact workflow project-file relationship questions locally",
+  "requirement_ids": ["FR-QA-WORKFLOW-DOCUMENT-RELATION-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-111.json", "changes/CR-0126.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-111",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return every bounded analyzed file associated with one exact RFI or Submittal from existing local evidence without model cost."
+}

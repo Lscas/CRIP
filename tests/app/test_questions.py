@@ -26,7 +26,8 @@ from app.questions import (
     requested_email_header, requested_email_workflow_relations,
     requested_single_email_header,
     requested_rfi_content, requested_submittal_field,
-    requested_workflow_date_item, requested_workflow_email_relations,
+    requested_workflow_date_item, requested_workflow_document_relations,
+    requested_workflow_email_relations,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
@@ -35,6 +36,7 @@ from app.questions import (
     requires_submittal_field_index,
     requires_single_email_header_index,
     requires_workflow_date_index,
+    requires_workflow_document_relation_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
@@ -4571,6 +4573,251 @@ def test_question_api_loads_workflow_index_for_reverse_email_relationship(
     assert result['status']=='ANSWERED'
     assert 'coordination.eml (explicit reference)' in result['answer']
     assert result['citations'][0]['quote']=='Coordinate RFI 42 before release.'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Which project files mention RFI 42?',('RFI','42')),
+    ('Which documents reference Request for Information No. 0042?',('RFI','42')),
+    ('What source files are associated with Submittal 23-01?',('SUBMITTAL','23-01')),
+    ('List the files linked to RFI ARC-42.',('RFI','ARC-42')),
+    ('Show me documents that contain Submittal 23 05 00 - 01.',
+     ('SUBMITTAL','23 05 00-01')),
+    ('Which project files mention RFI 42 and RFI 43?',None),
+    ('Which email files mention RFI 42?',None),
+    ('What files contain the response to RFI 42?',None),
+    ('List all project files.',None),
+])
+def test_workflow_document_relationship_question_boundary(question,expected):
+    assert requested_workflow_document_relations(question)==expected
+    assert requires_workflow_document_relation_index(question) is bool(expected)
+
+
+def test_workflow_document_relationships_answer_across_file_types_without_model(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-0042.pdf',['RFI 0042 Question: Confirm the domestic water routing.']),
+        ('project-spec.pdf',['Coordinate RFI 42 before releasing the piping package.']),
+        ('coordination.eml',['Subject: Request for Information No. 0042 coordination']),
+        ('other.pdf',['RFI 43 Question: Confirm the fire alarm routing.']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    documents={row['name']:row['document_id'] for row in rows}
+    for row in rows:
+        if row['name']!='coordination.eml':continue
+        payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([
+        {'document_id':documents['RFI-0042.pdf'],'name':'RFI-0042.pdf','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'0042','role':'QUESTION','status':None}]}},
+        {'document_id':documents['project-spec.pdf'],'name':'project-spec.pdf','summary':{
+            'document_type':'SPECIFICATION','workflow_references':[{
+                'workflow_type':'RFI','identifier':'42'}]}},
+        {'document_id':documents['coordination.eml'],'name':'coordination.eml','summary':{
+            'document_type':'EMAIL','workflow_references':[{
+                'workflow_type':'RFI','identifier':'0042'}]}},
+        {'document_id':documents['other.pdf'],'name':'other.pdf','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'43','role':'QUESTION','status':None}]}},
+    ])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which project files mention RFI 42?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'RFI-0042.pdf (RFI question; primary workflow source)' in result['answer']
+    assert 'coordination.eml (Email; explicit reference)' in result['answer']
+    assert 'project-spec.pdf (Specification; explicit reference)' in result['answer']
+    assert 'other.pdf' not in result['answer']
+    assert [item['quote'] for item in result['citations']]==[
+        'RFI 0042 Question: Confirm the domestic water routing.',
+        'Subject: Request for Information No. 0042 coordination',
+        'Coordinate RFI 42 before releasing the piping package.',
+    ]
+    assert result['retrieved_count']==3
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_document_relationships_answer_submittal_sources_without_model(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('Submittal-23-01.pdf',['Submittal 23-01 Description: Domestic water piping.']),
+        ('project-spec.pdf',['Review Submission 23-01 before procurement.']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.document_id,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    documents={row['name']:row['document_id'] for row in rows}
+    index=build_workflow_index([
+        {'document_id':documents['Submittal-23-01.pdf'],'name':'Submittal-23-01.pdf',
+         'summary':{'document_type':'SUBMITTAL','workflow_contexts':[{
+             'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL',
+             'status':None}]}},
+        {'document_id':documents['project-spec.pdf'],'name':'project-spec.pdf','summary':{
+            'document_type':'SPECIFICATION','workflow_references':[{
+                'workflow_type':'SUBMITTAL','identifier':'23-01'}]}},
+    ])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What source files are associated with Submittal 23-01?',index)
+
+    assert result['status']=='ANSWERED'
+    assert 'Submittal-23-01.pdf (Submittal; primary workflow source)' in result['answer']
+    assert 'project-spec.pdf (Specification; explicit reference)' in result['answer']
+    assert [item['quote'] for item in result['citations']]==[
+        'Submittal 23-01 Description: Domestic water piping.',
+        'Review Submission 23-01 before procurement.',
+    ]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_document_relationship_requires_exact_text_in_every_indexed_file(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42.pdf',['RFI 42 Question: Confirm the routing.']),
+        ('archive.eml',['RFI 42 appeared only in quoted history.']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    documents={row['name']:row['document_id'] for row in rows}
+    for row in rows:
+        if row['name']!='archive.eml':continue
+        payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > QUOTED HISTORY'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([
+        {'document_id':documents['RFI-42.pdf'],'name':'RFI-42.pdf','summary':{
+            'document_type':'RFI_QUESTION','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]}},
+        {'document_id':documents['archive.eml'],'name':'archive.eml','summary':{
+            'document_type':'EMAIL','workflow_references':[{
+                'workflow_type':'RFI','identifier':'42'}]}},
+    ])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which documents reference RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'exact source text was not available in: archive.eml' in result['answer']
+    assert [item['quote'] for item in result['citations']]==[
+        'RFI 42 Question: Confirm the routing.']
+
+
+def test_workflow_document_relationship_rejects_vision_narration(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('drawing.pdf',[
+        'The image appears to mention Submittal 23-01.',
+    ])])
+    db=client.app.state.db
+    row=db.one('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                  JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    payload=json.loads(row['payload']);payload['content_basis']='MODEL_VISION_OUTPUT'
+    payload['extraction_method']='VISION'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':row['name'],
+        'summary':{'document_type':'DRAWING','workflow_references':[{
+            'workflow_type':'SUBMITTAL','identifier':'23-01'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which project files mention Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'exact source text was not available in: drawing.pdf' in result['answer']
+    assert result['citations']==[]
+
+
+def test_workflow_document_relationship_caps_files_before_evidence_read(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{value}','file_name':f'{value}.pdf',
+         'document_type':'SPECIFICATION','source':'REFERENCE'} for value in range(9)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('large file relationship read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-MANY-FILES','status':'COMPLETED'},
+        'Which project files mention RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 8 exact project-file associations' in result['answer']
+    assert result['citations']==[]
+
+
+def test_workflow_document_relationship_rejects_duplicate_file_names_before_read(
+        monkeypatch):
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':'D-1','file_name':'review.pdf','document_type':'SUBMITTAL',
+         'source':'PRIMARY'},
+        {'document_id':'D-2','file_name':'REVIEW.PDF','document_type':'SPECIFICATION',
+         'source':'REFERENCE'},
+    ]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('duplicate relationship read evidence')
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-DUPLICATE-FILES','status':'COMPLETED'},
+        'What source files are associated with Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'share the same file name' in result['answer']
+    assert result['citations']==[]
+
+
+def test_workflow_document_relationship_caps_candidate_passages(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[{
+        'document_id':'D-1','file_name':'project-spec.pdf',
+        'document_type':'SPECIFICATION','source':'REFERENCE'}]}]}
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-MANY-PASSAGES','status':'COMPLETED'},
+        'Which project files mention RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate passages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_project_file_relationship(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('project-spec.pdf',[
+        'Coordinate RFI 42 before releasing the piping package.',
+    ])])
+    db=client.app.state.db
+    row=db.one('''SELECT e.document_id,e.payload,d.name FROM evidence e
+                  JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],row['document_id'],'SUCCESS',json.dumps({
+            'document_type':'SPECIFICATION','workflow_references':[{
+                'workflow_type':'RFI','identifier':'42'}]})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('file relationship API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'Which project files mention RFI 42?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert 'project-spec.pdf (Specification; explicit reference)' in result['answer']
+    assert result['citations'][0]['quote']==(
+        'Coordinate RFI 42 before releasing the piping package.')
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

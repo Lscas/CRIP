@@ -477,6 +477,22 @@ _EXACT_WORKFLOW_EMAIL_RELATION_QUESTIONS = (
         (?:(?:associated|linked)\s+with|linked\s+to|referencing|mentioning)\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_WORKFLOW_DOCUMENT_RELATION_CATEGORY = (
+    r'(?:(?:project|source)\s+files?|documents?|files?)')
+_EXACT_WORKFLOW_DOCUMENT_RELATION_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        {_WORKFLOW_DOCUMENT_RELATION_CATEGORY}\s+
+        (?:reference|mention|contain)\s+{_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        {_WORKFLOW_DOCUMENT_RELATION_CATEGORY}\s+(?:are|were)\s+
+        (?:(?:associated|linked)\s+with|linked\s+to|referencing|mentioning)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        {_WORKFLOW_DOCUMENT_RELATION_CATEGORY}\s+(?:that\s+)?
+        (?:reference|mention|contain|(?:are\s+)?(?:associated|linked)\s+with|
+           (?:are\s+)?linked\s+to)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
+)
 _EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
     r'(?im)^[ \t]*(?P<role>from|to|cc|bcc|reply-to)[ \t]*:[ \t]*'
     r'(?P<value>[^\r\n]{1,4000})[ \t]*$')
@@ -976,6 +992,24 @@ def requested_workflow_email_relations(question: str) -> tuple[str,str] | None:
 
 def requires_workflow_email_relation_index(question: str) -> bool:
     return requested_workflow_email_relations(question) is not None
+
+
+def requested_workflow_document_relations(question: str) -> tuple[str,str] | None:
+    """Recognize one exact RFI/Submittal request for all associated project files."""
+    for pattern in _EXACT_WORKFLOW_DOCUMENT_RELATION_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier
+    return None
+
+
+def requires_workflow_document_relation_index(question: str) -> bool:
+    return requested_workflow_document_relations(question) is not None
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -1684,6 +1718,122 @@ def _workflow_email_relationship_answer(
             for document_id in ordered]
     return {'status':'ANSWERED','answer':(
         f'{label} has these exact current Email associations: {"; ".join(labels)}.'),
+        'citations':citations}
+
+
+def _workflow_document_citations(
+        db: Database, run_id: str, documents: list[dict],
+        target: tuple[str,str]) -> tuple[dict[str,list[dict]],bool]:
+    """Return one exact non-vision workflow citation for every bounded project file."""
+    found={document['document_id']:[] for document in documents}
+    email=[document for document in documents
+           if (document.get('document_type')=='EMAIL'
+               or document['file_name'].casefold().endswith(('.eml','.msg')))]
+    email_ids=[document['document_id'] for document in email];email_id_set=set(email_ids)
+    if email_ids:
+        email_found,overflow=_current_email_workflow_citations(
+            db,run_id,email_ids,[target])
+        if overflow:return {},True
+        for document_id in email_ids:
+            found[document_id]=email_found[(document_id,target)]
+    other_ids=[document['document_id'] for document in documents
+               if document['document_id'] not in email_id_set]
+    if not other_ids:return found,False
+    placeholders=','.join('?' for _ in other_ids)
+    limit=_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES*len(other_ids)
+    rows=db.all(f'''SELECT e.document_id,e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT {limit+1}''',[run_id,*other_ids])
+    if len(rows)>limit:return {},True
+    counts=Counter()
+    for row in rows:
+        document_id=str(row['document_id']);counts[document_id]+=1
+        if counts[document_id]>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:return {},True
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        section=str((evidence.get('locator') or {}).get('section') or '').upper()
+        if 'QUOTED HISTORY' in section or 'SIGNATURE' in section:continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        for identity,start,end in _workflow_identity_spans(text):
+            if identity!=target or found[document_id]:continue
+            left,right=statement_span(text,start,end);quote=text[left:right]
+            if target in _workflow_identities(quote):
+                found[document_id].append(citation(evidence,left,right,role='CONTEXT'))
+    return found,False
+
+
+def _workflow_document_relationship_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """List every bounded project file with exact text for one workflow identity."""
+    request=requested_workflow_document_relations(question)
+    if not request:return None
+    workflow,identifier=request;type_name='RFI' if workflow=='RFI' else 'Submittal'
+    label=f'{type_name} {identifier}';relations={}
+    for item in (workflow_index or {}).get('items',[]):
+        if not isinstance(item,dict) or item.get('kind')!=workflow:continue
+        if normalize_identifier(workflow,item.get('identifier'))!=identifier:continue
+        for member in item.get('members',[]):
+            if not isinstance(member,dict) or member.get('source') not in {'PRIMARY','REFERENCE'}:
+                continue
+            document_id=member.get('document_id')
+            if not document_id:continue
+            document_id=str(document_id);source=member['source']
+            current=relations.get(document_id)
+            if current and (current['source']=='PRIMARY' or source!='PRIMARY'):continue
+            relations[document_id]={
+                'document_id':document_id,
+                'file_name':str(member.get('file_name') or 'Unknown file'),
+                'document_type':str(member.get('document_type') or 'UNKNOWN'),
+                'source':source,
+            }
+    ordered=sorted(relations.values(),key=lambda value:(
+        value['source']!='PRIMARY',value['file_name'].casefold(),value['document_id']))
+    if not ordered:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} has no exact indexed project-file association.'),'citations':[]}
+    if len(ordered)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} has more than {_MAX_RESULTS} exact project-file associations. '
+            'Review the complete Workflow relationships section.'),'citations':[]}
+    duplicate_names=[name for name,count in Counter(
+        value['file_name'].casefold() for value in ordered).items() if count>1]
+    if duplicate_names:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} is associated with multiple analyzed files that share the same file name. '
+            'Review the complete Workflow relationships section before relying on the sources.'),
+            'citations':[]}
+    found,overflow=_workflow_document_citations(db,run_id,ordered,request)
+    if overflow:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            'The project-file associations were not answered locally because one or more '
+            'associated files contain more than 32 candidate passages.'),'citations':[]}
+    missing=[document['file_name'] for document in ordered
+             if not found[document['document_id']]]
+    citations=[];seen=set()
+    for document in ordered:
+        for item in found[document['document_id']]:
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in seen:seen.add(key);citations.append(item)
+    if missing:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{label} has indexed project-file associations, but exact source text was not '
+            f'available in: {", ".join(missing)}. Quoted Email history, Email signatures, '
+            'filenames, classification labels and vision narration are not accepted as proof.'),
+            'citations':citations}
+    type_labels={'RFI_QUESTION':'RFI question','RFI_RESPONSE':'RFI response',
+                 'SUBMITTAL':'Submittal','EMAIL':'Email','SPECIFICATION':'Specification',
+                 'DRAWING':'Drawing','CAD':'CAD'}
+    labels=[]
+    for document in ordered:
+        document_type=type_labels.get(document['document_type'],'Project document')
+        source=('primary workflow source' if document['source']=='PRIMARY'
+                else 'explicit reference')
+        labels.append(f'{document["file_name"]} ({document_type}; {source})')
+    return {'status':'ANSWERED','answer':(
+        f'{label} appears in these exact analyzed project files: {"; ".join(labels)}.'),
         'citations':citations}
 
 
@@ -3141,6 +3291,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(workflow_email_relationship['citations']),'cached':False}
+        workflow_document_relationship=_workflow_document_relationship_answer(
+            self.db,run['id'],question,workflow_index)
+        if workflow_document_relationship:
+            return {'run_id':run['id'],'question':question,**workflow_document_relationship,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(workflow_document_relationship['citations']),'cached':False}
         email_header=_email_header_answer(
             self.db,run['id'],question,workflow_index)
         if email_header:

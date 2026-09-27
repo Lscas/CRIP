@@ -1617,6 +1617,20 @@
       ],
       "decision_source": "The user requested Trunk Tools-style questions answered from existing project files, with RFI, Submittal and Email relationships visible and cited.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-WORKFLOW-DOCUMENT-RELATION-LOCAL-001",
+      "title": "Answer exact workflow project-file relationship questions locally",
+      "statement": "Strict questions asking which analyzed project files contain one exact RFI or Submittal identifier should reuse the complete workflow index and exact immutable source text before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions naming one exact RFI or Submittal may list at most eight associated analyzed files across supported source formats. Primary workflow sources and explicit references are labelled separately, and every returned file has one exact non-vision source quotation for that same normalized identifier with zero provider or budget action.",
+        "Email members reuse the current-header/body evidence boundary, so quoted history and signatures cannot prove a relationship. Non-Email members exclude vision narration. Pure-numeric RFI leading zeros normalize while prefixed, compound and Submittal identifiers remain exact.",
+        "Missing exact source text, duplicate associated file names, more than eight files or more than 32 candidate passages in one file returns insufficient evidence. Filenames and classification labels cannot substitute for source text; the implementation does not infer applicability, authority, chronology or contractual effect and adds no dependency or second index."
+      ],
+      "decision_source": "The user requested Trunk Tools-style questions answered from existing project files and the active objective requires accurate cross-format RFI, Submittal and Email support.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

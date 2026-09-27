@@ -2091,6 +2091,26 @@
         "app/main.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-DOCUMENT-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_cross_format_workflow_document_relationship_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }
