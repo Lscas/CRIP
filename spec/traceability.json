@@ -2287,6 +2287,28 @@
         "prompts/project-question/system.md"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-IMPACT-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_impact_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

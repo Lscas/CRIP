@@ -437,6 +437,33 @@ _WORKFLOW_METADATA_CLAIM_PREFIXES = tuple(
     (role,re.compile(rf'(?i)\b(?:{label})\s*:\s*'))
     for role,label in _WORKFLOW_METADATA_FIELD_LABELS.items()
 )
+_EXACT_WORKFLOW_IMPACT_QUESTIONS = (
+    ('COST_IMPACT',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:potential\s+)?cost\s+impact\s+(?:field\s+)?(?:of|for|in)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('SCHEDULE_IMPACT',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:potential\s+)?schedule\s+impact\s+(?:field\s+)?(?:of|for|in)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+)
+_WORKFLOW_IMPACT_FIELD_LABELS = {
+    'COST_IMPACT':r'(?:potential\s+)?cost\s+impact',
+    'SCHEDULE_IMPACT':r'(?:potential\s+)?schedule\s+impact',
+}
+_WORKFLOW_IMPACT_SQL_TERMS = {
+    'COST_IMPACT':('cost impact:','cost impact :','potential cost impact:',
+                   'potential cost impact :'),
+    'SCHEDULE_IMPACT':('schedule impact:','schedule impact :','potential schedule impact:',
+                       'potential schedule impact :'),
+}
+_WORKFLOW_IMPACT_SOURCE_PATTERNS = {
+    role:re.compile(rf'''(?imx)^[ \t]*(?:{label})[ \t]*:[ \t]*
+        (?P<value>[^\r\n]{{1,200}}?)[ \t]*$''')
+    for role,label in _WORKFLOW_IMPACT_FIELD_LABELS.items()
+}
+_WORKFLOW_IMPACT_CLAIM_PREFIXES = tuple(
+    (role,re.compile(rf'(?i)\b(?:{label})\s*:\s*'))
+    for role,label in _WORKFLOW_IMPACT_FIELD_LABELS.items()
+)
 _SUBMITTAL_FIELD_LABELS = {
     'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
     'DESCRIPTION':r'(?:submittal\s+description|description)',
@@ -1227,6 +1254,24 @@ def requested_workflow_metadata(question: str) -> tuple[str,str,str] | None:
 
 def requires_workflow_metadata_index(question: str) -> bool:
     return requested_workflow_metadata(question) is not None
+
+
+def requested_workflow_impact(question: str) -> tuple[str,str,str] | None:
+    """Recognize one direct request for one explicit workflow impact field."""
+    for role,pattern in _EXACT_WORKFLOW_IMPACT_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier,role
+    return None
+
+
+def requires_workflow_impact_index(question: str) -> bool:
+    return requested_workflow_impact(question) is not None
 
 
 def requested_submittal_field(question: str) -> tuple[str,str] | None:
@@ -2252,6 +2297,77 @@ def _workflow_metadata_answer(
         upper_section=section.upper()
         if (_source_family(evidence)=='EMAIL'
                 and not upper_section.startswith('EMAIL > BODY')):
+            continue
+        if _workflow_identities(section)!={target}:continue
+        for match in pattern.finditer(text):
+            display=' '.join(match.group('value').strip().split())
+            normalized=_normalize_workflow_party_value(display)
+            if not normalized:continue
+            quote=text[match.start():match.end()]
+            if _workflow_identities(_citation_identity_text(evidence,quote))!={target}:continue
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),match.end(),role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The analyzed primary evidence does not contain one supported explicit '
+            f'{names[role]} field for {label}.'),'citations':[]}
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} cannot be established because the analyzed '
+            f'primary evidence contains conflicting explicit values: {values}. '
+            'Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':f'{label} {names[role]}: "{value}".',
+            'citations':citations}
+
+
+def _workflow_impact_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one exact printed workflow impact field without calculating impact."""
+    request=requested_workflow_impact(question)
+    if not request:return None
+    workflow,identifier,role=request;target=(workflow,identifier);label=f'{workflow} {identifier}'
+    documents=_workflow_index_primary_documents(target,workflow_index)
+    if not documents:
+        if not isinstance(workflow_index,dict):return None
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run does not contain one indexed primary source for '
+            f'{label} from which to read the requested impact field.'),'citations':[]}
+    document_ids=list(dict.fromkeys(str(item['document_id']) for item in documents))
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The requested impact for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    terms=_WORKFLOW_IMPACT_SQL_TERMS[role]
+    placeholders=','.join('?' for _ in document_ids)
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0" for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders}) AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.rowid LIMIT 33''',[run_id,*document_ids,*terms])
+    names={'COST_IMPACT':'Cost Impact','SCHEDULE_IMPACT':'Schedule Impact'}
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[role]} field for {label} was not answered locally because more than '
+            '32 candidate source passages require review.'),'citations':[]}
+    found={};pattern=_WORKFLOW_IMPACT_SOURCE_PATTERNS[role]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if (_source_family(evidence)=='EMAIL'
+                and not section.casefold().startswith('email > body')):
             continue
         if _workflow_identities(section)!={target}:continue
         for match in pattern.finditer(text):
@@ -3525,6 +3641,46 @@ def _workflow_metadata_claim_values(text: str) -> set[tuple[tuple[str,str],str,s
     return _workflow_scoped_values(text,occurrences)
 
 
+def _workflow_impact_source_values(
+        text: str, identity_text: str | None = None
+        ) -> set[tuple[tuple[str,str],str,str]]:
+    all_identities=_workflow_identities(text if identity_text is None else identity_text)
+    identity_spans=_workflow_identity_spans(text);values=set()
+    for role,pattern in _WORKFLOW_IMPACT_SOURCE_PATTERNS.items():
+        for match in pattern.finditer(text):
+            value=_normalize_workflow_party_value(match.group('value'))
+            if not value:continue
+            preceding=[item for item in identity_spans
+                       if item[2]<=match.start() and match.start()-item[2]<=500]
+            identities={preceding[-1][0]} if preceding else (
+                all_identities if len(all_identities)==1 else set())
+            values.update((identity,role,value) for identity in identities)
+    return values
+
+
+def _workflow_impact_claim_values(text: str) -> set[tuple[tuple[str,str],str,str]]:
+    occurrences=[]
+    for role,pattern in _WORKFLOW_IMPACT_CLAIM_PREFIXES:
+        for match in pattern.finditer(text):
+            if re.search(r'(?i)\be-?mail\s+$',text[max(0,match.start()-24):match.start()]):
+                continue
+            start=match.end()
+            while start<len(text) and text[start] in ' \t':start+=1
+            quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+            closing=quote_pairs.get(text[start:start+1])
+            close=(text.find(closing,start+1,min(len(text),start+202)) if closing else -1)
+            quoted=(close>=0 and '\n' not in text[start+1:close]
+                    and '\r' not in text[start+1:close])
+            if quoted:
+                raw=text[start+1:close];end=close+1
+            else:
+                _,end=statement_span(text,start,start);raw=text[start:end]
+            value=_normalize_workflow_party_value(
+                raw,strip_answer_punctuation=not quoted)
+            if value:occurrences.append((role,value,match.start(),end))
+    return _workflow_scoped_values(text,occurrences)
+
+
 def _is_email_subject_question(question: str) -> bool:
     if not _EMAIL_SUBJECT_INTENT.search(question):return False
     return not (_workflow_identities(question)
@@ -3937,6 +4093,26 @@ def _require_workflow_metadata_support(
                 if source_identity==identity and source_role==role}
         if len(values)>1:
             raise ValueError(label+' cites conflicting workflow metadata field values')
+
+
+def _require_workflow_impact_support(
+        claim: str, contexts: list[tuple], label: str) -> None:
+    supported=set()
+    for context in contexts:
+        quote,identity_text=context[:2]
+        if len(context)>=4:
+            family,section=context[2:4]
+            if family=='EMAIL' and not str(section).casefold().startswith('email > body'):
+                continue
+        supported.update(_workflow_impact_source_values(quote,identity_text))
+    claimed=_workflow_impact_claim_values(claim)
+    if claimed-supported:
+        raise ValueError(label+' contains a workflow impact field absent from its citations')
+    for identity,role,_ in claimed:
+        values={value for source_identity,source_role,value in supported
+                if source_identity==identity and source_role==role}
+        if len(values)>1:
+            raise ValueError(label+' cites conflicting workflow impact field values')
 
 
 def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
@@ -4489,6 +4665,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_workflow_action_contexts,'source finding')
             _require_workflow_metadata_support(
                 finding['statement'],finding_workflow_action_contexts,'source finding')
+            _require_workflow_impact_support(
+                finding['statement'],finding_workflow_action_contexts,'source finding')
             _require_email_action_support(
                 finding['statement'],finding_email_action_contexts,'source finding')
             _require_email_participant_support(
@@ -4551,6 +4729,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             value['answer'],answer_workflow_action_contexts,'answer')
         _require_workflow_metadata_support(
             value['answer'],answer_workflow_action_contexts,'answer')
+        _require_workflow_impact_support(
+            value['answer'],answer_workflow_action_contexts,'answer')
         _require_email_action_support(
             value['answer'],answer_email_action_contexts,'answer')
         _require_email_participant_support(value['answer'],answer_email_quotes,'answer')
@@ -4605,6 +4785,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                        for identity,role,_ in claims):
                 raise ValueError(
                     'an answered workflow metadata question requires an explicit scoped field')
+        if impact_request:=requested_workflow_impact(question):
+            target=(impact_request[0],impact_request[1]);requested_role=impact_request[2]
+            claims=set(_workflow_impact_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_workflow_impact_claim_values(finding['statement']))
+            if not any(identity==target and role==requested_role
+                       for identity,role,_ in claims):
+                raise ValueError(
+                    'an answered workflow impact question requires an explicit scoped field')
         if email_action_request:=requested_email_action(question):
             requested_role,requested_file=email_action_request
             claims=set(_email_action_claim_values(value['answer']))
@@ -4737,6 +4926,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(workflow_metadata['citations']),'cached':False}
+        workflow_impact=_workflow_impact_answer(
+            self.db,run['id'],question,workflow_index)
+        if workflow_impact:
+            return {'run_id':run['id'],'question':question,**workflow_impact,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(workflow_impact['citations']),'cached':False}
         rfi_content=_rfi_content_answer(self.db,run['id'],question,workflow_index)
         if rfi_content:
             return {'run_id':run['id'],'question':question,**rfi_content,

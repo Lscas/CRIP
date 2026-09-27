@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0135",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-IMPACT-LOCAL-001"],
+  "summary": "Answer strict exact RFI and Submittal Cost Impact and Schedule Impact questions locally and ground the same identity, role and complete value in model-generated answers and source findings.",
+  "decision_refs": [
+    "The active objective requires efficient accurate questions across RFI, Submittal and Email content",
+    "Printed impact fields are useful workflow facts but must not be replaced by model estimates or calculations",
+    "The existing workflow index and immutable evidence can answer exact labelled fields without a second index or provider cost"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-120.json",
+    "changes/CR-0135.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact RFI or Submittal and one supported printed impact field use the local shortcut.",
+    "Email-prefixed fields, headers, quoted history, signatures, ordinary cost or delay prose and unlabeled text remain outside the field contract.",
+    "More than 32 primary files or candidate passages and conflicting explicit values fail closed.",
+    "The implementation does not estimate, calculate, convert, predict or infer cost, duration, applicability, responsibility, approval, chronology, authority or contractual effect."
+  ]
+}

@@ -23,6 +23,7 @@ from app.questions import (
     _spec_section_values, _workflow_identities,
     _workflow_party_claim_values, _workflow_party_source_values,
     _workflow_action_claim_values, _workflow_action_source_values,
+    _workflow_impact_claim_values, _workflow_impact_source_values,
     _workflow_metadata_claim_values, _workflow_metadata_source_values,
     _workflow_subject_claim_values, _workflow_subject_source_values,
     _workflow_index_status_conflicts,
@@ -36,7 +37,8 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
-    requested_workflow_action, requested_workflow_metadata, requested_workflow_party,
+    requested_workflow_action, requested_workflow_impact, requested_workflow_metadata,
+    requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
@@ -54,7 +56,8 @@ from app.questions import (
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
-    requires_workflow_action_index, requires_workflow_metadata_index,
+    requires_workflow_action_index, requires_workflow_impact_index,
+    requires_workflow_metadata_index,
     requires_workflow_party_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
@@ -7566,3 +7569,273 @@ def test_workflow_metadata_question_requires_explicit_scoped_field_and_no_confli
               'citations':[{'evidence_id':'EV-SOURCE-1','quote':conflict}]}
     with pytest.raises(ValueError,match='conflicting workflow metadata field values'):
         validate_answer_model(selected,conflict_evidence,question)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the cost impact of RFI 42?',('RFI','42','COST_IMPACT')),
+    ('What is the Potential Cost Impact field for Request for Information No. 0042?',
+     ('RFI','42','COST_IMPACT')),
+    ('Show me the schedule impact for Submittal 23-01.',
+     ('SUBMITTAL','23-01','SCHEDULE_IMPACT')),
+    ('What is the potential schedule impact in Submission MEP-023?',
+     ('SUBMITTAL','MEP-023','SCHEDULE_IMPACT')),
+    ('Will RFI 42 increase cost?',None),
+    ('How much will RFI 42 cost?',None),
+    ('What should the schedule impact be for RFI 42?',None),
+    ('What is the cost impact of RFI 42 and RFI 43?',None),
+])
+def test_exact_workflow_impact_question_boundary(question,expected):
+    assert requested_workflow_impact(question)==expected
+    assert requires_workflow_impact_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source'),[
+    ('RFI-42.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','What is the cost impact of RFI 42?',
+     'Cost Impact: $4,500 allowance'),
+    ('RFI-43.pdf','RFI_QUESTION',
+     {'workflow_type':'RFI','identifier':'43','role':'QUESTION','status':'OPEN'},
+     'RFI 43 > QUESTION','What is the potential cost impact for RFI 43?',
+     'Potential Cost Impact: To be determined'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','What is the schedule impact for Submittal 23-01?',
+     'Schedule Impact: No impact'),
+    ('Submittal-MEP-023.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'MEP-023','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL MEP-023','What is the potential schedule impact for Submittal MEP-023?',
+     'Potential Schedule Impact: 3 working days'),
+])
+def test_exact_workflow_impact_answers_from_explicit_field_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context, section,
+        question, source):
+    run=_source_evidence(client,project,[(file_name,[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+        lambda *_args,**_kwargs:pytest.fail('workflow impact used ordinary retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source
+    assert source.split(': ',1)[1] in result['answer']
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_impact_merges_alias_and_blocks_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['Cost Impact: No impact']),
+        ('RFI-42-response.pdf',['Potential Cost Impact: no impact']),
+        ('RFI-42-addendum.pdf',['Cost Impact: $5,000']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('impact conflict used retrieval'))
+
+    merged=ProjectQuestions(db,object()).ask(
+        run,'What is the cost impact of RFI 42?',build_workflow_index(contexts[:2]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'What is the cost impact of RFI 42?',build_workflow_index(contexts))
+
+    assert merged['status']=='ANSWERED' and len(merged['citations'])==2
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in conflicted['answer']
+    assert len(conflicted['citations'])==3
+
+
+@pytest.mark.parametrize(('section','source'),[
+    ('RFI 42 > RESPONSE','The change may delay the work by 3 days.'),
+    ('RFI 42 > RESPONSE','Email Cost Impact: No impact'),
+    ('EMAIL > HEADERS > RFI 42','Cost Impact: No impact'),
+    ('EMAIL > QUOTED HISTORY > RFI 42','Cost Impact: No impact'),
+    ('EMAIL > SIGNATURE > RFI 42','Cost Impact: No impact'),
+    ('RFI 43 > RESPONSE','Cost Impact: No impact'),
+])
+def test_exact_workflow_impact_does_not_infer_or_cross_scope(
+        client, project, monkeypatch, section, source):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42-response.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('unsupported impact used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What is the cost impact of RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE' and result['citations']==[]
+
+
+def test_exact_workflow_impact_accepts_current_email_body(client, project, monkeypatch):
+    source='Schedule Impact: 2 working days'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY > RFI 42'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('current Email impact used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(run,'What is the schedule impact of RFI 42?',index)
+
+    assert result['status']=='ANSWERED' and result['citations'][0]['quote']==source
+
+
+def test_workflow_impact_caps_and_missing_primary_fail_closed(monkeypatch):
+    primary_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    passage_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('impact primary-file cap read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('impact cap used retrieval'))
+
+    missing=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-IMPACT-CAP','status':'COMPLETED'},
+        'What is the cost impact of RFI 42?',{'items':[]})
+    primary=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-IMPACT-CAP','status':'COMPLETED'},
+        'What is the cost impact of RFI 42?',primary_index)
+    passages=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-IMPACT-CAP','status':'COMPLETED'},
+        'What is the cost impact of RFI 42?',passage_index)
+
+    assert missing['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'does not contain one indexed primary source' in missing['answer']
+    assert 'more than 32 primary files' in primary['answer']
+    assert 'more than 32 candidate source passages' in passages['answer']
+
+
+def test_question_api_loads_workflow_index_for_exact_workflow_impact(
+        client, project, monkeypatch):
+    source='Potential Schedule Impact: No impact'
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('impact API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the schedule impact for Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json();assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']==source
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_workflow_impact_parser_preserves_identity_role_and_complete_value():
+    source=('RFI 42\nPotential Cost Impact: $4,500 allowance\n'
+            'RFI 43\nSchedule Impact: 3 working days')
+
+    assert _workflow_impact_source_values(source)=={
+        (('RFI','42'),'COST_IMPACT','$4,500 allowance'),
+        (('RFI','43'),'SCHEDULE_IMPACT','3 working days')}
+    assert _workflow_impact_claim_values(
+        'RFI 42 Cost Impact: “$4,500 allowance”.')=={
+            (('RFI','42'),'COST_IMPACT','$4,500 allowance')}
+
+
+def test_workflow_impact_validator_accepts_exact_and_rejects_unsupported_claims(
+        client, project):
+    source='Cost Impact: $4,500 allowance'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='What is the cost impact of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    citation=[{'evidence_id':'EV-SOURCE-1','quote':source}]
+    grounded={'status':'ANSWERED','answer':'RFI 42 Cost Impact: “$4,500 allowance”.',
+              'source_findings':[],'citations':citation}
+
+    validate_answer_model(grounded,evidence,question)
+
+    for answer,error in [
+        ('RFI 42 Cost Impact: “$5,000”.','workflow impact field absent'),
+        ('RFI 42 Schedule Impact: “$4,500 allowance”.','workflow impact field absent'),
+        ('RFI 42 Email Cost Impact: “$4,500 allowance”.','requires an explicit scoped field'),
+        ('The record includes an allowance.','requires an explicit scoped field'),
+    ]:
+        wrong={**grounded,'answer':answer}
+        with pytest.raises(ValueError,match=error):
+            validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_impact_validator_rejects_cross_item_and_conflict(client, project):
+    cross=('RFI 42\nCost Impact: No impact\n'
+           'RFI 43\nCost Impact: $5,000')
+    run=_source_evidence(client,project,[('RFI-log.pdf',[cross])])
+    question='What is the cost impact of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    borrowed={'status':'ANSWERED','answer':'RFI 42 Cost Impact: “$5,000”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':cross}]}
+    with pytest.raises(ValueError,match='workflow impact field absent'):
+        validate_answer_model(borrowed,evidence,question)
+
+    conflict='Cost Impact: No impact\nPotential Cost Impact: $5,000'
+    conflict_run=_source_evidence(client,project,[('RFI-42.pdf',[conflict])])
+    conflict_evidence=retrieve_evidence(client.app.state.db,conflict_run,question)
+    conflict_evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    selected={'status':'ANSWERED','answer':'RFI 42 Cost Impact: “No impact”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':conflict}]}
+    with pytest.raises(ValueError,match='conflicting workflow impact field values'):
+        validate_answer_model(selected,conflict_evidence,question)
+
+
+def test_workflow_impact_source_finding_cannot_borrow_another_source_value(
+        client, project):
+    specification='Cost Impact: No impact'
+    rfi='Cost Impact: $5,000 allowance'
+    run=_source_evidence(client,project,[
+        ('project-spec.txt',[specification]),('RFI-42.pdf',[rfi])])
+    question='Compare the specification and RFI 42 cost impact.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    for item in evidence:
+        if item['file_name']=='RFI-42.pdf':item['locator']['section']='RFI 42 > RESPONSE'
+    wrong={
+        'status':'ANSWERED','answer':'The sources list different impact values.','citations':[],
+        'source_findings':[
+            {'source_type':'SPECIFICATION','file_name':'project-spec.txt',
+             'statement':'The specification contains an impact field.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':specification}]},
+            {'source_type':'RFI','file_name':'RFI-42.pdf',
+             'statement':'RFI 42 Cost Impact: “No impact”.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':rfi}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains a workflow impact field'):
+        validate_answer_model(wrong,evidence,question)
