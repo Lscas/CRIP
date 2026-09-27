@@ -1098,3 +1098,12 @@ A strict direct request for one exact RFI Question or Official Response should r
 
 - Bounded English direct-question forms name one exact RFI and request either its Question or Response. The complete terminal-run workflow index must identify exactly one primary source with that explicit role, and only existing non-vision passages whose locator contains the same exact RFI identity and role may return locally with exact inline citations and zero provider or budget action.
 - Current Email-body RFI scopes may participate, while quoted Email history cannot donate content. Multiple same-role primary sources return insufficient evidence before evidence access; more than 32 matching passages or 18,000 characters fails closed. Missing parser-scoped content falls through to ordinary grounded Q&A, and the shortcut does not interpret requirements, compare items, decide chronology or select controlling authority.
+
+## FR-QA-SUBMITTAL-FIELD-LOCAL-001 · Answer explicit Submittal fields locally
+
+优先级：P0；状态：implemented
+
+A strict direct request for one exact Submittal Spec Section, Description or Review Comments value should reuse explicit labelled project evidence before model dispatch.
+
+- Bounded English direct-question forms name one exact Submittal and request Spec Section, Description or Review Comments. The complete terminal-run workflow index must identify exactly one primary source, and only an explicit supported label inside non-vision evidence scoped to that exact Submittal may return locally with exact inline citations and zero provider or budget action.
+- A value may continue across non-label lines in the same immutable passage. Different explicit values, multiple primary sources and more than 32 candidate passages return insufficient evidence. Current Email-body Submittal scopes may participate, while quoted Email history and unlabeled nearby text cannot. The shortcut does not infer a field from Subject or a CSI number, choose a revision, interpret review intent or decide controlling authority.

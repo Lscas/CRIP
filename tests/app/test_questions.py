@@ -24,11 +24,12 @@ from app.questions import (
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_email_header, requested_single_email_header,
-    requested_rfi_content,
+    requested_rfi_content, requested_submittal_field,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
     requires_email_header_index, requires_rfi_content_index,
+    requires_submittal_field_index,
     requires_single_email_header_index,
     requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
@@ -3616,6 +3617,186 @@ def test_exact_rfi_content_excludes_quoted_email_history(
     assert result['citations']==[]
 
 
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the Spec Section for Submittal 23-01?',('23-01','SPEC_SECTION')),
+    ('What specification section does Submission 23 05 00 - 01 reference?',
+     ('23 05 00-01','SPEC_SECTION')),
+    ('What is the description of Submittal 23-01?',('23-01','DESCRIPTION')),
+    ('What description does Submission MEP-023 have?',('MEP-023','DESCRIPTION')),
+    ('What are the review comments for Submittal 23-01?',('23-01','REVIEW_COMMENTS')),
+    ('Show me the reviewer comment on Submission 23-01.',('23-01','REVIEW_COMMENTS')),
+    ('Tell me the comments for Submittal 23-01.',('23-01','REVIEW_COMMENTS')),
+    ('What is the status of Submittal 23-01?',None),
+    ('What is the description of RFI 42?',None),
+    ('Compare the descriptions of Submittal 23-01 and Submittal 23-02.',None),
+    ('What are the review comments for this Submittal?',None),
+])
+def test_exact_submittal_field_question_boundary(question,expected):
+    assert requested_submittal_field(question)==expected
+    assert requires_submittal_field_index(question) is bool(expected)
+
+
+def test_exact_submittal_fields_use_labelled_primary_evidence_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[
+        'Specification   Section: 23 05 00 - General-Duty Valves',
+        'Description:\nPump P-1 product data',
+        'Review Comments:\nRevise pump selection.\nCoordinate voltage.',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=? ORDER BY id',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],
+        'name':'Submittal-23-01.pdf','summary':{'document_type':'SUBMITTAL',
+        'workflow_contexts':[{'workflow_type':'SUBMITTAL','identifier':'23-01',
+                              'role':'SUBMITTAL','status':'PENDING'}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact Submittal field used retrieval'))
+
+    section=ProjectQuestions(db,gateway).ask(
+        run,'What is the Spec Section for Submittal 23-01?',index)
+    description=ProjectQuestions(db,gateway).ask(
+        run,'What is the description of Submittal 23-01?',index)
+    comments=ProjectQuestions(db,gateway).ask(
+        run,'What are the review comments for Submittal 23-01?',index)
+
+    assert section['status']=='ANSWERED' and section['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert '23 05 00 - General-Duty Valves' in section['answer']
+    assert section['citations'][0]['quote']==(
+        'Specification   Section: 23 05 00 - General-Duty Valves')
+    assert description['status']=='ANSWERED' and 'Pump P-1 product data' in description['answer']
+    assert description['citations'][0]['quote']=='Description:\nPump P-1 product data'
+    assert comments['status']=='ANSWERED'
+    assert 'Revise pump selection. Coordinate voltage.' in comments['answer']
+    assert comments['citations'][0]['quote']==(
+        'Review Comments:\nRevise pump selection.\nCoordinate voltage.')
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_submittal_field_blocks_conflicting_explicit_values(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[
+        'Description: Pump P-1 product data',
+        'Description: Pump P-2 product data',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],
+        'name':'Submittal-23-01.pdf','summary':{'document_type':'SUBMITTAL',
+        'workflow_contexts':[{'workflow_type':'SUBMITTAL','identifier':'23-01',
+                              'role':'SUBMITTAL','status':None}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('conflicting Submittal field used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the description of Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Description: Pump P-1 product data','Description: Pump P-2 product data'}
+
+
+def test_exact_submittal_field_blocks_multiple_primary_sources_before_evidence_read(monkeypatch):
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':'D-1','file_name':'first.pdf','source':'PRIMARY'},
+        {'document_id':'D-2','file_name':'second.pdf','source':'PRIMARY'},
+    ]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('ambiguous Submittal field read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('ambiguous Submittal field used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-SUBMITTAL','status':'COMPLETED'},
+        'What is the description of Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert '2 primary sources share that identifier' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_submittal_field_passage_cap_fails_closed(monkeypatch):
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':'D-1','file_name':'submittal.pdf','source':'PRIMARY'},
+    ]}]}
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Submittal field cap used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-SUBMITTAL-CAP','status':'COMPLETED'},
+        'What is the description of Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 candidate source passages' in result['answer']
+    assert result['citations']==[]
+
+
+@pytest.mark.parametrize(('section','text'),[
+    ('EMAIL > QUOTED HISTORY > SUBMITTAL 23-01','Description: Obsolete pump data'),
+    ('SUBMITTAL 23-01','Pump data for Spec Section 23 05 00'),
+])
+def test_exact_submittal_field_ignores_quoted_history_and_unlabelled_values(
+        client, project, tmp_path, monkeypatch, section, text):
+    run=_source_evidence(client,project,[('coordination.eml', [text])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':None}]}}])
+    calls=[]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:(calls.append('retrieval') or []))
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('empty Submittal field evidence called provider'))))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'What is the description of Submittal 23-01?',index)
+
+    assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_exact_submittal_field_accepts_current_email_body(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Comment: Revise pump selection.',
+    ])])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload'])
+    payload['locator']['section']='EMAIL > BODY > SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':None}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('current Email field used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'What are the review comments for Submittal 23-01?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']=='Comment: Revise pump selection.'
+    assert requests==[]
+
+
 def test_exact_workflow_subject_uses_primary_file_evidence_without_model_or_retrieval(
         client, project, tmp_path, monkeypatch):
     run=_source_evidence(client,project,[
@@ -3782,6 +3963,33 @@ def test_question_api_loads_workflow_index_for_exact_rfi_response(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Official Response:\nProvide Type L copper pipe.'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_workflow_index_for_exact_submittal_field(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('Submittal-23-01.pdf',['Spec Section: 23 05 00 - General-Duty Valves']),
+    ])
+    db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact Submittal field route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the Spec Section for Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Spec Section: 23 05 00 - General-Duty Valves'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 

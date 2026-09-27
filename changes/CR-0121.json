@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0121",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-SUBMITTAL-FIELD-LOCAL-001"],
+  "summary": "Answer strict exact-Submittal Spec Section, Description and Review Comments requests from explicit labelled local evidence.",
+  "decision_refs": [
+    "The active objective requires faster and more accurate file-grounded Q&A across RFI, Submittal and Email",
+    "Submittal evidence already has exact workflow scope but not dedicated field locators",
+    "Explicit labels provide a deterministic field boundary without changing the parser or adding a model call"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-106.json", "changes/CR-0121.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-106",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only strict English Spec Section, Description and Review Comments requests naming one exact Submittal use the shortcut.",
+    "Only explicit supported labels inside an exact Submittal scope qualify; unlabeled nearby text falls through.",
+    "Multiple primary sources, conflicting values, quoted Email history, vision narration and more than 32 candidate passages fail closed.",
+    "The shortcut does not infer Description from Subject, infer a Spec Section from a nearby number, choose a revision or decide controlling authority."
+  ]
+}

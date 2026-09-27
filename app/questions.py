@@ -260,6 +260,41 @@ _EXACT_RFI_CONTENT_QUESTIONS = (
     ('RESPONSE',re.compile(rf'''(?ix)^\s*how\s+was\s+{_WORKFLOW_EXACT_ITEM}\s+
         answered\s*[?!.]*\s*$''')),
 )
+_EXACT_SUBMITTAL_FIELD_QUESTIONS = (
+    ('SPEC_SECTION',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?(?:spec(?:ification)?\s+section)\s+(?:of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$''')),
+    ('SPEC_SECTION',re.compile(rf'''(?ix)^\s*what\s+(?:spec(?:ification)?\s+section)\s+
+        does\s+{_WORKFLOW_EXACT_ITEM}\s+(?:have|reference|use)\s*[?!.]*\s*$''')),
+    ('DESCRIPTION',re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?description\s+(?:of|for)\s+{_WORKFLOW_EXACT_ITEM}
+        \s*[?!.]*\s*$''')),
+    ('DESCRIPTION',re.compile(rf'''(?ix)^\s*what\s+description\s+does\s+
+        {_WORKFLOW_EXACT_ITEM}\s+have\s*[?!.]*\s*$''')),
+    ('REVIEW_COMMENTS',re.compile(rf'''(?ix)^\s*(?:
+        (?:what\s+(?:is|are)|show(?:\s+me)?|tell\s+me)\s+(?:the\s+)?
+        (?:review(?:er)?\s+comments?|comments?)\s+(?:on|of|for)\s+
+        {_WORKFLOW_EXACT_ITEM}
+    )\s*[?!.]*\s*$''')),
+)
+_SUBMITTAL_FIELD_LABELS = {
+    'SPEC_SECTION':r'(?:spec(?:ification)?\s+section)',
+    'DESCRIPTION':r'(?:submittal\s+description|description)',
+    'REVIEW_COMMENTS':r'(?:(?:review|reviewer)\s+comments?|comments?)',
+}
+_SUBMITTAL_FIELD_SQL_TERMS = {
+    'SPEC_SECTION':('spec',),
+    'DESCRIPTION':('description',),
+    'REVIEW_COMMENTS':('comment',),
+}
+_SUBMITTAL_FIELD_SOURCE_PATTERNS = {
+    field:re.compile(rf'''(?imx)^[ \t]*(?:{label})[ \t]*:[ \t]*(?:
+        (?P<inline>[^\r\n]{{1,1000}})
+        |\r?\n[ \t]*(?P<block>[^\r\n]{{1,1000}}(?:\r?\n
+            (?![ \t]*(?:[A-Za-z][A-Za-z /-]{{0,60}})[ \t]*:)
+            [^\r\n]{{1,1000}})*)
+    )''') for field,label in _SUBMITTAL_FIELD_LABELS.items()
+}
 _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
     ('SUBJECT',re.compile(r'''(?ix)^\s*(?:
         what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+subject(?:\s+line)?|
@@ -702,6 +737,20 @@ def requires_rfi_content_index(question: str) -> bool:
     return requested_rfi_content(question) is not None
 
 
+def requested_submittal_field(question: str) -> tuple[str,str] | None:
+    """Recognize one direct labelled-field request for one exact Submittal."""
+    for field,pattern in _EXACT_SUBMITTAL_FIELD_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match or match.group('kind').casefold().startswith(('rfi','request')):continue
+        identifier=normalize_identifier('SUBMITTAL',match.group('identifier'))
+        if identifier:return identifier,field
+    return None
+
+
+def requires_submittal_field_index(question: str) -> bool:
+    return requested_submittal_field(question) is not None
+
+
 def requested_single_email_header(question: str) -> str | None:
     """Recognize an exact header question that refers to one otherwise-unspecified Email."""
     return next((field for field,pattern in _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS
@@ -1106,6 +1155,83 @@ def _rfi_content_answer(
     content='\n\n'.join(passages)
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary source records the {role.title()} for {label} as:\n\n{content}'),
+        'citations':citations}
+
+
+def _workflow_index_submittal_documents(
+        identifier: str, workflow_index: dict | None) -> list[dict]:
+    if not isinstance(workflow_index,dict):return []
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict) or item.get('kind')!='SUBMITTAL':continue
+        if normalize_identifier('SUBMITTAL',item.get('identifier'))!=identifier:continue
+        return [member for member in item.get('members',[])
+                if isinstance(member,dict) and member.get('source')=='PRIMARY'
+                and member.get('document_id')]
+    return []
+
+
+def _submittal_field_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Return one explicit labelled Submittal field without interpreting nearby prose."""
+    request=requested_submittal_field(question)
+    if not request:return None
+    identifier,field=request;target=('SUBMITTAL',identifier);label=f'Submittal {identifier}'
+    documents=_workflow_index_submittal_documents(identifier,workflow_index)
+    if not documents:return None
+    if len(documents)>1:
+        files=', '.join(f'"{str(item.get("file_name") or "Unknown file")}"'
+                        for item in documents[:3])
+        extra=f', plus {len(documents)-3} more files' if len(documents)>3 else ''
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The requested field for {label} was not answered locally because '
+            f'{len(documents)} primary sources share that identifier: {files}{extra}. '
+            'Review the original sources.'),'citations':[]}
+    document_id=str(documents[0]['document_id']);terms=_SUBMITTAL_FIELD_SQL_TERMS[field]
+    clauses=' OR '.join(
+        "instr(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),?)>0"
+        for _ in terms)
+    rows=db.all(f'''SELECT e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id=? AND ({clauses})
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY e.rowid LIMIT 33''',[run_id,document_id,*terms])
+    names={'SPEC_SECTION':'Spec Section','DESCRIPTION':'Description',
+           'REVIEW_COMMENTS':'Review Comments'}
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[field]} for {label} was not answered locally because more than 32 '
+            'candidate source passages require review.'),'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'EMAIL > QUOTED HISTORY' in section.upper():continue
+        if _workflow_identities(section)!={target}:continue
+        for match in _SUBMITTAL_FIELD_SOURCE_PATTERNS[field].finditer(text):
+            group='inline' if match.group('inline') is not None else 'block'
+            start,end=match.span(group);display=' '.join(match.group(group).strip().split())
+            if not display:continue
+            normalized=display.casefold()
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,match.start(),end,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The {names[field]} for {label} cannot be established because the analyzed '
+            f'primary source contains conflicting explicit values: {values}. '
+            'Review the cited source.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary source records the {names[field]} for {label} as "{value}".'),
         'citations':citations}
 
 
@@ -2552,6 +2678,13 @@ class ProjectQuestions:
                     'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(rfi_content['citations']),'cached':False}
+        submittal_field=_submittal_field_answer(
+            self.db,run['id'],question,workflow_index)
+        if submittal_field:
+            return {'run_id':run['id'],'question':question,**submittal_field,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(submittal_field['citations']),'cached':False}
         exact_subject=_workflow_index_exact_subject(
             self.db,run['id'],question,workflow_index)
         if exact_subject:
