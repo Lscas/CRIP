@@ -1,0 +1,31 @@
+{
+  "change_id": "CR-0110",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Retain conservatively classified generic-PDF Email evidence in bounded FTS source comparisons.",
+  "decision_refs": [
+    "The active objective requires accurate and adaptable project questions across RFI, Submittal and Email content",
+    "An offline reproduction proved that the generic-document Email classifier accepted a To-plus-Subject fragment while its FTS family supplement rejected it",
+    "Aligning the existing bounded filter avoids a second index, dependency or broader semantic classifier"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-095.json", "changes/CR-0110.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "The supplement recognizes only the existing bounded Email signals; it does not infer that arbitrary PDF prose is an Email.",
+    "A generic document still needs a recognized first visible header plus a Subject header, while native EML/MSG and Email locators remain the preferred signals.",
+    "The change affects local evidence retrieval only and does not add mailbox synchronization, OCR, parsing or model calls."
+  ]
+}

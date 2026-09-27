@@ -361,7 +361,10 @@ _CONFLICTING_DISPOSITION_PAIRS = frozenset(
 _FAMILY_SQL_FILTERS = {
     'EMAIL':'''(LOWER(d.name) LIKE '%.eml' OR LOWER(d.name) LIKE '%.msg'
         OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE 'email >%'
-        OR (LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'from:%'
+        OR ((LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'from:%'
+             OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'to:%'
+             OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'cc:%'
+             OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'subject:%')
             AND INSTR(LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')),'subject:')>0))''',
     'RFI':'''(LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),'')) LIKE '%rfi%'
         OR LOWER(LTRIM(COALESCE(json_extract(e.payload,'$.raw_text'),''))) LIKE 'rfi %'

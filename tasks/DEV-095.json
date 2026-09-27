@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce an explicit Specification-versus-Email comparison that forces bounded FTS family supplementation.",
+    "Align the existing generic-document Email SQL supplement with its conservative first-header classifier for From, To, Cc and Subject.",
+    "Keep native EML/MSG, Email locators, complete-scan behavior and source precedence unchanged.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-095",
+  "title": "Retain generic PDF Email sources in comparisons",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-095.json", "changes/CR-0110.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep conservatively recognized Email evidence from a generically named PDF available to explicit source comparisons when the primary FTS candidate set is full."
+}

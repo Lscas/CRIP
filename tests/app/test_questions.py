@@ -8,6 +8,7 @@ import sqlite3
 import httpx
 import pytest
 
+import app.questions as questions_module
 from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
@@ -270,6 +271,32 @@ def test_comparison_question_keeps_spec_rfi_submittal_and_email_sources(client, 
         'project-spec.txt', 'RFI-42-response.txt', 'Submittal-23-01.txt',
         'architect-email.eml',
     }
+
+
+@pytest.mark.parametrize('email_text', [
+    'To: contractor@example.test\nSubject: Email response: Use Type L copper pipe.',
+    'Cc: contractor@example.test\nSubject: Email response: Use Type L copper pipe.',
+    'Subject: Email response: Use Type L copper pipe.',
+])
+def test_generic_pdf_email_source_survives_candidate_pressure(
+        client, project, monkeypatch, email_text):
+    repeated = ['Specification email response pipe requirements.'] * 16
+    run = _source_evidence(client, project, [
+        ('project-spec.txt', repeated),
+        ('correspondence.pdf', [email_text]),
+    ])
+    question = 'Compare the pipe requirements in the specification and email response.'
+
+    db = client.app.state.db
+    monkeypatch.setattr(questions_module, '_MAX_CANDIDATES', 0)
+    found = retrieve_evidence(db, run, question)
+    db.evidence_search_available = False
+    fallback = retrieve_evidence(db, run, question)
+
+    for result in (found, fallback):
+        assert {item['file_name'] for item in result} >= {
+            'project-spec.txt', 'correspondence.pdf'}
+        assert {_source_family(item) for item in result} >= {'SPECIFICATION', 'EMAIL'}
 
 
 def test_source_diversity_requires_comparison_or_multiple_named_sources():
