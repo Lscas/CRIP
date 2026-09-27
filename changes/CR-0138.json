@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0138",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-ANSWER-PROVENANCE-001"],
+  "summary": "Add a stable answer basis to every project-question result and show an English browser badge that distinguishes local, fresh-model, cached-model, retrieval-only and no-evidence paths.",
+  "decision_refs": [
+    "The active objective requires efficient and trustworthy questions across RFI, Submittal, Email and other project evidence",
+    "The API previously omitted answer_basis on model, Mock-retrieval and empty-evidence paths",
+    "The browser previously gave users no direct indication of whether a result used the model or only local project data"
+  ],
+  "affected_paths": [
+    "app/questions.py", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_questions.py", "tests/web/test_display_contract.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-123.json", "changes/CR-0138.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across project question flows.",
+  "known_limitations": [
+    "The badge reports the execution and evidence route, not independent validation of the answer's engineering correctness.",
+    "MODEL_PROJECT_EVIDENCE identifies a model-produced response; cached=true means this request reused a settled response and made no new model call.",
+    "The change does not predict the route before submission and does not alter model selection, retrieval or budget policy."
+  ]
+}

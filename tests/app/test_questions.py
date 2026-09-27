@@ -649,6 +649,7 @@ def test_mock_question_returns_retrieval_context_without_fabricated_answer(clien
     assert response.status_code == 200
     value = response.json()
     assert value['status'] == 'MODEL_DISABLED'
+    assert value['answer_basis'] == 'RETRIEVAL_ONLY' and value['cached'] is False
     assert 'Mock mode' in value['answer']
     assert value['citations'][0]['quote'] == 'Domestic water service pipe shall be 2 inch Type L copper.'
     assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?', (run['id'],)) == []
@@ -680,9 +681,11 @@ def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
     equivalent = service.ask(run, 'What  is the water service pipe material and size?')
 
     assert result['status'] == 'ANSWERED' and result['answer'] == 'Use 2 inch Type L copper.'
+    assert result['answer_basis'] == 'MODEL_PROJECT_EVIDENCE' and result['cached'] is False
     assert result['citations'][0]['evidence_id'] == 'EV-QA-1'
     assert result['citations'][0]['start'] == 0
     assert recovered['answer'] == result['answer'] and recovered['cached'] is True
+    assert recovered['answer_basis'] == 'MODEL_PROJECT_EVIDENCE'
     assert equivalent['answer'] == result['answer'] and equivalent['cached'] is True
     assert len(requests) == 1
     assert 'Domestic water service pipe' not in requests[0]['messages'][0]['content']
@@ -3488,7 +3491,7 @@ def test_exact_workflow_status_without_a_supported_explicit_state_uses_evidence_
         run,'What is the status of RFI 42?',index)
 
     assert calls==['retrieval'] and result['status']=='INSUFFICIENT_EVIDENCE'
-    assert 'answer_basis' not in result and result['workflow_statuses']==[]
+    assert result['answer_basis']=='NO_MATCHING_EVIDENCE' and result['workflow_statuses']==[]
 
 
 @pytest.mark.parametrize(('question','expected'),[

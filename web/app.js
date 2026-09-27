@@ -128,6 +128,14 @@ function citationLocation(item){
  return parts.filter(Boolean).join(' · ');
 }
 const questionSourceLabels={SPECIFICATION:'Specification',RFI:'RFI',SUBMITTAL:'Submittal',EMAIL:'Email',OTHER:'Other source'};
+const questionBasisKeys={
+ WORKFLOW_INDEX:'ask.basis.workflowIndex',LOCAL_PROJECT_EVIDENCE:'ask.basis.localEvidence',
+ RETRIEVAL_ONLY:'ask.basis.retrievalOnly',NO_MATCHING_EVIDENCE:'ask.basis.noEvidence'
+};
+function questionBasisKey(data){
+ if(data.answer_basis==='MODEL_PROJECT_EVIDENCE')return data.cached?'ask.basis.modelCached':'ask.basis.modelLive';
+ return questionBasisKeys[data.answer_basis];
+}
 function questionCitation(item,data){
  const source=el('div',null,'question-citation'),quote=el('blockquote',item.quote),location=el('small',citationLocation(item));
  const open=elT('button','ask.source',{},'link evidence-button');
@@ -135,7 +143,9 @@ function questionCitation(item,data){
  source.append(quote,location,open);return source;
 }
 function renderQuestionAnswer(question,data){
- const article=el('article',null,'question-answer');article.append(el('h3',question),el('p',data.answer));
+ const article=el('article',null,'question-answer'),basisKey=questionBasisKey(data);article.append(el('h3',question));
+ if(basisKey)article.append(elT('div',basisKey,{},'question-basis'));
+ article.append(el('p',data.answer));
  const workflowStatuses=[...(data.workflow_statuses||[]),...(data.workflow_conflicts||[])];
  workflowStatuses.forEach(item=>{
   const conflict=el('section',null,'question-finding');conflict.append(el('h4',item.label));

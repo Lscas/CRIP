@@ -91,6 +91,8 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert "if(source.citation)row.append(questionCitation(source.citation,data))" in source
     assert "finding.append(questionCitation(citation,data))" in source
     assert "questionSourceLabels[item.source_type]" in source
+    assert "if(data.answer_basis==='MODEL_PROJECT_EVIDENCE')return data.cached?'ask.basis.modelCached':'ask.basis.modelLive'" in source
+    assert "if(basisKey)article.append(elT('div',basisKey,{},'question-basis'))" in source
     assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source
     assert "citationLocation({file_name:null,locator:e.locator})" in source
     assert 'innerHTML' not in source

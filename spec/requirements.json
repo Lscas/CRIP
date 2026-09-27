@@ -1782,6 +1782,20 @@
       ],
       "decision_source": "The active objective requires direct accurate questions across RFI and Submittal content, while an explicit relationship field is required to avoid converting simple co-occurrence into a project relationship.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-ANSWER-PROVENANCE-001",
+      "title": "Show how each project answer was produced",
+      "statement": "Every project-question response should expose and display whether it came from the workflow index, local project evidence, a cited model answer, retrieval-only Mock mode, or no matching evidence.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Every returned project-question result carries one stable answer_basis value. Existing deterministic paths retain WORKFLOW_INDEX or LOCAL_PROJECT_EVIDENCE; successful provider or recovered-cache answers use MODEL_PROJECT_EVIDENCE; Mock retrieval uses RETRIEVAL_ONLY; and an empty retrieval uses NO_MATCHING_EVIDENCE. A workflow-index conflict stays WORKFLOW_INDEX.",
+        "The browser renders an English answer-path badge before the answer text. Deterministic, retrieval-only and no-evidence badges state that no model call occurred; a fresh model result states that a model call was used; and a recovered settled response states that no new model call occurred by combining MODEL_PROJECT_EVIDENCE with the existing cached flag.",
+        "The provenance label is response metadata only. It adds no retrieval, model dispatch, retry, budget action, parser, dependency or second index; it does not claim that a model answer is correct beyond the existing exact-citation validation."
+      ],
+      "decision_source": "Users need to distinguish fast local answers, paid model answers and no-call failure paths when asking across project RFI, Submittal, Email and specification evidence.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

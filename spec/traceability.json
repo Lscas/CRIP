@@ -2353,6 +2353,32 @@
         "prompts/project-question/system.md"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-ANSWER-PROVENANCE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_project_question_answer_basis_and_browser_provenance_badges",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

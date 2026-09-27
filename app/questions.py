@@ -5463,18 +5463,21 @@ class ProjectQuestions:
             _attach_workflow_status_citations(self.db,run['id'],conflicts)
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':_workflow_status_conflict_answer(conflicts),
+                    'answer_basis':'WORKFLOW_INDEX',
                     'citations':[],'source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':conflicts,
                     'retrieved_count':len(evidence),'cached':False}
         if not evidence:
             return {'run_id':run['id'],'question':question,'status':'INSUFFICIENT_EVIDENCE',
                     'answer':'The analyzed project files do not contain enough matching evidence to answer this question.',
+                    'answer_basis':'NO_MATCHING_EVIDENCE',
                     'citations':[],'source_findings':[],'workflow_statuses':[],
                     'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
         if self.gateway.s.provider=='mock':
             return {'run_id':run['id'],'question':question,'status':'MODEL_DISABLED',
                     'answer':'Mock mode retrieved possible source passages but did not generate an answer. Configure a live API or local model to answer from these files.',
+                    'answer_basis':'RETRIEVAL_ONLY',
                     'citations':[_context_citation(item) for item in evidence[:3]],
                     'source_findings':[],'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':len(evidence),'cached':False}
@@ -5492,5 +5495,6 @@ class ProjectQuestions:
             })
         return {'run_id':run['id'],'question':question,'status':result.data['status'],
                 'answer':result.data['answer'],'citations':citations,'source_findings':findings,
+                'answer_basis':'MODEL_PROJECT_EVIDENCE',
                 'workflow_statuses':[],'workflow_conflicts':[],
                 'retrieved_count':len(evidence),'cached':result.cached}
