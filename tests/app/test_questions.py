@@ -3001,16 +3001,30 @@ def test_email_participant_name_cannot_be_recombined(client, project):
         validate_answer_model(wrong,evidence,question)
 
 
-def test_email_participant_question_requires_an_explicit_role_value(client, project):
-    source=('From: Alice Architect <alice@example.test>\n'
-            'Subject: RFI 42 response')
+@pytest.mark.parametrize(('question','header','claim'),[
+    ('Who sent the email?','From: Alice Architect <alice@example.test>',
+     'Email sender: Alice Architect.'),
+    ('Who was copied on the email?','Cc: Carol Checker <carol@example.test>',
+     'Cc: Carol Checker.'),
+    ('Who was blind  copied on the email?','Bcc: Beth Bidder <beth@example.test>',
+     'Bcc: Beth Bidder.'),
+    ('Where should replies to the coordination email be sent?',
+     'Reply-To: Erin Engineer <erin@example.test>','Reply-To: Erin Engineer.'),
+])
+def test_email_participant_question_requires_an_explicit_role_value(
+        client, project, question, header, claim):
+    source=header+'\nSubject: RFI 42 response'
     run=_source_evidence(client,project,[('coordination.eml',[source])])
-    question='Who sent the email?'
-    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence=retrieve_evidence(client.app.state.db,run,'What is the email subject?')
     evasive={'status':'ANSWERED','answer':'The email concerns RFI 42.',
              'source_findings':[],
              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+    grounded={**evasive,'answer':claim}
 
+    expected_role=('REPLY_TO' if header.startswith('Reply-To:')
+                   else header.split(':',1)[0].upper())
+    assert questions_module._email_participant_intent_roles(question)=={expected_role}
+    validate_answer_model(grounded,evidence,question)
     with pytest.raises(ValueError,match='requires an explicit role value'):
         validate_answer_model(evasive,evidence,question)
 
@@ -4010,6 +4024,15 @@ def test_question_api_loads_workflow_index_for_exact_submittal_field(
     ('Who received the email?','TO'),
     ('Who are the email recipients?','TO'),
     ('Who was this email sent to?','TO'),
+    ('What is the email Cc header?','CC'),
+    ("Who was CC'd on the email?",'CC'),
+    ('Who is carbon copied on this e-mail?','CC'),
+    ('What is this email Bcc?','BCC'),
+    ("Who was BCC'd on this email?",'BCC'),
+    ('Who is blindly copied on the email?','BCC'),
+    ('What is the email Reply-To header?','REPLY_TO'),
+    ('What is the Reply-To header of this e-mail?','REPLY_TO'),
+    ('Where should replies to this email be sent?','REPLY_TO'),
     ('What is the subject of RFI 42?',None),
     ('Compare the email subjects.',None),
 ])
@@ -4030,6 +4053,13 @@ def test_single_email_header_question_boundary(question,expected):
     ('Who is "Coordination Reply.eml" from?',('FROM','Coordination Reply.eml')),
     ('Who received coordination.eml?',('TO','coordination.eml')),
     ('Who was email file coordination.msg sent to?',('TO','coordination.msg')),
+    ('What is the Cc header of coordination.eml?',('CC','coordination.eml')),
+    ("Who was CC'd on \"Coordination Reply.eml\"?",('CC','Coordination Reply.eml')),
+    ('What is the Bcc header for coordination.msg?',('BCC','coordination.msg')),
+    ('Who is blindly copied on coordination.eml?',('BCC','coordination.eml')),
+    ('What is the Reply-To header of coordination.eml?',('REPLY_TO','coordination.eml')),
+    ('Where should replies to "Coordination Reply.eml" be sent?',
+     ('REPLY_TO','Coordination Reply.eml')),
     ('What is the subject of ../secret.eml?',None),
     ('What is the subject of report.pdf?',None),
     ('What is the subject of email file *.eml?',None),
@@ -4046,6 +4076,9 @@ def test_single_email_headers_answer_locally_without_model_or_retrieval(
         'From: Alice Architect <alice@example.test>',
         'To: Bob Builder <bob@example.test>',
         'Date: Tue, 5 Jan 2024 10:30:00 -0500',
+        'Cc: Carol Checker <carol@example.test>',
+        'Bcc: Beth Bidder <beth@example.test>',
+        'Reply-To: Erin Engineer <erin@example.test>',
     ]
     run=_source_evidence(client,project,[('coordination.eml',headers)])
     db=client.app.state.db
@@ -4068,6 +4101,9 @@ def test_single_email_headers_answer_locally_without_model_or_retrieval(
         'Who sent the email?':headers[1],
         'Who received the email?':headers[2],
         'When was the email sent?':headers[3],
+        'Who was copied on the email?':headers[4],
+        'Who was blind copied on the email?':headers[5],
+        'What is the email Reply-To header?':headers[6],
     }
     for question,quote in cases.items():
         result=ProjectQuestions(db,gateway).ask(run,question,index)
@@ -4083,7 +4119,9 @@ def test_named_email_header_selects_one_file_in_a_multi_email_run(
         client, project, tmp_path, monkeypatch):
     run=_source_evidence(client,project,[
         ('first.eml',['Subject: First Coordination','From: first@example.test']),
-        ('second.eml',['Subject: Second Coordination','From: second@example.test']),
+        ('second.eml',['Subject: Second Coordination','From: second@example.test',
+                       'Cc: checker@example.test','Bcc: bidder@example.test',
+                       'Reply-To: engineer@example.test']),
     ])
     db=client.app.state.db
     for row in db.all('SELECT id,payload FROM evidence WHERE run_id=?',(run['id'],)):
@@ -4101,6 +4139,12 @@ def test_named_email_header_selects_one_file_in_a_multi_email_run(
     subject=ProjectQuestions(db,gateway).ask(
         run,'What is the subject of email file SECOND.eml?',index)
     sender=ProjectQuestions(db,gateway).ask(run,'Who sent first.eml?',index)
+    copied=ProjectQuestions(db,gateway).ask(
+        run,'What is the Cc header of second.eml?',index)
+    blind=ProjectQuestions(db,gateway).ask(
+        run,'Who was blind copied on second.eml?',index)
+    reply_to=ProjectQuestions(db,gateway).ask(
+        run,'What is the Reply-To header of second.eml?',index)
     missing=ProjectQuestions(db,gateway).ask(
         run,'What is the subject of missing.eml?',index)
 
@@ -4109,6 +4153,12 @@ def test_named_email_header_selects_one_file_in_a_multi_email_run(
     assert 'second.eml' in subject['answer']
     assert sender['status']=='ANSWERED'
     assert sender['citations'][0]['quote']=='From: first@example.test'
+    assert copied['status']=='ANSWERED'
+    assert copied['citations'][0]['quote']=='Cc: checker@example.test'
+    assert blind['status']=='ANSWERED'
+    assert blind['citations'][0]['quote']=='Bcc: bidder@example.test'
+    assert reply_to['status']=='ANSWERED'
+    assert reply_to['citations'][0]['quote']=='Reply-To: engineer@example.test'
     assert missing['status']=='INSUFFICIENT_EVIDENCE'
     assert 'does not contain an analyzed Email file named "missing.eml"' in missing['answer']
     assert requests==[] and db.all(
@@ -4187,6 +4237,31 @@ def test_single_email_header_ignores_quoted_history_and_blocks_current_conflicts
     assert 'conflicting current Subject header values' in conflict['answer']
     assert {item['quote'] for item in conflict['citations']}==set([
         'Subject: Current Coordination','Subject: Quoted Earlier Message'])
+
+
+def test_reply_to_conflict_uses_public_header_name(client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Reply-To: first@example.test','Reply-To: second@example.test',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=? LIMIT 1''',(run['id'],))
+    index=build_workflow_index([{'document_id':document['document_id'],
+        'name':document['name'],'summary':{'document_type':'EMAIL'}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Reply-To conflict used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the email Reply-To header?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting current Reply-To header values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Reply-To: first@example.test','Reply-To: second@example.test'}
 
 
 def test_single_email_header_passage_cap_fails_closed(monkeypatch):

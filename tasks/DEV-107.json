@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Use Trunk Tools-style services as a reference so users can ask questions and receive answers grounded in existing project files.",
+  "notes": [
+    "Extend the existing local current-Email header path to Cc, Bcc and Reply-To.",
+    "Support the only analyzed Email and one exact named .eml or .msg file.",
+    "Reuse exact citations, filename matching, conflict handling and passage caps.",
+    "Require ordinary answered Cc/Bcc/Reply-To questions to state the supported same-role value.",
+    "Do not expand distribution lists or infer delivery, readership, identity or authority.",
+    "Use synthetic evidence and make no provider or mailbox request."
+  ],
+  "task_id": "DEV-107",
+  "title": "Answer Cc, Bcc and Reply-To headers locally",
+  "requirement_ids": ["FR-QA-EMAIL-EXTENDED-HEADERS-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "prompts/project-question/system.md", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-107.json", "changes/CR-0122.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-107",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return unambiguous Cc, Bcc and Reply-To headers from existing local Email evidence without model cost."
+}

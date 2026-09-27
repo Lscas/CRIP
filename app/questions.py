@@ -130,6 +130,14 @@ _EMAIL_SENDER_INTENT = re.compile(
 _EMAIL_RECIPIENT_INTENT = re.compile(
     r'(?i)\b(?:who\s+(?:received|receives)\b|(?:email\s+)?recipients?\b|'
     r'sent\s+to\s+whom\b|to\s+whom\b)')
+_EMAIL_CC_INTENT = re.compile(
+    r"(?i)\b(?:cc(?:'d|ed)?|carbon\s+copied|"
+    r"who\s+(?:is|was)\s+copied\s+on)\b")
+_EMAIL_BCC_INTENT = re.compile(
+    r"(?i)\b(?:bcc(?:'d|ed)?|blind(?:ly)?\s+copied)\b")
+_EMAIL_REPLY_TO_INTENT = re.compile(
+    r'(?i)\b(?:reply-to|where\s+should\s+replies?\b|'
+    r'replies?\s+(?:should|must)\s+(?:go|be\s+sent)\s+to)\b')
 _EMAIL_DATE_HEADER = re.compile(
     r'(?im)^[ \t]*date[ \t]*:[ \t]*(?P<value>[^\r\n]{1,500})[ \t]*$')
 _EMAIL_DATE_CLAIM_PREFIX = re.compile(
@@ -318,6 +326,23 @@ _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
         |who\s+(?:is|are)\s+(?:the|this)\s+e-?mail(?:'s)?\s+recipients?
         |who\s+was\s+(?:the|this)\s+e-?mail\s+sent\s+to
     )\s*[?!.]*\s*$''')),
+    ('CC',re.compile(r'''(?ix)^\s*(?:
+        what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+cc(?:\s+header)?|
+            cc\s+header\s+of\s+(?:the|this)\s+e-?mail)
+        |who\s+(?:is|was)\s+(?:cc(?:'d|ed)?|carbon\s+copied|copied)\s+on\s+
+            (?:the|this)\s+e-?mail
+    )\s*[?!.]*\s*$''')),
+    ('BCC',re.compile(r'''(?ix)^\s*(?:
+        what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+bcc(?:\s+header)?|
+            bcc\s+header\s+of\s+(?:the|this)\s+e-?mail)
+        |who\s+(?:is|was)\s+(?:bcc(?:'d|ed)?|blind(?:ly)?\s+copied)\s+on\s+
+            (?:the|this)\s+e-?mail
+    )\s*[?!.]*\s*$''')),
+    ('REPLY_TO',re.compile(r'''(?ix)^\s*(?:
+        what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+reply-to(?:\s+header)?|
+            reply-to\s+header\s+of\s+(?:the|this)\s+e-?mail)
+        |where\s+should\s+replies?\s+to\s+(?:the|this)\s+e-?mail\s+be\s+sent
+    )\s*[?!.]*\s*$''')),
 )
 _EMAIL_FILE_VALUE = (
     r'(?:"[^"/\\\r\n]{1,235}\.(?:eml|msg)"|'
@@ -344,9 +369,28 @@ _EXACT_NAMED_EMAIL_HEADER_QUESTIONS = (
         who\s+received\s+(?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
         |who\s+was\s+(?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})\s+sent\s+to
     )\s*[?!.]*\s*$''')),
+    ('CC',re.compile(rf'''(?ix)^\s*(?:
+        what\s+is\s+(?:the\s+)?cc(?:\s+header)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |who\s+(?:is|was)\s+(?:cc(?:'d|ed)?|carbon\s+copied|copied)\s+on\s+
+            (?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})
+    )\s*[?!.]*\s*$''')),
+    ('BCC',re.compile(rf'''(?ix)^\s*(?:
+        what\s+is\s+(?:the\s+)?bcc(?:\s+header)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |who\s+(?:is|was)\s+(?:bcc(?:'d|ed)?|blind(?:ly)?\s+copied)\s+on\s+
+            (?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})
+    )\s*[?!.]*\s*$''')),
+    ('REPLY_TO',re.compile(rf'''(?ix)^\s*(?:
+        what\s+is\s+(?:the\s+)?reply-to(?:\s+header)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |where\s+should\s+replies?\s+to\s+(?:e-?mail\s+file\s+)?
+            (?P<file_b>{_EMAIL_FILE_VALUE})\s+be\s+sent
+    )\s*[?!.]*\s*$''')),
 )
-_EMAIL_FROM_TO_HEADER = re.compile(
-    r'(?im)^[ \t]*(?P<role>from|to)[ \t]*:[ \t]*(?P<value>[^\r\n]{1,4000})[ \t]*$')
+_EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
+    r'(?im)^[ \t]*(?P<role>from|to|cc|bcc|reply-to)[ \t]*:[ \t]*'
+    r'(?P<value>[^\r\n]{1,4000})[ \t]*$')
 _NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
 _NUMERIC_VALUE = re.compile(rf'(?<!\w){_NUMERIC_LITERAL}(?!\w)')
 _COMPACT_MEASUREMENT_UNIT_SUFFIX = (
@@ -1264,8 +1308,9 @@ def _single_email_header_occurrences(
             display=' '.join(match.group('value').strip().split())
             if normalized:values.append((normalized,display,match.start(),match.end()))
     else:
-        for match in _EMAIL_FROM_TO_HEADER.finditer(text):
-            if match.group('role').upper()!=field:continue
+        role_names={'from':'FROM','to':'TO','cc':'CC','bcc':'BCC','reply-to':'REPLY_TO'}
+        for match in _EMAIL_PARTICIPANT_VALUE_HEADER.finditer(text):
+            if role_names[match.group('role').casefold()]!=field:continue
             display=' '.join(match.group('value').strip().split())
             if display:values.append((display,display,match.start(),match.end()))
     return values
@@ -1324,8 +1369,9 @@ def _email_header_answer(
             if key not in {(value.get('evidence_id'),value.get('quote'))
                            for value in entry['citations']}:
                 entry['citations'].append(item)
+    names={'SUBJECT':'Subject','DATE':'Date','FROM':'From','TO':'To','CC':'Cc',
+           'BCC':'Bcc','REPLY_TO':'Reply-To'}
     if not found:
-        names={'SUBJECT':'Subject','DATE':'Date','FROM':'From','TO':'To'}
         return {'status':'INSUFFICIENT_EVIDENCE','answer':(
             f'{target} does not contain one supported current {names[field]} '
             'header value.'),'citations':[]}
@@ -1333,10 +1379,12 @@ def _email_header_answer(
     if len(found)>1:
         values=', '.join(f'"{entry["value"]}"' for entry in found.values())
         return {'status':'INSUFFICIENT_EVIDENCE','answer':(
-            f'{target} contains conflicting current {field.title()} header '
+            f'{target} contains conflicting current {names[field]} header '
             f'values: {values}. Review the cited sources.'),'citations':citations}
     value=next(iter(found.values()))['value']
-    labels={'SUBJECT':'Subject','DATE':'Date header','FROM':'sender (From)','TO':'recipient (To)'}
+    labels={'SUBJECT':'Subject','DATE':'Date header','FROM':'sender (From)',
+            'TO':'recipient (To)','CC':'Cc recipients','BCC':'Bcc recipients',
+            'REPLY_TO':'Reply-To contact'}
     return {'status':'ANSWERED','answer':(
         f'{target} records {labels[field]} as "{value}".'),
         'citations':citations}
@@ -1562,6 +1610,9 @@ def _email_participant_intent_roles(text: str) -> set[str]:
     roles=set()
     if _EMAIL_SENDER_INTENT.search(text):roles.add('FROM')
     if _EMAIL_RECIPIENT_INTENT.search(text):roles.add('TO')
+    if _EMAIL_CC_INTENT.search(text):roles.add('CC')
+    if _EMAIL_BCC_INTENT.search(text):roles.add('BCC')
+    if _EMAIL_REPLY_TO_INTENT.search(text):roles.add('REPLY_TO')
     return roles
 
 

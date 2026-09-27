@@ -1107,3 +1107,12 @@ A strict direct request for one exact Submittal Spec Section, Description or Rev
 
 - Bounded English direct-question forms name one exact Submittal and request Spec Section, Description or Review Comments. The complete terminal-run workflow index must identify exactly one primary source, and only an explicit supported label inside non-vision evidence scoped to that exact Submittal may return locally with exact inline citations and zero provider or budget action.
 - A value may continue across non-label lines in the same immutable passage. Different explicit values, multiple primary sources and more than 32 candidate passages return insufficient evidence. Current Email-body Submittal scopes may participate, while quoted Email history and unlabeled nearby text cannot. The shortcut does not infer a field from Subject or a CSI number, choose a revision, interpret review intent or decide controlling authority.
+
+## FR-QA-EMAIL-EXTENDED-HEADERS-LOCAL-001 · Answer Cc, Bcc and Reply-To headers locally
+
+优先级：P0；状态：implemented
+
+Strict Cc, Bcc and Reply-To questions should reuse existing current Email-header evidence locally for the only analyzed Email or one exact named Email file.
+
+- Bounded English Cc, Bcc and Reply-To questions extend the existing local Email-header path for both one otherwise-unspecified analyzed Email and one exact named .eml or .msg file. Only existing non-vision EMAIL > HEADERS evidence may return one complete header value with exact inline citations and zero provider or budget action.
+- Multiple Email selection, exact filename, missing value, conflicting current values, quoted-history exclusion and the 32-passage ceiling retain the existing fail-closed behavior. Ordinary model-answer validation requires an explicit supported same-role name or address for Cc/Bcc/Reply-To intent. The implementation does not expand distribution lists, infer actual delivery or readership, resolve identities, access a mailbox or add a dependency or second index.
