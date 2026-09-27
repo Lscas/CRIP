@@ -267,6 +267,32 @@ _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
         |who\s+was\s+(?:the|this)\s+e-?mail\s+sent\s+to
     )\s*[?!.]*\s*$''')),
 )
+_EMAIL_FILE_VALUE = (
+    r'(?:"[^"/\\\r\n]{1,235}\.(?:eml|msg)"|'
+    r"'[^'/\\\r\n]{1,235}\.(?:eml|msg)'|"
+    r'[^\s?!./\\][^\s?!/\\]{0,234}\.(?:eml|msg))'
+)
+_EXACT_NAMED_EMAIL_HEADER_QUESTIONS = (
+    ('SUBJECT',re.compile(rf'''(?ix)^\s*(?:
+        what\s+is\s+(?:the\s+)?subject(?:\s+line)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |show(?:\s+me)?\s+(?:the\s+)?subject(?:\s+line)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})
+    )\s*[?!.]*\s*$''')),
+    ('DATE',re.compile(rf'''(?ix)^\s*(?:
+        what\s+is\s+(?:the\s+)?date(?:\s+header)?\s+(?:of|for)\s+
+            (?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |when\s+was\s+(?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})\s+sent
+    )\s*[?!.]*\s*$''')),
+    ('FROM',re.compile(rf'''(?ix)^\s*(?:
+        who\s+sent\s+(?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |who\s+is\s+(?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})\s+from
+    )\s*[?!.]*\s*$''')),
+    ('TO',re.compile(rf'''(?ix)^\s*(?:
+        who\s+received\s+(?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})
+        |who\s+was\s+(?:e-?mail\s+file\s+)?(?P<file_b>{_EMAIL_FILE_VALUE})\s+sent\s+to
+    )\s*[?!.]*\s*$''')),
+)
 _EMAIL_FROM_TO_HEADER = re.compile(
     r'(?im)^[ \t]*(?P<role>from|to)[ \t]*:[ \t]*(?P<value>[^\r\n]{1,4000})[ \t]*$')
 _NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
@@ -649,8 +675,29 @@ def requested_single_email_header(question: str) -> str | None:
                  if pattern.fullmatch(question)),None)
 
 
+def requested_email_header(question: str) -> tuple[str,str | None] | None:
+    if field:=requested_single_email_header(question):return field,None
+    for field,pattern in _EXACT_NAMED_EMAIL_HEADER_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        values={value for key,value in match.groupdict().items()
+                if key.startswith('file') and value is not None}
+        if len(values)!=1:continue
+        file_name=next(iter(values)).strip()
+        if len(file_name)>=2 and file_name[0]==file_name[-1] and file_name[0] in "\"'":
+            file_name=file_name[1:-1].strip()
+        if (file_name and '/' not in file_name and '\\' not in file_name
+                and not any(char in file_name for char in '*?[]')):
+            return field,file_name
+    return None
+
+
+def requires_email_header_index(question: str) -> bool:
+    return requested_email_header(question) is not None
+
+
 def requires_single_email_header_index(question: str) -> bool:
-    return requested_single_email_header(question) is not None
+    return requires_email_header_index(question)
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -997,19 +1044,35 @@ def _single_email_header_occurrences(
     return values
 
 
-def _single_email_header_answer(
+def _email_header_answer(
         db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
     """Answer one exact header only when the complete run contains one analyzed Email."""
-    field=requested_single_email_header(question)
-    if not field:return None
+    request=requested_email_header(question)
+    if not request:return None
+    field,requested_file=request
     documents=_workflow_email_documents(workflow_index)
-    if len(documents)>1:
+    if requested_file:
+        matches=[value for value in documents
+                 if value['file_name'].casefold()==requested_file.casefold()]
+        if not matches:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run does not contain an analyzed Email file named '
+                f'"{requested_file}".'),'citations':[]}
+        if len(matches)>1:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run contains {len(matches)} analyzed Email files named '
+                f'"{requested_file}". Select the source in the file list before relying on one '
+                'header value.'),'citations':[]}
+        documents=matches
+    elif len(documents)>1:
         return {'status':'INSUFFICIENT_EVIDENCE','answer':(
             f'The selected analysis run contains {len(documents)} Email files. Specify the '
             'Email file or an exact RFI/Submittal context before asking for one header value.'),
             'citations':[]}
     if not documents:return None
     document=documents[0]
+    target=(f'Email file "{document["file_name"]}"' if requested_file
+            else 'The only analyzed Email')
     rows=db.all('''SELECT e.payload,d.name AS file_name
                    FROM evidence e JOIN documents d ON d.id=e.document_id
                    WHERE e.run_id=? AND e.document_id=?
@@ -1037,18 +1100,18 @@ def _single_email_header_answer(
     if not found:
         names={'SUBJECT':'Subject','DATE':'Date','FROM':'From','TO':'To'}
         return {'status':'INSUFFICIENT_EVIDENCE','answer':(
-            f'The only analyzed Email does not contain one supported current {names[field]} '
+            f'{target} does not contain one supported current {names[field]} '
             'header value.'),'citations':[]}
     citations=[item for entry in found.values() for item in entry['citations']]
     if len(found)>1:
         values=', '.join(f'"{entry["value"]}"' for entry in found.values())
         return {'status':'INSUFFICIENT_EVIDENCE','answer':(
-            f'The only analyzed Email contains conflicting current {field.title()} header '
+            f'{target} contains conflicting current {field.title()} header '
             f'values: {values}. Review the cited sources.'),'citations':citations}
     value=next(iter(found.values()))['value']
     labels={'SUBJECT':'Subject','DATE':'Date header','FROM':'sender (From)','TO':'recipient (To)'}
     return {'status':'ANSWERED','answer':(
-        f'The only analyzed Email records {labels[field]} as "{value}".'),
+        f'{target} records {labels[field]} as "{value}".'),
         'citations':citations}
 
 
@@ -2375,7 +2438,7 @@ class ProjectQuestions:
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
-        email_header=_single_email_header_answer(
+        email_header=_email_header_answer(
             self.db,run['id'],question,workflow_index)
         if email_header:
             return {'run_id':run['id'],'question':question,**email_header,

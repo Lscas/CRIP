@@ -1538,6 +1538,19 @@
       ],
       "decision_source": "The active objective requests faster and more accurate file-grounded support across Email as well as RFI and Submittal content.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-EMAIL-HEADER-NAMED-001",
+      "title": "Target local Email headers by exact file name",
+      "statement": "A strict header question naming one exact analyzed .eml or .msg file should use that file's existing current-header evidence locally, including in a multi-Email run.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English Subject, sender/From, recipient/To and Date questions may name one exact .eml or .msg file. The complete terminal-run workflow index is matched case-insensitively without fuzzy search; a unique match uses only existing non-vision EMAIL > HEADERS evidence and retains exact citations, conflict handling, the 32-passage cap and zero provider or budget action.",
+        "File names containing spaces require quotation marks. Directory separators and wildcard tokens do not enter the local shortcut. Zero matches and duplicate exact file names return insufficient evidence before source evidence is read; the implementation does not scan the filesystem, access a mailbox, add a dependency or infer identity, authority, delivery time or thread position."
+      ],
+      "decision_source": "The active objective requires adaptable Email question support for realistic projects containing more than one message.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

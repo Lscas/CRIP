@@ -1080,3 +1080,12 @@ Strict Subject, sender, recipient and Date questions should use existing current
 
 - Bounded English questions for Subject, sender/From, recipient/To or Date use the complete terminal-run workflow index to confirm exactly one analyzed Email, then read only existing non-vision evidence under its current EMAIL > HEADERS locator. One distinct explicit value returns with exact inline citations and no provider or budget action.
 - An otherwise-unspecified header question against multiple Email files returns insufficient evidence instead of choosing a message. Quoted history and body text cannot donate a header; conflicting current values, a missing supported header or more than 32 current-header passages fails closed. The shortcut adds no mailbox access, provider call, dependency, parser change, second index, delivery-time, thread-position, identity, authority or semantic inference.
+
+## FR-QA-EMAIL-HEADER-NAMED-001 · Target local Email headers by exact file name
+
+优先级：P0；状态：implemented
+
+A strict header question naming one exact analyzed .eml or .msg file should use that file's existing current-header evidence locally, including in a multi-Email run.
+
+- Bounded English Subject, sender/From, recipient/To and Date questions may name one exact .eml or .msg file. The complete terminal-run workflow index is matched case-insensitively without fuzzy search; a unique match uses only existing non-vision EMAIL > HEADERS evidence and retains exact citations, conflict handling, the 32-passage cap and zero provider or budget action.
+- File names containing spaces require quotation marks. Directory separators and wildcard tokens do not enter the local shortcut. Zero matches and duplicate exact file names return insufficient evidence before source evidence is read; the implementation does not scan the filesystem, access a mailbox, add a dependency or infer identity, authority, delivery time or thread position.

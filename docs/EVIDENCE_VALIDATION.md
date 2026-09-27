@@ -1,5 +1,11 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-26 exact-file multi-Email header verification
+
+- Four header families, quoted names with spaces, exact case-insensitive matching, unique selection from a two-Email run, missing and duplicate names, path/wildcard rejection and API workflow-index loading passed 14 focused offline cases.
+- The first focused run exposed wildcard acceptance for `*.eml`; the recognizer was tightened and the repeated 32-case related suite passed.
+- Synthetic transports fail if reached, and successful named-file answers create no model-call row. No customer file, credential, `.local` data, mailbox, paid provider or external project system was accessed.
+
 ## 2026-09-26 local single-Email header verification
 
 - Subject, From, To and Date local answers, strict-question boundaries, multi-Email ambiguity, quoted-history exclusion, current-header conflict handling, the 32-passage safety cap and API workflow-index loading passed 23 focused offline cases.

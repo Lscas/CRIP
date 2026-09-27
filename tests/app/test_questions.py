@@ -23,11 +23,12 @@ from app.questions import (
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_single_email_header,
+    requested_email_header, requested_single_email_header,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_single_email_header_index, requires_workflow_inventory, requires_workflow_status_index,
+    requires_email_header_index, requires_single_email_header_index,
+    requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -3637,7 +3638,28 @@ def test_question_api_loads_workflow_index_for_an_exact_subject(
 ])
 def test_single_email_header_question_boundary(question,expected):
     assert requested_single_email_header(question)==expected
+    assert requested_email_header(question)==((expected,None) if expected else None)
     assert requires_single_email_header_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the subject of email file coordination.eml?',
+     ('SUBJECT','coordination.eml')),
+    ('Show me the subject line for "Coordination Reply.eml".',
+     ('SUBJECT','Coordination Reply.eml')),
+    ('What is the Date header of coordination.msg?',('DATE','coordination.msg')),
+    ('When was email file coordination.eml sent?',('DATE','coordination.eml')),
+    ('Who sent coordination.eml?',('FROM','coordination.eml')),
+    ('Who is "Coordination Reply.eml" from?',('FROM','Coordination Reply.eml')),
+    ('Who received coordination.eml?',('TO','coordination.eml')),
+    ('Who was email file coordination.msg sent to?',('TO','coordination.msg')),
+    ('What is the subject of ../secret.eml?',None),
+    ('What is the subject of report.pdf?',None),
+    ('What is the subject of email file *.eml?',None),
+])
+def test_named_email_header_question_boundary(question,expected):
+    assert requested_email_header(question)==expected
+    assert requires_email_header_index(question) is bool(expected)
 
 
 def test_single_email_headers_answer_locally_without_model_or_retrieval(
@@ -3678,6 +3700,62 @@ def test_single_email_headers_answer_locally_without_model_or_retrieval(
         assert result['retrieved_count']==1
     assert requests==[] and db.all(
         'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_named_email_header_selects_one_file_in_a_multi_email_run(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('first.eml',['Subject: First Coordination','From: first@example.test']),
+        ('second.eml',['Subject: Second Coordination','From: second@example.test']),
+    ])
+    db=client.app.state.db
+    for row in db.all('SELECT id,payload FROM evidence WHERE run_id=?',(run['id'],)):
+        payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    documents=db.all('SELECT id,name FROM documents WHERE project_id=?',(project['id'],))
+    index=build_workflow_index([{'document_id':row['id'],'name':row['name'],
+                                 'summary':{'document_type':'EMAIL'}} for row in documents])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('named Email header used retrieval'))
+
+    subject=ProjectQuestions(db,gateway).ask(
+        run,'What is the subject of email file SECOND.eml?',index)
+    sender=ProjectQuestions(db,gateway).ask(run,'Who sent first.eml?',index)
+    missing=ProjectQuestions(db,gateway).ask(
+        run,'What is the subject of missing.eml?',index)
+
+    assert subject['status']=='ANSWERED'
+    assert subject['citations'][0]['quote']=='Subject: Second Coordination'
+    assert 'second.eml' in subject['answer']
+    assert sender['status']=='ANSWERED'
+    assert sender['citations'][0]['quote']=='From: first@example.test'
+    assert missing['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'does not contain an analyzed Email file named "missing.eml"' in missing['answer']
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_named_email_header_blocks_duplicate_exact_file_names_without_evidence_read(
+        monkeypatch):
+    index={'items':[{'kind':'EMAIL','identifier':None,'members':[
+        {'document_id':'D-1','file_name':'duplicate.eml','document_type':'EMAIL'},
+        {'document_id':'D-2','file_name':'duplicate.eml','document_type':'EMAIL'},
+    ]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('duplicate Email name read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('duplicate Email name used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-DUPLICATE','status':'COMPLETED'},
+        'What is the subject of duplicate.eml?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 analyzed Email files named "duplicate.eml"' in result['answer']
+    assert result['citations']==[]
 
 
 def test_unspecified_header_question_blocks_multiple_emails_without_evidence_read(
@@ -3774,6 +3852,36 @@ def test_question_api_loads_workflow_index_for_one_email_header(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Subject: Domestic Water Coordination'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_question_api_loads_workflow_index_for_a_named_email_in_a_multi_email_run(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('first.eml',['Subject: First Coordination']),
+        ('second.eml',['Subject: Second Coordination']),
+    ])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    with db.connect(True) as connection:
+        for row in rows:
+            payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+            connection.execute('UPDATE evidence SET payload=? WHERE id=?',
+                               (json.dumps(payload),row['id']))
+            connection.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+                run['id'],row['document_id'],'SUCCESS',json.dumps({'document_type':'EMAIL'})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('named Email API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the subject of second.eml?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Subject: Second Coordination'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 
