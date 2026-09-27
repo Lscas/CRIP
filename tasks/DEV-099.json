@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce an Email sender name swapped with the cited recipient while the addresses remain absent from the answer.",
+    "Keep each explicit participant display name equal to one complete same-role From, To, Cc, Bcc or Reply-To Email header value.",
+    "Reject name recombination, role swaps and cross-Email source-finding borrowing.",
+    "Do not treat an RFI or Submittal form's From or To field as an Email participant header.",
+    "Require an explicit supported role value when an answered sender or recipient question uses Email evidence.",
+    "Reuse Python's standard-library mailbox parser and add no runtime dependency or provider request.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-099",
+  "title": "Ground Email participant display names",
+  "requirement_ids": ["FR-QA-EMAIL-PARTICIPANT-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-099.json",
+    "changes/CR-0114.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent Email participant names from being omitted, recombined, role-swapped or borrowed across source findings while retaining exact readable sender and recipient output."
+}

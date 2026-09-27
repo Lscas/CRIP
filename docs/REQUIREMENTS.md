@@ -1035,3 +1035,12 @@ Explicit Email subject answers must remain tied to one complete Subject header f
 
 - Every explicit Subject, Email subject or Subject line claim in an ordinary answer or source finding equals one complete Subject header in that scope's exact quotations from evidence conservatively classified as Email; an RFI or Submittal form's Subject field cannot ground an Email-subject answer. Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the subject value are formatting-equivalent, while punctuation quoted inside the subject, reply prefixes and the remaining value stay exact; headers cannot be recombined or borrowed across source findings.
 - An answered question explicitly asking for one or more Email subjects states each subject explicitly in the answer or corresponding source findings; the validator does not infer current-thread position, sender authority or semantic paraphrase equivalence.
+
+## FR-QA-EMAIL-PARTICIPANT-001 · Ground Email participant answers
+
+优先级：P0；状态：implemented
+
+Explicit Email participant display names must remain complete and paired with the same From, To, Cc, Bcc or Reply-To role from Email evidence in the same answer or source-finding scope.
+
+- Every explicit Email sender, recipient, From, To, Cc, Bcc or Reply-To display-name claim in an ordinary answer or source finding equals one complete same-role header value in that scope's exact quotations from evidence conservatively classified as Email; an RFI or Submittal form's From or To field cannot ground an Email-participant answer. Case, repeated whitespace and outer quotation marks are formatting-equivalent, while names cannot be recombined, role-swapped or borrowed across source findings.
+- An answered sender or recipient question using Email evidence states each requested role explicitly as a supported display name or already validated address in the answer or corresponding source findings; the validator does not infer identity from an address, company, title, signature, thread position or authority.

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from email.utils import getaddresses
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -112,6 +113,23 @@ _EMAIL_PROSE_ROLES = (
     ('FROM',re.compile(r'(?i)\b(?:from|sender(?:\s+(?:is|was))?|sent\s+by|came\s+from)\s*[:=<([]?\s*$')),
     ('TO',re.compile(r'(?i)\b(?:to|recipient(?:\s+(?:is|was))?)\s*[:=<([]?\s*$')),
 )
+_EMAIL_PARTICIPANT_CLAIM_PREFIXES = (
+    ('FROM',re.compile(
+        r'(?im)(?:(?<![\w-])(?:(?:email\s+)?sender\s*(?::|is\b|was\b)|'
+        r'sent\s+by\b|came\s+from\b)|^[ \t]*from\s*:)[ \t]*')),
+    ('TO',re.compile(
+        r'(?im)(?:(?<![\w-])(?:(?:email\s+)?recipients?\s*'
+        r'(?::|is\b|are\b|was\b|were\b)|sent\s+to\b)|^[ \t]*to\s*:)[ \t]*')),
+    ('CC',re.compile(r'(?im)^[ \t]*cc\s*:[ \t]*')),
+    ('BCC',re.compile(r'(?im)^[ \t]*bcc\s*:[ \t]*')),
+    ('REPLY_TO',re.compile(r'(?im)^[ \t]*reply-to\s*:[ \t]*')),
+)
+_EMAIL_SENDER_INTENT = re.compile(
+    r'(?i)\b(?:who\s+(?:sent|sends)\b|(?:email\s+)?senders?\b|'
+    r'sent\s+by\s+whom\b|from\s+whom\b)')
+_EMAIL_RECIPIENT_INTENT = re.compile(
+    r'(?i)\b(?:who\s+(?:received|receives)\b|(?:email\s+)?recipients?\b|'
+    r'sent\s+to\s+whom\b|to\s+whom\b)')
 _EMAIL_SUBJECT_HEADER = re.compile(
     r'(?im)^[ \t]*subject[ \t]*:[ \t]*(?P<value>[^\r\n]{1,500})[ \t]*$')
 _EMAIL_SUBJECT_CLAIM_PREFIX = re.compile(
@@ -948,6 +966,76 @@ def _email_address_role_values(text: str) -> set[tuple[str,str]]:
     return {(role,address) for role,address,_,_ in _email_address_role_occurrences(text)}
 
 
+def _normalize_email_participant_name(
+        value: str, *, strip_answer_punctuation: bool = False) -> str | None:
+    normalized=' '.join(value.strip().split())
+    quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+    if (len(normalized)>=2 and normalized[-1:]==quote_pairs.get(normalized[:1])):
+        normalized=normalized[1:-1].strip()
+    if strip_answer_punctuation and normalized[-1:] in '.!?':
+        normalized=normalized[:-1].rstrip()
+    if (not normalized or len(normalized)>160 or '\n' in normalized or '\r' in normalized
+            or any(char in normalized for char in '<>@')
+            or not any(char.isalpha() for char in normalized)):
+        return None
+    return normalized.casefold()
+
+
+def _email_participant_names(value: str, *, allow_name_only: bool,
+                             strip_answer_punctuation: bool = False) -> set[str]:
+    names=set()
+    for display,address in getaddresses([value]):
+        if display and _email_address_values(address):
+            normalized=_normalize_email_participant_name(display)
+            if normalized:names.add(normalized)
+    if names or not allow_name_only or _EMAIL_ADDRESS.search(value):return names
+    normalized=_normalize_email_participant_name(
+        value,strip_answer_punctuation=strip_answer_punctuation)
+    if normalized:names.add(normalized)
+    return names
+
+
+def _email_header_participant_role_values(text: str) -> set[tuple[str,str]]:
+    role_names={'from':'FROM','to':'TO','cc':'CC','bcc':'BCC','reply-to':'REPLY_TO'}
+    values=set()
+    for line in text.splitlines():
+        header=_EMAIL_HEADER_ROLE.match(line)
+        if not header:continue
+        role=role_names[header['role'].casefold()]
+        for name in _email_participant_names(line[header.end():],allow_name_only=True):
+            values.add((role,name))
+    return values
+
+
+def _email_participant_claim_role_values(text: str) -> set[tuple[str,str]]:
+    values=set()
+    for role,pattern in _EMAIL_PARTICIPANT_CLAIM_PREFIXES:
+        for match in pattern.finditer(text):
+            start=match.end()
+            while start<len(text) and text[start] in ' \t':start+=1
+            quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+            closing=quote_pairs.get(text[start:start+1])
+            close=(text.find(closing,start+1,min(len(text),start+162)) if closing else -1)
+            quoted=(close>=0 and '\n' not in text[start+1:close]
+                    and '\r' not in text[start+1:close])
+            if quoted:
+                raw=text[start+1:close]
+            else:
+                _,right=statement_span(text,start,start)
+                raw=text[start:right]
+            for name in _email_participant_names(
+                    raw,allow_name_only=True,strip_answer_punctuation=not quoted):
+                values.add((role,name))
+    return values
+
+
+def _email_participant_intent_roles(text: str) -> set[str]:
+    roles=set()
+    if _EMAIL_SENDER_INTENT.search(text):roles.add('FROM')
+    if _EMAIL_RECIPIENT_INTENT.search(text):roles.add('TO')
+    return roles
+
+
 def _normalize_email_subject(value: str, *, strip_answer_punctuation: bool = False
                              ) -> str | None:
     normalized=' '.join(value.strip().split())
@@ -1291,6 +1379,13 @@ def _require_email_subject_support(claim: str, quotes: list[str], label: str) ->
     for quote in quotes:supported.update(_email_subject_values(quote))
     if _email_subject_claim_values(claim)-supported:
         raise ValueError(label+' contains an email subject absent from its citations')
+
+
+def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
+    supported=set()
+    for quote in quotes:supported.update(_email_header_participant_role_values(quote))
+    if _email_participant_claim_role_values(claim)-supported:
+        raise ValueError(label+' contains an email participant role absent from its citations')
 
 
 def _require_date_support(claim: str, quotes: list[str], label: str) -> None:
@@ -1716,6 +1811,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
     top_level_quotes=[];top_level_identity_texts=[];top_level_subject_quotes=[]
+    top_level_participant_quotes=[]
     top_level_drawing_texts=[];top_level_clause_texts=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
@@ -1725,12 +1821,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         top_level_identity_texts.append(_citation_identity_text(source,item['quote']))
         top_level_drawing_texts.append(_citation_drawing_text(source,item['quote']))
         top_level_clause_texts.append(_citation_clause_text(source,item['quote']))
-        if _source_family(source)=='EMAIL':top_level_subject_quotes.append(item['quote'])
+        if _source_family(source)=='EMAIL':
+            top_level_subject_quotes.append(item['quote'])
+            top_level_participant_quotes.append(item['quote'])
     answer_quotes=list(top_level_quotes)
     answer_identity_texts=list(top_level_identity_texts)
     answer_drawing_texts=list(top_level_drawing_texts)
     answer_clause_texts=list(top_level_clause_texts)
     answer_subject_quotes=list(top_level_subject_quotes)
+    answer_participant_quotes=list(top_level_participant_quotes)
     finding_sources=[];question_targets=_workflow_identities(question)
     date_question=bool(_DATE_QUESTION_INTENT.search(question)
                        and not _STATUS_FIELD_INTENT.search(question))
@@ -1744,6 +1843,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         finding_sources.append(key)
         finding_quotes=[];finding_identity_texts=[]
         finding_drawing_texts=[];finding_clause_texts=[];finding_subject_quotes=[]
+        finding_participant_quotes=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
             if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
@@ -1756,7 +1856,9 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             finding_identity_texts.append(_citation_identity_text(source,item['quote']))
             finding_drawing_texts.append(_citation_drawing_text(source,item['quote']))
             finding_clause_texts.append(_citation_clause_text(source,item['quote']))
-            if _source_family(source)=='EMAIL':finding_subject_quotes.append(item['quote'])
+            if _source_family(source)=='EMAIL':
+                finding_subject_quotes.append(item['quote'])
+                finding_participant_quotes.append(item['quote'])
         if value['status']=='ANSWERED':
             finding_status=bool(_disposition_values(finding['statement'])
                                 and _needs_disposition_ambiguity_check(
@@ -1789,6 +1891,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_email_subject_support(
                 finding['statement'],finding_subject_quotes,'source finding')
+            _require_email_participant_support(
+                finding['statement'],finding_participant_quotes,'source finding')
             _require_date_support(finding['statement'],finding_quotes,'source finding')
             _require_date_role_support(
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
@@ -1801,6 +1905,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         answer_drawing_texts.extend(finding_drawing_texts)
         answer_clause_texts.extend(finding_clause_texts)
         answer_subject_quotes.extend(finding_subject_quotes)
+        answer_participant_quotes.extend(finding_participant_quotes)
     if value['status']=='ANSWERED':
         if (top_level_quotes
                 and _needs_disposition_ambiguity_check(value['answer'],date_question)):
@@ -1834,6 +1939,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
         _require_email_subject_support(value['answer'],answer_subject_quotes,'answer')
+        _require_email_participant_support(value['answer'],answer_participant_quotes,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
         _require_date_role_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts)
@@ -1846,6 +1952,15 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 and not any(_email_subject_claim_values(text) for text in (
                     value['answer'],*(finding['statement'] for finding in value['source_findings'])))):
             raise ValueError('an answered email subject question requires an explicit email subject')
+        participant_intent=_email_participant_intent_roles(question)
+        participant_claims=set(_email_participant_claim_role_values(value['answer']))
+        address_claims=set(_email_address_role_values(value['answer']))
+        for finding in value['source_findings']:
+            participant_claims.update(_email_participant_claim_role_values(finding['statement']))
+            address_claims.update(_email_address_role_values(finding['statement']))
+        stated_roles={role for role,_ in participant_claims|address_claims}
+        if (answer_participant_quotes and participant_intent-stated_roles):
+            raise ValueError('an answered email participant question requires an explicit role value')
     if value['status']=='ANSWERED' and requires_source_diversity(question):
         if not value['source_findings']:
             raise ValueError('a comparison answer requires source findings')

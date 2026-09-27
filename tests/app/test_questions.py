@@ -13,7 +13,9 @@ from app.db import BudgetError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
-    _email_address_role_values, _email_address_values, _numeric_unit_values,
+    _email_address_role_values, _email_address_values,
+    _email_header_participant_role_values, _email_participant_claim_role_values,
+    _numeric_unit_values,
     _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
     _workflow_index_status_conflicts,
@@ -2651,6 +2653,144 @@ def test_email_header_role_cannot_be_swapped(client, project):
     validate_answer_model(grounded,evidence,'Who is the email sender?')
     with pytest.raises(ValueError,match='email address role'):
         validate_answer_model(wrong,evidence,'Who is the email sender?')
+
+
+def test_email_participant_name_role_cannot_be_swapped(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'To: Bob Builder <bob@example.test>\nSubject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='Who is the email sender?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED','answer':'The sender was Alice Architect.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+    wrong={**grounded,'answer':'The sender was Bob Builder.'}
+
+    validate_answer_model(grounded,evidence,question)
+    with pytest.raises(ValueError,match='email participant role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_participant_name_accepts_formatting_only_changes(client, project):
+    source=('From: "Alice Architect" <alice@example.test>\n'
+            'Subject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='Who sent the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={'status':'ANSWERED','answer':'Email sender: “alice   architect”.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_email_participant_name_cannot_be_recombined(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'To: Bob Builder <bob@example.test>\nSubject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='Who sent the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'Email sender: Alice Builder.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email participant role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_participant_question_requires_an_explicit_role_value(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Subject: RFI 42 response')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='Who sent the email?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evasive={'status':'ANSWERED','answer':'The email concerns RFI 42.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit role value'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_email_source_finding_cannot_borrow_another_sender_name(client, project):
+    first=('From: Alice Architect <alice@example.test>\n'
+           'Subject: Domestic Water Pipe')
+    second=('From: Bob Builder <bob@example.test>\n'
+            'Subject: Fire Alarm Coordination')
+    run=_source_evidence(client,project,[
+        ('water.eml',[first]),('fire-alarm.eml',[second])])
+    question='Compare the email senders for Domestic Water Pipe and Fire Alarm Coordination.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The emails have different senders.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'water.eml',
+             'statement':'Email sender: Bob Builder.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':first}]},
+            {'source_type':'EMAIL','file_name':'fire-alarm.eml',
+             'statement':'Email sender: Bob Builder.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':second}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains an email participant role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_sender_comparison_requires_explicit_role_values(client, project):
+    first=('From: Alice Architect <alice@example.test>\n'
+           'Subject: Domestic Water Pipe')
+    second=('From: Bob Builder <bob@example.test>\n'
+            'Subject: Fire Alarm Coordination')
+    run=_source_evidence(client,project,[
+        ('water.eml',[first]),('fire-alarm.eml',[second])])
+    question='Compare the email senders for Domestic Water Pipe and Fire Alarm Coordination.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    vague={
+        'status':'ANSWERED','answer':'The messages involve different people.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'water.eml',
+             'statement':'The first message concerns domestic water pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':first}]},
+            {'source_type':'EMAIL','file_name':'fire-alarm.eml',
+             'statement':'The second message concerns fire alarm coordination.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':second}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='requires an explicit role value'):
+        validate_answer_model(vague,evidence,question)
+
+
+@pytest.mark.parametrize(('source','file_name'),[
+    ('RFI 42\nFrom: Alice Architect\nQuestion: Can Type L copper be used?','RFI-42.txt'),
+    ('Submittal 23-01\nFrom: Alice Architect\nStatus: PENDING','Submittal-23-01.txt'),
+])
+def test_workflow_form_from_field_does_not_ground_an_email_sender_name(
+        client, project, source, file_name):
+    run=_source_evidence(client,project,[(file_name,[source])])
+    question='Who is the email sender?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'Email sender: Alice Architect.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='email participant role'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_participant_parser_preserves_header_roles_and_display_names():
+    text=('From: "Architect, Alice" <alice@example.test>\n'
+          'To: Bob Builder <bob@example.test>, Carol Checker <carol@example.test>\n'
+          'Cc: Dave Designer <dave@example.test>\n'
+          'Bcc: Beth Bidder <beth@example.test>\n'
+          'Reply-To: Erin Engineer <erin@example.test>')
+
+    assert _email_header_participant_role_values(text)=={
+        ('FROM','architect, alice'),('TO','bob builder'),('TO','carol checker'),
+        ('CC','dave designer'),('BCC','beth bidder'),('REPLY_TO','erin engineer')}
+    assert _email_participant_claim_role_values(
+        'According to: Alice Architect, the RFI remains open.')==set()
 
 
 def test_email_address_stays_with_its_workflow(client, project):
