@@ -1512,6 +1512,19 @@
       ],
       "decision_source": "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-WORKFLOW-SUBJECT-LOCAL-001",
+      "title": "Answer exact workflow Subject questions locally",
+      "statement": "A strict direct Subject question naming one exact RFI or Submittal should reuse the complete workflow index and existing immutable primary-form evidence before model dispatch.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The shortcut recognizes only bounded English direct-question forms naming one exact RFI or Submittal identifier, uses the complete terminal-run workflow index to select primary form documents, and reads only existing non-vision evidence. One distinct complete explicit Subject returns with exact inline citations and no provider or budget action; different values return insufficient evidence with the conflicting exact quotations.",
+        "Email documents and Email Subject headers cannot satisfy an RFI/Submittal form-Subject shortcut. More than 32 primary documents or 512 Subject-bearing passages fails closed, while no supported Subject falls through to the ordinary evidence-grounded question path. The shortcut adds no parser, provider call, dependency, second index, applicability, status, revision, authority or semantic-paraphrase inference."
+      ],
+      "decision_source": "The active objective requests Trunk Tools-style file-grounded construction questions while improving CIRP speed and accuracy.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

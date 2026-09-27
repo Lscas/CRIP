@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Reference Trunk Tools-style file-grounded construction questions and continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the existing Ask the project flow rather than create a second chat system.",
+    "Recognize only strict direct Subject questions naming one exact RFI or Submittal.",
+    "Use the complete workflow index to bound primary form documents and existing non-vision evidence.",
+    "Answer one distinct explicit Subject locally with exact citations and block conflicting values.",
+    "Do not let an Email Subject satisfy an RFI or Submittal form Subject.",
+    "Fall through to ordinary grounded Q&A when no supported Subject exists.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-102",
+  "title": "Answer exact workflow Subject questions locally",
+  "requirement_ids": ["FR-QA-WORKFLOW-SUBJECT-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-102.json", "changes/CR-0117.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-102",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reduce latency and model cost for exact RFI/Submittal Subject questions without weakening source identity, conflict or Email boundaries."
+}

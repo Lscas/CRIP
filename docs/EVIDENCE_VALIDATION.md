@@ -1,5 +1,12 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-26 local exact workflow-Subject verification
+
+- Strict direct RFI/Submittal Subject question recognition, one-value local answering, conflicting-value blocking, Email exclusion, both safety caps and API workflow-index loading passed 13 focused offline cases.
+- The complete `tests/app/test_questions.py` module passed after the change.
+- The tests use synthetic immutable evidence and a transport that fails if reached. The successful and conflict paths create no model-call row, so the result demonstrates local execution rather than a mocked provider answer.
+- No customer file, credential, `.local` data, paid provider or external project system was accessed.
+
 ## 实际交付
 在`v0.2.5-ui-language`基础上实现字段原句、独立语义核验接口、修改后失效、引用显示与导出。当前证据包没有Git工作树且未推送远端。2026-09-11已在用户Windows本机分别启动Gemini与DeepSeek live服务；当时密钥由用户通过一次性本机密码页输入，未由诊断命令读取。2026-09-12用户明确要求避免重复输入后，新增Windows DPAPI当前用户加密保存；不写明文`.env`、网址、命令行、日志或Git。
 

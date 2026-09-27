@@ -234,6 +234,15 @@ _EXACT_WORKFLOW_STATUS_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*(?:what|which)\s+(?:status|disposition)\s+is\s+
         {_WORKFLOW_EXACT_ITEM}\s*[?!.]*\s*$'''),
 )
+_EXACT_WORKFLOW_SUBJECT_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:what\s+is|show(?:\s+me)?|tell\s+me)\s+
+        (?:the\s+)?subject(?:\s+line)?\s+(?:of|for)\s+{_WORKFLOW_EXACT_ITEM}
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:what|which)\s+subject(?:\s+line)?\s+does\s+
+        {_WORKFLOW_EXACT_ITEM}\s+have\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*what\s+is\s+{_WORKFLOW_EXACT_ITEM}(?:'s|’s)\s+
+        subject(?:\s+line)?\s*[?!.]*\s*$'''),
+)
 _NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
 _NUMERIC_VALUE = re.compile(rf'(?<!\w){_NUMERIC_LITERAL}(?!\w)')
 _COMPACT_MEASUREMENT_UNIT_SUFFIX = (
@@ -590,6 +599,24 @@ def requires_workflow_status_index(question: str) -> bool:
                 or (_STATUS_INTENT.search(question) and _workflow_identities(question)))
 
 
+def requested_workflow_subject_item(question: str) -> tuple[str,str] | None:
+    """Recognize only a direct Subject question naming one exact workflow item."""
+    for pattern in _EXACT_WORKFLOW_SUBJECT_QUESTIONS:
+        match=pattern.fullmatch(question)
+        if not match:continue
+        workflow=('RFI' if match.group('kind').casefold().startswith(('rfi','request'))
+                  else 'SUBMITTAL')
+        raw_identifier=match.group('identifier')
+        if workflow=='RFI' and re.search(r'\s',raw_identifier):continue
+        identifier=normalize_identifier(workflow,raw_identifier)
+        if identifier:return workflow,identifier
+    return None
+
+
+def requires_workflow_subject_index(question: str) -> bool:
+    return requested_workflow_subject_item(question) is not None
+
+
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
     found=[(hit.start(),kind) for kind,pattern in types if (hit:=pattern.search(categories))]
     return tuple(kind for _,kind in sorted(found))
@@ -825,6 +852,77 @@ def _workflow_status_answer(record: dict) -> str:
     status=record['statuses'][0]['status']
     return (f"The complete workflow index for the selected analysis run records "
             f"{record['label']} with the explicit status {status}.")
+
+
+def _workflow_index_subject_documents(
+        target: tuple[str,str], workflow_index: dict | None) -> list[str]:
+    """Return primary form documents only; an Email Subject is not an RFI form Subject."""
+    if not isinstance(workflow_index,dict):return []
+    allowed=({'RFI_QUESTION','RFI_RESPONSE'} if target[0]=='RFI' else {'SUBMITTAL'})
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict):continue
+        identity=(item.get('kind'),normalize_identifier(item.get('kind'),item.get('identifier')))
+        if identity!=target:continue
+        return list(dict.fromkeys(
+            str(member.get('document_id')) for member in item.get('members',[])
+            if isinstance(member,dict) and member.get('source')=='PRIMARY'
+            and member.get('document_type') in allowed and member.get('document_id')))
+    return []
+
+
+def _workflow_index_exact_subject(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Answer one exact form Subject from bounded immutable parser evidence."""
+    target=requested_workflow_subject_item(question)
+    if not target:return None
+    document_ids=_workflow_index_subject_documents(target,workflow_index)
+    if not document_ids:return None
+    label=f'{target[0]} {target[1]}'
+    if len(document_ids)>_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Subject for {label} was not answered locally because more than '
+            f'{_MAX_WORKFLOW_CONFLICT_CITATION_SOURCES} primary files share that identifier. '
+            'Review the Workflow relationships section.'),'citations':[]}
+    placeholders=','.join('?' for _ in document_ids)
+    rows=db.all(f'''SELECT e.document_id,e.payload,d.name AS file_name
+                    FROM evidence e JOIN documents d ON d.id=e.document_id
+                    WHERE e.run_id=? AND e.document_id IN ({placeholders})
+                      AND LOWER(COALESCE(json_extract(e.payload,'$.raw_text'),'')) LIKE '%subject%'
+                      AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                      AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                    ORDER BY LOWER(d.name),e.id LIMIT 513''',[run_id,*document_ids])
+    if len(rows)>512:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Subject for {label} was not answered locally because more than 512 '
+            'candidate source passages require review.'),'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name']
+        text=str(evidence.get('raw_text') or '')
+        identity_text=_citation_identity_text(evidence,text)
+        for identity,normalized,display,start,end in _workflow_subject_source_occurrences(
+                text,identity_text):
+            if identity!=target:continue
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,start,end,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:return None
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The Subject for {label} cannot be established because the analyzed primary '
+            f'files contain conflicting explicit values: {values}. Review the cited sources.'),
+            'citations':citations}
+    value=next(iter(found.values()))['value']
+    return {'status':'ANSWERED','answer':(
+        f'The analyzed primary file records the Subject for {label} as "{value}".'),
+        'citations':citations}
 
 
 def _evidence_workflow_identities(evidence: dict) -> set[tuple[str,str]]:
@@ -1121,19 +1219,29 @@ def _email_subject_claim_values(text: str) -> set[str]:
     return values
 
 
-def _workflow_subject_source_values(
-        text: str, identity_text: str | None = None) -> set[tuple[tuple[str,str],str]]:
+def _workflow_subject_source_occurrences(
+        text: str, identity_text: str | None = None,
+        ) -> list[tuple[tuple[str,str],str,str,int,int]]:
     identities=_workflow_identities(text if identity_text is None else identity_text)
     identity_spans=_workflow_identity_spans(text)
-    values=set()
+    values=[]
     for match in _EMAIL_SUBJECT_HEADER.finditer(text):
         subject=_normalize_email_subject(match.group('value'))
         if not subject:continue
+        display=' '.join(match.group('value').strip().split())
+        if len(display)>=2 and display[0]==display[-1] and display[0] in "\"'":
+            display=display[1:-1].strip()
         preceding=[item for item in identity_spans
                    if item[2]<=match.start() and match.start()-item[2]<=500]
         scoped={preceding[-1][0]} if preceding else identities if len(identities)==1 else set()
-        values.update((identity,subject) for identity in scoped)
+        values.extend((identity,subject,display,match.start(),match.end()) for identity in scoped)
     return values
+
+
+def _workflow_subject_source_values(
+        text: str, identity_text: str | None = None) -> set[tuple[tuple[str,str],str]]:
+    return {(identity,subject) for identity,subject,_,_,_ in
+            _workflow_subject_source_occurrences(text,identity_text)}
 
 
 def _workflow_subject_claim_values(text: str) -> set[tuple[tuple[str,str],str]]:
@@ -2140,6 +2248,13 @@ class ProjectQuestions:
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
+        exact_subject=_workflow_index_exact_subject(
+            self.db,run['id'],question,workflow_index)
+        if exact_subject:
+            return {'run_id':run['id'],'question':question,**exact_subject,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(exact_subject['citations']),'cached':False}
         exact_status=_workflow_index_exact_status(question,workflow_index)
         if exact_status:
             _attach_workflow_status_citations(self.db,run['id'],[exact_status])

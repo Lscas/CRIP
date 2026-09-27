@@ -1062,3 +1062,12 @@ Explicit RFI and Submittal form Subject answers must remain tied to one complete
 
 - Every explicit RFI/Submittal form Subject claim in an ordinary answer or source finding equals one complete Subject value paired with the same exact workflow identifier in that scope's exact quotations from evidence conservatively classified as RFI or Submittal. One exact locator identity may supply an omitted source identifier, while a multi-identity locator, another workflow item or an Email Subject header cannot ground the claim. Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the value are formatting-equivalent; values cannot be recombined or borrowed across source findings.
 - An answered question explicitly asking for one or more RFI/Submittal subjects states each exact workflow identifier and complete subject in the answer or corresponding source findings; the validator does not infer applicability, status, revision, authority or semantic paraphrase equivalence.
+
+## FR-QA-WORKFLOW-SUBJECT-LOCAL-001 · Answer exact workflow Subject questions locally
+
+优先级：P0；状态：implemented
+
+A strict direct Subject question naming one exact RFI or Submittal should reuse the complete workflow index and existing immutable primary-form evidence before model dispatch.
+
+- The shortcut recognizes only bounded English direct-question forms naming one exact RFI or Submittal identifier, uses the complete terminal-run workflow index to select primary form documents, and reads only existing non-vision evidence. One distinct complete explicit Subject returns with exact inline citations and no provider or budget action; different values return insufficient evidence with the conflicting exact quotations.
+- Email documents and Email Subject headers cannot satisfy an RFI/Submittal form-Subject shortcut. More than 32 primary documents or 512 Subject-bearing passages fails closed, while no supported Subject falls through to the ordinary evidence-grounded question path. The shortcut adds no parser, provider call, dependency, second index, applicability, status, revision, authority or semantic-paraphrase inference.

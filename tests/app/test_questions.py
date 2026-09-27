@@ -24,8 +24,10 @@ from app.questions import (
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
     requested_workflow_status_inventory, requested_workflow_status_item,
+    requested_workflow_subject_item,
     requires_source_diversity,
-    requires_workflow_inventory, requires_workflow_status_index, retrieve_evidence,
+    requires_workflow_inventory, requires_workflow_status_index,
+    requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
 from app.settings import ROOT, Settings
@@ -3454,6 +3456,162 @@ def test_exact_workflow_status_without_a_supported_explicit_state_uses_evidence_
 ])
 def test_exact_workflow_status_question_boundary(question,expected):
     assert requested_workflow_status_item(question)==expected
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the subject of RFI 42?',('RFI','42')),
+    ('Show me the Subject line for Request for Information No. 0042.',('RFI','42')),
+    ('What subject does Submittal 23-01 have?',('SUBMITTAL','23-01')),
+    ("What is Submission 23-01's subject line?",('SUBMITTAL','23-01')),
+    ('Compare the subjects of RFI 42 and RFI 43.',None),
+    ('What is the email subject for RFI 42?',None),
+    ('What is the subject of this RFI?',None),
+])
+def test_exact_workflow_subject_question_boundary(question,expected):
+    assert requested_workflow_subject_item(question)==expected
+    assert requires_workflow_subject_index(question) is bool(expected)
+
+
+def test_exact_workflow_subject_uses_primary_file_evidence_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-form.pdf',['RFI 42\nSubject: Domestic Water Pipe\nQuestion: May Type L be used?']),
+    ])
+    db=client.app.state.db
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    index=build_workflow_index([{'document_id':document['document_id'],
+        'name':document['name'],'summary':{'document_type':'RFI_QUESTION','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':'OPEN'}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact Subject used ordinary retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the subject of RFI 42?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'Domestic Water Pipe' in result['answer']
+    assert result['citations'][0]['quote']=='Subject: Domestic Water Pipe'
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_subject_blocks_conflicting_primary_values_without_model(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['RFI 42\nSubject: Domestic Water Pipe']),
+        ('RFI-42-response.pdf',['RFI 42\nSubject: Fire Alarm Coordination']),
+    ])
+    db=client.app.state.db
+    documents={row['name']:row['id'] for row in db.all(
+        'SELECT id,name FROM documents WHERE project_id=?',(project['id'],))}
+    index=build_workflow_index([
+        {'document_id':documents['RFI-42-question.pdf'],'name':'RFI-42-question.pdf',
+         'summary':{'document_type':'RFI_QUESTION','workflow_contexts':[{
+             'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}]}},
+        {'document_id':documents['RFI-42-response.pdf'],'name':'RFI-42-response.pdf',
+         'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+             'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}},
+    ])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('conflicting Subject used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the subject of RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in result['answer']
+    assert {item['quote'] for item in result['citations']}=={
+        'Subject: Domestic Water Pipe','Subject: Fire Alarm Coordination'}
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_exact_workflow_subject_primary_document_cap_fails_closed(monkeypatch):
+    index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','document_type':'RFI_RESPONSE','source':'PRIMARY'}
+        for number in range(33)]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('document cap still read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('document cap used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-CAP','status':'COMPLETED'},'What is the subject of RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 primary files' in result['answer']
+    assert result['citations']==[]
+
+
+def test_exact_workflow_subject_passage_cap_fails_closed(monkeypatch):
+    index={'items':[{'kind':'SUBMITTAL','identifier':'23-01','members':[
+        {'document_id':'D-1','document_type':'SUBMITTAL','source':'PRIMARY'}]}]}
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(513)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('passage cap used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-CAP','status':'COMPLETED'},
+        'What is the subject of Submittal 23-01?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 512 candidate source passages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_subject_cannot_answer_an_exact_rfi_form_subject(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('coordination.eml',['From: architect@example.test\nSubject: RFI 42 Domestic Water Pipe']),
+    ])
+    db=client.app.state.db
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    index=build_workflow_index([{'document_id':document['document_id'],
+        'name':document['name'],'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':None}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',lambda *_args,**_kwargs:[])
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda _request:pytest.fail('missing form Subject called provider'))))
+
+    result=ProjectQuestions(db,gateway).ask(run,'What is the subject of RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_an_exact_subject(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('Submittal-23-01.pdf',[
+            'Submittal 23-01\nSubject: Domestic Water Pipe Product Data']),
+    ])
+    db=client.app.state.db
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],document['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('exact Subject route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the subject of Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Subject: Domestic Water Pipe Product Data'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 
 def test_workflow_conflict_citation_does_not_borrow_another_workflow_status(
