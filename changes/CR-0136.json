@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0136",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-FIELD-LOCAL-001"],
+  "summary": "Add one strict exact-label local reader for company-specific RFI and Submittal fields and ground the same requested label, workflow identity and complete value in model-generated answers and source findings.",
+  "decision_refs": [
+    "The active objective requires efficient accurate adaptable questions across RFI, Submittal and Email content",
+    "Different company forms use labels such as RFI Manager, Category, Submittal Type and Procurement Package that should not require one new dedicated implementation each",
+    "Exact label matching against the existing immutable evidence and workflow index improves adaptability without semantic inference or provider cost"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-121.json",
+    "changes/CR-0136.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "The local shortcut requires a strict English question using the literal word field, one exact RFI or Submittal and a one-through-six-word label no longer than 60 characters.",
+    "Known semantic fields retain dedicated contracts; general prose, synonyms, Email-prefixed labels, headers, quoted history, signatures and unlabeled values remain outside this path.",
+    "More than 32 primary files or candidate passages and conflicting explicit values fail closed.",
+    "The implementation does not infer label equivalence, meaning, applicability, role, authority or relationships to other fields."
+  ]
+}

@@ -1754,6 +1754,20 @@
       ],
       "decision_source": "The active objective requires faster and more accurate file-grounded questions across RFI, Submittal and Email content while keeping printed impact fields distinct from model estimates.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-WORKFLOW-FIELD-LOCAL-001",
+      "title": "Answer exact company-specific workflow fields locally",
+      "statement": "Strict questions naming an otherwise-unregistered printed field and one exact RFI or Submittal should read only an exact same-label value from bounded workflow-scoped primary evidence before model retrieval.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A bounded English question uses the literal form the <label> field for one exact RFI or Submittal. The label contains one through six English words and at most 60 characters; known Status, Subject, date, action, impact, party and reference terms remain on their dedicated contracts. Existing non-vision evidence from at most 32 indexed primary files may return one complete one-line value locally only from a line-leading exact case/whitespace-equivalent label under that workflow locator, with exact citations and zero provider or budget action.",
+        "Current Email-body primary workflow scopes may participate. A shorter, synonymous or Email-prefixed label, general prose, another or multiple workflow identity, Email headers, quoted history, signatures, vision narration, more than 32 primary files or more than 32 candidate passages cannot produce the local answer. Missing labels and conflicting explicit values fail closed before ordinary retrieval.",
+        "The shared final-answer validator preserves the exact requested label, workflow identity and complete value in ordinary answers and source findings. It rejects omission, invention, cross-item or cross-source borrowing and conflicting cited values. The implementation adds no synonym expansion, semantic interpretation, dependency, parser change or second index."
+      ],
+      "decision_source": "The active objective requires adaptable file-grounded questions across different companies' RFI and Submittal forms without weakening evidence boundaries or adding a new implementation for every label.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

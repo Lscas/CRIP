@@ -45,6 +45,7 @@ from app.questions import (ProjectQuestions,requires_email_attachment_relation_i
                            requires_workflow_email_relation_index,
                            requires_workflow_inventory,
                            requires_workflow_action_index,
+                           requires_workflow_field_index,
                            requires_workflow_impact_index,
                            requires_workflow_metadata_index,
                            requires_workflow_party_index,
@@ -275,6 +276,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
                              or requires_workflow_date_index(question)
                              or requires_workflow_clause_reference_index(question)
                              or requires_workflow_action_index(question)
+                             or requires_workflow_field_index(question)
                              or requires_workflow_impact_index(question)
                              or requires_workflow_metadata_index(question)
                              or requires_workflow_party_index(question)

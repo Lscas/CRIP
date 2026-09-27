@@ -23,6 +23,7 @@ from app.questions import (
     _spec_section_values, _workflow_identities,
     _workflow_party_claim_values, _workflow_party_source_values,
     _workflow_action_claim_values, _workflow_action_source_values,
+    _workflow_field_claim_values, _workflow_field_source_values,
     _workflow_impact_claim_values, _workflow_impact_source_values,
     _workflow_metadata_claim_values, _workflow_metadata_source_values,
     _workflow_subject_claim_values, _workflow_subject_source_values,
@@ -37,8 +38,8 @@ from app.questions import (
     requested_workflow_date_item, requested_workflow_document_relations,
     requested_workflow_drawing_references,
     requested_workflow_email_relations,
-    requested_workflow_action, requested_workflow_impact, requested_workflow_metadata,
-    requested_workflow_party,
+    requested_workflow_action, requested_workflow_field, requested_workflow_impact,
+    requested_workflow_metadata, requested_workflow_party,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
@@ -56,7 +57,8 @@ from app.questions import (
     requires_workflow_drawing_reference_index,
     requires_workflow_email_relation_index,
     requires_workflow_inventory, requires_workflow_status_index,
-    requires_workflow_action_index, requires_workflow_impact_index,
+    requires_workflow_action_index, requires_workflow_field_index,
+    requires_workflow_impact_index,
     requires_workflow_metadata_index,
     requires_workflow_party_index,
     requires_workflow_subject_index, retrieve_evidence,
@@ -7839,3 +7841,271 @@ def test_workflow_impact_source_finding_cannot_borrow_another_source_value(
 
     with pytest.raises(ValueError,match='source finding contains a workflow impact field'):
         validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the RFI Manager field for RFI 42?',('RFI','42','RFI Manager')),
+    ('Show me the Category field for Request for Information No. 0042.',
+     ('RFI','42','Category')),
+    ('Tell me the Submittal Type field in Submittal 23-01.',
+     ('SUBMITTAL','23-01','Submittal Type')),
+    ('What is the Procurement Package field for Submission MEP-023?',
+     ('SUBMITTAL','MEP-023','Procurement Package')),
+    ('What is the RFI Manager for RFI 42?',None),
+    ('What should the Category field be for RFI 42?',None),
+    ('What is the Category field for RFI 42 and RFI 43?',None),
+    ('What is the Status field for RFI 42?',None),
+    ('What is the Cost Impact field for RFI 42?',None),
+    ('What is the Email Category field for RFI 42?',None),
+])
+def test_exact_generic_workflow_field_question_boundary(question,expected):
+    assert requested_workflow_field(question)==expected
+    assert requires_workflow_field_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(
+    ('file_name','document_type','context','section','question','source','expected'),[
+    ('RFI-42.pdf','RFI_RESPONSE',
+     {'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'},
+     'RFI 42 > RESPONSE','What is the RFI Manager field for RFI 42?',
+     'RFI Manager: Project Architect','Project Architect'),
+    ('RFI-ARC-42.pdf','RFI_QUESTION',
+     {'workflow_type':'RFI','identifier':'ARC-42','role':'QUESTION','status':'OPEN'},
+     'RFI ARC-42 > QUESTION','What is the Category field for RFI ARC-42?',
+     'Category : Design Coordination','Design Coordination'),
+    ('Submittal-23-01.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL 23-01','What is the Submittal Type field for Submittal 23-01?',
+     'Submittal Type: Product Data','Product Data'),
+    ('Submittal-MEP-023.pdf','SUBMITTAL',
+     {'workflow_type':'SUBMITTAL','identifier':'MEP-023','role':'SUBMITTAL','status':'PENDING'},
+     'SUBMITTAL MEP-023','What is the Procurement Package field for Submittal MEP-023?',
+     'Procurement Package: Mechanical Equipment','Mechanical Equipment'),
+])
+def test_exact_generic_workflow_field_answers_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch, file_name, document_type, context, section,
+        question, source, expected):
+    run=_source_evidence(client,project,[(file_name,[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':file_name,
+        'summary':{'document_type':document_type,'workflow_contexts':[context]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('generic field used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(run,question,index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']==source and expected in result['answer']
+    assert result['retrieved_count']==1 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_generic_workflow_field_merges_formatting_and_blocks_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('RFI-42-question.pdf',['RFI Manager: Project Architect']),
+        ('RFI-42-response.pdf',['rfi   manager : project architect']),
+        ('RFI-42-addendum.pdf',['RFI Manager: Construction Manager']),
+    ]);db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    contexts=[]
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='RFI 42 > RESPONSE'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+        contexts.append({'document_id':row['document_id'],'name':row['name'],'summary':{
+            'document_type':'RFI_RESPONSE','workflow_contexts':[{
+                'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}})
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('generic field conflict used retrieval'))
+
+    merged=ProjectQuestions(db,object()).ask(
+        run,'What is the RFI Manager field for RFI 42?',build_workflow_index(contexts[:2]))
+    conflicted=ProjectQuestions(db,object()).ask(
+        run,'What is the RFI Manager field for RFI 42?',build_workflow_index(contexts))
+
+    assert merged['status']=='ANSWERED' and len(merged['citations'])==2
+    assert conflicted['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting explicit values' in conflicted['answer']
+    assert len(conflicted['citations'])==3
+
+
+@pytest.mark.parametrize(('section','source'),[
+    ('RFI 42 > RESPONSE','The project architect manages this RFI.'),
+    ('RFI 42 > RESPONSE','Manager: Project Architect'),
+    ('RFI 42 > RESPONSE','Email RFI Manager: Project Architect'),
+    ('EMAIL > HEADERS > RFI 42','RFI Manager: Project Architect'),
+    ('EMAIL > QUOTED HISTORY > RFI 42','RFI Manager: Project Architect'),
+    ('EMAIL > SIGNATURE > RFI 42','RFI Manager: Project Architect'),
+    ('RFI 43 > RESPONSE','RFI Manager: Project Architect'),
+])
+def test_generic_workflow_field_requires_exact_label_and_scope(
+        client, project, monkeypatch, section, source):
+    run=_source_evidence(client,project,[('RFI-42-response.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']=section
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'RFI-42-response.pdf',
+        'summary':{'document_type':'RFI_RESPONSE','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('unsupported generic field used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the RFI Manager field for RFI 42?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE' and result['citations']==[]
+
+
+def test_generic_workflow_field_accepts_current_email_body(client, project, monkeypatch):
+    source='RFI Manager: Project Architect'
+    run=_source_evidence(client,project,[('coordination.eml',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > BODY > RFI 42'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':'coordination.eml',
+        'summary':{'document_type':'EMAIL','workflow_contexts':[{
+            'workflow_type':'RFI','identifier':'42','role':'RESPONSE','status':'ANSWERED'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('current Email generic field used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'What is the RFI Manager field for RFI 42?',index)
+
+    assert result['status']=='ANSWERED' and result['citations'][0]['quote']==source
+
+
+def test_generic_workflow_field_caps_and_missing_primary_fail_closed(monkeypatch):
+    primary_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':f'D-{number}','source':'PRIMARY'} for number in range(33)]}]}
+    passage_index={'items':[{'kind':'RFI','identifier':'42','members':[
+        {'document_id':'D-1','source':'PRIMARY'}]}]}
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('generic field primary cap read evidence')
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('generic field cap used retrieval'))
+
+    missing=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-FIELD-CAP','status':'COMPLETED'},
+        'What is the RFI Manager field for RFI 42?',{'items':[]})
+    primary=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-FIELD-CAP','status':'COMPLETED'},
+        'What is the RFI Manager field for RFI 42?',primary_index)
+    passages=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-FIELD-CAP','status':'COMPLETED'},
+        'What is the RFI Manager field for RFI 42?',passage_index)
+
+    assert missing['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'does not contain one indexed primary source' in missing['answer']
+    assert 'more than 32 primary files' in primary['answer']
+    assert 'more than 32 candidate source passages' in passages['answer']
+
+
+def test_question_api_loads_workflow_index_for_generic_workflow_field(
+        client, project, monkeypatch):
+    source='Submittal Type: Shop Drawing'
+    run=_source_evidence(client,project,[('Submittal-23-01.pdf',[source])]);db=client.app.state.db
+    row=db.one('SELECT id,document_id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='SUBMITTAL 23-01'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    summary={'document_type':'SUBMITTAL','workflow_contexts':[{
+        'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]}
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+               (run['id'],row['document_id'],'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('generic field API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],
+        'question':'What is the Submittal Type field for Submittal 23-01?'})
+
+    assert response.status_code==200
+    result=response.json();assert result['status']=='ANSWERED'
+    assert result['citations'][0]['quote']==source
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_generic_workflow_field_parser_preserves_identity_and_complete_value():
+    source=('RFI 42\nRFI Manager: Project Architect\n'
+            'RFI 43\nRFI Manager: Construction Manager')
+
+    assert _workflow_field_source_values(source,'RFI Manager')=={
+        (('RFI','42'),'project architect'),
+        (('RFI','43'),'construction manager')}
+    assert _workflow_field_claim_values(
+        'RFI 42 RFI Manager: “Project Architect”.','RFI Manager')=={
+            (('RFI','42'),'project architect')}
+
+
+def test_generic_workflow_field_validator_accepts_exact_and_rejects_unsupported_claims(
+        client, project):
+    source='RFI Manager: Project Architect'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[source])])
+    question='What is the RFI Manager field for RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    citation=[{'evidence_id':'EV-SOURCE-1','quote':source}]
+    grounded={'status':'ANSWERED','answer':'RFI 42 RFI Manager: “Project Architect”.',
+              'source_findings':[],'citations':citation}
+
+    validate_answer_model(grounded,evidence,question)
+
+    for answer,error in [
+        ('RFI 42 RFI Manager: “Construction Manager”.','workflow field absent'),
+        ('RFI 43 RFI Manager: “Project Architect”.','workflow identifier absent'),
+        ('RFI 42 Email RFI Manager: “Project Architect”.','requires an explicit scoped field'),
+        ('RFI 42 Assistant RFI Manager: “Project Architect”.',
+         'requires an explicit scoped field'),
+        ('The manager is listed in the form.','requires an explicit scoped field'),
+    ]:
+        with pytest.raises(ValueError,match=error):
+            validate_answer_model({**grounded,'answer':answer},evidence,question)
+
+
+def test_generic_workflow_field_validator_rejects_conflict_and_cross_source_borrowing(
+        client, project):
+    question='What is the RFI Manager field for RFI 42?'
+    conflict='RFI Manager: Project Architect\nRFI Manager: Construction Manager'
+    run=_source_evidence(client,project,[('RFI-42.pdf',[conflict])])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > RESPONSE'
+    selected={'status':'ANSWERED','answer':'RFI 42 RFI Manager: “Project Architect”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':conflict}]}
+    with pytest.raises(ValueError,match='conflicting workflow field values'):
+        validate_answer_model(selected,evidence,question)
+
+    specification='RFI Manager: Specification Coordinator'
+    rfi='RFI Manager: Project Architect'
+    comparison_run=_source_evidence(client,project,[
+        ('project-spec.txt',[specification]),('RFI-42.pdf',[rfi])])
+    comparison_question='Compare the specification and RFI 42 RFI Manager field.'
+    comparison_evidence=retrieve_evidence(
+        client.app.state.db,comparison_run,comparison_question)
+    for item in comparison_evidence:
+        if item['file_name']=='RFI-42.pdf':item['locator']['section']='RFI 42 > RESPONSE'
+    specification_evidence=next(
+        item for item in comparison_evidence if item['file_name']=='project-spec.txt')
+    rfi_evidence=next(item for item in comparison_evidence if item['file_name']=='RFI-42.pdf')
+    wrong={
+        'status':'ANSWERED','answer':'The sources list different manager values.','citations':[],
+        'source_findings':[
+            {'source_type':_source_family(specification_evidence),'file_name':'project-spec.txt',
+             'statement':'The specification contains a manager field.',
+             'citations':[{'evidence_id':specification_evidence['evidence_id'],
+                           'quote':specification}]},
+            {'source_type':_source_family(rfi_evidence),'file_name':'RFI-42.pdf',
+             'statement':'RFI 42 RFI Manager: “Specification Coordinator”.',
+             'citations':[{'evidence_id':rfi_evidence['evidence_id'],'quote':rfi}]},
+        ],
+    }
+    with pytest.raises(ValueError,match='source finding contains a workflow field'):
+        validate_answer_model(wrong,comparison_evidence,question)
