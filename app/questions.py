@@ -144,11 +144,14 @@ _EMAIL_SENT_DATE_INTENT = re.compile(
 _EMAIL_SUBJECT_HEADER = re.compile(
     r'(?im)^[ \t]*subject[ \t]*:[ \t]*(?P<value>[^\r\n]{1,500})[ \t]*$')
 _EMAIL_SUBJECT_CLAIM_PREFIX = re.compile(
-    r'(?i)\b(?:(?:email\s+)?subject\s*:|(?:email\s+)?subject\s+(?:is|was)|'
+    r'(?i)\b(?:email\s+subject\s*:|email\s+subject\s+(?:is|was)|'
     r'subject\s+line\s+(?:is|was))\s*')
 _EMAIL_SUBJECT_INTENT = re.compile(
     r'(?i)\b(?:email\s+subjects?|subject\s+lines?|'
     r'subjects?\s+of\s+(?:the\s+)?emails?)\b')
+_WORKFLOW_SUBJECT_CLAIM_PREFIX = re.compile(
+    r'(?i)\bsubject\s*(?::|is\b|was\b)[ \t]*')
+_WORKFLOW_SUBJECT_INTENT = re.compile(r'(?i)\bsubjects?\b')
 _NUMERIC_RFI = re.compile(
     r'(?i)\b(?:rfi|request\s+for\s+information)\s*'
     r'(?:(?:no\.?|number)\s*)?[#:-]?\s*(\d+)(?![a-z0-9._/-])')
@@ -1118,6 +1121,52 @@ def _email_subject_claim_values(text: str) -> set[str]:
     return values
 
 
+def _workflow_subject_source_values(
+        text: str, identity_text: str | None = None) -> set[tuple[tuple[str,str],str]]:
+    identities=_workflow_identities(text if identity_text is None else identity_text)
+    identity_spans=_workflow_identity_spans(text)
+    values=set()
+    for match in _EMAIL_SUBJECT_HEADER.finditer(text):
+        subject=_normalize_email_subject(match.group('value'))
+        if not subject:continue
+        preceding=[item for item in identity_spans
+                   if item[2]<=match.start() and match.start()-item[2]<=500]
+        scoped={preceding[-1][0]} if preceding else identities if len(identities)==1 else set()
+        values.update((identity,subject) for identity in scoped)
+    return values
+
+
+def _workflow_subject_claim_values(text: str) -> set[tuple[tuple[str,str],str]]:
+    identity_spans=_workflow_identity_spans(text);values=set()
+    for match in _WORKFLOW_SUBJECT_CLAIM_PREFIX.finditer(text):
+        if re.search(r'(?i)\bemail\s+$',text[max(0,match.start()-24):match.start()]):
+            continue
+        start=match.end()
+        while start<len(text) and text[start] in ' \t':start+=1
+        quote_pairs={'"':'"',"'":"'",'“':'”','‘':'’'}
+        closing=quote_pairs.get(text[start:start+1])
+        close=(text.find(closing,start+1,min(len(text),start+502)) if closing else -1)
+        quoted=(close>=0 and '\n' not in text[start+1:close]
+                and '\r' not in text[start+1:close])
+        if quoted:
+            raw=text[start+1:close]
+        else:
+            _,right=statement_span(text,start,start)
+            raw=text[start:right]
+        subject=_normalize_email_subject(raw,strip_answer_punctuation=not quoted)
+        left,_=statement_span(text,match.start(),match.end())
+        preceding=[item for item in identity_spans
+                   if left<=item[1] and item[2]<=match.start()]
+        if subject and preceding:values.add((preceding[-1][0],subject))
+    return values
+
+
+def _is_email_subject_question(question: str) -> bool:
+    if not _EMAIL_SUBJECT_INTENT.search(question):return False
+    return not (_workflow_identities(question)
+                and not re.search(r'(?i)\be-?mail\b',question))
+
+
 def _unit_after(text: str, end: int, right: int | None = None) -> str | None:
     match=_MEASUREMENT_UNIT_AFTER.search(text[end:min(right or len(text),end+32)])
     if not match:return None
@@ -1426,6 +1475,15 @@ def _require_email_subject_support(claim: str, quotes: list[str], label: str) ->
     for quote in quotes:supported.update(_email_subject_values(quote))
     if _email_subject_claim_values(claim)-supported:
         raise ValueError(label+' contains an email subject absent from its citations')
+
+
+def _require_workflow_subject_support(
+        claim: str, contexts: list[tuple[str,str]], label: str) -> None:
+    supported=set()
+    for quote,identity_text in contexts:
+        supported.update(_workflow_subject_source_values(quote,identity_text))
+    if _workflow_subject_claim_values(claim)-supported:
+        raise ValueError(label+' contains a workflow subject absent from its citations')
 
 
 def _require_email_participant_support(claim: str, quotes: list[str], label: str) -> None:
@@ -1865,6 +1923,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
     if value['status']=='ANSWERED' and not value['citations'] and not value['source_findings']:
         raise ValueError('an answered response requires at least one citation')
     top_level_quotes=[];top_level_identity_texts=[];top_level_email_quotes=[]
+    top_level_workflow_subject_contexts=[]
     top_level_drawing_texts=[];top_level_clause_texts=[]
     for item in value['citations']:
         source=allowed.get(item['evidence_id'])
@@ -1874,12 +1933,17 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         top_level_identity_texts.append(_citation_identity_text(source,item['quote']))
         top_level_drawing_texts.append(_citation_drawing_text(source,item['quote']))
         top_level_clause_texts.append(_citation_clause_text(source,item['quote']))
-        if _source_family(source)=='EMAIL':top_level_email_quotes.append(item['quote'])
+        family=_source_family(source)
+        if family=='EMAIL':top_level_email_quotes.append(item['quote'])
+        elif family in {'RFI','SUBMITTAL'}:
+            top_level_workflow_subject_contexts.append(
+                (item['quote'],top_level_identity_texts[-1]))
     answer_quotes=list(top_level_quotes)
     answer_identity_texts=list(top_level_identity_texts)
     answer_drawing_texts=list(top_level_drawing_texts)
     answer_clause_texts=list(top_level_clause_texts)
     answer_email_quotes=list(top_level_email_quotes)
+    answer_workflow_subject_contexts=list(top_level_workflow_subject_contexts)
     finding_sources=[];question_targets=_workflow_identities(question)
     date_question=bool(_DATE_QUESTION_INTENT.search(question)
                        and not _STATUS_FIELD_INTENT.search(question))
@@ -1893,6 +1957,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         finding_sources.append(key)
         finding_quotes=[];finding_identity_texts=[]
         finding_drawing_texts=[];finding_clause_texts=[];finding_email_quotes=[]
+        finding_workflow_subject_contexts=[]
         for item in finding['citations']:
             source=allowed.get(item['evidence_id'])
             if source is None:raise ValueError('source finding is outside the retrieved evidence scope')
@@ -1905,7 +1970,11 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             finding_identity_texts.append(_citation_identity_text(source,item['quote']))
             finding_drawing_texts.append(_citation_drawing_text(source,item['quote']))
             finding_clause_texts.append(_citation_clause_text(source,item['quote']))
-            if _source_family(source)=='EMAIL':finding_email_quotes.append(item['quote'])
+            family=_source_family(source)
+            if family=='EMAIL':finding_email_quotes.append(item['quote'])
+            elif family in {'RFI','SUBMITTAL'}:
+                finding_workflow_subject_contexts.append(
+                    (item['quote'],finding_identity_texts[-1]))
         if value['status']=='ANSWERED':
             finding_status=bool(_disposition_values(finding['statement'])
                                 and _needs_disposition_ambiguity_check(
@@ -1938,6 +2007,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
                 finding['statement'],finding_quotes,'source finding',finding_identity_texts)
             _require_email_subject_support(
                 finding['statement'],finding_email_quotes,'source finding')
+            _require_workflow_subject_support(
+                finding['statement'],finding_workflow_subject_contexts,'source finding')
             _require_email_participant_support(
                 finding['statement'],finding_email_quotes,'source finding')
             _require_email_date_header_support(
@@ -1954,6 +2025,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         answer_drawing_texts.extend(finding_drawing_texts)
         answer_clause_texts.extend(finding_clause_texts)
         answer_email_quotes.extend(finding_email_quotes)
+        answer_workflow_subject_contexts.extend(finding_workflow_subject_contexts)
     if value['status']=='ANSWERED':
         if (top_level_quotes
                 and _needs_disposition_ambiguity_check(value['answer'],date_question)):
@@ -1987,6 +2059,8 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             scope_workflow=not value['source_findings'])
         _require_email_subject_support(value['answer'],answer_email_quotes,'answer')
+        _require_workflow_subject_support(
+            value['answer'],answer_workflow_subject_contexts,'answer')
         _require_email_participant_support(value['answer'],answer_email_quotes,'answer')
         _require_email_date_header_support(value['answer'],answer_email_quotes,'answer')
         _require_date_support(value['answer'],answer_quotes,'answer')
@@ -1997,10 +2071,21 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
             answer_drawing_texts,answer_clause_texts,
             scope_workflow=not value['source_findings'])
         _require_disposition_support(value['answer'],answer_quotes,'answer')
-        if (_EMAIL_SUBJECT_INTENT.search(question)
+        email_subject_question=_is_email_subject_question(question)
+        if (email_subject_question
                 and not any(_email_subject_claim_values(text) for text in (
                     value['answer'],*(finding['statement'] for finding in value['source_findings'])))):
             raise ValueError('an answered email subject question requires an explicit email subject')
+        workflow_subject_targets=(_workflow_identities(question)
+                                  if (_WORKFLOW_SUBJECT_INTENT.search(question)
+                                      and not email_subject_question) else set())
+        if workflow_subject_targets:
+            claims=set(_workflow_subject_claim_values(value['answer']))
+            for finding in value['source_findings']:
+                claims.update(_workflow_subject_claim_values(finding['statement']))
+            if workflow_subject_targets-{identity for identity,_ in claims}:
+                raise ValueError(
+                    'an answered workflow subject question requires an explicit scoped subject')
         if (_EMAIL_DATE_INTENT.search(question)
                 and not any(_email_date_header_claim_values(text) for text in (
                     value['answer'],*(finding['statement'] for finding in value['source_findings'])))):

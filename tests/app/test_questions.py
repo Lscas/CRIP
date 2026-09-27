@@ -19,6 +19,7 @@ from app.questions import (
     _numeric_unit_values,
     _requested_source_families, _revision_label_values, _source_family,
     _spec_section_values, _workflow_identities,
+    _workflow_subject_claim_values, _workflow_subject_source_values,
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
@@ -2458,7 +2459,7 @@ def test_answer_accepts_an_exact_email_subject_with_formatting_only_changes(
     evidence=retrieve_evidence(client.app.state.db,run,question)
     answer={
         'status':'ANSWERED',
-        'answer':'Subject is "rfi 42: domestic water pipe".',
+        'answer':'Subject line is "rfi 42: domestic water pipe".',
         'source_findings':[],
         'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
     }
@@ -2601,6 +2602,158 @@ def test_workflow_form_subject_does_not_ground_an_email_subject(
 
     with pytest.raises(ValueError,match='email subject absent'):
         validate_answer_model(wrong,evidence,question)
+
+
+@pytest.mark.parametrize(('source','file_name','question','answer'),[
+    ('RFI 42\nSubject: Domestic Water Pipe\nQuestion: Can Type L copper be used?',
+     'RFI-42.txt','What is the Subject line of RFI 42?',
+     'RFI 0042 subject: “domestic   water pipe”.'),
+    ('Submittal 23-01\nSubject: Domestic Water Pipe\nStatus: PENDING',
+     'Submittal-23-01.txt','What is the subject of Submittal 23-01?',
+     'Submittal 23-01 subject: Domestic Water Pipe.'),
+])
+def test_workflow_subject_accepts_the_same_scoped_form_value(
+        client, project, source, file_name, question, answer):
+    run=_source_evidence(client,project,[(file_name,[source])])
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED','answer':answer,'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_rfi_subject_cannot_borrow_another_rfi_subject(client, project):
+    source=('RFI 42\nSubject: Domestic Water Pipe\nQuestion: Use Type L copper?\n'
+            'RFI 43\nSubject: Fire Alarm Coordination\nQuestion: Revise devices?')
+    run=_source_evidence(client,project,[('RFI-log.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 subject: Fire Alarm Coordination.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_subject_cannot_be_recombined(client, project):
+    source=('RFI 42\nSubject: Domestic Water Pipe\n'
+            'RFI 43\nSubject: Fire Alarm Coordination')
+    run=_source_evidence(client,project,[('RFI-log.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 subject: Domestic Alarm Coordination.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_subject_question_requires_an_explicit_scoped_subject(client, project):
+    source='RFI 42\nSubject: Domestic Water Pipe\nQuestion: Use Type L copper?'
+    run=_source_evidence(client,project,[('RFI-42.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evasive={'status':'ANSWERED','answer':'RFI 42 concerns domestic water.',
+             'source_findings':[],
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='requires an explicit scoped subject'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_workflow_source_finding_cannot_borrow_another_subject(client, project):
+    rfi='RFI 42\nSubject: Domestic Water Pipe\nQuestion: Use Type L copper?'
+    submittal='Submittal 23-01\nSubject: Fire Alarm Devices\nStatus: PENDING'
+    run=_source_evidence(client,project,[
+        ('RFI-42.txt',[rfi]),('Submittal-23-01.txt',[submittal])])
+    question='Compare the subjects of RFI 42 and Submittal 23-01.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The workflow subjects differ.','citations':[],
+        'source_findings':[
+            {'source_type':'RFI','file_name':'RFI-42.txt',
+             'statement':'RFI 42 subject: Domestic Water Pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':rfi}]},
+            {'source_type':'SUBMITTAL','file_name':'Submittal-23-01.txt',
+             'statement':'Submittal 23-01 subject: Domestic Water Pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':submittal}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains a workflow subject'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_workflow_subject_uses_one_exact_identity_from_the_citation_locator(
+        client, project):
+    source='Subject: Domestic Water Pipe'
+    run=_source_evidence(client,project,[('RFI-42.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 > FORM'
+    grounded={'status':'ANSWERED','answer':'RFI 42 subject: Domestic Water Pipe.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    validate_answer_model(grounded,evidence,question)
+
+
+def test_workflow_subject_rejects_an_unscoped_multi_identity_locator(client, project):
+    source='Subject: Domestic Water Pipe'
+    run=_source_evidence(client,project,[('RFI-log.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evidence[0]['locator']['section']='RFI 42 / RFI 43'
+    wrong={'status':'ANSWERED','answer':'RFI 42 subject: Domestic Water Pipe.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_subject_header_does_not_ground_an_rfi_form_subject(client, project):
+    source=('From: Alice Architect <alice@example.test>\n'
+            'Subject: RFI 42 Domestic Water Pipe')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={'status':'ANSWERED','answer':'RFI 42 subject: Domestic Water Pipe.',
+           'source_findings':[],
+           'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+
+    with pytest.raises(ValueError,match='workflow subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_quoted_workflow_subject_preserves_terminal_punctuation(client, project):
+    source='RFI 42\nSubject: Can Type L copper be used?\nQuestion: Confirm material.'
+    run=_source_evidence(client,project,[('RFI-42.txt',[source])])
+    question='What is the subject of RFI 42?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={'status':'ANSWERED',
+              'answer':'RFI 42 subject: “Can Type L copper be used?”.',
+              'source_findings':[],
+              'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}]}
+    changed={**grounded,'answer':'RFI 42 subject: “Can Type L copper be used”.'}
+
+    validate_answer_model(grounded,evidence,question)
+    with pytest.raises(ValueError,match='workflow subject absent'):
+        validate_answer_model(changed,evidence,question)
+
+
+def test_workflow_subject_parser_keeps_each_nearest_preceding_identity():
+    source=('RFI 42\nSubject: Domestic Water Pipe\n'
+            'RFI 43\nSubject: Fire Alarm Coordination')
+
+    assert _workflow_subject_source_values(source)=={
+        (('RFI','42'),'domestic water pipe'),
+        (('RFI','43'),'fire alarm coordination')}
+    assert _workflow_subject_claim_values(
+        'RFI 42 subject: Domestic Water Pipe.')=={
+            (('RFI','42'),'domestic water pipe')}
 
 
 def test_email_date_header_cannot_borrow_a_received_date(client, project):

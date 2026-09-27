@@ -1913,6 +1913,25 @@
         "prompts/project-question/system.md"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-SUBJECT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_subject_and_identity_grounding",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }
