@@ -1,5 +1,11 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-26 local single-Email header verification
+
+- Subject, From, To and Date local answers, strict-question boundaries, multi-Email ambiguity, quoted-history exclusion, current-header conflict handling, the 32-passage safety cap and API workflow-index loading passed 23 focused offline cases.
+- The complete `tests/app/test_questions.py` module passed after the change.
+- Synthetic transports fail if reached, and the successful path creates no model-call row. No customer file, credential, `.local` data, mailbox, paid provider or external project system was accessed.
+
 ## 2026-09-26 local exact workflow-Subject verification
 
 - Strict direct RFI/Submittal Subject question recognition, one-value local answering, conflicting-value blocking, Email exclusion, both safety caps and API workflow-index loading passed 13 focused offline cases.

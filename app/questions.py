@@ -243,6 +243,32 @@ _EXACT_WORKFLOW_SUBJECT_QUESTIONS = (
     re.compile(rf'''(?ix)^\s*what\s+is\s+{_WORKFLOW_EXACT_ITEM}(?:'s|’s)\s+
         subject(?:\s+line)?\s*[?!.]*\s*$'''),
 )
+_EXACT_SINGLE_EMAIL_HEADER_QUESTIONS = (
+    ('SUBJECT',re.compile(r'''(?ix)^\s*(?:
+        what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+subject(?:\s+line)?|
+            subject(?:\s+line)?\s+of\s+(?:the|this)\s+e-?mail)
+        |show(?:\s+me)?\s+(?:the\s+)?e-?mail\s+subject(?:\s+line)?
+        |what\s+subject(?:\s+line)?\s+does\s+(?:the|this)\s+e-?mail\s+have
+    )\s*[?!.]*\s*$''')),
+    ('DATE',re.compile(r'''(?ix)^\s*(?:
+        what\s+is\s+(?:(?:the|this)\s+)?(?:e-?mail(?:'s)?\s+date(?:\s+header)?|
+            date\s+header\s+of\s+(?:the|this)\s+e-?mail)
+        |when\s+was\s+(?:the|this)\s+e-?mail\s+sent
+        |what\s+date\s+was\s+(?:the|this)\s+e-?mail\s+sent
+    )\s*[?!.]*\s*$''')),
+    ('FROM',re.compile(r'''(?ix)^\s*(?:
+        who\s+sent\s+(?:the|this)\s+e-?mail
+        |who\s+is\s+(?:the|this)\s+e-?mail(?:'s)?\s+sender
+        |who\s+is\s+(?:the|this)\s+e-?mail\s+from
+    )\s*[?!.]*\s*$''')),
+    ('TO',re.compile(r'''(?ix)^\s*(?:
+        who\s+received\s+(?:the|this)\s+e-?mail
+        |who\s+(?:is|are)\s+(?:the|this)\s+e-?mail(?:'s)?\s+recipients?
+        |who\s+was\s+(?:the|this)\s+e-?mail\s+sent\s+to
+    )\s*[?!.]*\s*$''')),
+)
+_EMAIL_FROM_TO_HEADER = re.compile(
+    r'(?im)^[ \t]*(?P<role>from|to)[ \t]*:[ \t]*(?P<value>[^\r\n]{1,4000})[ \t]*$')
 _NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
 _NUMERIC_VALUE = re.compile(rf'(?<!\w){_NUMERIC_LITERAL}(?!\w)')
 _COMPACT_MEASUREMENT_UNIT_SUFFIX = (
@@ -617,6 +643,16 @@ def requires_workflow_subject_index(question: str) -> bool:
     return requested_workflow_subject_item(question) is not None
 
 
+def requested_single_email_header(question: str) -> str | None:
+    """Recognize an exact header question that refers to one otherwise-unspecified Email."""
+    return next((field for field,pattern in _EXACT_SINGLE_EMAIL_HEADER_QUESTIONS
+                 if pattern.fullmatch(question)),None)
+
+
+def requires_single_email_header_index(question: str) -> bool:
+    return requested_single_email_header(question) is not None
+
+
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
     found=[(hit.start(),kind) for kind,pattern in types if (hit:=pattern.search(categories))]
     return tuple(kind for _,kind in sorted(found))
@@ -922,6 +958,97 @@ def _workflow_index_exact_subject(
     value=next(iter(found.values()))['value']
     return {'status':'ANSWERED','answer':(
         f'The analyzed primary file records the Subject for {label} as "{value}".'),
+        'citations':citations}
+
+
+def _workflow_email_documents(workflow_index: dict | None) -> list[dict]:
+    if not isinstance(workflow_index,dict):return []
+    found={}
+    for item in workflow_index.get('items',[]):
+        if not isinstance(item,dict):continue
+        for member in item.get('members',[]):
+            if not isinstance(member,dict):continue
+            document_id=member.get('document_id')
+            file_name=str(member.get('file_name') or 'Unknown file')
+            if (document_id and (member.get('document_type')=='EMAIL'
+                                 or file_name.casefold().endswith(('.eml','.msg')))):
+                found[str(document_id)]={'document_id':str(document_id),'file_name':file_name}
+    return sorted(found.values(),key=lambda value:(value['file_name'].casefold(),value['document_id']))
+
+
+def _single_email_header_occurrences(
+        text: str, field: str) -> list[tuple[str,str,int,int]]:
+    values=[]
+    if field=='SUBJECT':
+        for match in _EMAIL_SUBJECT_HEADER.finditer(text):
+            normalized=_normalize_email_subject(match.group('value'))
+            display=' '.join(match.group('value').strip().split())
+            if normalized:values.append((normalized,display,match.start(),match.end()))
+    elif field=='DATE':
+        for match in _EMAIL_DATE_HEADER.finditer(text):
+            normalized=_normalize_email_date_header(match.group('value'))
+            display=' '.join(match.group('value').strip().split())
+            if normalized:values.append((normalized,display,match.start(),match.end()))
+    else:
+        for match in _EMAIL_FROM_TO_HEADER.finditer(text):
+            if match.group('role').upper()!=field:continue
+            display=' '.join(match.group('value').strip().split())
+            if display:values.append((display,display,match.start(),match.end()))
+    return values
+
+
+def _single_email_header_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """Answer one exact header only when the complete run contains one analyzed Email."""
+    field=requested_single_email_header(question)
+    if not field:return None
+    documents=_workflow_email_documents(workflow_index)
+    if len(documents)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run contains {len(documents)} Email files. Specify the '
+            'Email file or an exact RFI/Submittal context before asking for one header value.'),
+            'citations':[]}
+    if not documents:return None
+    document=documents[0]
+    rows=db.all('''SELECT e.payload,d.name AS file_name
+                   FROM evidence e JOIN documents d ON d.id=e.document_id
+                   WHERE e.run_id=? AND e.document_id=?
+                     AND LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),''))
+                         LIKE 'email > headers%'
+                     AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                     AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                   ORDER BY e.id LIMIT 33''',(run_id,document['document_id']))
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            'The Email header was not answered locally because more than 32 current-header '
+            'passages require review.'),'citations':[]}
+    found={}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        for normalized,display,start,end in _single_email_header_occurrences(text,field):
+            entry=found.setdefault(normalized,{'value':display,'citations':[]})
+            item=citation(evidence,start,end,role='CONTEXT')
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in {(value.get('evidence_id'),value.get('quote'))
+                           for value in entry['citations']}:
+                entry['citations'].append(item)
+    if not found:
+        names={'SUBJECT':'Subject','DATE':'Date','FROM':'From','TO':'To'}
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The only analyzed Email does not contain one supported current {names[field]} '
+            'header value.'),'citations':[]}
+    citations=[item for entry in found.values() for item in entry['citations']]
+    if len(found)>1:
+        values=', '.join(f'"{entry["value"]}"' for entry in found.values())
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The only analyzed Email contains conflicting current {field.title()} header '
+            f'values: {values}. Review the cited sources.'),'citations':citations}
+    value=next(iter(found.values()))['value']
+    labels={'SUBJECT':'Subject','DATE':'Date header','FROM':'sender (From)','TO':'recipient (To)'}
+    return {'status':'ANSWERED','answer':(
+        f'The only analyzed Email records {labels[field]} as "{value}".'),
         'citations':citations}
 
 
@@ -2248,6 +2375,13 @@ class ProjectQuestions:
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
+        email_header=_single_email_header_answer(
+            self.db,run['id'],question,workflow_index)
+        if email_header:
+            return {'run_id':run['id'],'question':question,**email_header,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(email_header['citations']),'cached':False}
         exact_subject=_workflow_index_exact_subject(
             self.db,run['id'],question,workflow_index)
         if exact_subject:

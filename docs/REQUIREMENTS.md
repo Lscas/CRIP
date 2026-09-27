@@ -1071,3 +1071,12 @@ A strict direct Subject question naming one exact RFI or Submittal should reuse 
 
 - The shortcut recognizes only bounded English direct-question forms naming one exact RFI or Submittal identifier, uses the complete terminal-run workflow index to select primary form documents, and reads only existing non-vision evidence. One distinct complete explicit Subject returns with exact inline citations and no provider or budget action; different values return insufficient evidence with the conflicting exact quotations.
 - Email documents and Email Subject headers cannot satisfy an RFI/Submittal form-Subject shortcut. More than 32 primary documents or 512 Subject-bearing passages fails closed, while no supported Subject falls through to the ordinary evidence-grounded question path. The shortcut adds no parser, provider call, dependency, second index, applicability, status, revision, authority or semantic-paraphrase inference.
+
+## FR-QA-EMAIL-HEADER-LOCAL-001 · Answer unambiguous single-Email headers locally
+
+优先级：P0；状态：implemented
+
+Strict Subject, sender, recipient and Date questions should use existing current-header evidence locally when the complete selected run contains exactly one analyzed Email.
+
+- Bounded English questions for Subject, sender/From, recipient/To or Date use the complete terminal-run workflow index to confirm exactly one analyzed Email, then read only existing non-vision evidence under its current EMAIL > HEADERS locator. One distinct explicit value returns with exact inline citations and no provider or budget action.
+- An otherwise-unspecified header question against multiple Email files returns insufficient evidence instead of choosing a message. Quoted history and body text cannot donate a header; conflicting current values, a missing supported header or more than 32 current-header passages fails closed. The shortcut adds no mailbox access, provider call, dependency, parser change, second index, delivery-time, thread-position, identity, authority or semantic inference.

@@ -1525,6 +1525,19 @@
       ],
       "decision_source": "The active objective requests Trunk Tools-style file-grounded construction questions while improving CIRP speed and accuracy.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-EMAIL-HEADER-LOCAL-001",
+      "title": "Answer unambiguous single-Email headers locally",
+      "statement": "Strict Subject, sender, recipient and Date questions should use existing current-header evidence locally when the complete selected run contains exactly one analyzed Email.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Bounded English questions for Subject, sender/From, recipient/To or Date use the complete terminal-run workflow index to confirm exactly one analyzed Email, then read only existing non-vision evidence under its current EMAIL > HEADERS locator. One distinct explicit value returns with exact inline citations and no provider or budget action.",
+        "An otherwise-unspecified header question against multiple Email files returns insufficient evidence instead of choosing a message. Quoted history and body text cannot donate a header; conflicting current values, a missing supported header or more than 32 current-header passages fails closed. The shortcut adds no mailbox access, provider call, dependency, parser change, second index, delivery-time, thread-position, identity, authority or semantic inference."
+      ],
+      "decision_source": "The active objective requests faster and more accurate file-grounded support across Email as well as RFI and Submittal content.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
     }
   ],
   "artifact_kind": "prototype_source",

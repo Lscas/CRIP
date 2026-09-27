@@ -1952,6 +1952,26 @@
         "app/main.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-HEADER-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_single_email_current_header_local_answer_and_ambiguity_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

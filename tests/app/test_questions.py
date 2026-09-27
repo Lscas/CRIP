@@ -23,10 +23,11 @@ from app.questions import (
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
+    requested_single_email_header,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_workflow_inventory, requires_workflow_status_index,
+    requires_single_email_header_index, requires_workflow_inventory, requires_workflow_status_index,
     requires_workflow_subject_index, retrieve_evidence,
     search_query_terms, validate_answer_model,
 )
@@ -3611,6 +3612,168 @@ def test_question_api_loads_workflow_index_for_an_exact_subject(
     assert result['status']=='ANSWERED'
     assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
     assert result['citations'][0]['quote']=='Subject: Domestic Water Pipe Product Data'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('What is the email subject?','SUBJECT'),
+    ("What is this email's subject?",'SUBJECT'),
+    ('What is the subject line of this email?','SUBJECT'),
+    ('Show me the e-mail subject line.','SUBJECT'),
+    ('What subject does the email have?','SUBJECT'),
+    ('What is the email Date header?','DATE'),
+    ("What is this email's date?",'DATE'),
+    ('What is the Date header of this email?','DATE'),
+    ('When was the email sent?','DATE'),
+    ('What date was this email sent?','DATE'),
+    ('Who sent the email?','FROM'),
+    ('Who is this email from?','FROM'),
+    ('Who is the email sender?','FROM'),
+    ('Who received the email?','TO'),
+    ('Who are the email recipients?','TO'),
+    ('Who was this email sent to?','TO'),
+    ('What is the subject of RFI 42?',None),
+    ('Compare the email subjects.',None),
+])
+def test_single_email_header_question_boundary(question,expected):
+    assert requested_single_email_header(question)==expected
+    assert requires_single_email_header_index(question) is bool(expected)
+
+
+def test_single_email_headers_answer_locally_without_model_or_retrieval(
+        client, project, tmp_path, monkeypatch):
+    headers=[
+        'Subject: Domestic Water Coordination',
+        'From: Alice Architect <alice@example.test>',
+        'To: Bob Builder <bob@example.test>',
+        'Date: Tue, 5 Jan 2024 10:30:00 -0500',
+    ]
+    run=_source_evidence(client,project,[('coordination.eml',headers)])
+    db=client.app.state.db
+    rows=db.all('SELECT id,payload FROM evidence WHERE run_id=?',(run['id'],))
+    for row in rows:
+        payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=? LIMIT 1''',(run['id'],))
+    index=build_workflow_index([{'document_id':document['document_id'],
+        'name':document['name'],'summary':{'document_type':'EMAIL'}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('single Email header used retrieval'))
+
+    cases={
+        'What is the email subject?':headers[0],
+        'Who sent the email?':headers[1],
+        'Who received the email?':headers[2],
+        'When was the email sent?':headers[3],
+    }
+    for question,quote in cases.items():
+        result=ProjectQuestions(db,gateway).ask(run,question,index)
+        assert result['status']=='ANSWERED'
+        assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+        assert result['citations'][0]['quote']==quote
+        assert result['retrieved_count']==1
+    assert requests==[] and db.all(
+        'SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_unspecified_header_question_blocks_multiple_emails_without_evidence_read(
+        monkeypatch):
+    index=build_workflow_index([
+        {'document_id':'D-1','name':'first.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'D-2','name':'second.eml','summary':{'document_type':'EMAIL'}},
+    ])
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('ambiguous Email header read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('ambiguous Email header used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-EMAILS','status':'COMPLETED'},'What is the email subject?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 Email files' in result['answer']
+    assert result['retrieved_count']==0 and result['citations']==[]
+
+
+def test_single_email_header_ignores_quoted_history_and_blocks_current_conflicts(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Subject: Current Coordination',
+        'Subject: Quoted Earlier Message',
+    ])])
+    db=client.app.state.db
+    rows=db.all('SELECT id,payload FROM evidence WHERE run_id=? ORDER BY id',(run['id'],))
+    for index,row in enumerate(rows):
+        payload=json.loads(row['payload'])
+        payload['locator']['section']=('EMAIL > HEADERS' if index==0
+                                       else 'EMAIL > QUOTED HISTORY')
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    document=db.one('''SELECT e.document_id,d.name FROM evidence e
+                       JOIN documents d ON d.id=e.document_id WHERE e.run_id=? LIMIT 1''',(run['id'],))
+    workflow_index=build_workflow_index([{'document_id':document['document_id'],
+        'name':document['name'],'summary':{'document_type':'EMAIL'}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('quoted history used retrieval'))
+
+    current=ProjectQuestions(db,object()).ask(
+        run,'What is the email subject?',workflow_index)
+    assert current['status']=='ANSWERED'
+    assert [item['quote'] for item in current['citations']]==['Subject: Current Coordination']
+
+    second=json.loads(rows[1]['payload']);second['locator']['section']='EMAIL > HEADERS'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(second),rows[1]['id']))
+    conflict=ProjectQuestions(db,object()).ask(
+        run,'What is the email subject?',workflow_index)
+    assert conflict['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'conflicting current Subject header values' in conflict['answer']
+    assert {item['quote'] for item in conflict['citations']}==set([
+        'Subject: Current Coordination','Subject: Quoted Earlier Message'])
+
+
+def test_single_email_header_passage_cap_fails_closed(monkeypatch):
+    index=build_workflow_index([
+        {'document_id':'D-1','name':'mail.eml','summary':{'document_type':'EMAIL'}},
+    ])
+    class FloodDatabase:
+        def all(self,*_args,**_kwargs):return [{} for _ in range(33)]
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email header cap used retrieval'))
+
+    result=ProjectQuestions(FloodDatabase(),object()).ask(
+        {'id':'RUN-CAP','status':'COMPLETED'},'What is the email subject?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'more than 32 current-header passages' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_one_email_header(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[
+        ('coordination.eml',['Subject: Domestic Water Coordination']),
+    ])
+    db=client.app.state.db
+    row=db.one('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                  JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],row['document_id'],'SUCCESS',json.dumps({'document_type':'EMAIL'})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email header route used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the email subject?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert result['citations'][0]['quote']=='Subject: Domestic Water Coordination'
     assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 
