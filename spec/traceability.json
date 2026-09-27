@@ -1856,6 +1856,25 @@
         "scripts/benchmark_question_search.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-SUBJECT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_email_subject_header_grounding_and_required_subject_claim",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
   ]
 }

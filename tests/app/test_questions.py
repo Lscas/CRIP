@@ -2428,6 +2428,178 @@ def test_clause_identifier_parser_requires_an_explicit_dotted_label():
             'PARAGRAPH:2.3.1','CLAUSE:4.5.6','ARTICLE:1.2A'}
 
 
+def test_answer_rejects_an_email_subject_absent_from_its_citation(client, project):
+    source=('From: architect@example.test\n'
+            'Subject: RFI 42 Domestic Water Pipe\n'
+            'Use Type L copper.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'Email subject: RFI 42 Fire Alarm Coordination.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='email subject'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_answer_accepts_an_exact_email_subject_with_formatting_only_changes(
+        client, project):
+    source=('From: architect@example.test\n'
+            'Subject: RFI 42: Domestic   Water Pipe\n'
+            'Use Type L copper.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={
+        'status':'ANSWERED',
+        'answer':'Subject is "rfi 42: domestic water pipe".',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_answer_accepts_a_quoted_email_subject_containing_sentence_punctuation(
+        client, project):
+    source=('From: architect@example.test\n'
+            'Subject: RFI 42. Domestic Water Pipe\n'
+            'Use Type L copper.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    answer={
+        'status':'ANSWERED',
+        'answer':'Email subject: "RFI 42. Domestic Water Pipe".',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    validate_answer_model(answer,evidence,question)
+
+
+def test_quoted_email_subject_preserves_its_own_terminal_punctuation(client, project):
+    source=('From: architect@example.test\n'
+            'Subject: Can Type L copper be used?\n'
+            'RFI 42 question follows.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    grounded={
+        'status':'ANSWERED','answer':'Email subject: "Can Type L copper be used?".',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+    changed={**grounded,'answer':'Email subject: "Can Type L copper be used".'}
+
+    validate_answer_model(grounded,evidence,question)
+    with pytest.raises(ValueError,match='email subject absent'):
+        validate_answer_model(changed,evidence,question)
+
+
+def test_email_subject_question_requires_an_explicit_subject_claim(client, project):
+    source=('From: architect@example.test\n'
+            'Subject: RFI 42 Domestic Water Pipe\n'
+            'Use Type L copper.')
+    run=_source_evidence(client,project,[('coordination.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    evasive={
+        'status':'ANSWERED','answer':'The email concerns RFI 42 Domestic Water Pipe.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='requires an explicit email subject'):
+        validate_answer_model(evasive,evidence,question)
+
+
+def test_answer_rejects_an_email_subject_recombined_from_two_headers(
+        client, project):
+    source=('From: architect@example.test\n'
+            'Subject: RFI 42 Domestic Water Pipe\n'
+            'Subject: RFI 43 Fire Alarm Coordination')
+    run=_source_evidence(client,project,[('thread.eml',[source])])
+    question='What is the email subject?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'Email subject: RFI 42 Fire Alarm Coordination.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='email subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_source_finding_cannot_borrow_another_email_subject(client, project):
+    first='From: architect@example.test\nSubject: Domestic Water Pipe'
+    second='From: engineer@example.test\nSubject: Fire Alarm Coordination'
+    run=_source_evidence(client,project,[
+        ('water.eml',[first]),('fire-alarm.eml',[second])])
+    question='Compare the email subjects for Domestic Water Pipe and Fire Alarm Coordination.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'The emails have different subjects.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'water.eml',
+             'statement':'Email subject: Fire Alarm Coordination.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':first}]},
+            {'source_type':'EMAIL','file_name':'fire-alarm.eml',
+             'statement':'Email subject: Fire Alarm Coordination.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':second}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='source finding contains an email subject'):
+        validate_answer_model(wrong,evidence,question)
+
+
+def test_email_subject_comparison_requires_a_subject_claim(client, project):
+    first='From: architect@example.test\nSubject: Domestic Water Pipe'
+    second='From: engineer@example.test\nSubject: Fire Alarm Coordination'
+    run=_source_evidence(client,project,[
+        ('water.eml',[first]),('fire-alarm.eml',[second])])
+    question='Compare the email subjects for Domestic Water Pipe and Fire Alarm Coordination.'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    vague={
+        'status':'ANSWERED','answer':'The emails concern different work.','citations':[],
+        'source_findings':[
+            {'source_type':'EMAIL','file_name':'water.eml',
+             'statement':'The first email concerns domestic water pipe.',
+             'citations':[{'evidence_id':'EV-SOURCE-1','quote':first}]},
+            {'source_type':'EMAIL','file_name':'fire-alarm.eml',
+             'statement':'The second email concerns fire alarm coordination.',
+             'citations':[{'evidence_id':'EV-SOURCE-2','quote':second}]},
+        ],
+    }
+
+    with pytest.raises(ValueError,match='requires an explicit email subject'):
+        validate_answer_model(vague,evidence,question)
+
+
+@pytest.mark.parametrize(('source','file_name'),[
+    ('RFI 42\nSubject: Domestic Water Pipe','RFI-42.txt'),
+    ('Submittal 23-01\nSubject: Domestic Water Pipe','Submittal-23-01.txt'),
+])
+def test_workflow_form_subject_does_not_ground_an_email_subject(
+        client, project, source, file_name):
+    run=_source_evidence(client,project,[(file_name,[source])])
+    question='What is the email subject for Domestic Water Pipe?'
+    evidence=retrieve_evidence(client.app.state.db,run,question)
+    wrong={
+        'status':'ANSWERED','answer':'Email subject: Domestic Water Pipe.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-SOURCE-1','quote':source}],
+    }
+
+    with pytest.raises(ValueError,match='email subject absent'):
+        validate_answer_model(wrong,evidence,question)
+
+
 def test_answer_rejects_recombined_email_address(client, project):
     source=('From: architect@example.test\nTo: owner@project.test\n'
             'Subject: RFI 42 response')

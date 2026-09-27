@@ -1026,3 +1026,12 @@ A user may ask an English question about a selected completed analysis run and r
 - A strict count or list question filtered by one bounded explicit status applicable to every requested workflow type may use the same complete index for RFI and Submittal identifiers. Only groups with one distinct explicit detected-or-manual status supporting the requested disposition enter the confirmed result; groups containing that disposition plus another explicit status are excluded from the result and reported separately as ambiguous, while relationship state, missing documents and reference-only identifiers never manufacture a status. Email-derived workflow contexts participate, lists retain complete totals with at most 50 confirmed and 50 ambiguous values per category, and no evidence retrieval, model call or budget action is added.
 - Question task identity normalizes only repeated whitespace so equivalent spacing variants reuse one settled response without changing the submitted prompt; letter case, punctuation and identifiers remain significant, and exact settled task identities from before normalization remain recoverable.
 - A question containing an explicit pure-numeric RFI identifier uses the parser's exact leading-zero equivalence through one bounded local identifier supplement; bare numbers, prefixed or compound RFI identifiers and Submittal identifiers remain exact, and no provider call is added.
+
+## FR-QA-EMAIL-SUBJECT-001 · Ground Email subject answers
+
+优先级：P0；状态：implemented
+
+Explicit Email subject answers must remain tied to one complete Subject header from Email evidence in the same answer or source-finding scope.
+
+- Every explicit Subject, Email subject or Subject line claim in an ordinary answer or source finding equals one complete Subject header in that scope's exact quotations from evidence conservatively classified as Email; an RFI or Submittal form's Subject field cannot ground an Email-subject answer. Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the subject value are formatting-equivalent, while punctuation quoted inside the subject, reply prefixes and the remaining value stay exact; headers cannot be recombined or borrowed across source findings.
+- An answered question explicitly asking for one or more Email subjects states each subject explicitly in the answer or corresponding source findings; the validator does not infer current-thread position, sender authority or semantic paraphrase equivalence.

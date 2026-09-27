@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce an answered Email subject that is absent from an otherwise exact citation.",
+    "Keep each explicit Subject, Email subject or Subject line claim equal to one complete cited Subject header.",
+    "Reject cross-Email borrowing and a subject recombined from two cited headers.",
+    "Do not treat an RFI or Submittal form's Subject field as an Email subject.",
+    "Require an explicit subject value when an answered question asks for one, including comparisons.",
+    "Accept formatting-only case, repeated whitespace, outer quotation and answer-ending punctuation outside the subject value while preserving punctuation quoted inside the subject.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-098",
+  "title": "Ground Email subject claims",
+  "requirement_ids": ["FR-QA-EMAIL-SUBJECT-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-098.json",
+    "changes/CR-0113.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Prevent an Email subject answer from being invented, recombined, omitted or borrowed across source findings while retaining exact readable subject output."
+}
