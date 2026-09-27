@@ -1125,3 +1125,12 @@ Strict date-role questions for one exact RFI or Submittal should reuse existing 
 
 - Bounded English questions for one exact RFI/Submittal Due, Issued, Submitted, Received, Sent, Reviewed, Approved, Revision or Response date reuse the complete workflow index and existing non-vision evidence. One distinct full date returns with exact inline citations and zero provider or budget action.
 - Equivalent ISO and English month-name formats merge. Different dates, another workflow identity, ambiguous multi-identity scope, quoted Email history, vision narration, more than 32 primary files or more than 512 role-bearing candidate passages fail closed. Missing, plural, comparison and interpretive questions stay on ordinary grounded Q&A; no deadline, chronology, current-state or authority inference is added.
+
+## FR-QA-EMAIL-WORKFLOW-RELATION-LOCAL-001 · Answer exact Email workflow relationship questions locally
+
+优先级：P0；状态：implemented
+
+Strict questions asking which RFIs or Submittals one Email references should reuse the complete workflow index and exact current Email evidence before model retrieval.
+
+- Bounded English questions may target the only analyzed Email or one exact named .eml or .msg file and request RFI, Submittal or both relationship types. Indexed primary context and explicit reference members return separately labelled with exact citations from current non-vision EMAIL > HEADERS or EMAIL > BODY text and zero provider or budget action.
+- Multiple otherwise-unspecified Emails, missing or duplicate exact file names, more than eight requested associations, more than 32 current passages, or any indexed association lacking exact current source text returns insufficient evidence. Quoted history, signatures, filenames and vision narration cannot prove a relationship; the implementation does not infer applicability, authority, chronology or contractual effect and adds no dependency or second index.

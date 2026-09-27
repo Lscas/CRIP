@@ -429,6 +429,41 @@ _EXACT_NAMED_EMAIL_HEADER_QUESTIONS = (
             (?P<file_b>{_EMAIL_FILE_VALUE})\s+be\s+sent
     )\s*[?!.]*\s*$''')),
 )
+_EMAIL_WORKFLOW_RELATION_CATEGORY = (
+    r'(?:rfis?|requests?\s+for\s+information|submittals?)')
+_EMAIL_WORKFLOW_RELATION_CATEGORIES = (
+    rf'{_EMAIL_WORKFLOW_RELATION_CATEGORY}(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)'
+    rf'{_EMAIL_WORKFLOW_RELATION_CATEGORY})*')
+_EMAIL_WORKFLOW_RELATION_TYPES = (
+    ('RFI',re.compile(r'(?i)\b(?:rfis?|requests?\s+for\s+information)\b')),
+    ('SUBMITTAL',re.compile(r'(?i)\bsubmittals?\b')),
+)
+_EXACT_SINGLE_EMAIL_WORKFLOW_RELATION_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?P<categories>{_EMAIL_WORKFLOW_RELATION_CATEGORIES})\s+
+        (?:does|do)\s+(?:the|this)\s+e-?mail\s+(?:reference|mention)
+        \s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?P<categories>{_EMAIL_WORKFLOW_RELATION_CATEGORIES})\s+
+        (?:(?:is|are)\s+(?:referenced|mentioned)\s+(?:by|in)|
+           (?:is|are)\s+linked\s+to)\s+(?:the|this)\s+e-?mail
+        \s*[?!.]*\s*$'''),
+)
+_EXACT_NAMED_EMAIL_WORKFLOW_RELATION_QUESTIONS = (
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?P<categories>{_EMAIL_WORKFLOW_RELATION_CATEGORIES})\s+
+        (?:does|do)\s+(?:e-?mail\s+file\s+)?(?P<file_a>{_EMAIL_FILE_VALUE})\s+
+        (?:reference|mention)\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:which|what)\s+
+        (?P<categories>{_EMAIL_WORKFLOW_RELATION_CATEGORIES})\s+
+        (?:(?:is|are)\s+(?:referenced|mentioned)\s+(?:by|in)|
+           (?:is|are)\s+linked\s+to)\s+(?:e-?mail\s+file\s+)?
+        (?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+    re.compile(rf'''(?ix)^\s*(?:list|show(?:\s+me)?)\s+(?:the\s+)?
+        (?P<categories>{_EMAIL_WORKFLOW_RELATION_CATEGORIES})\s+
+        (?:referenced|mentioned)\s+(?:by|in)\s+(?:e-?mail\s+file\s+)?
+        (?P<file_a>{_EMAIL_FILE_VALUE})\s*[?!.]*\s*$'''),
+)
 _EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
     r'(?im)^[ \t]*(?P<role>from|to|cc|bcc|reply-to)[ \t]*:[ \t]*'
     r'(?P<value>[^\r\n]{1,4000})[ \t]*$')
@@ -862,20 +897,25 @@ def requested_single_email_header(question: str) -> str | None:
                  if pattern.fullmatch(question)),None)
 
 
+def _requested_email_file(match: re.Match) -> str | None:
+    values={value for key,value in match.groupdict().items()
+            if key.startswith('file') and value is not None}
+    if len(values)!=1:return None
+    file_name=next(iter(values)).strip()
+    if len(file_name)>=2 and file_name[0]==file_name[-1] and file_name[0] in "\"'":
+        file_name=file_name[1:-1].strip()
+    if (not file_name or '/' in file_name or '\\' in file_name
+            or any(char in file_name for char in '*?[]')):
+        return None
+    return file_name
+
+
 def requested_email_header(question: str) -> tuple[str,str | None] | None:
     if field:=requested_single_email_header(question):return field,None
     for field,pattern in _EXACT_NAMED_EMAIL_HEADER_QUESTIONS:
         match=pattern.fullmatch(question)
         if not match:continue
-        values={value for key,value in match.groupdict().items()
-                if key.startswith('file') and value is not None}
-        if len(values)!=1:continue
-        file_name=next(iter(values)).strip()
-        if len(file_name)>=2 and file_name[0]==file_name[-1] and file_name[0] in "\"'":
-            file_name=file_name[1:-1].strip()
-        if (file_name and '/' not in file_name and '\\' not in file_name
-                and not any(char in file_name for char in '*?[]')):
-            return field,file_name
+        if file_name:=_requested_email_file(match):return field,file_name
     return None
 
 
@@ -885,6 +925,26 @@ def requires_email_header_index(question: str) -> bool:
 
 def requires_single_email_header_index(question: str) -> bool:
     return requires_email_header_index(question)
+
+
+def requested_email_workflow_relations(
+        question: str) -> tuple[tuple[str,...],str | None] | None:
+    """Recognize one bounded Email-to-RFI/Submittal relationship request."""
+    for named,patterns in ((False,_EXACT_SINGLE_EMAIL_WORKFLOW_RELATION_QUESTIONS),
+                           (True,_EXACT_NAMED_EMAIL_WORKFLOW_RELATION_QUESTIONS)):
+        for pattern in patterns:
+            match=pattern.fullmatch(question)
+            if not match:continue
+            hits=[(hit.start(),kind) for kind,type_pattern in _EMAIL_WORKFLOW_RELATION_TYPES
+                  if (hit:=type_pattern.search(match.group('categories')))]
+            requested=tuple(kind for _,kind in sorted(hits))
+            file_name=_requested_email_file(match) if named else None
+            if requested and (not named or file_name):return requested,file_name
+    return None
+
+
+def requires_email_workflow_relation_index(question: str) -> bool:
+    return requested_email_workflow_relations(question) is not None
 
 
 def _workflow_types_in(categories: str, types=_WORKFLOW_COUNT_TYPES) -> tuple[str,...]:
@@ -1431,6 +1491,97 @@ def _workflow_email_documents(workflow_index: dict | None) -> list[dict]:
                                  or file_name.casefold().endswith(('.eml','.msg')))):
                 found[str(document_id)]={'document_id':str(document_id),'file_name':file_name}
     return sorted(found.values(),key=lambda value:(value['file_name'].casefold(),value['document_id']))
+
+
+def _email_workflow_relationship_answer(
+        db: Database, run_id: str, question: str, workflow_index: dict | None) -> dict | None:
+    """List exact current Email workflow associations with source-text citations."""
+    request=requested_email_workflow_relations(question)
+    if not request:return None
+    requested_types,requested_file=request;documents=_workflow_email_documents(workflow_index)
+    if requested_file:
+        matches=[value for value in documents
+                 if value['file_name'].casefold()==requested_file.casefold()]
+        if not matches:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run does not contain an analyzed Email file named '
+                f'"{requested_file}".'),'citations':[]}
+        if len(matches)>1:
+            return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+                f'The selected analysis run contains {len(matches)} analyzed Email files named '
+                f'"{requested_file}". Select the source in the file list before relying on its '
+                'workflow associations.'),'citations':[]}
+        documents=matches
+    elif len(documents)>1:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'The selected analysis run contains {len(documents)} Email files. Specify the '
+            'Email file before asking for its workflow associations.'),'citations':[]}
+    if not documents:return None
+    document=documents[0];document_id=document['document_id']
+    relations={};type_names={'RFI':'RFI','SUBMITTAL':'Submittal'}
+    type_order={kind:index for index,kind in enumerate(requested_types)}
+    for item in (workflow_index or {}).get('items',[]):
+        if not isinstance(item,dict) or item.get('kind') not in type_order:continue
+        kind=item['kind'];identifier=normalize_identifier(kind,item.get('identifier'))
+        if not identifier:continue
+        for member in item.get('members',[]):
+            if (isinstance(member,dict) and str(member.get('document_id'))==document_id
+                    and member.get('source') in {'PRIMARY','REFERENCE'}):
+                relations[(kind,identifier)]=member['source'];break
+    ordered=sorted(relations,key=lambda value:(type_order[value[0]],value[1]))
+    target=(f'Email file "{document["file_name"]}"' if requested_file
+            else 'The only analyzed Email')
+    categories=' or '.join(type_names[value] for value in requested_types)
+    if not ordered:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target} has no exact indexed {categories} association.'),'citations':[]}
+    if len(ordered)>_MAX_RESULTS:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target} has more than {_MAX_RESULTS} exact requested workflow associations. '
+            'Review the complete Workflow relationships section.'),'citations':[]}
+    rows=db.all('''SELECT e.payload,d.name AS file_name
+                   FROM evidence e JOIN documents d ON d.id=e.document_id
+                   WHERE e.run_id=? AND e.document_id=?
+                     AND (LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),''))
+                              LIKE 'email > headers%'
+                          OR LOWER(COALESCE(json_extract(e.payload,'$.locator.section'),''))
+                              LIKE 'email > body%')
+                     AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                     AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                   ORDER BY e.rowid LIMIT 33''',(run_id,document_id))
+    if len(rows)>32:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            'The Email workflow associations were not answered locally because more than 32 '
+            'current header/body passages require review.'),'citations':[]}
+    found={identity:[] for identity in ordered}
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        evidence['file_name']=row['file_name'];text=str(evidence.get('raw_text') or '')
+        section=str((evidence.get('locator') or {}).get('section') or '')
+        if 'QUOTED HISTORY' in section.upper():continue
+        for identity,start,end in _workflow_identity_spans(text):
+            if identity not in found or found[identity]:continue
+            left,right=statement_span(text,start,end);quote=text[left:right]
+            if identity not in _workflow_identities(quote):continue
+            found[identity].append(citation(evidence,left,right,role='CONTEXT'))
+    missing=[f'{type_names[kind]} {identifier}' for kind,identifier in ordered
+             if not found[(kind,identifier)]]
+    citations=[];seen=set()
+    for identity in ordered:
+        for item in found[identity]:
+            key=(item.get('evidence_id'),item.get('quote'))
+            if key not in seen:seen.add(key);citations.append(item)
+    if missing:
+        return {'status':'INSUFFICIENT_EVIDENCE','answer':(
+            f'{target} has indexed workflow associations, but exact current header/body text '
+            f'was not available for: {", ".join(missing)}. Quoted history, signatures, '
+            'filenames and vision narration are not accepted as proof.'),'citations':citations}
+    labels=[f'{type_names[kind]} {identifier} ({"primary Email context" if relations[(kind,identifier)]=="PRIMARY" else "explicit reference"})'
+            for kind,identifier in ordered]
+    return {'status':'ANSWERED','answer':(
+        f'{target} has these exact current-content workflow associations: '
+        f'{"; ".join(labels)}.'),'citations':citations}
 
 
 def _single_email_header_occurrences(
@@ -2873,6 +3024,13 @@ class ProjectQuestions:
                     'answer_basis':'WORKFLOW_INDEX','citations':[],'source_findings':[],
                     'workflow_statuses':[],'workflow_conflicts':[],
                     'retrieved_count':0,'cached':False}
+        email_relationship=_email_workflow_relationship_answer(
+            self.db,run['id'],question,workflow_index)
+        if email_relationship:
+            return {'run_id':run['id'],'question':question,**email_relationship,
+                    'answer_basis':'LOCAL_PROJECT_EVIDENCE','source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':len(email_relationship['citations']),'cached':False}
         email_header=_email_header_answer(
             self.db,run['id'],question,workflow_index)
         if email_header:

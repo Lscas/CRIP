@@ -23,13 +23,15 @@ from app.questions import (
     _workflow_index_status_conflicts,
     expanded_query_terms,
     numeric_rfi_search_terms, requested_workflow_counts, requested_workflow_list,
-    requested_email_header, requested_single_email_header,
+    requested_email_header, requested_email_workflow_relations,
+    requested_single_email_header,
     requested_rfi_content, requested_submittal_field,
     requested_workflow_date_item,
     requested_workflow_status_inventory, requested_workflow_status_item,
     requested_workflow_subject_item,
     requires_source_diversity,
-    requires_email_header_index, requires_rfi_content_index,
+    requires_email_header_index, requires_email_workflow_relation_index,
+    requires_rfi_content_index,
     requires_submittal_field_index,
     requires_single_email_header_index,
     requires_workflow_date_index,
@@ -4284,6 +4286,139 @@ def test_single_email_header_question_boundary(question,expected):
 def test_named_email_header_question_boundary(question,expected):
     assert requested_email_header(question)==expected
     assert requires_email_header_index(question) is bool(expected)
+
+
+@pytest.mark.parametrize(('question','expected'),[
+    ('Which RFIs and Submittals does coordination.eml reference?',
+     (('RFI','SUBMITTAL'),'coordination.eml')),
+    ('Which RFI is referenced by "Coordination Reply.eml"?',
+     (('RFI',),'Coordination Reply.eml')),
+    ('Which Submittals are mentioned in this email?',(('SUBMITTAL',),None)),
+    ('What Requests for Information are linked to coordination.msg?',
+     (('RFI',),'coordination.msg')),
+    ('List the RFIs and Submittals referenced in coordination.eml.',
+     (('RFI','SUBMITTAL'),'coordination.eml')),
+    ('Which RFIs are referenced by ../secret.eml?',None),
+    ('Which RFIs does report.pdf reference?',None),
+    ('Which RFIs does *.eml reference?',None),
+    ('What is the subject of coordination.eml?',None),
+])
+def test_email_workflow_relationship_question_boundary(question,expected):
+    assert requested_email_workflow_relations(question)==expected
+    assert requires_email_workflow_relation_index(question) is bool(expected)
+
+
+def test_named_email_workflow_relationships_answer_from_current_text_without_model(
+        client, project, tmp_path, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Subject: RFI 0042 Domestic Water Coordination',
+        'Coordinate Submittal 23-01 before procurement.',
+    ])])
+    db=client.app.state.db
+    rows=db.all('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                   JOIN documents d ON d.id=e.document_id WHERE e.run_id=?
+                   ORDER BY e.rowid''',(run['id'],))
+    for index,row in enumerate(rows):
+        payload=json.loads(row['payload'])
+        payload['locator']['section']='EMAIL > HEADERS' if index==0 else 'EMAIL > BODY'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':rows[0]['document_id'],
+        'name':rows[0]['name'],'summary':{'document_type':'EMAIL','workflow_contexts':[
+            {'workflow_type':'RFI','identifier':'42','role':'QUESTION','status':None}],
+            'workflow_references':[
+                {'workflow_type':'RFI','identifier':'0042'},
+                {'workflow_type':'SUBMITTAL','identifier':'23-01'}]}}])
+    requests=[]
+    gateway=Gateway(_live_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(500))[1])))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email relationship used retrieval'))
+
+    result=ProjectQuestions(db,gateway).ask(
+        run,'Which RFIs and Submittals does COORDINATION.eml reference?',index)
+
+    assert result['status']=='ANSWERED'
+    assert result['answer_basis']=='LOCAL_PROJECT_EVIDENCE'
+    assert 'RFI 42 (primary Email context)' in result['answer']
+    assert 'Submittal 23-01 (explicit reference)' in result['answer']
+    assert [item['quote'] for item in result['citations']]==[
+        'Subject: RFI 0042 Domestic Water Coordination',
+        'Coordinate Submittal 23-01 before procurement.',
+    ]
+    assert result['retrieved_count']==2 and requests==[]
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
+def test_email_workflow_relationship_blocks_multiple_unspecified_emails_before_evidence_read(
+        monkeypatch):
+    index=build_workflow_index([
+        {'document_id':'D-1','name':'first.eml','summary':{'document_type':'EMAIL'}},
+        {'document_id':'D-2','name':'second.eml','summary':{'document_type':'EMAIL'}},
+    ])
+    class NoReadDatabase:
+        def all(self,*_args,**_kwargs):pytest.fail('ambiguous Email relationship read evidence')
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email relationship used retrieval'))
+
+    result=ProjectQuestions(NoReadDatabase(),object()).ask(
+        {'id':'RUN-EMAILS','status':'COMPLETED'},
+        'Which RFIs does this email reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'contains 2 Email files' in result['answer']
+    assert result['citations']==[]
+
+
+def test_email_workflow_relationship_rejects_quoted_history_only_index_link(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'RFI 99 was discussed in the earlier message.',
+    ])])
+    db=client.app.state.db
+    row=db.one('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                  JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > QUOTED HISTORY'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    index=build_workflow_index([{'document_id':row['document_id'],'name':row['name'],
+        'summary':{'document_type':'EMAIL','workflow_references':[
+            {'workflow_type':'RFI','identifier':'99'}]}}])
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('quoted relationship used retrieval'))
+
+    result=ProjectQuestions(db,object()).ask(
+        run,'Which RFIs does coordination.eml reference?',index)
+
+    assert result['status']=='INSUFFICIENT_EVIDENCE'
+    assert 'exact current header/body text was not available for: RFI 99' in result['answer']
+    assert result['citations']==[]
+
+
+def test_question_api_loads_workflow_index_for_email_workflow_relationship(
+        client, project, monkeypatch):
+    run=_source_evidence(client,project,[('coordination.eml',[
+        'Subject: RFI 42 Domestic Water Coordination',
+    ])])
+    db=client.app.state.db
+    row=db.one('''SELECT e.id,e.document_id,e.payload,d.name FROM evidence e
+                  JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''',(run['id'],))
+    payload=json.loads(row['payload']);payload['locator']['section']='EMAIL > HEADERS'
+    db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],row['document_id'],'SUCCESS',json.dumps({'document_type':'EMAIL',
+            'workflow_contexts':[{'workflow_type':'RFI','identifier':'42',
+                                  'role':'QUESTION','status':None}]})))
+    monkeypatch.setattr('app.questions.retrieve_evidence',
+                        lambda *_args,**_kwargs:pytest.fail('Email relationship API used retrieval'))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'Which RFI does coordination.eml reference?'})
+
+    assert response.status_code==200
+    result=response.json()
+    assert result['status']=='ANSWERED'
+    assert 'RFI 42 (primary Email context)' in result['answer']
+    assert result['citations'][0]['quote']=='Subject: RFI 42 Domestic Water Coordination'
+    assert db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
 
 
 def test_single_email_headers_answer_locally_without_model_or_retrieval(

@@ -1,5 +1,11 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-26 local Email workflow relationship verification
+
+- Thirteen focused offline cases cover strict named/single-Email question forms, singular/plural RFI and Submittal categories, exact case-insensitive file selection, primary-context versus explicit-reference labels, exact current-header/body citations, path/wildcard rejection, multi-Email ambiguity, quoted-history rejection and route-level workflow-index loading.
+- The complete `tests/app/test_questions.py` module passed after the change. Synthetic transports and retrieval hooks fail if reached, and the successful path creates no model-call row.
+- No customer file, credential, `.local` data, mailbox, paid provider or external project system was accessed.
+
 ## 2026-09-26 exact-file multi-Email header verification
 
 - Four header families, quoted names with spaces, exact case-insensitive matching, unique selection from a two-Email run, missing and duplicate names, path/wildcard rejection and API workflow-index loading passed 14 focused offline cases.

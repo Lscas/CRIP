@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0124",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-WORKFLOW-RELATION-LOCAL-001"],
+  "summary": "Answer strict Email-to-RFI/Submittal relationship questions from exact current project evidence.",
+  "decision_refs": [
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "The existing workflow index already maps Email documents to exact RFI/Submittal identities",
+    "The existing citation path can prove each current Email mention without a new index or provider call"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-109.json", "changes/CR-0124.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-109",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested file-grounded project questions modeled on Trunk Tools' cited document-answer workflow.",
+  "known_limitations": [
+    "Only strict English RFI/Submittal relationship questions for one selected Email use the shortcut.",
+    "Every published association requires an exact current Email header/body quotation.",
+    "Quoted history, signatures, filenames, vision narration, more than eight associations and more than 32 current passages fail closed.",
+    "The shortcut does not infer applicability, chronology, contractual effect or authority."
+  ]
+}
