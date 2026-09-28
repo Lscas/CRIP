@@ -101,11 +101,11 @@ def main(argv: list[str] | None = None) -> int:
                 if server.started:
                     print(f'[READY] CIRP {VERSION}: {url}', flush=True)
                     print('Data directory: ' + str(settings.data_dir), flush=True)
-                    mode=('mock; model cost is zero' if settings.provider=='mock' else
+                    mode=('mock; no model request' if settings.provider=='mock' else
                           'local model' if settings.is_local_model() else
                           'live API (startup itself makes no model request)')
                     print('Mode: ' + mode, flush=True)
-                    print('Close the window or press Ctrl+C to stop. A normal restart preserves uploads, review history, and the budget ledger.', flush=True)
+                    print('Close the window or press Ctrl+C to stop. A normal restart preserves uploads, review history, and model-call records.', flush=True)
                     if not args.no_browser and not browser_opened:
                         browser_opened=True
                         try:

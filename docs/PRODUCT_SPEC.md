@@ -5,9 +5,9 @@
 **机器可读需求：** `spec/requirements.json`；完整需求表见 `docs/REQUIREMENTS.md`
 
 ## 1. 产品目标与用户体验
-工程师一次上传尽可能完整的商业新建项目资料，不需要提前按专业整理或逐一问答。系统逐文件、逐页面／视图审查，以全部专业为分析目标，生成材料、检查／测试／报告、设计冲突和独立缺失信息四类结果。核心价值是减少阅读与整理，而不是替代工程判断。
+工程师一次上传尽可能完整的商业新建项目资料，不需要提前按专业整理。系统逐文件、逐页面／视图审查，并把保存的项目知识用于后续提问。当前审阅输出聚焦材料／设备与真实检查／测试要求；Conflict 与 Missing 已按 D-26 取消。核心价值是减少阅读与整理，而不是替代工程判断。
 
-原型必须有网页：项目创建、批量上传、分析进度、四类清单、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控并行任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB在用户选择的预算内全部完成。
+原型必须有网页：项目创建、批量上传、分析进度、项目提问、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控本地任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB都能在目标时间内完成。
 
 不能将“全部专业能上传”写成“全部专业已正确分析”。每专业、文件、页面和任务均显示未处理、完成、部分、失败或能力缺失。内部原型可以逐模块交付，但不能擅自把总目标缩为混凝土专项。
 
@@ -23,7 +23,7 @@ The current input slice accepts PDF, DOCX, TXT, RFC-style EML, bounded local Out
 
 首读不依赖用户问题检索。每个内容片段必须被处理或有明确未处理状态。检索用于后续跨文件证据连接，不能用前K条相关结果代替阅读其余文件。
 
-供应商限流、预算、时限或文件错误出现时，其余可用结果可查看，但Run显示PARTIAL／PAUSED，不把缺失的专业或页面隐藏。
+供应商限流、时限、输入容量或文件错误出现时，其余可用结果可查看，但Run显示PARTIAL／PAUSED，不把缺失的专业或页面隐藏。
 
 ## 4. 原始文件及解析
 原始二进制与SHA-256不可变，派生文本、表格、图像和CAD对象均链接源文件与解析器版本。重名不同哈希是不同内容；相同哈希可以复用解析，但仍保留每次来源关系。远程选定文件导入复用本地上传的项目容量门禁、4MiB分片、SHA-256与去重；连接器只访问固定官方API和经允许的HTTPS下载主机，跨主机签名下载不得携带供应商Bearer令牌。
@@ -115,12 +115,12 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 
 低价模型降低每token成本；减少实际token靠零调用、短输入、缓存复用、最低推理、短JSON及有限重试。没有可用更小模型时可以多个任务共享Flash，不能把不同Prompt伪装成多个不同尺寸模型。
 
-## 13. 预算、时间和状态
-每项目采用用户选择的累计直接处理上限，包括重试及后续运行；新项目默认300CNY，可在0.01至1,000,000CNY范围内修改。上限不能低于已结算+未结算预留（其中包含计费未决请求，不重复计算），每次修改留审计记录；下一次调用发送前仍检查原子预留。模型/OCR/CAD/直接计算分别核算。共享基础设施费用单独记录分摊，不伪称免费。
+## 13. 时间、调用安全和状态
+项目没有 CIRP 预算、单价或累计费用门禁。模型供应商账户产生的费用由用户直接在供应商侧管理；CIRP 不用价格配置决定是否发送请求。
 
-24小时从Analyze启动计时，上传时长另列；初期单活跃项目。预算或目标时限到达，停止新增收费任务并显示剩余范围；在途任务仍计费且对账，不能回滚已经产生的供应商费用。暂停不代表所有远端请求立即停止。
+24小时从 Analyze 启动计时，上传时长另列；初期单活跃项目。目标时限到达后停止新增任务并显示剩余范围。网络结果不确定或 usage 缺失时保持调用记录为未决，阻止新调用并要求用户核对供应商状态；软件不自动重试，从而避免重复请求。暂停不代表所有远端请求立即停止。
 
-费用未知或实际API价格未确认前，付费路径默认关闭。API响应usage及供应商账单核对，推理token如果已在输出总数中不重复计算。预估按高峰缓存未命中与保守输出上限，缓存收益完成后再核销。
+模型调用仍记录 provider、model、token usage、延迟、请求状态和安全请求号，用于可复现性与故障恢复。这些运行记录不是项目预算模块，不形成额度、费率或费用总计。
 
 ## 14. 用户审核与导出
 全部结果初始PENDING；模型不得填写已批准状态。用户接受／编辑／拒绝由服务端记录身份、时间、原值、新值和说明。本轮不设计跨运行编辑继承；重新分析保留旧快照，开始新的审核。
@@ -130,14 +130,14 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 未审核结果可以预览及导出，但每行和文件总说明显示状态，未完成Run有PARTIAL说明。正式已审核导出只包含对应审核项；在量算/几何/视觉尚无独立接受流程时，不将这些`PENDING`分析辅助混入`reviewed_only`导出。来源始终可定位。导出读取保存数据，不重新生成自然语言材料。JSON/XLSX固定使用英文工程审核视图，名称、数量和单位分列，证据随项目显示，冲突双方原文与来源并排；不显示内部ID、原始结构代码或PDF纸面几何审计。
 
 ## 15. 开发治理和测试
-需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由、Assembly和价格配置进入Git；密钥不进入Git。用户明确要求避免重复输入时，本机live入口可把供应商密钥保存为Windows DPAPI当前用户加密文件；不得保存明文`.env`，也不得进入网址、命令行或日志。更换Windows账户或电脑不能直接复用该密文。
+需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由和Assembly配置进入Git；密钥不进入Git。用户明确要求避免重复输入时，本机live入口可把供应商密钥保存为Windows DPAPI当前用户加密文件；不得保存明文`.env`，也不得进入网址、命令行或日志。更换Windows账户或电脑不能直接复用该密文。
 
-开发LLM可提议和实现已批准内容，不能自行更改范围、规则、预算、外传边界或验收标准。变更清单区分spec_only、implementation、bugfix；规格先行时产品状态仍planned，不能因为Schema通过就标业务功能implemented。
+开发LLM可提议和实现已批准内容，不能自行更改范围、规则、外传边界或验收标准。变更清单区分spec_only、implementation、bugfix；规格先行时产品状态仍planned，不能因为Schema通过就标业务功能implemented。
 
-正式历史项目准确率评测暂缓。基础Schema正负例、预算、日期、选项、证据、审核权限和失败状态测试不可省略。CI检查存在性和结构并执行离线测试；语义一致性及真实负责人审批仍由受保护分支审查保证，工具不能自动证明全部产品语义等价。
+正式历史项目准确率评测暂缓。基础Schema正负例、模型调用安全、日期、选项、证据、审核权限和失败状态测试不可省略。CI检查存在性和结构并执行离线测试；语义一致性及真实负责人审批仍由受保护分支审查保证，工具不能自动证明全部产品语义等价。
 
 ## 16. 当前包与后续交付
-本轮用户已授权开始搭建。交付可运行的本地上传网页、SQLite持久化、基础文字解析、单运行任务、模拟Provider、文本DeepSeek适配器、预算、候选审核和JSON/XLSX导出，以及原规格/契约/测试。
+本轮用户已授权开始搭建。交付可运行的本地上传网页、SQLite持久化、基础文字解析、单运行任务、模拟Provider、可配置模型适配器、项目提问、候选审核和JSON/XLSX导出，以及原规格/契约/测试。
 真实API除MockTransport回归外，已完成Gemini合成连通/局部PDF测试及DeepSeek 144/144文字片段全量运行。本轮又实现本机OCR、DeepSeek页面视觉路由、DXF/DWG对象元数据和几何审计：指定PDF离线已补齐53至58页OCR并建立59页视觉任务；合成DWG转换及对象量算通过。视觉live、真实用户DWG兼容性、图形到材料的完整净量归并、复杂跨专业分析和施工准确率仍需逐项验收。原型明确PARTIAL/待审核，不因接口或局部能力成功宣称全专业工程能力。详见IMPLEMENTATION_STATUS和EVIDENCE_VALIDATION。
 开发token策略落为短AGENTS、分目录指令、有限任务包和定向测试。项目级Codex配置只提供low推理建议，不强制账户模型和token硬上限，不代替安全审查。
 后续仍保留完整全项目目标，不把当前切片当作缩减后的产品验收。跨运行编辑继承、采购定价、正式Gold评测继续按用户决定暂缓。
@@ -152,13 +152,13 @@ Cloudflare账户资源实际创建与公网验证是独立待完成需求，不�
 所有页面和业务API保留鉴权；仅Render profile的精确`/_health` GET/HEAD返回无业务信息的存活结果供平台检查。实际公网发布、模型效果与免费额度受账户验证，配置和离线测试不能代替部署。用户云账户没有接入前保持FR-RENDER-LIVE-001 planned。本轮不关闭本机运行、不修改既有Cloudflare资源、不使用付费实例或保活绕过休眠。详见docs/RENDER_FREE_DEPLOY.md。
 
 ## 本轮部署交付：D-20
-用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；不修改300CNY预算、Revision规则、业务范围或工程精度承诺。Windows入口提供但无实机验证；首次依赖安装与实际HTTP验证分别报告。见docs/LOCAL_DEPLOY.md。
+用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；Revision规则、业务范围或工程精度承诺不变。D-30 后不再存在 CIRP 项目预算。见docs/LOCAL_DEPLOY.md。
 
 ## English-only presentation (FR-UI-002)
-Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, cost descriptions, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. This presentation change does not add a network or model call and does not change project data, review history, API paths, canonical status codes, algorithms, provider configuration, or budget state. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
+Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
 
 ## 24. 本轮增量：原文引用与独立核验
 采用成本优先方案A。新增逐字段citation、独立verification报告与付费重验任务，保留原始业务候选和人工审核状态。材料/检查/冲突字段关联原句；推导、计算、缺失报告仅标示其真实依据，不制造设计原句。
 自动分析结束阶段执行免费引用构建，并在已配置真实API时用原有低价模型的最低可用推理模式作分批语义核验；默认模拟模式不调用API、不显示虚假核验通过。GET、语言切换、导出和人工编辑不会自动发送付费请求。编辑会免费重建引用，变化字段失效，后续语义重验须显式请求。
-所有费用进入原项目账本，24小时原运行时限不自动延长；预算不足保留部分结果。核验只覆盖关联片段及其上下文，不等于全项目反证搜索或完整性评测。详见docs/EVIDENCE_VERIFICATION.md。
-JSON与XLSX增加核验和原句表，不翻译设计原文、不默认打包原始文档。新增SQLite表幂等升级，旧项目和预算不重置。
+所有模型调用保留原项目运行记录，24小时原运行时限不自动延长。核验只覆盖关联片段及其上下文，不等于全项目反证搜索或完整性评测。详见docs/EVIDENCE_VERIFICATION.md。
+JSON与XLSX增加核验和原句表，不翻译设计原文、不默认打包原始文档。SQLite幂等升级保留旧项目；历史预算表仅作兼容数据，不再参与运行。

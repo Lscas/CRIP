@@ -13,7 +13,7 @@ import re
 import time
 from typing import Any
 
-from app.db import Database, DomainError, BudgetError, dumps, now, uid
+from app.db import CallSafetyError, Database, DomainError, dumps, now, uid
 from app.gateway import InvalidModelOutput, ProviderPaused
 from app.settings import ROOT
 from contracts.runtime_rules import EvidenceScope, evidence_references, validate_schema
@@ -341,7 +341,7 @@ class VerificationService:
                 for f in batch:
                     f.update(status='NEEDS_CONTEXT', method='MODEL_OUTPUT_REJECTED')
                     f['issues'].append('模型核验响应不完整、过长或引用不精确；不标记通过。')
-            except (BudgetError, ProviderPaused):
+            except (CallSafetyError, ProviderPaused):
                 report['checked_at'] = now(); summarize(report); self.save(report)
                 raise
             report['checked_at'] = now(); summarize(report)
@@ -441,7 +441,7 @@ class VerificationService:
         if run['provider'] != self.s.provider:
             raise DomainError('原运行Provider不一致，请新建分析', 409)
         if time.time() >= run['deadline_epoch']:
-            raise DomainError('原运行已过24小时目标；重新分析不会重置项目预算', 409)
+            raise DomainError('原运行已过24小时目标；请创建新的分析', 409)
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():
                 raise DomainError('已有活跃分析，请结束后核验', 409)
@@ -473,8 +473,8 @@ class VerificationService:
                 current = self.db.one('SELECT * FROM records WHERE id=?', (job['record_id'],))
                 if digest(json.loads(current['envelope'])['candidate']) != job['candidate_hash']:
                     state = 'STALE'
-        except BudgetError:
-            state = 'PAUSED_BUDGET'; message = '预算不足，核验未完成。'
+        except CallSafetyError as exc:
+            state = 'PAUSED_PROVIDER'; message = str(exc)
         except ProviderPaused as exc:
             state = 'PAUSED_PROVIDER'; message = str(exc)
         except Exception:

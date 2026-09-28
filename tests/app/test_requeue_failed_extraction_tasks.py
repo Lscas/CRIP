@@ -65,7 +65,7 @@ def test_contract_dry_run_then_apply_preserves_call_and_adds_explicit_generation
     db, run, document_id, storage_id, family = _paused_run_with_evidence(client, project)
     call_id = _settled_contract_error(db, run, family)
     before_call = db.one("SELECT * FROM model_calls WHERE id=?", (call_id,))
-    before_cost = db.cost(project["id"])
+    before_calls = db.model_call_stats(project["id"])
 
     preview = requeue_failed_extraction_tasks(db, run["id"])
     assert preview["mode"] == "DRY_RUN" and preview["requeued_count"] == 1
@@ -89,7 +89,7 @@ def test_contract_dry_run_then_apply_preserves_call_and_adds_explicit_generation
         "status": "PENDING", "error": "",
     }
     assert db.one("SELECT * FROM model_calls WHERE id=?", (call_id,)) == before_call
-    assert db.cost(project["id"]) == before_cost
+    assert db.model_call_stats(project["id"]) == before_calls
     assert db.authorized_generation(run["id"], family) == 1
     event = db.one("SELECT call_id,payload FROM call_reconciliation_events WHERE run_id=?", (run["id"],))
     payload = json.loads(event["payload"])
@@ -111,7 +111,7 @@ def test_pre_request_input_reject_requeues_generation_zero_without_call_or_event
     db, run, document_id, storage_id, family = _paused_run_with_evidence(
         client, project, error=INPUT_BUDGET_EVIDENCE_ERROR,
     )
-    before_cost = db.cost(project["id"])
+    before_calls = db.model_call_stats(project["id"])
     result = requeue_failed_extraction_tasks(db, run["id"], apply=True)
     assert result["tasks"] == [{
         "document_id": document_id,
@@ -128,7 +128,7 @@ def test_pre_request_input_reject_requeues_generation_zero_without_call_or_event
     assert db.one("SELECT COUNT(*) AS n FROM model_calls WHERE run_id=?", (run["id"],))["n"] == 0
     assert db.one("SELECT COUNT(*) AS n FROM call_reconciliation_events WHERE run_id=?", (run["id"],))["n"] == 0
     assert db.authorized_generation(run["id"], family) == 0
-    assert db.cost(project["id"]) == before_cost
+    assert db.model_call_stats(project["id"]) == before_calls
     summary = json.loads(db.one(
         "SELECT summary FROM document_results WHERE run_id=? AND document_id=?", (run["id"], document_id)
     )["summary"])

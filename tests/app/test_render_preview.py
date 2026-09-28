@@ -67,7 +67,7 @@ def test_authenticated_demo_upload_limit_and_secret_safety(tmp_path):
         assert c.post(f'/api/projects/{p}/uploads',json={'name':'too-big.txt','size':PREVIEW_BYTES+1}).status_code==413
         run=run_demo(c,p)
         assert len(c.get(f'/api/analysis-runs/{run}/records').json())==4
-        assert c.get(f'/api/analysis-runs/{run}/cost').json()['calls']==0
+        assert c.get(f'/api/analysis-runs/{run}/cost').status_code==405
         assert c.get(f'/api/analysis-runs/{run}/exports/json').status_code==200
         assert c.post('/api/projects',json={'name':'bad'},headers={'Origin':'https://evil.invalid'}).status_code==403
 

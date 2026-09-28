@@ -75,7 +75,7 @@ def test_remote_demo_workflow(tmp_path):
         project=c.post('/api/projects',json={'name':'remote mock'}).json()
         rid=run_demo(c,project['id'])
         assert len(c.get(f'/api/analysis-runs/{rid}/records').json())==4
-        assert c.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+        assert c.get(f'/api/analysis-runs/{rid}/cost').status_code==405
 
 def test_launcher_forces_mock(monkeypatch):
     monkeypatch.setenv('CIRP_PROVIDER','deepseek');monkeypatch.setenv('CIRP_API_KEY','not-a-real-key')

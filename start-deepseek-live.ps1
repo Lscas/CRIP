@@ -12,7 +12,7 @@ if ($Port -eq $SetupPort) {
 
 Write-Host 'CIRP DeepSeek V4 Flash local live launcher'
 Write-Host 'Saved keys use Windows DPAPI current-user encryption; no plaintext .env, key command-line argument, or key log is created.'
-Write-Host 'Conservative ledger rates: input CNY 4.40/M tokens; output CNY 13.20/M tokens.'
+Write-Host 'Provider charges, if any, are billed by the configured DeepSeek account.'
 Write-Host 'Data disclosure: after Analyze is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API.'
 Remove-Item Env:CIRP_API_KEY -ErrorAction SilentlyContinue
 Write-Host '[CHECK] Checking project dependencies without an API key.'

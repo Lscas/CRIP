@@ -94,11 +94,11 @@ def main() -> int:
                 record_id=mat['record']['meta']['record_id']
                 r=c.post(f'/api/records/{record_id}/review',json={'action':'ACCEPTED','expected_version':0})
                 assert r.status_code==200
-                cost=c.get(f'/api/analysis-runs/{rid}/cost').json();assert cost['calls']==0
+                assert c.get(f'/api/analysis-runs/{rid}/cost').status_code==405
                 js=c.get(f'/api/analysis-runs/{rid}/exports/json');assert js.status_code==200 and len(js.json()['records'])==5
                 xl=c.get(f'/api/analysis-runs/{rid}/exports/xlsx');assert xl.status_code==200
                 with zipfile.ZipFile(io.BytesIO(xl.content)) as z:assert '[Content_Types].xml' in z.namelist()
-                report.update(counts=counts,run_status=run['status'],evidence='PASS',review='PASS',json_export='PASS',xlsx_export='PASS',cross_origin_status=bad.status_code,cost=cost)
+                report.update(counts=counts,run_status=run['status'],evidence='PASS',review='PASS',json_export='PASS',xlsx_export='PASS',cross_origin_status=bad.status_code)
             stop()
             start()
             with httpx.Client(base_url=base,timeout=5,trust_env=False) as c:

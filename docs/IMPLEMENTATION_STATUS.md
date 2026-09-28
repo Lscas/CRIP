@@ -1,6 +1,8 @@
 # 实际实现边界
 版本0.2.6。本表说明工程进度，不改变已批准最终目标。
 
+2026-09-27: D-30 removes active budget/rate/cost UI and dispatch gates. Budget/CNY rows below are history only; call-safety controls remain.
+
 | 模块 | 当前实际行为 | 未完成 |
 |---|---|---|
 | Upload | Browser files/folders; Autodesk/Procore selected imports; selected/batched EML/MSG attachments with prevalidation and parent provenance; 4 MiB chunks, capacity, SHA-256 and deduplication | 10 GB stress, cleanup, object storage, virus scan, recursive email imports, OAuth/refresh, polling and live-tenant acceptance |

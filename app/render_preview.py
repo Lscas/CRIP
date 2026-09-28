@@ -16,7 +16,7 @@ def preview_settings(env: Mapping[str, str] | None = None, *, data_dir: Path | N
     # 明确创建Settings，避免继承本机.env、模型Key、生产数据路径或源站密钥。
     return Settings(
         data_dir=data_dir or Path('/tmp/cirp-render-preview'),
-        provider='mock', api_key='', live_enabled=False, prices_confirmed=False,
+        provider='mock', api_key='', live_enabled=False,
         remote_enabled=True, preview_user='engineer',
         preview_password=values.get('CIRP_PREVIEW_PASSWORD', ''), origin_token='',
         allowed_hosts=(host, '127.0.0.1', 'localhost'),

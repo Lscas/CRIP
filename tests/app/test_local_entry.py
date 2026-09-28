@@ -1,6 +1,5 @@
 """Local startup invariants using synthetic configuration and no live model calls."""
 from argparse import Namespace, ArgumentTypeError
-from decimal import Decimal
 from pathlib import Path
 import socket
 import sys
@@ -34,20 +33,19 @@ def test_live_requires_complete_configuration(tmp_path,monkeypatch):
 
 
 def test_live_uses_existing_config_but_binds_local(tmp_path,monkeypatch):
-    s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,
-               api_key='synthetic-key',input_rate=Decimal(1),output_rate=Decimal(2))
+    s=Settings(tmp_path,provider='deepseek',live_enabled=True,api_key='synthetic-key')
     monkeypatch.setattr(Settings,'from_env',lambda:s)
     result=local_settings(live=True)
     assert result.data_dir==tmp_path and result.allowed_hosts==LOCAL_HOSTS and result.api_key=='synthetic-key'
     assert result.public()['request_limits']=={
         'text_input_utf8_bytes':32000,'text_extraction_output_tokens':8000,
+        'project_answer_input_utf8_bytes':64000,
         'vision_input_utf8_bytes':6000,'vision_output_tokens':2000,
         'verification_input_utf8_bytes':6000,'verification_output_tokens':1400}
 
 
 def test_live_saves_key_only_after_explicit_remember_marker(tmp_path,monkeypatch):
-    s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,
-               api_key='synthetic-key',input_rate=Decimal(1),output_rate=Decimal(2))
+    s=Settings(tmp_path,provider='deepseek',live_enabled=True,api_key='synthetic-key')
     saved=[]
     monkeypatch.setattr(Settings,'from_env',lambda:s)
     monkeypatch.setattr('app.local_entry.remember_enabled',lambda *a:True)
@@ -57,19 +55,17 @@ def test_live_saves_key_only_after_explicit_remember_marker(tmp_path,monkeypatch
 
 
 def test_live_accepts_official_gemini_configuration(tmp_path,monkeypatch):
-    s=Settings(tmp_path,provider='gemini',live_enabled=True,prices_confirmed=True,
+    s=Settings(tmp_path,provider='gemini',live_enabled=True,
                api_base_url='https://generativelanguage.googleapis.com/v1beta/openai',
-               cheap_model='gemini-3.6-flash',api_key='synthetic-key',
-               input_rate=Decimal('7.5'),output_rate=Decimal('37.5'))
+               cheap_model='gemini-3.6-flash',api_key='synthetic-key')
     monkeypatch.setattr(Settings,'from_env',lambda:s)
     result=local_settings(live=True)
     assert result.provider=='gemini' and result.public()['thinking']=='minimal'
 
 
 def test_live_accepts_loopback_openai_compatible_model_without_key_or_price(tmp_path,monkeypatch):
-    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,prices_confirmed=True,
-               api_base_url='http://127.0.0.1:11434/v1',cheap_model='qwen3:8b',
-               input_rate=Decimal('0'),output_rate=Decimal('0'))
+    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,
+               api_base_url='http://127.0.0.1:11434/v1',cheap_model='qwen3:8b')
     monkeypatch.setattr(Settings,'from_env',lambda:s)
     result=local_settings(live=True)
     assert result.live_errors()==[] and result.is_local_model()
@@ -80,7 +76,7 @@ def test_standard_local_start_reuses_explicitly_saved_local_profile(tmp_path):
     base=Settings(tmp_path,start_worker=False,allowed_hosts=LOCAL_HOSTS)
     selected=configured_settings(
         base,provider='custom',api_base_url='http://127.0.0.1:11434/v1',
-        model='qwen3:8b',input_rate='0',output_rate='0')
+        model='qwen3:8b')
     save_active_configuration(selected)
     loaded=local_settings(tmp_path)
     assert loaded.provider==selected.provider and loaded.is_local_model()
@@ -91,9 +87,8 @@ def test_standard_local_start_reuses_explicitly_saved_local_profile(tmp_path):
     'http://remote.example/v1','http://127.0.0.1.example/v1','http://2130706433/v1',
 ])
 def test_custom_remote_endpoint_cannot_use_insecure_or_ambiguous_loopback_url(tmp_path,base_url):
-    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,prices_confirmed=True,
-               api_base_url=base_url,cheap_model='model',api_key='synthetic-valid-key',
-               input_rate=Decimal('1'),output_rate=Decimal('2'))
+    s=Settings(tmp_path,provider='custom-0123456789abcdef',live_enabled=True,
+               api_base_url=base_url,cheap_model='model',api_key='synthetic-valid-key')
     assert s.live_errors()
 
 
@@ -105,20 +100,16 @@ def test_gemini_env_selects_official_defaults_without_dotenv(monkeypatch):
     monkeypatch.setenv('CIRP_PROVIDER','gemini')
     monkeypatch.setenv('CIRP_LIVE_API_ENABLED','true')
     monkeypatch.setenv('CIRP_API_KEY','synthetic-key')
-    monkeypatch.setenv('CIRP_PRICES_CONFIRMED','true')
-    monkeypatch.setenv('CIRP_INPUT_CNY_PER_MILLION','7.5')
-    monkeypatch.setenv('CIRP_OUTPUT_CNY_PER_MILLION','37.5')
     configured=Settings.from_env()
     assert configured.api_base_url=='https://generativelanguage.googleapis.com/v1beta/openai'
     assert configured.cheap_model=='gemini-3.6-flash' and configured.live_errors()==[]
     assert configured.min_request_interval_seconds==15
-    assert configured.input_limit==32000 and configured.output_limit==8000
+    assert configured.input_limit==64000 and configured.output_limit==8000
 
 
 @pytest.mark.parametrize('interval',[float('nan'),-1,301])
 def test_invalid_request_interval_blocks_live_configuration(tmp_path,interval):
-    s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,
-               api_key='synthetic-key',input_rate=Decimal(1),output_rate=Decimal(2),
+    s=Settings(tmp_path,provider='deepseek',live_enabled=True,api_key='synthetic-key',
                min_request_interval_seconds=interval)
     assert any('Minimum model-request interval' in error for error in s.live_errors())
 

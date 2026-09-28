@@ -249,7 +249,7 @@ def main():
                 page.locator('#results-body tr td:first-child button').first.click()
                 panel=page.locator('.verification-panel')
                 page.wait_for_selector('.verification-panel', state='visible')
-                assert panel.get_by_role('button',name='Recheck meaning (uses project budget)',exact=True).is_disabled()
+                assert panel.get_by_role('button',name='Recheck meaning',exact=True).is_disabled()
                 assert 'Verification incomplete' in panel.inner_text()
                 quotes=panel.locator('blockquote').all_text_contents()
                 source_texts=[f.read_text(encoding='utf-8') for f in (ROOT/'examples/demo').glob('*.txt')]

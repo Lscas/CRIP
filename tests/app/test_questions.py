@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 import app.questions as questions_module
-from app.db import BudgetError, Database, dumps, paid_task_key
+from app.db import CallSafetyError, Database, dumps, paid_task_key
 from app.gateway import Gateway, InvalidModelOutput
 from app.questions import (
     ProjectQuestions, _clause_identifier_values, _drawing_identifier_values,
@@ -116,9 +116,8 @@ def _source_evidence(client, project, sources):
 
 
 def _live_settings(tmp_path):
-    return Settings(tmp_path, provider='deepseek', live_enabled=True, prices_confirmed=True,
-                    api_key='test-not-real', input_rate=Decimal('1'),
-                    output_rate=Decimal('2'), start_worker=False)
+    return Settings(tmp_path, provider='deepseek', live_enabled=True,
+                    api_key='test-not-real', start_worker=False)
 
 
 def test_retrieval_ranks_specific_project_evidence(client, project):
@@ -753,6 +752,46 @@ def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
     assert call['task_key'].startswith('answer:') and call['state'] == 'SETTLED'
 
 
+def test_live_answer_accepts_the_full_bounded_retrieval_context(client, project, tmp_path):
+    rows = [
+        f'Construction sequence work area {index}: four months. ' + ('context ' * 310)
+        for index in range(1, 9)
+    ]
+    run = _evidence(client, project, rows)
+    response_data = {
+        'status': 'ANSWERED',
+        'answer': 'Work area 1 is assigned four months.',
+        'source_findings': [],
+        'citations': [{
+            'evidence_id': 'EV-QA-1',
+            'quote': 'Construction sequence work area 1: four months.',
+        }],
+    }
+    request_sizes = []
+
+    def handler(request):
+        request_sizes.append(sum(
+            len(message['content'].encode('utf-8'))
+            for message in json.loads(request.content)['messages']))
+        return httpx.Response(200, json={
+            'id': 'large-question-test',
+            'choices': [{'finish_reason': 'stop', 'message': {
+                'content': json.dumps(response_data),
+            }}],
+            'usage': {'prompt_tokens': 9000, 'completion_tokens': 30},
+        })
+
+    gateway = Gateway(
+        _live_settings(tmp_path), client.app.state.db,
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    result = ProjectQuestions(client.app.state.db, gateway).ask(
+        run, 'Which construction sequence work areas are listed?')
+
+    assert result['status'] == 'ANSWERED'
+    assert 32000 < request_sizes[0] <= 64000
+
+
 def test_question_recovers_a_settled_pre_normalization_task_without_http(client, project, tmp_path):
     run = _evidence(client, project, [
         'Domestic water service pipe shall be 2 inch Type L copper.',
@@ -770,7 +809,7 @@ def test_question_recovers_a_settled_pre_normalization_task_without_http(client,
     family='answer:'+hashlib.sha256(dumps(legacy).encode()).hexdigest()
     attempt=client.app.state.db.reserve(
         run['project_id'],run['id'],paid_task_key(family,0),Decimal('0.01'),
-        settings.cheap_model,'legacy-request',settings.input_rate,settings.output_rate,
+        settings.cheap_model,'legacy-request',Decimal('0'),Decimal('0'),
         interactive_question=True)
     response_data={
         'status':'ANSWERED','answer':'Use 2 inch Type L copper.','source_findings':[],
@@ -3406,7 +3445,7 @@ def test_paid_question_is_blocked_before_http_while_an_analysis_is_active(client
                       httpx.Client(transport=httpx.MockTransport(
                           lambda request: (requests.append(request), httpx.Response(500))[1])))
 
-    with pytest.raises(BudgetError, match='active analysis'):
+    with pytest.raises(CallSafetyError, match='active analysis'):
         ProjectQuestions(client.app.state.db, gateway).ask(
             run, 'What is the water service pipe material and size?')
 

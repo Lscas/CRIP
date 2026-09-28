@@ -487,7 +487,7 @@ A local customer can start CIRP with a customer-selected OpenAI-compatible text 
 - Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.
 - The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.
 - The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.
-- The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.
+- The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or model-call history.
 - A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.
 - A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data.
 - Every open application tab detects a completed same-port service restart and reloads its non-secret configuration, so an older Mock tab cannot hide the active provider's replacement-key controls.
@@ -762,38 +762,42 @@ cheap角色默认使用deepseek-v4-flash且thinking disabled；用户明确选�
 
 ## FR-BUDGET-001 · User-selected project budget limit
 
-优先级：P0；状态：implemented
+优先级：P0；状态：superseded
 
 Each project has a user-selected cumulative CNY processing limit across runs and retries; new paid work is blocked before the selected limit is exceeded.
 
+替代需求：FR-MODEL-BUDGET-REMOVAL-001
 - A new project defaults to CNY 300 and accepts a user-selected limit from CNY 0.01 through CNY 1,000,000.
 - The limit cannot be set below settled plus outstanding cost; unknown charges remain reserved and retries require a new reservation.
 - Every changed limit is audit-recorded, and a valid user change may unlock a budget-frozen project without resetting spent cost.
 
 ## FR-BUDGET-002 · 先预留再调用
 
-优先级：P0；状态：implemented
+优先级：P0；状态：superseded
 
 任务发出前原子预留最坏费用，完成后核销；未知账单不提前释放。
 
+替代需求：FR-MODEL-BUDGET-REMOVAL-001
 - 并行worker不能同时越限。
 - 超时重试可能重复计费，必须重新预留。
 
 ## FR-BUDGET-003 · 价格可配置
 
-优先级：P0；状态：planned
+优先级：P0；状态：superseded
 
 官方价格仅参考快照；中转价和图像/OCR/CAD价必须单独确认。
 
+替代需求：FR-MODEL-BUDGET-REMOVAL-001
 - 未确认实际单价不开启付费。
 - 缓存折扣、离峰折扣不用于最坏预算。
 
 ## FR-BUDGET-004 · 部分完成透明
 
-优先级：P0；状态：planned
+优先级：P0；状态：superseded
 
 预算或时限阻断必须显示已完成、未完成、阻断原因和已花费用。
 
+替代需求：FR-MODEL-BUDGET-REMOVAL-001
 - 不自动扩预算。
 - 低优先任务仍入队，不隐瞒未执行。
 
@@ -947,7 +951,7 @@ Assume users and developers work in English. The application, setup flow, launch
 - The key-entry page, local launcher, dependency checks, public settings, and cost descriptions use English application-owned messages.
 - The change does not clear unsaved project names, review notes, filters, upload selection, or project/run state and does not add a network or model call.
 - Original source-document quotations remain faithful to the source; fixed reviewer output otherwise uses concise English and fails closed when required legacy business text cannot be translated safely.
-- API paths, canonical status codes, request headers, algorithms, saved project data, human reviews, and budget state do not change.
+- API paths, canonical status codes, request headers, algorithms, saved project data, human reviews, and model-call history do not change.
 - The English interface remains readable on narrow screens without a translation API, new front-end framework, or runtime dependency.
 
 ## FR-CITATION-001 · 逐字段原文定位
@@ -967,7 +971,7 @@ Assume users and developers work in English. The application, setup flow, launch
 新增独立核验状态，与项目要求状态和人工批准状态分离。
 
 - Programmatic checks validate citation bounds, text fragments, and numeric risk; the small model verifies at most four fields per request and can combine fields from records with the same exact evidence scope.
-- Semantic verification uses the existing cheap model's lowest available reasoning mode and charges reasoning tokens to the user-selected project budget.
+- Semantic verification uses the configured model's lowest available reasoning mode and records provider usage without a CIRP monetary gate.
 - 无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。
 - 不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。
 
@@ -1000,7 +1004,7 @@ JSON和Excel以固定英文只输出可直接审核的材料/设备与可执行�
 A user may ask an English question about a selected completed analysis run and receive a concise answer based only on bounded, project-scoped evidence or the deterministic complete-run workflow index, with exact source quotations immediately after evidence-based model answers.
 
 - Retrieval is limited to immutable evidence from the explicitly selected project and PARTIAL or COMPLETED run; a run from another project is rejected.
-- A live or local model call occurs only after the user submits a question, uses the existing project budget ledger, lowest-cost configured model and no automatic retry, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.
+- A live or local model call occurs only after the user submits a question, uses the configured model with no automatic retry, records provider usage, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.
 - An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.
 - Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.
 - The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.
@@ -1281,3 +1285,13 @@ Every project-question response should expose and display whether it came from t
 - Every returned project-question result carries one stable answer_basis value. Existing deterministic paths retain WORKFLOW_INDEX or LOCAL_PROJECT_EVIDENCE; successful provider or recovered-cache answers use MODEL_PROJECT_EVIDENCE; Mock retrieval uses RETRIEVAL_ONLY; and an empty retrieval uses NO_MATCHING_EVIDENCE. A workflow-index conflict stays WORKFLOW_INDEX.
 - The browser renders an English answer-path badge before the answer text. Deterministic, retrieval-only and no-evidence badges state that no model call occurred; a fresh model result states that a model call was used; and a recovered settled response states that no new model call occurred by combining MODEL_PROJECT_EVIDENCE with the existing cached flag.
 - The provenance label is response metadata only. It adds no retrieval, model dispatch, retry, budget action, parser, dependency or second index; it does not claim that a model answer is correct beyond the existing exact-citation validation.
+
+## FR-MODEL-BUDGET-REMOVAL-001 · Run without a CIRP project budget module
+
+优先级：P0；状态：implemented
+
+CIRP model dispatch is not gated by a project budget, configured price, exchange rate, or cumulative cost total; provider-account spending is managed outside CIRP.
+
+- Project creation, project settings, model settings, run status, analysis results and exports expose no project budget, rate input, price confirmation, monetary cost total or budget update endpoint.
+- A legacy budget account or old budget-frozen state cannot block a new eligible model call. Legacy tables and rows remain inert and readable for upgrade compatibility; existing project files, reviews, analysis records and model-call history are not deleted or reset.
+- Provider authorization, exact task idempotency, unresolved-call blocking, explicit reconciliation, no automatic retry, request-size limits, serial provider pacing and the 24-hour run boundary remain independent call-safety controls.

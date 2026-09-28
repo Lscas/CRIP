@@ -30,18 +30,18 @@
 
 演示步骤：新建项目 → 上传 `examples/demo/01_original.txt` 和 `02_revision.txt` → 分析 → 两条材料、两条检查/报告、一条版本差异 → 查看来源 → 审核 → JSON/XLSX 导出。运行状态 PARTIAL 是能力边界，不是错误地声明全项目已完成。
 
-使用真实模型时，在本机按 `docs/PROVIDER_INTEGRATION.md` 设置 `.env` 的API地址、密钥、实际单价、`CIRP_PRICES_CONFIRMED` 和 `CIRP_LIVE_API_ENABLED`，然后执行：
+使用真实模型时，优先在主网页 **Settings** 中选择供应商、模型、端点与密钥，并由同一页面安全重启。也可按 `docs/PROVIDER_INTEGRATION.md` 配置 `.env` 的 API 地址、密钥和 `CIRP_LIVE_API_ENABLED`，然后执行：
 
 ```powershell
 .\start-local.cmd --live
 ```
 
-`--live` 只开启本机入口。配置不完整则拒绝启动，不打印密钥；启动本身不向模型发送请求，点击分析后才可能发生费用。DeepSeek使用非思考，Gemini 3.6 Flash使用最低minimal推理；短输出和每项目用户选择的累计预算闸门不变（新项目默认300CNY）。当前选择DeepSeek V4 Flash：Windows优先运行`start-deepseek-live.ps1`；首次运行由仅限127.0.0.1的页面输入并确认预算。选择保存后，Key只写入`.local/credentials/`下的Windows DPAPI当前用户密文，后续自动启动；不写明文`.env`、网址、命令行或日志。运行`scripts/deepseek_local_setup.py --replace-key`可更换，`--forget-key`可删除。Gemini对应入口仍为`start-gemini-live.ps1`和`scripts/gemini_local_setup.py`。
+`--live` 只开启本机入口。配置不完整则拒绝启动，不打印密钥；启动本身不向模型发送请求，点击分析或提交项目问题后才可能发生供应商费用。DeepSeek使用非思考，Gemini 3.6 Flash使用最低minimal推理。CIRP 不再设项目预算、单价或费用闸门，用户在供应商账户管理用量与费用。当前选择DeepSeek V4 Flash：Windows优先运行`start-deepseek-live.ps1`；首次运行由仅限127.0.0.1的页面输入并确认数据传输。选择保存后，Key只写入`.local/credentials/`下的Windows DPAPI当前用户密文，后续自动启动；不写明文`.env`、网址、命令行或日志。运行`scripts/deepseek_local_setup.py --replace-key`可更换，`--forget-key`可删除。Gemini对应入口仍为`start-gemini-live.ps1`和`scripts/gemini_local_setup.py`。
 
 The secure live setup now checks the target application port before it loads, saves, forgets or forwards a credential. If a Mock or other CIRP process already owns that port, the form returns a visible conflict and leaves both the process and credential store unchanged. Stop the existing CIRP service and resubmit; the setup page no longer reports that a live child is starting when the target port cannot be used.
 
 ## 数据和更新
-默认数据在当前工程 `.local/`：原文件、SQLite数据库、审核、预算、任务进度。不要靠删除SQLite重置费用。升级前正常停止服务，备份整个数据目录，不只复制数据库主文件；解压新代码不能覆盖或删除 `.local` 和用户自己的 `.env`。
+默认数据在当前工程 `.local/`：原文件、SQLite数据库、审核、模型调用记录和任务进度。升级前正常停止服务，备份整个数据目录，不只复制数据库主文件；解压新代码不能覆盖或删除 `.local` 和用户自己的 `.env`。旧数据库中的历史预算表仅作升级兼容，不再参与运行。
 
 显式指定稳定数据目录：
 ```powershell

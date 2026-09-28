@@ -5,16 +5,14 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal
 from pathlib import Path
-from threading import RLock
 from typing import Any, Iterable, Mapping
 
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[1]
-MONEY = Decimal('0.000001')
 
 
 def load_json(path: str) -> Any:
@@ -222,77 +220,6 @@ def make_chat_payload(route: Route, system_prompt: str, user_content: Any, max_t
     if route.thinking == 'enabled':
         payload['reasoning_effort'] = cfg.get('reasoning_effort', 'low')
     return payload
-
-
-def quote_tokens(input_tokens: int, output_tokens_total: int, input_rate: Decimal, output_rate: Decimal,
-                 *, safety: Decimal = Decimal('1.10')) -> Decimal:
-    if min(input_tokens, output_tokens_total) < 0 or min(input_rate, output_rate) < 0 or safety < 1:
-        raise ValueError('非法计费参数')
-    amount = (Decimal(input_tokens) * input_rate + Decimal(output_tokens_total) * output_rate) / Decimal(1_000_000)
-    return (amount * safety).quantize(MONEY, rounding=ROUND_CEILING)
-
-
-class BudgetBlocked(RuntimeError):
-    pass
-
-
-class BudgetLedger:
-    """单进程内存模型；生产必须替换为持久化事务预留，不跨进程保证。"""
-    def __init__(self, limit: Decimal = Decimal('300')):
-        if limit <= 0:
-            raise ValueError('预算须大于零')
-        self.limit = limit
-        self.spent = Decimal('0')
-        self.reservations: dict[str, Decimal] = {}
-        self.settled: dict[str, Decimal] = {}
-        self.frozen = False
-        self._lock = RLock()
-
-    @property
-    def outstanding(self) -> Decimal:
-        with self._lock:
-            return sum(self.reservations.values(), Decimal('0'))
-
-    def reserve(self, attempt_id: str, upper_bound: Decimal) -> None:
-        if not attempt_id or upper_bound <= 0:
-            raise ValueError('预留ID和费用必须有效')
-        with self._lock:
-            if attempt_id in self.settled:
-                raise ValueError('已结算的请求ID不能重用')
-            if attempt_id in self.reservations:
-                if self.reservations[attempt_id] == upper_bound:
-                    return  # 相同派发意图幂等；真正重试必须新的attempt ID。
-                raise ValueError('同一预留ID金额发生变化')
-            if self.frozen or self.spent + self.outstanding + upper_bound > self.limit:
-                raise BudgetBlocked('停止新付费调用，保留未处理Coverage')
-            self.reservations[attempt_id] = upper_bound
-
-    def settle(self, attempt_id: str, actual: Decimal) -> None:
-        if actual < 0:
-            raise ValueError('实际费用不能为负')
-        with self._lock:
-            if attempt_id in self.settled:
-                if self.settled[attempt_id] == actual:
-                    return
-                raise ValueError('重复结算金额不一致')
-            if attempt_id not in self.reservations:
-                raise ValueError('没有对应预留')
-            expected = self.reservations.pop(attempt_id)
-            self.spent += actual
-            self.settled[attempt_id] = actual
-            if actual > expected or self.spent + self.outstanding > self.limit:
-                self.frozen = True  # 记录真实费用，不能通过拒记账隐藏超费。
-
-    def mark_unknown(self, attempt_id: str) -> None:
-        with self._lock:
-            if attempt_id not in self.reservations:
-                raise ValueError('不存在的待对账请求')
-            # 未知计费保持全额预留，不释放。
-
-    def release_unbilled(self, attempt_id: str, *, confirmed_unbilled: bool) -> None:
-        if not confirmed_unbilled:
-            raise ValueError('没有确定未计费依据')
-        self.settle(attempt_id, Decimal('0'))
 
 
 CACHE_REQUIRED = {'tenant_id', 'project_id', 'input_snapshot_id', 'input_hash', 'crop_hashes',

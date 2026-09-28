@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
 import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -43,22 +42,20 @@ class ProviderProfile:
     display_name: str
     base_url: str
     model: str
-    input_rate: str
-    output_rate: str
     min_interval: str
     local: bool = False
 
 
 GEMINI_PROFILE = ProviderProfile(
     "gemini", "Gemini 3.6 Flash", GEMINI_BASE_URL, GEMINI_MODEL,
-    "7.50", "37.50", "15",
+    "15",
 )
 DEEPSEEK_PROFILE = ProviderProfile(
     "deepseek", "DeepSeek V4 Flash", "https://api.deepseek.com", "deepseek-v4-flash",
-    "4.40", "13.20", "1",
+    "1",
 )
 CUSTOM_PROFILE = ProviderProfile(
-    "custom", "Custom OpenAI-compatible model", "", "", "", "", "0",
+    "custom", "Custom OpenAI-compatible model", "", "", "0",
 )
 PROFILES = {profile.provider: profile for profile in (GEMINI_PROFILE, DEEPSEEK_PROFILE, CUSTOM_PROFILE)}
 
@@ -75,9 +72,6 @@ def live_child_env(api_key: str, profile: ProviderProfile = GEMINI_PROFILE) -> d
             "CIRP_CHEAP_MODEL": profile.model,
             "CIRP_VISION_ENABLED": "true" if profile.provider == "deepseek" else "false",
             "CIRP_VISION_MODEL": "deepseek-v4-flash-vision-exp",
-            "CIRP_PRICES_CONFIRMED": "true",
-            "CIRP_INPUT_CNY_PER_MILLION": profile.input_rate,
-            "CIRP_OUTPUT_CNY_PER_MILLION": profile.output_rate,
             "CIRP_INPUT_LIMIT_BYTES": "32000",
             "CIRP_OUTPUT_LIMIT_TOKENS": "8000",
             "CIRP_MIN_REQUEST_INTERVAL_SECONDS": profile.min_interval,
@@ -106,23 +100,17 @@ def loopback_port_in_use(port: int) -> bool:
 def custom_profile(fields: dict[str, list[str]], api_key: str) -> ProviderProfile:
     base_url=fields.get("base_url", [""])[0].strip().rstrip("/")
     model=fields.get("model", [""])[0].strip()
-    try:
-        input_rate=Decimal(fields.get("input_rate", [""])[0])
-        output_rate=Decimal(fields.get("output_rate", [""])[0])
-    except (InvalidOperation, ValueError):
-        raise ValueError("Enter valid CNY rates.") from None
     provider="custom-"+hashlib.sha256((base_url+"\0"+model).encode()).hexdigest()[:16]
     settings=Settings(
         ROOT / ".local", provider=provider, api_base_url=base_url,
         api_key=api_key or "saved-key-validation-placeholder",
-        cheap_model=model, live_enabled=True, prices_confirmed=True,
-        input_rate=input_rate, output_rate=output_rate, start_worker=False,
+        cheap_model=model, live_enabled=True, start_worker=False,
     )
     errors=settings.live_errors()
     if errors: raise ValueError(errors[0])
     return ProviderProfile(
         provider, "Custom OpenAI-compatible model", base_url, model,
-        str(input_rate), str(output_rate), "0", settings.is_local_model(),
+        "0", settings.is_local_model(),
     )
 
 
@@ -134,19 +122,17 @@ def page(
     checked = " checked" if remember else ""
     custom = profile.provider == "custom"
     configuration = "" if not custom else """
-  <p>Choose any OpenAI-compatible text endpoint. After Analyze is clicked, CIRP sends parsed text to that endpoint; this generic route does not send page images. For a local model, use a loopback base URL such as <code>http://127.0.0.1:11434/v1</code>; no API key or token price is required. Remote endpoints must use HTTPS, an API key, and positive CNY-per-million-token rates.</p>
+  <p>Choose any OpenAI-compatible text endpoint. After Analyze is clicked, CIRP sends parsed text to that endpoint; this generic route does not send page images. For a local model, use a loopback base URL such as <code>http://127.0.0.1:11434/v1</code>; no API key is required. Remote endpoints must use HTTPS and an API key.</p>
   <p><label>API base URL<br><input name=base_url required size=72 placeholder="http://127.0.0.1:11434/v1"></label></p>
   <p><label>Model name<br><input name=model required size=48 placeholder="qwen3:8b"></label></p>
-  <p><label>Input CNY per million tokens<br><input name=input_rate required inputmode=decimal value=0></label></p>
-  <p><label>Output CNY per million tokens<br><input name=output_rate required inputmode=decimal value=0></label></p>
 """
     remember_control = (f'<p><label><input type=checkbox name=remember value=yes{checked}> '
                         + ('Encrypt this key for this endpoint/model, or reuse its saved key when the key field is blank' if custom else
                            'Encrypt and save for the current user with Windows DPAPI for future automatic startup')
                         + '</label></p>')
     key_required = "" if custom else " required"
-    approval_text = ("I confirm the configured endpoint, model, rates, data transfer, and possible API charges after Start analysis is clicked" if custom else
-                     "I confirm the provider rates and authorize the stated text/image transfer and API charges up to each project's user-selected budget limit")
+    approval_text = ("I confirm the configured endpoint, model, data transfer, and possible provider charges after Start analysis is clicked" if custom else
+                     "I authorize the stated text/image transfer and possible provider charges after Start analysis is clicked")
     return f"""<!doctype html>
 <html lang=en><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
@@ -154,8 +140,7 @@ def page(
   <h1>Secure CIRP {profile.display_name} startup</h1>
   <p>This tool listens only on local address 127.0.0.1 and does not write the key to a URL, application log, or plaintext .env. Do not let the browser save the key.</p>
   {'' if custom else '<p>When Save is selected, the key is written only to a Windows DPAPI current-user encrypted file. Other Windows users and copies moved to another computer cannot decrypt it directly.</p>'}
-  {'' if custom else f'<p>The budget ledger uses conservative upper-bound rates: input ¥{profile.input_rate}/million tokens and output ¥{profile.output_rate}/million tokens. Each project keeps its user-selected cumulative limit.</p>'}
-  {"<p><strong>Data disclosure:</strong> After Start analysis is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API. Page images and text calls share the same cumulative budget gate.</p>" if profile.provider == "deepseek" else ""}
+  {"<p><strong>Data disclosure:</strong> After Start analysis is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API.</p>" if profile.provider == "deepseek" else ""}
 {notice}
 <form method=post action=/start autocomplete=off>
   <input type=hidden name=csrf value="{csrf_token}">

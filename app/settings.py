@@ -5,7 +5,6 @@ import re
 import math
 import ipaddress
 from dataclasses import dataclass, field
-from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 from dotenv import load_dotenv
@@ -38,11 +37,8 @@ class Settings:
     vision_enabled: bool = False
     vision_model: str = DEEPSEEK_VISION_MODEL
     live_enabled: bool = False
-    prices_confirmed: bool = False
-    input_rate: Decimal = Decimal('0')
-    output_rate: Decimal = Decimal('0')
     # Conservative UTF-8 byte envelope, not a claim about exact provider tokens.
-    input_limit: int = 32000
+    input_limit: int = 64000
     # Text extraction may use 8k; vision and verification retain lower task caps.
     output_limit: int = 8000
     min_request_interval_seconds: float = 0
@@ -88,10 +84,7 @@ class Settings:
             vision_enabled=flag('CIRP_VISION_ENABLED'),
             vision_model=os.getenv('CIRP_VISION_MODEL', DEEPSEEK_VISION_MODEL),
             live_enabled=flag('CIRP_LIVE_API_ENABLED'),
-            prices_confirmed=flag('CIRP_PRICES_CONFIRMED'),
-            input_rate=Decimal(os.getenv('CIRP_INPUT_CNY_PER_MILLION', '0')),
-            output_rate=Decimal(os.getenv('CIRP_OUTPUT_CNY_PER_MILLION', '0')),
-            input_limit=int(os.getenv('CIRP_INPUT_LIMIT_BYTES','32000')),
+            input_limit=int(os.getenv('CIRP_INPUT_LIMIT_BYTES','64000')),
             output_limit=int(os.getenv('CIRP_OUTPUT_LIMIT_TOKENS','8000')),
             min_request_interval_seconds=float(os.getenv(
                 'CIRP_MIN_REQUEST_INTERVAL_SECONDS','15' if provider=='gemini' else '0')),
@@ -115,10 +108,6 @@ class Settings:
         if not live_provider(self.provider): errors.append('CIRP_PROVIDER must be deepseek, gemini, or a valid custom profile')
         if not self.live_enabled: errors.append('Live API switch is disabled')
         if not self.api_key and not self.is_local_model(): errors.append('API key is not configured')
-        if not self.prices_confirmed: errors.append('Actual API prices have not been confirmed')
-        for name, rate in [('Input', self.input_rate), ('Output', self.output_rate)]:
-            if not rate.is_finite() or rate < 0 or (not self.is_local_model() and rate == 0):
-                errors.append(f'{name} price must be a finite non-negative number and positive for remote APIs')
         u = urlsplit(self.api_base_url)
         if (not u.hostname or u.query or u.fragment or u.username is not None or u.password is not None
                 or (u.scheme != 'https' and not (self.is_local_model() and u.scheme == 'http'))):
@@ -139,8 +128,8 @@ class Settings:
                 errors.append('This release requires DeepSeek model deepseek-v4-flash')
             if self.vision_enabled and self.vision_model != DEEPSEEK_VISION_MODEL:
                 errors.append('This release requires DeepSeek vision model deepseek-v4-flash-vision-exp')
-        if type(self.input_limit) is not int or not 1 <= self.input_limit <= 32000:
-            errors.append('Text-input byte limit must be between 1 and 32000')
+        if type(self.input_limit) is not int or not 1 <= self.input_limit <= 64000:
+            errors.append('Text-input byte limit must be between 1 and 64000')
         if type(self.output_limit) is not int or not 1 <= self.output_limit <= 8000:
             errors.append('Text-extraction output limit must be between 1 and 8000')
         if not math.isfinite(self.min_request_interval_seconds) or not 0 <= self.min_request_interval_seconds <= 300:
@@ -169,7 +158,7 @@ class Settings:
                      'Local model mode' if self.is_local_model() else 'Live API mode'),
             'model': self.cheap_model if self.provider != 'mock' else 'mock-no-network',
             'live_ready': not self.live_errors(), 'live_blockers': self.live_errors(),
-            'budget_cny': '300.00', 'deadline_hours': 24, 'max_active_projects': 1,
+            'deadline_hours': 24, 'max_active_projects': 1,
             'upload_capacity_bytes': self.project_bytes, 'upload_chunk_bytes': self.chunk_bytes,
             'local_single_user': not self.remote_enabled, 'remote_preview': self.remote_enabled,
             'thinking': self.inference_mode(),
@@ -177,6 +166,7 @@ class Settings:
             'request_limits': {
                 'text_input_utf8_bytes': min(32000,self.input_limit),
                 'text_extraction_output_tokens': min(8000,self.output_limit),
+                'project_answer_input_utf8_bytes': min(64000,self.input_limit),
                 'vision_input_utf8_bytes': min(6000,self.input_limit),
                 'vision_output_tokens': min(2000,self.output_limit),
                 'verification_input_utf8_bytes': min(6000,self.input_limit),
@@ -190,8 +180,7 @@ class Settings:
                 'docx': 'Body text and tables; embedded-image vision remains separate',
                 'images': 'Local OCR and page vision' if vision_ready else 'Local OCR; vision route is disabled',
                 'ocr': {'ready': ocr_ready, 'engine': 'RapidOCR/ONNX running locally' if ocr_ready else None},
-                'vision': {'ready': vision_ready, 'model': self.vision_model if vision_ready else None,
-                           'billing': 'Shares the project-wide cumulative ¥300 model-cost gate'},
+                'vision': {'ready': vision_ready, 'model': self.vision_model if vision_ready else None},
                 'dxf': {'ready': dxf_ready, 'level': 'OBJECT_METADATA' if dxf_ready else 'UNAVAILABLE'},
                 'dwg': {'ready': dwg_ready, 'level': 'OBJECT_METADATA' if dwg_ready else 'UNAVAILABLE',
                         'converter':converter[0] if converter else None,

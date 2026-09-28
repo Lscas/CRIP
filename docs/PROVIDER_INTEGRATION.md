@@ -2,7 +2,7 @@
 
 ## In-app model settings
 
-Local users can use the dedicated **Settings** section on the main application page, reached from the sidebar or the **Model API settings** header shortcut, to choose Mock, DeepSeek, Gemini, a custom OpenAI-compatible HTTPS API, or a loopback local model. This is not a modal or separate setup server. The existing gateway and budget ledger are reused; this is not a second dispatch path. Official provider choices keep their fixed endpoint/model restrictions. A custom remote endpoint requires HTTPS, a key, and positive confirmed CNY rates; only `localhost` or a literal loopback address may use HTTP, omit the key, and use zero rates. Generic custom endpoints remain text-only and receive no DeepSeek/Gemini-specific request parameters.
+Local users can use the dedicated **Settings** section on the main application page, reached from the sidebar or the **Model API settings** header shortcut, to choose Mock, DeepSeek, Gemini, a custom OpenAI-compatible HTTPS API, or a loopback local model. This is not a modal or separate setup server. All model HTTP still uses the existing gateway; this is not a second dispatch path. Official provider choices keep their fixed endpoint/model restrictions. A custom remote endpoint requires HTTPS and a key; only `localhost` or a literal loopback address may use HTTP and omit the key. Generic custom endpoints remain text-only and receive no DeepSeek/Gemini-specific request parameters. CIRP has no project budget, price, rate, or monetary dispatch gate.
 
 Applying settings performs no model call. It is blocked by an active analysis, active semantic verification, or any unresolved model call. The local single-user service then restarts on the same port. Keys are never returned to the browser after submission and are persisted only when the user selects Windows current-user DPAPI storage. The non-secret active profile permits the normal launcher to reuse the selection; `--mock` explicitly bypasses it.
 **规格版本：** 0.2.6
@@ -18,16 +18,16 @@ Interactive OAuth, automatic refresh, provider-side revocation, recursive bulk i
 ## DeepSeek V4 Flash（当前选择）
 Windows运行`start-deepseek-live.ps1`；需要网页输入时运行`scripts/deepseek_local_setup.py`。两种入口都固定官方基址`https://api.deepseek.com`与模型`deepseek-v4-flash`，显式发送`thinking={"type":"disabled"}`。用户选择保存后，Key使用Windows DPAPI当前用户加密文件保存并在后续启动时自动加载；不写明文`.env`、网址、命令行、日志或Git。可用`--replace-key`强制重新输入、`--forget-key`删除。启动本身不调用API，只有用户点击“开始分析”后才可能计费。
 
-DeepSeek入口同时启用精确视觉模型`deepseek-v4-flash-vision-exp`。PDF/图片先在本机转为最长边2048的PNG，通过data URL发送；原文件不改。每页任务和图片哈希进入缓存键，视觉与文本共用项目累计预算、未决调用闸门、串行间隔、usage结算及不自动重试规则。视觉输出必须通过`vision-result.schema.json`，且强制待人工审核；只描述可见内容，不执行文档中的指令，不允许模型替代CAD几何量算。官方说明单图最多384图像token，预算仍按缓存未命中峰值费率预留。
+DeepSeek入口同时启用精确视觉模型`deepseek-v4-flash-vision-exp`。PDF/图片先在本机转为最长边2048的PNG，通过data URL发送；原文件不改。每页任务和图片哈希进入缓存键，视觉与文本共用未决调用闸门、串行间隔、usage记录及不自动重试规则。视觉输出必须通过`vision-result.schema.json`，且强制待人工审核；只描述可见内容，不执行文档中的指令，不允许模型替代CAD几何量算。
 
-2026-09-11核实的官方峰值价为缓存未命中输入$0.44/百万token、缓存命中$0.014/百万token、输出$1.32/百万token。安全启动器不预先假定缓存命中，并用固定10 CNY/USD安全倍数预留输入¥4.40、输出¥13.20；这不是DeepSeek报价或实时汇率，实际扣费、赠送余额与税费以用户账户为准。DeepSeek入口使用1秒最小请求开始间隔作为本机稳定性缓冲，仍不自动重试失败请求。
+DeepSeek入口使用1秒最小请求开始间隔作为本机稳定性缓冲，仍不自动重试失败请求。CIRP 不保存供应商单价或项目费用上限；实际扣费、赠送余额与税费以用户的 DeepSeek 账户为准。
 
 ## Google Gemini 3.6 Flash（推荐用安全启动器）
-Windows运行`start-gemini-live.ps1`。首次使用时在仅绑定127.0.0.1的密码页确认保守人民币计费上界并输入Key；可选择由Windows DPAPI为当前用户加密保存，后续自动加载。Key不写明文`.env`、网址、命令行、日志或Git；启动子进程后设置页关闭。启动服务本身不调用API，只有用户点击“开始分析”后才可能计费。
+Windows运行`start-gemini-live.ps1`。首次使用时在仅绑定127.0.0.1的密码页确认数据传输并输入Key；可选择由Windows DPAPI为当前用户加密保存，后续自动加载。Key不写明文`.env`、网址、命令行、日志或Git；启动子进程后设置页关闭。启动服务本身不调用API，只有用户点击“开始分析”或提交项目问题后才可能计费。
 
 当前适配固定Google官方OpenAI兼容基址`https://generativelanguage.googleapis.com/v1beta/openai`和模型`gemini-3.6-flash`，避免把Google密钥发送到其他主机。Gemini 3不能关闭推理，因此请求显式使用`reasoning_effort=minimal`，不请求或保存思维摘要。文本联合抽取`max_tokens<=8000`，其中包含可见输出和内部推理生成量；usage结算在`total_tokens-prompt_tokens`大于`completion_tokens`时采用较大值，避免漏记隐藏推理。
 
-官方Standard价格截至2026-12-31为输入$0.75/百万token、输出$3.75/百万token（输出包含thinking）。安全启动器用10 CNY/USD的固定上界做预算预留，即输入¥7.50、输出¥37.50；这是防止低估的内部上界，不是报价或实时汇率。账户实际是否免费、税费和结算币种仍以Google账单为准。
+CIRP 不保存 Gemini 单价、汇率或项目费用上限。账户实际是否免费、税费和结算币种以 Google 账单为准。
 
 ## DeepSeek手动配置（不推荐保存Key）
 在本机复制.env.example为.env，按实际接口填写：
@@ -37,11 +37,8 @@ CIRP_LIVE_API_ENABLED=true
 CIRP_API_BASE_URL=https://api.deepseek.com
 CIRP_API_KEY=<只在本机填写>
 CIRP_CHEAP_MODEL=deepseek-v4-flash
-CIRP_PRICES_CONFIRMED=true
-CIRP_INPUT_CNY_PER_MILLION=<实际接口输入最高适用单价>
-CIRP_OUTPUT_CNY_PER_MILLION=<实际接口输出最高适用单价>
 ```
-不要把示意占位符直接启用。本版DeepSeek live只接受精确官方基址`https://api.deepseek.com`和模型`deepseek-v4-flash`，Gemini也只接受文档中的精确官方基址与模型；程序自行追加`/chat/completions`。当前不支持中转API，避免把供应商Key发送到其他主机。价格未确认、Key为空或开关关闭时，启动真实分析会暂停而非偷偷切换服务。
+不要把示意占位符直接启用。本版DeepSeek live只接受精确官方基址`https://api.deepseek.com`和模型`deepseek-v4-flash`，Gemini也只接受文档中的精确官方基址与模型；程序自行追加`/chat/completions`。当前不支持中转API，避免把供应商Key发送到其他主机。Key为空或live开关关闭时，启动真实分析会暂停而非偷偷切换服务。
 
 `python scripts/doctor.py`仅离线检查，不调用供应商。用户启动真实分析代表该次请求可能计费；先用小授权样例核实接口，不先上传整个10GB项目。应用没有自动读取供应商账单的能力；未知调用必须由用户先在供应商后台核实，再从本机网页逐条登记。
 

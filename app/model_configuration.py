@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import os
@@ -15,21 +14,17 @@ from app.settings import (DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, DEEPSEEK_VISION_MOD
                           GEMINI_BASE_URL, GEMINI_MODEL, Settings)
 
 
-PROFILE_VERSION = 1
+PROFILE_VERSION = 2
 PROFILE_FILE = "active-model-profile.json"
 DEFAULTS = {
     "deepseek": {
         "api_base_url": DEEPSEEK_BASE_URL,
         "model": DEEPSEEK_MODEL,
-        "input_rate": Decimal("4.40"),
-        "output_rate": Decimal("13.20"),
         "min_interval": 1.0,
     },
     "gemini": {
         "api_base_url": GEMINI_BASE_URL,
         "model": GEMINI_MODEL,
-        "input_rate": Decimal("7.50"),
-        "output_rate": Decimal("37.50"),
         "min_interval": 15.0,
     },
 }
@@ -48,16 +43,6 @@ def provider_kind(settings: Settings) -> str:
     return settings.provider if settings.provider in ("deepseek", "gemini", "mock") else "custom"
 
 
-def _decimal(value: Decimal | str | int | float, label: str) -> Decimal:
-    try:
-        result = Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        raise ValueError(f"Enter a valid {label} rate.") from None
-    if not result.is_finite():
-        raise ValueError(f"Enter a finite {label} rate.")
-    return result
-
-
 def _valid_key(value: str) -> bool:
     try:
         encoded = value.encode("ascii")
@@ -73,16 +58,13 @@ def configured_settings(
     api_base_url: str = "",
     model: str = "",
     api_key: str = "",
-    input_rate: Decimal | str = "0",
-    output_rate: Decimal | str = "0",
 ) -> Settings:
     """Build one validated in-memory configuration; no files or HTTP are touched."""
     kind = provider.strip().lower()
     if kind == "mock":
         return replace(
             current, provider="mock", api_key="", live_enabled=False,
-            prices_confirmed=False, vision_enabled=False,
-            input_rate=Decimal("0"), output_rate=Decimal("0"),
+            vision_enabled=False,
             min_request_interval_seconds=0,
         )
     if kind not in ("deepseek", "gemini", "custom"):
@@ -105,9 +87,7 @@ def configured_settings(
         api_key=api_key.strip(), cheap_model=selected_model,
         vision_enabled=kind == "deepseek",
         vision_model=DEEPSEEK_VISION_MODEL,
-        live_enabled=True, prices_confirmed=True,
-        input_rate=_decimal(input_rate, "input"),
-        output_rate=_decimal(output_rate, "output"),
+        live_enabled=True,
         min_request_interval_seconds=interval,
     )
     key = local_candidate.api_key
@@ -133,8 +113,6 @@ def public_configuration(settings: Settings) -> dict:
         "provider_identity": settings.provider,
         "api_base_url": "" if kind == "mock" else settings.api_base_url,
         "model": "" if kind == "mock" else settings.cheap_model,
-        "input_rate": str(settings.input_rate),
-        "output_rate": str(settings.output_rate),
         "local_model": settings.is_local_model(),
         "saved_key": saved,
         "saved_profile": profile_path(settings.data_dir).exists(),
@@ -176,8 +154,6 @@ def save_active_configuration(settings: Settings) -> None:
         "provider": provider_kind(settings),
         "api_base_url": settings.api_base_url,
         "model": settings.cheap_model,
-        "input_rate": str(settings.input_rate),
-        "output_rate": str(settings.output_rate),
     }
     _atomic_json(profile_path(settings.data_dir), value)
 
@@ -201,16 +177,17 @@ def load_active_configuration(current: Settings) -> Settings | None:
         value = json.loads(raw)
     except ValueError as exc:
         raise LocalCredentialError("The saved model profile is invalid.") from exc
-    expected = {"version", "provider", "api_base_url", "model", "input_rate", "output_rate"}
-    if not isinstance(value, dict) or set(value) != expected or value.get("version") != PROFILE_VERSION:
+    current_fields = {"version", "provider", "api_base_url", "model"}
+    legacy_fields = current_fields | {"input_rate", "output_rate"}
+    if (not isinstance(value, dict) or value.get("version") not in (1, PROFILE_VERSION)
+            or set(value) not in (current_fields, legacy_fields)):
         raise LocalCredentialError("The saved model profile is invalid.")
-    if any(not isinstance(value.get(key), str) for key in expected - {"version"}):
+    if any(not isinstance(value.get(key), str) for key in current_fields - {"version"}):
         raise LocalCredentialError("The saved model profile is invalid.")
     try:
         return configured_settings(
             current, provider=value["provider"], api_base_url=value["api_base_url"],
-            model=value["model"], input_rate=value["input_rate"],
-            output_rate=value["output_rate"],
+            model=value["model"],
         )
     except ValueError as exc:
         raise LocalCredentialError("The saved model profile is not usable: " + str(exc)) from exc

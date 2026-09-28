@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from app.db import Database,DomainError,BudgetError,dumps,now,uid,paid_task_family
+from app.db import CallSafetyError,Database,DomainError,dumps,now,uid,paid_task_family
 from app.settings import Settings,ROOT,live_provider
 from app.security import environment_without_secrets
 from app.uploads import Uploads
@@ -183,7 +183,7 @@ class Runner:
                 if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not resumable_failure:
                     raise DomainError('当前任务不可恢复；已结束任务需新建分析',409)
                 if r['provider'] != self.s.provider:raise DomainError('原运行Provider与当前服务不一致，请新建分析',409)
-                if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行；项目预算不重置',409)
+                if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行',409)
                 if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('已有活跃任务',409)
                 if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，请结束后再恢复分析',409)
                 if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(r['project_id'],)).fetchone():raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
@@ -315,8 +315,8 @@ class Runner:
                 ('PARTIAL','本轮基线任务已结束',
                  '已完成可用文字、本机OCR、已启用页面视觉与可用CAD对象处理；PDF原始矢量审计不等于材料净量，原生DWG取决于本机合法转换器。复杂选项与跨专业关联仍待完善。'
                  +('模拟模式仅验证流程，不代表真实施工分析。' if run['provider']=='mock' else '真实API结果尚需人工核验。'),rid))
-        except BudgetError as exc:
-            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_BUDGET',str(exc),rid));self.publish(run)
+        except CallSafetyError as exc:
+            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(exc),rid));self.publish(run)
         except ProviderPaused as exc:
             self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(exc),rid));self.publish(run)
         except Exception as exc:

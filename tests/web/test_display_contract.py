@@ -56,7 +56,7 @@ def test_original_actions_and_input_constraints_remain_present():
                 'filter', 'run-select', 'export-json', 'export-xlsx', 'drawer', 'project-form',
                 'reconciliation-panel', 'unresolved-calls', 'reconcile-dialog', 'reconcile-form',
                 'reconcile-resolution', 'reconcile-amount', 'reconcile-confirm', 'local-workers',
-                'budget-limit', 'save-budget', 'project-budget', 'performance',
+                'performance',
                 'analysis-progress', 'progress-bar', 'progress-summary')
     assert all(id_ in byid for id_ in expected)
     assert byid['project-input'][1]['maxlength'] == '150'
@@ -67,7 +67,7 @@ def test_original_actions_and_input_constraints_remain_present():
     assert byid['reconcile-note'][1]['maxlength'] == '1000'
     assert byid['resume'][1]['data-i18n-title'] == 'reconcile.resumePolicy'
     assert byid['local-workers'][0] == 'select'
-    assert byid['budget-limit'][1]['max'] == byid['project-budget'][1]['max'] == '1000000'
+    assert not {'budget-limit','save-budget','project-budget','cost'} & byid.keys()
     assert byid['analysis-progress'][1]['role'] == 'progressbar'
     assert byid['analysis-progress'][1]['aria-valuemax'] == '100'
 
@@ -77,7 +77,7 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
     byid={attrs['id']:(tag,attrs) for tag,attrs in elements if 'id' in attrs}
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')
     for item in ('model-settings-open','model-settings','model-settings-form','model-provider',
-                 'model-base-url','model-name','model-input-rate','model-output-rate','model-api-key',
+                 'model-base-url','model-name','model-api-key',
                  'model-remember','model-approved','apply-model-settings'):
         assert item in byid
     assert byid['model-settings'][0]=='section'
@@ -251,7 +251,7 @@ def test_live_vision_has_explicit_full_page_data_transfer_disclosure():
     html=(ROOT/'web/index.html').read_text(encoding='utf-8')
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')
     translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
-    assert 'id="vision-disclosure"' in html and '整页 PNG 派生图和解析文本发送到 DeepSeek 官方 API' in html
+    assert 'id="vision-disclosure"' in html and 'full-page PNG derivatives and parsed text' in html
     assert "state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready" in source
     assert 'Live vision sends eligible full-page PNG derivatives' in translations
 

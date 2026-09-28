@@ -1,4 +1,4 @@
-"""唯一模型入口：短JSON、供应商最低推理、先预留、无静默重试/升级。"""
+"""Single model gateway: bounded JSON, durable call records, no silent retries."""
 from __future__ import annotations
 import hashlib
 import base64
@@ -14,7 +14,7 @@ from app.db import (Database, DomainError, MAX_PAID_TASK_CALLS, dumps,
                     paid_task_family, paid_task_key)
 from app.settings import Settings, ROOT
 from app.assemble import apply_deterministic_quality
-from contracts.runtime_rules import (EvidenceScope,evidence_references,validate_schema,quote_tokens,cache_key)
+from contracts.runtime_rules import EvidenceScope,evidence_references,validate_schema,cache_key
 
 class ProviderPaused(DomainError):pass
 class InvalidModelOutput(DomainError):pass
@@ -38,7 +38,7 @@ _VISION_FIELDS = frozenset({'page_type','sheet_id','important_visible_text','obs
 _EXTRACTION_INPUT_BYTE_CAP = 32000
 _VISION_INPUT_BYTE_CAP = 6000
 _VERIFICATION_INPUT_BYTE_CAP = 6000
-_ANSWER_INPUT_BYTE_CAP = 32000
+_ANSWER_INPUT_BYTE_CAP = 64000
 _EXTRACTION_OUTPUT_TOKEN_CAP = 8000
 _VISION_OUTPUT_TOKEN_CAP = 2000
 _VERIFICATION_OUTPUT_TOKEN_CAP = 1400
@@ -648,7 +648,7 @@ class Gateway:
         payload=self.payload(
             [{'role':'system','content':self.prompt+'\nJSON Schema:\n'+dumps(self.schema)},
              {'role':'user','content':dumps(content)}],limit)
-        # UTF-8字节数作为保守工程估计，非精确token计数；实际usage超预留会冻结预算。
+        # UTF-8 bytes are a conservative input-size estimate, not token billing.
         upper_input=sum(len(x['content'].encode('utf-8')) for x in payload['messages'])+256
         if upper_input>min(_EXTRACTION_INPUT_BYTE_CAP,self.s.input_limit):
             raise InvalidModelOutput('片段加Schema超出简单任务输入预算；需细分，未调用API')
@@ -667,10 +667,10 @@ class Gateway:
             cached,_quality_flags=apply_deterministic_quality(cached,evidences)
             self.validate(cached,evidences)
             return ModelResult(cached,None,True,self.s.provider)
-        amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
+        amount=Decimal('0')
         self._wait_and_record(run['id'])
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.cheap_model,
-                                hashlib.sha256(dumps(payload).encode()).hexdigest(),self.s.input_rate,self.s.output_rate,
+                                hashlib.sha256(dumps(payload).encode()).hexdigest(),Decimal('0'),Decimal('0'),
                                 allow_zero=self.s.is_local_model())
         body=self._request_timed(run['id'],attempt,payload,'提取')
         try:
@@ -678,14 +678,14 @@ class Gateway:
         except ValueError:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused('响应缺少usage；保持预留并暂停，需核对账单。',409)
-        actual=quote_tokens(usage['prompt_tokens'],usage['completion_tokens'],self.s.input_rate,self.s.output_rate,safety=Decimal('1'))
+        actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
         # DeepSeek忽略非思考请求时保留账务并停止；Gemini 3最低推理属于预期行为。
         if self.rejects_reasoning(body, usage):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused('供应商未遵守非思考设置；本次费用已记录，需确认接口兼容性。', 409)
-        # 缓存命中部分按已确认输入上限费率记账；不假造未知供应商折扣。
+        # A terminal provider response is recorded before publishing a cache entry.
         try:
             choice=body['choices'][0]
             if choice.get('finish_reason')!='stop':raise ValueError('响应截断或非正常完成')
@@ -704,7 +704,7 @@ class Gateway:
 
     def vision(self, run: dict, task_key: str, image_png: bytes, metadata: dict,
                *, billing_generation: int = 0) -> ModelResult:
-        """Analyze one bounded page image through the only paid gateway and budget ledger."""
+        """Analyze one bounded page image through the single audited gateway."""
         if self.s.provider != 'deepseek' or not self.s.vision_enabled:
             raise ProviderPaused('DeepSeek视觉路由未启用；未发送图像。',409)
         blockers=self.s.live_errors()
@@ -729,7 +729,7 @@ class Gateway:
         data_url='data:image/png;base64,'+base64.b64encode(image_png).decode('ascii')
         # The 59-page live drawing proved that 1,200 output tokens truncated a
         # repeatable subset of dense sheets.  Keep the normal application cap
-        # (currently 2,000) while preserving the same prepaid budget guard.
+        # (currently 2,000) while keeping the same bounded response contract.
         limit=min(_VISION_OUTPUT_TOKEN_CAP,self.s.output_limit)
         payload=self.payload([
             {'role':'system','content':instruction},
@@ -757,19 +757,18 @@ class Gateway:
             original=self.db.one('SELECT id FROM model_calls WHERE project_id=? AND task_key=? AND actual_units IS NOT NULL AND response IS NOT NULL ORDER BY created_at DESC LIMIT 1',
                                  (run['project_id'],task),False)
             return ModelResult(cached,original['id'] if original else None,True,self.s.provider)
-        amount=quote_tokens(upper_input,limit,self.s.input_rate,self.s.output_rate)
+        amount=Decimal('0')
         self._wait_and_record(run['id'])
         request_hash=hashlib.sha256(dumps([self.s.vision_model,self.vision_prompt_hash,image_hash,safe_metadata,limit]).encode()).hexdigest()
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.vision_model,
-                                request_hash,self.s.input_rate,self.s.output_rate)
+                                request_hash,Decimal('0'),Decimal('0'))
         body=self._request_timed(run['id'],attempt,payload,'视觉')
         try:
             usage=self.billed_usage(body)
         except ValueError:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused('视觉响应缺少usage；费用保持预留并暂停，需对账。',409)
-        actual=quote_tokens(usage['prompt_tokens'],usage['completion_tokens'],self.s.input_rate,self.s.output_rate,
-                            safety=Decimal('1'))
+        actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
         if self.rejects_reasoning(body,usage):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
@@ -793,7 +792,7 @@ class Gateway:
     def verify_claims(self, run: dict, fields: list[dict], evidence: dict, job_id=None) -> ModelResult:
         """Low-cost independent verification. All HTTP remains in this gateway.
 
-        Uses the same persistent CNY budget, no automatic paid retries or model upgrades.
+        Uses the same durable call log, with no automatic retries or model upgrades.
         """
         from app.verification import VerificationService
         if self.s.provider == 'mock':
@@ -834,11 +833,11 @@ class Gateway:
         self._guard_family_before_request(recent,task,generation,'该核验')
         if self.db.one('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (run['project_id'],), False):
             raise ProviderPaused('项目有未对账调用，暂停核验', 409)
-        amount = quote_tokens(upper, limit, self.s.input_rate, self.s.output_rate)
+        amount = Decimal('0')
         self._wait_and_record(run['id'])
         attempt = self.db.reserve(run['project_id'], run['id'], task, amount, self.s.cheap_model,
-                                  hashlib.sha256(dumps(payload).encode()).hexdigest(), self.s.input_rate,
-                                  self.s.output_rate, verification_job_id=job_id,
+                                  hashlib.sha256(dumps(payload).encode()).hexdigest(), Decimal('0'),
+                                  Decimal('0'), verification_job_id=job_id,
                                   allow_zero=self.s.is_local_model())
         body = self._request_timed(run['id'], attempt, payload, '核验')
         try:
@@ -846,7 +845,7 @@ class Gateway:
         except ValueError:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused('核验响应缺少usage，费用保持预留', 409)
-        actual = quote_tokens(usage['prompt_tokens'], usage['completion_tokens'], self.s.input_rate, self.s.output_rate, safety=Decimal('1'))
+        actual = Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
         choice = (body.get('choices') or [{}])[0]; message = choice.get('message', {})
         if self.rejects_reasoning(body, usage):
@@ -910,18 +909,18 @@ class Gateway:
         if recovered is not None:return recovered
         recent=self._family_calls(run['id'],task_family)
         self._guard_family_before_request(recent,task,0,'This project question')
-        amount=quote_tokens(upper,limit,self.s.input_rate,self.s.output_rate)
+        amount=Decimal('0')
         self._wait_and_record(run['id'])
         attempt=self.db.reserve(run['project_id'],run['id'],task,amount,self.s.cheap_model,
                                 hashlib.sha256(dumps(payload).encode()).hexdigest(),
-                                self.s.input_rate,self.s.output_rate,
+                                Decimal('0'),Decimal('0'),
                                 allow_zero=self.s.is_local_model(),interactive_question=True)
         body=self._request_timed(run['id'],attempt,payload,'project question')
         try:usage=self.billed_usage(body)
         except ValueError:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused('The question response omitted usage. The reservation remains pending for billing review.',409)
-        actual=quote_tokens(usage['prompt_tokens'],usage['completion_tokens'],self.s.input_rate,self.s.output_rate,safety=Decimal('1'))
+        actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
         if self.rejects_reasoning(body,usage):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,

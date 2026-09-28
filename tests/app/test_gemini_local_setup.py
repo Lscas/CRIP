@@ -36,13 +36,13 @@ def test_live_child_env_scrubs_inherited_secrets(monkeypatch):
     assert env["CIRP_VISION_ENABLED"] == "false"
 
 
-def test_deepseek_v4_flash_profile_uses_official_endpoint_and_conservative_rates():
+def test_deepseek_v4_flash_profile_uses_official_endpoint():
     env = setup.live_child_env("synthetic-new-key", setup.DEEPSEEK_PROFILE)
     assert env["CIRP_PROVIDER"] == "deepseek"
     assert env["CIRP_API_BASE_URL"] == "https://api.deepseek.com"
     assert env["CIRP_CHEAP_MODEL"] == "deepseek-v4-flash"
-    assert env["CIRP_INPUT_CNY_PER_MILLION"] == "4.40"
-    assert env["CIRP_OUTPUT_CNY_PER_MILLION"] == "13.20"
+    assert "CIRP_INPUT_CNY_PER_MILLION" not in env
+    assert "CIRP_OUTPUT_CNY_PER_MILLION" not in env
     assert env["CIRP_MIN_REQUEST_INTERVAL_SECONDS"] == "1"
     assert env["CIRP_INPUT_LIMIT_BYTES"] == "32000"
     assert env["CIRP_OUTPUT_LIMIT_TOKENS"] == "8000"
@@ -55,19 +55,16 @@ def test_deepseek_v4_flash_profile_uses_official_endpoint_and_conservative_rates
 
 
 def test_custom_profile_accepts_loopback_without_key_and_rejects_insecure_remote():
-    fields={"base_url":["http://127.0.0.1:11434/v1"],"model":["qwen3:8b"],
-            "input_rate":["0"],"output_rate":["0"]}
+    fields={"base_url":["http://127.0.0.1:11434/v1"],"model":["qwen3:8b"]}
     profile=setup.custom_profile(fields,"")
     env=setup.live_child_env("",profile)
     assert profile.local and env["CIRP_PROVIDER"].startswith("custom-")
     assert env["CIRP_API_BASE_URL"]=="http://127.0.0.1:11434/v1"
     assert env["CIRP_CHEAP_MODEL"]=="qwen3:8b" and env["CIRP_API_KEY"]==""
-    remote=setup.custom_profile({**fields,"base_url":["https://api.example/v1"],
-                                 "input_rate":["1"],"output_rate":["2"]},"synthetic-valid-key")
+    remote=setup.custom_profile({**fields,"base_url":["https://api.example/v1"]},"synthetic-valid-key")
     assert not remote.local and remote.provider != profile.provider
     with pytest.raises(ValueError,match="HTTPS"):
-        setup.custom_profile({**fields,"base_url":["http://remote.example/v1"],
-                              "input_rate":["1"],"output_rate":["2"]},"synthetic-valid-key")
+        setup.custom_profile({**fields,"base_url":["http://remote.example/v1"]},"synthetic-valid-key")
     rendered=setup.page("synthetic-csrf",profile=setup.CUSTOM_PROFILE).decode("utf-8")
     assert "OpenAI-compatible text endpoint" in rendered and "name=base_url" in rendered
     assert "optional for a loopback local model" in rendered and "name=remember" in rendered
@@ -92,7 +89,7 @@ def test_setup_page_uses_password_post_and_no_key_storage_language():
     assert "synthetic-csrf" in rendered
     assert "does not write the key to a URL, application log, or plaintext .env" in rendered
     assert "Windows DPAPI" in rendered and "name=remember" in rendered
-    assert "user-selected cumulative limit" in rendered
+    assert "budget" not in rendered.lower() and "CNY per million" not in rendered
 
 
 @pytest.mark.parametrize("value", ["80", "1023", "65536"])
@@ -172,8 +169,7 @@ def test_custom_loopback_form_starts_without_api_key(monkeypatch,tmp_path):
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
         fields={"csrf":server.csrf_token,"approved":"yes","remember":"yes","api_key":"",
-                "base_url":"http://127.0.0.1:11434/v1","model":"qwen3:8b",
-                "input_rate":"0","output_rate":"0"}
+                "base_url":"http://127.0.0.1:11434/v1","model":"qwen3:8b"}
         with post(server,fields) as response:assert response.status==202
         thread.join(timeout=2)
         assert len(calls)==1 and calls[0][1]["env"]["CIRP_API_KEY"]==""
@@ -194,8 +190,7 @@ def test_custom_remote_saved_key_is_scoped_to_endpoint_and_model(monkeypatch,tmp
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
         fields={"csrf":server.csrf_token,"approved":"yes","remember":"yes","api_key":"",
-                "base_url":"https://api.example/v1","model":"customer-model",
-                "input_rate":"1","output_rate":"2"}
+                "base_url":"https://api.example/v1","model":"customer-model"}
         with post(server,fields) as response:assert response.status==202
         thread.join(timeout=2)
         assert len(loaded)==len(calls)==1 and loaded[0].startswith("custom-")

@@ -1,6 +1,4 @@
 """Customer model settings are local, fail closed, and never expose credentials."""
-from decimal import Decimal
-
 from app.model_configuration import (configured_settings, load_active_configuration,
                                      public_configuration, save_active_configuration)
 from app.settings import Settings
@@ -11,7 +9,7 @@ def test_custom_loopback_profile_round_trips_without_key(tmp_path):
     base=Settings(tmp_path,start_worker=False)
     configured=configured_settings(
         base,provider='custom',api_base_url='http://127.0.0.1:11434/v1',
-        model='qwen3:8b',input_rate='0',output_rate='0')
+        model='qwen3:8b')
     assert configured.is_local_model() and configured.live_errors()==[]
     save_active_configuration(configured)
     loaded=load_active_configuration(base)
@@ -20,15 +18,15 @@ def test_custom_loopback_profile_round_trips_without_key(tmp_path):
     assert loaded.cheap_model=='qwen3:8b' and loaded.api_key==''
 
 
-def test_remote_custom_profile_requires_https_key_and_positive_rates(tmp_path):
+def test_remote_custom_profile_requires_https_key_and_valid_model(tmp_path):
     base=Settings(tmp_path,start_worker=False)
-    for values in (
-        {'api_base_url':'http://remote.example/v1','api_key':'synthetic-valid-key','input_rate':'1','output_rate':'2'},
-        {'api_base_url':'https://remote.example/v1','api_key':'','input_rate':'1','output_rate':'2'},
-        {'api_base_url':'https://remote.example/v1','api_key':'synthetic-valid-key','input_rate':'0','output_rate':'2'},
+    for model,values in (
+        ('remote-model',{'api_base_url':'http://remote.example/v1','api_key':'synthetic-valid-key'}),
+        ('remote-model',{'api_base_url':'https://remote.example/v1','api_key':''}),
+        ('bad model',{'api_base_url':'https://remote.example/v1','api_key':'synthetic-valid-key'}),
     ):
         try:
-            configured_settings(base,provider='custom',model='remote-model',**values)
+            configured_settings(base,provider='custom',model=model,**values)
         except ValueError:
             pass
         else:
@@ -38,9 +36,10 @@ def test_remote_custom_profile_requires_https_key_and_positive_rates(tmp_path):
 def test_public_model_configuration_never_contains_key(tmp_path):
     configured=configured_settings(
         Settings(tmp_path,start_worker=False),provider='deepseek',
-        api_key='synthetic-valid-key',input_rate=Decimal('4.4'),output_rate=Decimal('13.2'))
+        api_key='synthetic-valid-key')
     public=public_configuration(configured)
     assert public['provider']=='deepseek' and public['model']=='deepseek-v4-flash'
+    assert 'input_rate' not in public and 'output_rate' not in public
     assert 'api_key' not in public and 'synthetic-valid-key' not in repr(public)
 
 
@@ -50,7 +49,7 @@ def test_model_settings_endpoint_applies_local_profile_without_model_call(client
     assert before['provider']=='mock' and before['restart_supported']
     response=client.post('/api/model-settings',json={
         'provider':'custom','api_base_url':'http://127.0.0.1:11434/v1','model':'qwen3:8b',
-        'api_key':'','input_rate':'0','output_rate':'0','remember':True,'approved':True})
+        'api_key':'','remember':True,'approved':True})
     assert response.status_code==202 and response.json()['status']=='RESTARTING'
     assert len(selected)==1 and selected[0].is_local_model()
     assert client.app.state.db.all('SELECT * FROM model_calls')==[]
@@ -62,7 +61,7 @@ def test_model_settings_endpoint_accepts_a_replacement_key_without_echo(client):
     selected=[];client.app.state.request_model_restart=selected.append
     replacement='synthetic-replacement-key-for-offline-test'
     response=client.post('/api/model-settings',json={
-        'provider':'deepseek','api_key':replacement,'input_rate':'4.4','output_rate':'13.2',
+        'provider':'deepseek','api_key':replacement,
         'remember':False,'approved':True})
     assert response.status_code==202 and len(selected)==1
     assert selected[0].api_key==replacement
@@ -73,7 +72,7 @@ def test_model_settings_endpoint_accepts_a_replacement_key_without_echo(client):
 def test_model_settings_endpoint_does_not_echo_rejected_key(client):
     client.app.state.request_model_restart=lambda value:None
     response=client.post('/api/model-settings',json={
-        'provider':'deepseek','api_key':'short secret','input_rate':'4.4','output_rate':'13.2',
+        'provider':'deepseek','api_key':'short secret',
         'remember':False,'approved':True})
     assert response.status_code==400 and 'short secret' not in response.text
     assert client.app.state.db.all('SELECT * FROM model_calls')==[]
@@ -86,7 +85,7 @@ def test_model_settings_storage_error_does_not_expose_local_path(client,monkeypa
                         lambda value:(_ for _ in ()).throw(OSError(private_path)))
     response=client.post('/api/model-settings',json={
         'provider':'custom','api_base_url':'http://127.0.0.1:11434/v1','model':'qwen3:8b',
-        'input_rate':'0','output_rate':'0','remember':True,'approved':True})
+        'remember':True,'approved':True})
     assert response.status_code==400 and private_path not in response.text
     assert response.json()['detail']=='The model settings could not be saved locally.'
 

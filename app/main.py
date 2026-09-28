@@ -62,9 +62,6 @@ from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_sc
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
 class ProjectInput(Input):
     name:str=Field(min_length=1,max_length=150)
-    budget_cny:Decimal=Field(default=Decimal('300'),ge=Decimal('0.01'),le=1000000,max_digits=13,decimal_places=6)
-class BudgetInput(Input):
-    limit_cny:Decimal=Field(ge=Decimal('0.01'),le=1000000,max_digits=13,decimal_places=6)
 class RunInput(Input):local_workers:Literal[1,2,4]=2
 class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Field(ge=0)
 class ConnectorInput(Input):
@@ -104,8 +101,6 @@ class ModelConfigurationInput(Input):
     api_base_url:str=Field(default='',max_length=2048)
     model:str=Field(default='',max_length=160)
     api_key:str=Field(default='',max_length=256,repr=False)
-    input_rate:Decimal=Field(default=Decimal('0'),ge=0,le=100000,max_digits=18,decimal_places=6)
-    output_rate:Decimal=Field(default=Decimal('0'),ge=0,le=100000,max_digits=18,decimal_places=6)
     remember:bool=True
     approved:bool=False
 
@@ -203,7 +198,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
         if s.remote_enabled or s.render_free_preview:
             raise DomainError('Model settings can be changed only from the local single-user application.',403)
         if data.provider!='mock' and not data.approved:
-            raise DomainError('Confirm the endpoint, data transfer, rates, and possible API charges.')
+            raise DomainError('Confirm the endpoint, document transfer, and possible provider charges.')
         with provider_change_lock:
             if restarting[0]:raise DomainError('CIRP is already restarting with a new model configuration.',409)
             restart=getattr(app.state,'request_model_restart',None)
@@ -218,7 +213,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
             try:
                 candidate=configured_settings(
                     s,provider=data.provider,api_base_url=data.api_base_url,model=data.model,
-                    api_key=data.api_key,input_rate=data.input_rate,output_rate=data.output_rate)
+                    api_key=data.api_key)
                 if data.remember and candidate.provider!='mock':save_active_configuration(candidate)
                 else:clear_active_configuration(s.data_dir)
             except (ValueError,LocalCredentialError) as exc:
@@ -239,7 +234,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
     @app.post('/api/projects',status_code=201)
     def project_create(data:ProjectInput):
         if not data.name.strip():raise DomainError('项目名不能为空')
-        return db.create_project(data.name.strip(),data.budget_cny)
+        return db.create_project(data.name.strip())
     @app.get('/api/projects/{pid}')
     def project_get(pid:str):return db.one('SELECT * FROM projects WHERE id=?',(pid,))
     @app.get('/api/projects/{pid}/manifest')
@@ -253,10 +248,6 @@ def create_app(settings:Settings|None=None)->FastAPI:
         for row in upload_rows:row['source_detail']=json.loads(row['source_detail']) if row['source_detail'] else None
         return {'uploads':upload_rows,
                 'documents':db.all('SELECT id,project_id,name,size,sha256,created_at FROM documents WHERE project_id=? ORDER BY created_at',(pid,))}
-    @app.get('/api/projects/{pid}/budget')
-    def project_budget(pid:str):return db.cost(pid)
-    @app.put('/api/projects/{pid}/budget')
-    def project_budget_update(pid:str,data:BudgetInput):return db.set_budget_limit(pid,data.limit_cny)
     @app.get('/api/connectors')
     def connector_status():return connectors.status()
     @app.post('/api/connectors/{provider}')
@@ -382,8 +373,6 @@ def create_app(settings:Settings|None=None)->FastAPI:
         with provider_change_lock:
             if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
             return runner.control(rid,action)
-    @app.get('/api/analysis-runs/{rid}/cost')
-    def run_cost(rid:str):return db.cost(runner.get(rid)['project_id'])
     @app.get('/api/analysis-runs/{rid}/takeoffs')
     def run_takeoffs(rid:str):
         runner.get(rid)

@@ -27,19 +27,14 @@ def test_invalid_name(client,name):assert client.post('/api/projects',json={'nam
 def test_extra_fields_rejected(client):assert client.post('/api/projects',json={'name':'x','admin':True}).status_code==422
 
 
-def test_project_budget_is_user_selected_audited_and_never_below_committed(client):
-    created=client.post('/api/projects',json={'name':'Custom budget','budget_cny':'425.50'})
-    assert created.status_code==201 and created.json()['budget_limit_cny']=='425.500000'
+def test_project_contract_has_no_budget_module(client):
+    created=client.post('/api/projects',json={'name':'No budget project'})
+    assert created.status_code==201 and 'budget_limit_cny' not in created.json()
     pid=created.json()['id'];db=client.app.state.db
-    updated=client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'500.25'})
-    assert updated.status_code==200 and updated.json()['limit_cny']=='500.250000'
-    event=db.one('SELECT previous_units,new_units FROM budget_limit_events WHERE project_id=?',(pid,))
-    assert event=={'previous_units':425500000,'new_units':500250000}
-    db.execute('UPDATE budget_accounts SET spent_units=? WHERE project_id=?',(200000000,pid))
-    blocked=client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'199.99'})
-    assert blocked.status_code==409 and db.cost(pid)['limit_cny']=='500.250000'
-    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'0'}).status_code==422
-    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'0.001'}).status_code==422
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(pid,),False) is None
+    assert client.post('/api/projects',json={'name':'No legacy field','budget_cny':'425.50'}).status_code==422
+    assert client.get(f'/api/projects/{pid}/budget').status_code==404
+    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'500.25'}).status_code==404
 
 def test_cross_origin_blocked(client):
     assert client.post('/api/projects',json={'name':'x'},headers={'Origin':'https://evil.invalid'}).status_code==403
@@ -792,7 +787,7 @@ def test_failed_local_publish_can_resume_without_repeating_model_work(client,pro
     payload=resumed.json()
     assert payload['status']=='QUEUED'
     assert '已完成的模型调用不会重发' in payload['message']
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
 
 def test_failed_run_outside_local_publish_stage_stays_closed(client,project):
     upload(client,project['id'],'a.txt',b'hello')
@@ -812,7 +807,7 @@ def test_old_provider_run_cannot_resume_or_process_under_current_service(client,
     current=client.get(f'/api/analysis-runs/{rid}').json()
     assert current['status']=='PAUSED_PROVIDER' and '未调用API' in current['message']
     assert client.get(f'/api/analysis-runs/{rid}/records').json()==[]
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
 
 
 def test_unknown_call_requires_explicit_reconciliation_before_resume(client,project):
@@ -845,7 +840,7 @@ def test_unknown_call_requires_explicit_reconciliation_before_resume(client,proj
         'resolution':'NOT_BILLED','actual_cny':'0','confirmation':'PROVIDER_BILLING_CHECKED',
         'note':'Checked provider billing'}).json()
     assert result['call']['state']=='RECONCILED_ZERO'
-    assert result['cost']['spent_cny']=='0.000000' and result['cost']['reserved_cny']=='0.000000'
+    assert 'cost' not in result and 'reserved_cny' not in result['call']
     assert client.get(f'/api/projects/{project["id"]}/unresolved-model-calls').json()==[]
     events=client.get(f'/api/projects/{project["id"]}/call-reconciliation-events').json()
     assert len(events)==1 and events[0]['call_id']==call_id
@@ -889,8 +884,7 @@ def test_real_pending_extraction_reconcile_resume_sends_exactly_one_new_generati
            b'DEMO_MATERIAL|M-1|Concrete|-|strength=5000 psi')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,api_key='offline-not-real')
     requests=[]
 
     def handler(request):
@@ -946,9 +940,8 @@ def test_reconciled_paused_visual_task_resumes_with_one_audited_generation_http(
     document=upload(client,project['id'],'drawing.pdf',b'offline-placeholder')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',vision_enabled=True,
-                 input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,
+                 api_key='offline-not-real',vision_enabled=True)
     db.execute("UPDATE runs SET status='RUNNING',provider='deepseek' WHERE id=?",(rid,))
     summary={'warnings':[],'visual_tasks':[{'page':1,'status':'PAUSED_PROVIDER'}]}
     db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
@@ -988,8 +981,7 @@ def test_extraction_family_stops_after_three_explicit_reconciled_generations(cli
     upload(client,project['id'],'bounded.txt',b'One real pending evidence fragment.')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,api_key='offline-not-real')
     requests=[]
     gateway=Gateway(live,db,httpx.Client(transport=httpx.MockTransport(
         lambda request:(requests.append(request),(_ for _ in ()).throw(
@@ -1178,7 +1170,7 @@ def test_legacy_material_identity_migration_preserves_human_edits(client,project
     assert [event['action'] for event in history]==['EDITED']
 
 
-def test_reconciled_charge_is_recorded_and_over_reservation_freezes_budget(client,project):
+def test_reconciled_provider_charge_is_recorded_without_budget_state(client,project):
     upload(client,project['id'],'a.txt',b'hello')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db
@@ -1188,8 +1180,9 @@ def test_reconciled_charge_is_recorded_and_over_reservation_freezes_budget(clien
     result=client.post(f'/api/model-calls/{call_id}/reconcile',json={
         'resolution':'BILLED','actual_cny':'1.25','confirmation':'PROVIDER_BILLING_CHECKED'}).json()
     assert result['call']['state']=='RECONCILED_CHARGED'
-    assert result['cost']['spent_cny']=='1.250000' and result['cost']['reserved_cny']=='0.000000'
-    assert result['cost']['frozen']
+    assert 'cost' not in result and 'reserved_cny' not in result['call']
+    assert db.one('SELECT actual_units FROM model_calls WHERE id=?',(call_id,))['actual_units']==1250000
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(project['id'],),False) is None
 
 def test_mock_end_to_end_revision_and_export(client,project):
     rid=run_demo(client,project['id'])
@@ -1205,7 +1198,7 @@ def test_mock_end_to_end_revision_and_export(client,project):
     source=client.get(f'/api/analysis-runs/{rid}/evidence/{eid}').json()
     assert pad['meta']['parser_version']==source['evidence']['parser_version']==PARSER_VERSION
     assert source['evidence']['raw_text'] and source['file_name']
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
     data=client.get(f'/api/analysis-runs/{rid}/exports/json').json()
     assert data['export_version']=='0.2.6-readable-en-2'
     assert data['summary']['run_status']=='Partial'
@@ -1282,9 +1275,8 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
     image=Image.new('RGB',(320,180),'white');source=io.BytesIO();image.save(source,format='PNG')
     document=upload(client,project['id'],'drawing.png',source.getvalue())
     runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='synthetic-not-real',vision_enabled=True,
-                 input_rate=Decimal('4.40'),output_rate=Decimal('13.20'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,
+                 api_key='synthetic-not-real',vision_enabled=True)
     runner.s=live;runner.gateway.s=live
     run=runner.create(project['id']);client.app.state.db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],))
     run=runner.get(run['id'])

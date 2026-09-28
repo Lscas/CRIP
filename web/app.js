@@ -18,16 +18,16 @@ async function api(path,method='GET',body){
 }
 function error(fn){return async(...args)=>{try{await fn(...args);}catch(e){toast(e.message);}};}
 const modelPresets={
- deepseek:{base_url:'https://api.deepseek.com',model:'deepseek-v4-flash',input_rate:'4.40',output_rate:'13.20'},
- gemini:{base_url:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-3.6-flash',input_rate:'7.50',output_rate:'37.50'}
+ deepseek:{base_url:'https://api.deepseek.com',model:'deepseek-v4-flash'},
+ gemini:{base_url:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-3.6-flash'}
 };
 function syncModelSettings(usePreset=false){
  const provider=$('model-provider').value,live=provider!=='mock',custom=provider==='custom',preset=modelPresets[provider];
  $('model-live-fields').hidden=!live;$('model-approved').required=live;$('model-remember').disabled=!live;
  for(const id of ['model-base-url','model-name']){$(id).readOnly=live&&!custom;$(id).required=live;}
  if(usePreset){
-  if(preset){$('model-base-url').value=preset.base_url;$('model-name').value=preset.model;$('model-input-rate').value=preset.input_rate;$('model-output-rate').value=preset.output_rate;}
-  else if(custom){$('model-base-url').value='';$('model-name').value='';$('model-input-rate').value='0';$('model-output-rate').value='0';}
+  if(preset){$('model-base-url').value=preset.base_url;$('model-name').value=preset.model;}
+  else if(custom){$('model-base-url').value='';$('model-name').value='';}
   $('model-api-key').value='';$('model-approved').checked=false;I.bindText($('model-key-status'),'modelSettings.keyUnknown');
  }
 }
@@ -35,8 +35,6 @@ async function loadModelSettings(){
  const data=await api('/model-settings');state.modelSettings=data;$('model-provider').value=data.provider;
  $('model-base-url').value=data.api_base_url||modelPresets[data.provider]?.base_url||'';
  $('model-name').value=data.model||modelPresets[data.provider]?.model||'';
- $('model-input-rate').value=data.input_rate||modelPresets[data.provider]?.input_rate||'0';
- $('model-output-rate').value=data.output_rate||modelPresets[data.provider]?.output_rate||'0';
  $('model-api-key').value='';$('model-remember').checked=Boolean(data.saved_profile||data.saved_key||data.local_model);
  $('model-approved').checked=false;I.bindText($('model-key-status'),data.saved_key?'modelSettings.keySaved':'modelSettings.keyNotSaved');
  syncModelSettings(false);$('apply-model-settings').disabled=!data.restart_supported;
@@ -76,9 +74,8 @@ async function projects(selected){
 async function selectProject(id){state.project=id;state.run=null;state.runStatus=null;state.knowledge=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowPagination=null;state.workflowsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
  $('question-results').replaceChildren();updateQuestionAvailability();
  renderConnectorItems();
- if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;$('save-budget').disabled=true;renderRecords();renderTakeoffs();renderWorkflows();return;}
+ if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;renderRecords();renderTakeoffs();renderWorkflows();return;}
  const p=await api('/projects/'+id);I.bindText($('project-name'),()=>p.name);
- const budget=await api(`/projects/${id}/budget`);$('budget-limit').value=Number(budget.limit_cny);$('save-budget').disabled=false;
  await refresh();
 }
 async function refresh(){
@@ -112,7 +109,6 @@ async function refreshRun(forceRecords=false){
     state.knowledge=await api(`/projects/${state.project}/knowledge`);
    }
   const active=['QUEUED','RUNNING'].includes(run.status);
-  const cost=await api(`/analysis-runs/${rid}/cost`);
  if(forceRecords||(!active&&state.recordsRun!==rid)){
    const overview=await api(`/analysis-runs/${rid}/record-summaries?limit=1`);
    if(rid!==state.run)return;
@@ -136,12 +132,10 @@ async function refreshRun(forceRecords=false){
   const c=run.coverage;const done=(c.fragments_extracted||0)+(c.fragments_need_review||0);
   renderProgress(run);
   I.bindText($('coverage'),'run.coverage',{processed:c.files_processed||0,total:c.files_total||0,done,fragments:c.fragments_total||0,review:c.fragments_need_review||0});
-   I.bindText($('cost'),'run.cost',{spent:Number(cost.spent_cny).toFixed(4),reserved:Number(cost.reserved_cny).toFixed(4),limit:Number(cost.limit_cny).toFixed(2)});
-   if(document.activeElement!==$('budget-limit'))$('budget-limit').value=Number(cost.limit_cny);
    const perf=run.performance||{},stages=Object.entries(perf).filter(([name])=>name.startsWith('stage.'));
    const elapsed=stages.reduce((sum,[,value])=>sum+value.total_ms,0)/1000,responses=perf['model.response']||{samples:0,average_ms:0};
    I.bindText($('performance'),'run.performance',{elapsed:elapsed.toFixed(1),requests:responses.samples,average:(responses.average_ms/1000).toFixed(2)});
-   I.bindText($('coverage-detail'),()=>JSON.stringify({coverage:c,performance:perf,cost,capabilities:run.capabilities},null,2));
+   I.bindText($('coverage-detail'),()=>JSON.stringify({coverage:c,performance:perf,capabilities:run.capabilities},null,2));
   $('pause').disabled=!active;
    renderReconciliation(state.unresolvedCalls);
    updateQuestionAvailability();
@@ -228,14 +222,14 @@ function diagnosticText(call){
 function renderReconciliation(calls){
  const panel=$('reconciliation-panel'),list=$('unresolved-calls');list.replaceChildren();panel.hidden=!calls.length;
  calls.forEach(call=>{const card=el('article',null,'reconciliation-call');
-  const text=el('div');text.append(el('strong',call.model),elT('small','reconcile.call',{id:call.id,run:call.run_id}),el('small',diagnosticText(call)),elT('small','reconcile.reserved',{amount:call.reserved_cny}));
+  const text=el('div');text.append(el('strong',call.model),elT('small','reconcile.call',{id:call.id,run:call.run_id}),el('small',diagnosticText(call)));
   const button=elT('button','reconcile.open',{},'outline');button.disabled=call.state!=='UNKNOWN';button.onclick=()=>openReconciliation(call);
   card.append(text,button);list.append(card);
  });
 }
 function openReconciliation(call){
  $('reconcile-form').reset();$('reconcile-call-id').value=call.id;$('reconcile-resolution').value='NOT_BILLED';$('reconcile-amount').value='0';syncReconcileAmount();
- I.bindText($('reconcile-call-summary'),()=>I.t('reconcile.summary',{model:call.model,amount:call.reserved_cny,diagnostic:diagnosticText(call)}));
+ I.bindText($('reconcile-call-summary'),()=>I.t('reconcile.summary',{model:call.model,diagnostic:diagnosticText(call)}));
  $('reconcile-dialog').showModal();
 }
 function syncReconcileAmount(){
@@ -512,7 +506,7 @@ $('model-settings-nav').onclick=error(loadModelSettings);
 $('model-provider').onchange=()=>syncModelSettings(true);
 $('model-settings-form').onsubmit=error(async event=>{event.preventDefault();const apply=$('apply-model-settings'),provider=$('model-provider').value,previous=state.settings.service_instance;apply.disabled=true;
  try{
-  await api('/model-settings','POST',{provider,api_base_url:$('model-base-url').value.trim(),model:$('model-name').value.trim(),api_key:$('model-api-key').value,input_rate:$('model-input-rate').value||'0',output_rate:$('model-output-rate').value||'0',remember:$('model-remember').checked,approved:provider==='mock'||$('model-approved').checked});
+  await api('/model-settings','POST',{provider,api_base_url:$('model-base-url').value.trim(),model:$('model-name').value.trim(),api_key:$('model-api-key').value,remember:$('model-remember').checked,approved:provider==='mock'||$('model-approved').checked});
   $('model-api-key').value='';toast(I.t('modelSettings.restarting'));await waitForModelRestart(previous);
  }finally{apply.disabled=false;}
 });
@@ -522,8 +516,7 @@ $('reconcile-form').onsubmit=error(async e=>{e.preventDefault();const resolution
  await api(`/model-calls/${$('reconcile-call-id').value}/reconcile`,'POST',{resolution,actual_cny:resolution==='BILLED'?$('reconcile-amount').value:'0',confirmation:'PROVIDER_BILLING_CHECKED',note:$('reconcile-note').value});
  $('reconcile-dialog').close();await refresh();toast(I.t(resolution==='BILLED'?'reconcile.savedBilled':'reconcile.savedNotBilled'));
 });
-$('project-form').onsubmit=error(async e=>{e.preventDefault();const p=await api('/projects','POST',{name:$('project-input').value,budget_cny:$('project-budget').value});$('project-dialog').close();$('project-input').value='';$('project-budget').value='300';await projects(p.id);});
-$('save-budget').onclick=error(async()=>{if(!state.project)return;const cost=await api(`/projects/${state.project}/budget`,'PUT',{limit_cny:$('budget-limit').value});$('budget-limit').value=Number(cost.limit_cny);toast(I.t('budget.saved',{limit:Number(cost.limit_cny).toFixed(2)}));if(state.run)await refreshRun();});
+$('project-form').onsubmit=error(async e=>{e.preventDefault();const p=await api('/projects','POST',{name:$('project-input').value});$('project-dialog').close();$('project-input').value='';await projects(p.id);});
 $('project-select').onchange=error(()=>selectProject($('project-select').value));
 $('run-select').onchange=error(async()=>{state.run=$('run-select').value;state.runStatus=null;state.records=[];state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowPagination=null;state.workflowsRun=null;state.kindTouched=false;$('question-results').replaceChildren();updateQuestionAvailability();await refreshRun();});
 $('start').onclick=error(async()=>{if(!state.project)return;const run=await api(`/projects/${state.project}/analysis-runs`,'POST',{local_workers:Number($('local-workers').value)});state.run=run.id;state.runStatus=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowPagination=null;state.workflowsRun=null;state.kindTouched=false;$('question-results').replaceChildren();updateQuestionAvailability();await refresh();});

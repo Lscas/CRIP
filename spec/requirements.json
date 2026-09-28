@@ -697,7 +697,7 @@
         "Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.",
         "The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.",
         "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.",
-          "The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.",
+          "The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or model-call history.",
         "A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.",
         "A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data."
         ,"Every open application tab detects a completed same-port service restart and reloads its non-secret configuration, so an older Mock tab cannot hide the active provider's replacement-key controls."
@@ -1104,8 +1104,9 @@
         "Every changed limit is audit-recorded, and a valid user change may unlock a budget-frozen project without resetting spent cost."
       ],
       "priority": "P0",
-      "status": "implemented",
-      "decision_source": "D-27: the user explicitly allowed unlocking the fixed budget and selecting the project range on 2026-09-15.",
+      "status": "superseded",
+      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "decision_source": "D-30 removed CIRP project budgets, price inputs, cost totals and monetary dispatch gates on 2026-09-27.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -1117,8 +1118,9 @@
         "超时重试可能重复计费，必须重新预留。"
       ],
       "priority": "P0",
-      "status": "implemented",
-      "decision_source": "D-17：本地原型对应代码/离线测试已实现；不代表真实模型质量",
+      "status": "superseded",
+      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "decision_source": "D-30 removed monetary reservation and budget enforcement while retaining unresolved-call and no-automatic-retry safety.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -1130,8 +1132,9 @@
         "缓存折扣、离峰折扣不用于最坏预算。"
       ],
       "priority": "P0",
-      "status": "planned",
-      "decision_source": "本轮确认及其工程化约束",
+      "status": "superseded",
+      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "decision_source": "D-30 removed price configuration from the application.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -1143,8 +1146,9 @@
         "低优先任务仍入队，不隐瞒未执行。"
       ],
       "priority": "P0",
-      "status": "planned",
-      "decision_source": "本轮确认及其工程化约束",
+      "status": "superseded",
+      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "decision_source": "D-30 removed budget-blocked states and cost totals; ordinary partial-run transparency remains required.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
     {
@@ -1358,7 +1362,7 @@
         "The key-entry page, local launcher, dependency checks, public settings, and cost descriptions use English application-owned messages.",
         "The change does not clear unsaved project names, review notes, filters, upload selection, or project/run state and does not add a network or model call.",
         "Original source-document quotations remain faithful to the source; fixed reviewer output otherwise uses concise English and fails closed when required legacy business text cannot be translated safely.",
-        "API paths, canonical status codes, request headers, algorithms, saved project data, human reviews, and budget state do not change.",
+        "API paths, canonical status codes, request headers, algorithms, saved project data, human reviews, and model-call history do not change.",
         "The English interface remains readable on narrow screens without a translation API, new front-end framework, or runtime dependency."
       ],
       "decision_source": "D-25: the user directed CIRP to assume all users and developers use English.",
@@ -1386,7 +1390,7 @@
       "status": "implemented",
       "acceptance_criteria": [
         "Programmatic checks validate citation bounds, text fragments, and numeric risk; the small model verifies at most four fields per request and can combine fields from records with the same exact evidence scope.",
-        "Semantic verification uses the existing cheap model's lowest available reasoning mode and charges reasoning tokens to the user-selected project budget.",
+        "Semantic verification uses the configured model's lowest available reasoning mode and records provider usage without a CIRP monetary gate.",
         "无密钥、预算不足、未知费用、截断、假引文均不得标为通过；模拟模式不伪造语义核验。",
         "不会以此声称无漏项、设计正确、现场合规或全项目反证检索完成。"
       ],
@@ -1431,7 +1435,7 @@
       "status": "implemented",
       "acceptance_criteria": [
         "Retrieval is limited to immutable evidence from the explicitly selected project and PARTIAL or COMPLETED run; a run from another project is rejected.",
-        "A live or local model call occurs only after the user submits a question, uses the existing project budget ledger, lowest-cost configured model and no automatic retry, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.",
+        "A live or local model call occurs only after the user submits a question, uses the configured model with no automatic retry, records provider usage, and is blocked by any unresolved model call; a terminal evidence snapshot remains usable when its analysis provider differs from the currently configured question model.",
         "An answered response cites only evidence supplied to that request and every published quote must match the immutable source text exactly and uniquely; invalid citations fail closed after cost settlement.",
         "Mock mode never fabricates an answer and makes no model call; it may display locally retrieved context as such.",
         "The browser renders the answer as plain text and places each source passage directly after it with a control that opens the existing evidence viewer.",
@@ -1817,8 +1821,22 @@
         "The browser renders an English answer-path badge before the answer text. Deterministic, retrieval-only and no-evidence badges state that no model call occurred; a fresh model result states that a model call was used; and a recovered settled response states that no new model call occurred by combining MODEL_PROJECT_EVIDENCE with the existing cached flag.",
         "The provenance label is response metadata only. It adds no retrieval, model dispatch, retry, budget action, parser, dependency or second index; it does not claim that a model answer is correct beyond the existing exact-citation validation."
       ],
-      "decision_source": "Users need to distinguish fast local answers, paid model answers and no-call failure paths when asking across project RFI, Submittal, Email and specification evidence.",
+      "decision_source": "Users need to distinguish fast local answers, model-generated answers and no-call failure paths when asking across project RFI, Submittal, Email and specification evidence.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-MODEL-BUDGET-REMOVAL-001",
+      "title": "Run without a CIRP project budget module",
+      "statement": "CIRP model dispatch is not gated by a project budget, configured price, exchange rate, or cumulative cost total; provider-account spending is managed outside CIRP.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Project creation, project settings, model settings, run status, analysis results and exports expose no project budget, rate input, price confirmation, monetary cost total or budget update endpoint.",
+        "A legacy budget account or old budget-frozen state cannot block a new eligible model call. Legacy tables and rows remain inert and readable for upgrade compatibility; existing project files, reviews, analysis records and model-call history are not deleted or reset.",
+        "Provider authorization, exact task idempotency, unresolved-call blocking, explicit reconciliation, no automatic retry, request-size limits, serial provider pacing and the 24-hour run boundary remain independent call-safety controls."
+      ],
+      "decision_source": "D-30: the user explicitly cancelled all CIRP budget modules on 2026-09-27.",
+      "spec_section": "docs/PRODUCT_SPEC.md"
     }
   ],
   "artifact_kind": "prototype_source",

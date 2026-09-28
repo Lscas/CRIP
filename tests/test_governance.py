@@ -30,8 +30,10 @@ def test_reviewer_facing_model_text_is_requested_in_english():
         text=(ROOT/path).read_text(encoding='utf-8')
         assert 'English' in text or '英文' in text
 
-def test_paid_api_disabled():
-    assert not load_json('config/model_routing.json')['live_api_enabled'];assert not load_json('config/provider_price_snapshot.json')['confirmed_for_user_endpoint']
+def test_default_routing_is_mock_and_budget_configs_are_removed():
+    assert not load_json('config/model_routing.json')['live_api_enabled']
+    assert not (ROOT/'config/budget_policy.json').exists()
+    assert not (ROOT/'config/provider_price_snapshot.json').exists()
 
 def test_qa_not_inferred_from_assembly():assert all(not r['qa_requirements'] for r in load_json('config/assembly_rules.json')['rules'])
 def test_yaml_templates_parse():

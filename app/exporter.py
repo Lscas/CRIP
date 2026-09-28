@@ -914,7 +914,6 @@ def _explicit_quantity_property(candidate: dict) -> tuple[int, object, str] | No
 
 def _summary(data: dict, material_count: int, inspection_count: int) -> dict:
     files = sorted({_plain(item.get('file_name')) for item in data.get('evidence', []) if item.get('file_name')})
-    cost = data.get('cost', {})
     return {
         'project': _plain(data.get('project_name')) or 'Local CIRP project',
         'run_status': _label(data.get('run', {}).get('status'), 'Unknown'),
@@ -924,9 +923,6 @@ def _summary(data: dict, material_count: int, inspection_count: int) -> dict:
         'source_files': files,
         'material_and_equipment_items': material_count,
         'inspection_and_test_items': inspection_count,
-        'model_calls': cost.get('calls', 0),
-        'model_cost_cny': cost.get('spent_cny', '0.000000'),
-        'unresolved_model_calls': cost.get('unknown_calls', 0),
         'notice': _plain(data.get('notice')),
         'evidence_display_note': 'Whitespace and isolated non-English OCR artifacts are normalized for readability; source wording is otherwise unchanged. Visual model observations are labeled and are not source-document quotations.',
         'quantity_note': 'A blank quantity means the source did not state a usable quantity or no reviewed design quantity was calculated. It does not mean zero.',
@@ -1185,7 +1181,7 @@ def collect(db: Database, run: dict, reviewed_only: bool = False, verifier=None)
     return {'verifications': reports, 'notice': notice,
             'generated_at': datetime.now(timezone.utc).isoformat(), 'run': run,
             'project_name': project['name'] if project else None,
-            'cost': db.cost(run['project_id']), 'reviewed_only': reviewed_only,
+            'reviewed_only': reviewed_only,
             'records': records, 'evidence': evidence, 'analysis_support': analysis_support}
 
 
@@ -1295,8 +1291,6 @@ def as_xlsx(data: dict) -> bytes:
         ['Source files', '\n'.join(summary['source_files'])],
         ['Material and equipment items', summary['material_and_equipment_items']],
         ['Test and inspection items', summary['inspection_and_test_items']],
-        ['Model calls', summary['model_calls']], ['Model cost (CNY)', summary['model_cost_cny']],
-        ['Unresolved model calls', summary['unresolved_model_calls']],
         ['Review notice', summary['notice']], ['Quantity note', summary['quantity_note']],
         ['Evidence display note', summary['evidence_display_note']],
     ]

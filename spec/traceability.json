@@ -1394,7 +1394,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-001",
-      "implementation_status": "implemented",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1416,7 +1416,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-002",
-      "implementation_status": "implemented",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1439,7 +1439,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-003",
-      "implementation_status": "planned",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1453,7 +1453,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-004",
-      "implementation_status": "planned",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -2422,6 +2422,39 @@
         "web/app.js",
         "web/i18n.js",
         "web/style.css"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-MODEL-BUDGET-REMOVAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/db.py",
+        "app/main.py",
+        "app/model_configuration.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_no_budget_api_ui_or_dispatch_gate_with_legacy_schema_compatibility",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/main.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "web/index.html",
+        "web/app.js"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
     }
