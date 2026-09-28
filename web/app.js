@@ -31,7 +31,7 @@ function syncModelSettings(usePreset=false){
   $('model-api-key').value='';$('model-approved').checked=false;I.bindText($('model-key-status'),'modelSettings.keyUnknown');
  }
 }
-async function openModelSettings(){
+async function loadModelSettings(){
  const data=await api('/model-settings');state.modelSettings=data;$('model-provider').value=data.provider;
  $('model-base-url').value=data.api_base_url||modelPresets[data.provider]?.base_url||'';
  $('model-name').value=data.model||modelPresets[data.provider]?.model||'';
@@ -39,7 +39,7 @@ async function openModelSettings(){
  $('model-output-rate').value=data.output_rate||modelPresets[data.provider]?.output_rate||'0';
  $('model-api-key').value='';$('model-remember').checked=Boolean(data.saved_profile||data.saved_key||data.local_model);
  $('model-approved').checked=false;I.bindText($('model-key-status'),data.saved_key?'modelSettings.keySaved':'modelSettings.keyNotSaved');
- syncModelSettings(false);$('apply-model-settings').disabled=!data.restart_supported;$('model-settings-dialog').showModal();
+ syncModelSettings(false);$('apply-model-settings').disabled=!data.restart_supported;
 }
 async function waitForModelRestart(previousInstance){
  for(let attempt=0;attempt<80;attempt++){
@@ -492,13 +492,12 @@ async function uploadFiles(files){
 }
 $('new-project').onclick=()=>{$('project-dialog').showModal();$('project-input').focus();};
 $('close-project').onclick=()=>{$('project-dialog').close();};
-$('model-settings-open').onclick=error(openModelSettings);
-$('close-model-settings').onclick=()=>{$('model-api-key').value='';$('model-settings-dialog').close();};
+$('model-settings-open').onclick=error(async()=>{await loadModelSettings();$('model-settings').scrollIntoView({behavior:'smooth'});history.replaceState(null,'','#model-settings');});
 $('model-provider').onchange=()=>syncModelSettings(true);
 $('model-settings-form').onsubmit=error(async event=>{event.preventDefault();const apply=$('apply-model-settings'),provider=$('model-provider').value,previous=state.settings.service_instance;apply.disabled=true;
  try{
   await api('/model-settings','POST',{provider,api_base_url:$('model-base-url').value.trim(),model:$('model-name').value.trim(),api_key:$('model-api-key').value,input_rate:$('model-input-rate').value||'0',output_rate:$('model-output-rate').value||'0',remember:$('model-remember').checked,approved:provider==='mock'||$('model-approved').checked});
-  $('model-api-key').value='';$('model-settings-dialog').close();toast(I.t('modelSettings.restarting'));await waitForModelRestart(previous);
+  $('model-api-key').value='';toast(I.t('modelSettings.restarting'));await waitForModelRestart(previous);
  }finally{apply.disabled=false;}
 });
 $('close-reconcile').onclick=()=>{$('reconcile-dialog').close();};
@@ -539,7 +538,7 @@ $('question-form').onsubmit=error(async event=>{event.preventDefault();if(!state
  }finally{state.asking=false;updateQuestionAvailability();}
 });
 for(const fmt of ['json','xlsx'])$('export-'+fmt).onclick=()=>{if(state.run)location.href=`/api/analysis-runs/${state.run}/exports/${fmt}`;};
-(async()=>{state.settings=await api('/settings');I.bindMessage($('mode'),state.settings.mode);I.bindText($('version'),()=>'v'+state.settings.version);
+(async()=>{state.settings=await api('/settings');I.bindMessage($('mode'),state.settings.mode);I.bindText($('version'),()=>'v'+state.settings.version);await loadModelSettings();
  I.bindText($('mode-notice'),()=>state.settings.provider==='mock'?I.t('notice.mock'):
   (state.settings.live_ready?I.t('notice.live'):I.t('notice.blocked',{reasons:state.settings.live_blockers.map(I.message).join('; ')})));
  $('vision-disclosure').hidden=!(state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready);

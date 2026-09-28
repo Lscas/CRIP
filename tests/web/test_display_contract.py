@@ -76,15 +76,23 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
     elements=Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
     byid={attrs['id']:(tag,attrs) for tag,attrs in elements if 'id' in attrs}
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')
-    for item in ('model-settings-open','model-settings-dialog','model-settings-form','model-provider',
+    for item in ('model-settings-open','model-settings','model-settings-form','model-provider',
                  'model-base-url','model-name','model-input-rate','model-output-rate','model-api-key',
                  'model-remember','model-approved','apply-model-settings'):
         assert item in byid
+    assert byid['model-settings'][0]=='section'
+    assert byid['model-settings-form'][0]=='form'
+    assert not {'model-settings-dialog','close-model-settings'} & byid.keys()
+    assert any(tag=='a' and attrs.get('href')=='#model-settings' and attrs.get('data-i18n')=='nav.settings'
+               for tag,attrs in elements)
     assert byid['model-api-key'][1]['type']=='password'
     assert byid['model-api-key'][1]['autocomplete']=='new-password'
     assert 'value' not in byid['model-api-key'][1]
     assert "const data=await api('/model-settings')" in source
     assert "await api('/model-settings','POST'" in source
+    assert 'await loadModelSettings()' in source
+    assert "$('model-settings').scrollIntoView" in source
+    assert 'model-settings-dialog' not in source
     assert "$('model-api-key').value=''" in source
     assert 'data.service_instance!==previousInstance' in source
     assert 'innerHTML' not in source

@@ -934,7 +934,7 @@
         "start-custom-model.ps1"
       ],
       "verification_report": "docs/LOCAL_VALIDATION.md",
-      "progress_note": "The English in-app Model API settings dialog now reuses the existing OpenAI-compatible gateway for Mock, fixed official DeepSeek/Gemini profiles, a custom HTTPS API, or a loopback local model. Applying a change is local-only, never returns the key, blocks active analysis/semantic verification/unresolved calls, persists remote keys only with Windows current-user DPAPI, and performs an orderly same-port service restart. A no-network loopback runtime acceptance switched Mock to qwen3:8b with a new service instance and no model call."
+      "progress_note": "The English main application now has a dedicated Model API Settings section, reachable from the sidebar or header and loaded with the page instead of using a modal dialog or separate setup server. It reuses the existing OpenAI-compatible gateway for Mock, fixed official DeepSeek/Gemini profiles, a custom HTTPS API, or a loopback local model. Applying a change is local-only, never returns the key, blocks active analysis/semantic verification/unresolved calls, persists remote keys only with Windows current-user DPAPI, and performs an orderly same-port service restart. A no-network loopback runtime acceptance switched Mock to qwen3:8b with a new service instance and no model call."
     },
     {
       "requirement_id": "FR-PROMPT-001",

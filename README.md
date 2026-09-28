@@ -113,7 +113,7 @@ Review the on-screen data-transfer and cost notice before starting a live analys
 
 The custom launcher opens a local setup page. Enter an OpenAI-compatible base URL ending before `/chat/completions` (for example, `http://127.0.0.1:11434/v1` for Ollama), the model name, and token rates. Loopback local models may use HTTP with no key and zero rates. Remote APIs require HTTPS, a key, and positive rates. This generic route requires JSON-mode chat completions with usage data and sends parsed text only; provider-specific SDKs, page-image vision, non-loopback LAN models, and automatic model discovery are not included.
 
-After the standard local app starts, **Model API settings** in the header can switch among Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, and a loopback local model. A successful change restarts CIRP on the same local port and keeps the existing project data and budget ledger. Select encrypted persistence to reuse the profile on later starts; use `start-local.cmd --mock` to bypass a saved profile for an offline session.
+After the standard local app starts, open the fixed **Settings** section from the sidebar or the **Model API settings** header shortcut. It is part of the main CIRP page, not a modal or separate setup server. It can switch among Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, and a loopback local model. A successful change restarts CIRP on the same local port and keeps the existing project data and budget ledger. Select encrypted persistence to reuse the profile on later starts; use `start-local.cmd --mock` to bypass a saved profile for an offline session.
 
 ## Validate the source
 

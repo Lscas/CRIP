@@ -697,7 +697,7 @@
         "Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.",
         "The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.",
         "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.",
-        "The local application settings dialog can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.",
+          "The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.",
         "A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.",
         "A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data."
       ],
