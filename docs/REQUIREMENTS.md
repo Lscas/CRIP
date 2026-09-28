@@ -62,6 +62,7 @@
 单文件失败不得导致整个项目分析终止。
 
 - 失败文件被列出，其他文件继续处理。
+- A document that fails with a concurrent Windows PermissionError is retried exactly once after its document batch finishes; other failure classes are not retried automatically.
 
 ## FR-PARSE-001 · PDF 结构提取
 
@@ -473,6 +474,7 @@ Show run coverage, current materials and QA review results, analysis percentage,
 
 - A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.
 - A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.
+- A concurrent document PermissionError receives one isolated retry using the selected page-worker count, without retrying model work or unrelated parser failures.
 - Up to four adjacent fragments/8.8 KB batch only inside one ordinary or exact workflow scope; an RFI/Submittal ID, role, status or family change closes the batch, and routing-only Email evidence closes locally.
 - Paid model calls remain serial and every call is recorded in the project ledger.
 
@@ -485,6 +487,9 @@ A local customer can start CIRP with a customer-selected OpenAI-compatible text 
 - Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.
 - The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.
 - The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.
+- The local application settings dialog can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.
+- A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.
+- A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data.
 
 ## FR-PROMPT-001 · Prompt Git 版本化
 
@@ -927,6 +932,7 @@ PR含可解析变更清单，涉及行为的配置/Prompt/代码变化必须关�
 
 - 提供Windows CMD及macOS/Linux入口；首次隔离安装，失败不得宣布启动。
 - 默认模拟入口不读取.env；端口冲突拒绝启动、不杀其他进程。
+- The live-key setup refuses an occupied application port before loading, saving, forgetting, or passing a credential to a child process.
 - 已有依赖环境真实HTTP示例流程和重启持久化通过；未验证平台/依赖安装如实报告。
 - 原远程预览保护和预算不变，不将本机端口公开。
 

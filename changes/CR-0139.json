@@ -1,0 +1,37 @@
+{
+  "change_id": "CR-0139",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-INGEST-004", "FR-API-005", "FR-LOCAL-001", "FR-QA-001"],
+  "summary": "Retry one concurrent parser PermissionError in isolation, reject occupied live target ports before credential handling, and block project answers when a selected document failed parsing.",
+  "decision_refs": [
+    "The current three-file run processed both drawing PDFs but the 401-page specification failed with PermissionError while all three parser processes ran together",
+    "The same saved specification completed all 401 pages both serially and with four page workers in isolated offline reproductions",
+    "The active service remained Mock while the DeepSeek setup page was still listening and the live target port was occupied",
+    "The user explicitly requested repair and a new DeepSeek analysis"
+  ],
+  "affected_paths": [
+    "app/parser_worker.py", "app/runner.py", "app/questions.py",
+    "scripts/gemini_local_setup.py", "web/app.js", "web/i18n.js",
+    "tests/app/test_api.py", "tests/app/test_parsers.py",
+    "tests/app/test_gemini_local_setup.py", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/LOCAL_DEPLOY.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/PERFORMANCE_BASELINE.md",
+    "docs/DEV_STATE.md", "tasks/DEV-124.json", "changes/CR-0139.json",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py", "tests/app/test_parsers.py",
+    "tests/app/test_gemini_local_setup.py", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "User explicitly requested repair and authorized DeepSeek analysis of the already uploaded test files.",
+  "known_limitations": [
+    "Only PermissionError receives the isolated parser retry; timeouts, corrupt inputs, unsupported formats and model failures retain their existing explicit recovery paths.",
+    "The retry is local parsing only and never retries or duplicates a paid model call.",
+    "A live analysis still requires a valid locally entered or Windows-DPAPI-saved DeepSeek credential and sufficient project budget."
+  ]
+}

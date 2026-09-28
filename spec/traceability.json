@@ -90,11 +90,18 @@
       "planned_product_modules": [
         "app/ingest"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "partial_product_test_transient_permission_retry",
+      "implemented_product_paths": [
+        "app/parser_worker.py",
+        "app/runner.py"
+      ],
+      "verification_report": null,
+      "progress_note": "Concurrent documents remain isolated. A FAILED PermissionError now receives exactly one post-batch isolated retry; all other failure classes remain explicit and are not retried automatically. Broader ingest-format completion remains planned."
     },
     {
       "requirement_id": "FR-PARSE-001",
@@ -891,7 +898,7 @@
         "scripts/benchmark_local_parse.py"
       ],
       "verification_report": "docs/PERFORMANCE_BASELINE.md",
-      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally. A single PDF uses bounded page chunks whose ordered merge carries exact workflow scope identically for 1/2/4 workers without another PDF scan. Paid calls remain serial and broader distributed orchestration remains planned."
+      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally. A single PDF uses bounded page chunks whose ordered merge carries exact workflow scope identically for 1/2/4 workers without another PDF scan. A concurrent document PermissionError receives one isolated local retry after its batch; paid calls remain serial and broader distributed orchestration remains planned."
     },
     {
       "requirement_id": "FR-API-006",
@@ -903,20 +910,31 @@
       "planned_product_tests": [
         "tests/app/test_gateway_budget.py",
         "tests/app/test_gemini_local_setup.py",
-        "tests/app/test_local_entry.py"
+        "tests/app/test_local_entry.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
       ],
       "contract_tests": [],
       "test_scope": "offline_mock_transport_and_loopback_setup",
       "implemented_product_paths": [
         "app/settings.py",
+        "app/model_configuration.py",
+        "app/main.py",
+        "app/local_entry.py",
         "app/gateway.py",
         "app/db.py",
         "app/runner.py",
         "config/model_routing.json",
         "scripts/gemini_local_setup.py",
+        "scripts/local_deploy.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css",
         "start-custom-model.ps1"
       ],
-      "verification_report": "docs/LOCAL_VALIDATION.md"
+      "verification_report": "docs/LOCAL_VALIDATION.md",
+      "progress_note": "The English in-app Model API settings dialog now reuses the existing OpenAI-compatible gateway for Mock, fixed official DeepSeek/Gemini profiles, a custom HTTPS API, or a loopback local model. Applying a change is local-only, never returns the key, blocks active analysis/semantic verification/unresolved calls, persists remote keys only with Windows current-user DPAPI, and performs an orderly same-port service restart. A no-network loopback runtime acceptance switched Mock to qwen3:8b with a new service instance and no model call."
     },
     {
       "requirement_id": "FR-PROMPT-001",
@@ -1696,7 +1714,8 @@
         "scripts/gemini_local_setup.py",
         "scripts/deepseek_local_setup.py"
       ],
-      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "The live setup checks the target application port before loading, saving, forgetting or forwarding a credential, and reports the conflict without stopping the existing process."
     },
     {
       "requirement_id": "FR-UI-002",
@@ -1855,7 +1874,8 @@
         "spec/schemas/project-answer.schema.json",
         "scripts/benchmark_question_search.py"
       ],
-      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "A selected run containing any terminal FAILED document returns ANALYSIS_INCOMPLETE before retrieval, deterministic answer paths or model dispatch. Existing grounded answer and exact-citation contracts remain unchanged for runs without failed documents."
     },
     {
       "requirement_id": "FR-QA-EMAIL-SUBJECT-001",

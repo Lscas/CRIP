@@ -24,6 +24,10 @@ Reproduce locally:
 
 To measure an actual project PDF without a model call, append its path. Raw measurements are written only to ignored `reports/local/` files.
 
+## CR-0139 current large-specification recovery check
+
+The current saved 401-page specification was opened from CIRP's immutable uploaded object and parsed without a model call. A direct one-worker page pass completed 401/401 pages in 117.4 seconds. The existing benchmark/parser-worker path with four page workers completed 401/401 pages in 106.234 seconds. Neither isolated run reproduced the earlier `PermissionError`; that error occurred only while three document parser processes were launched together. This supports one post-batch isolated retry for that exact transient exception instead of a general retry policy. File name, content, hash and extracted text are intentionally omitted; this is parser/recovery evidence, not construction-output accuracy or DeepSeek validation.
+
 ## CR-0021 parser-structure recheck
 
 After adding deterministic page routing, specification locators and bordered table-row evidence, the same generated 48-page fixture was rerun on 2026-09-15. It retained 136 fragments, 34 estimated adjacent extraction batches and identical content hashes for all worker settings.

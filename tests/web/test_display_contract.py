@@ -72,6 +72,24 @@ def test_original_actions_and_input_constraints_remain_present():
     assert byid['analysis-progress'][1]['aria-valuemax'] == '100'
 
 
+def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
+    elements=Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
+    byid={attrs['id']:(tag,attrs) for tag,attrs in elements if 'id' in attrs}
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    for item in ('model-settings-open','model-settings-dialog','model-settings-form','model-provider',
+                 'model-base-url','model-name','model-input-rate','model-output-rate','model-api-key',
+                 'model-remember','model-approved','apply-model-settings'):
+        assert item in byid
+    assert byid['model-api-key'][1]['type']=='password'
+    assert byid['model-api-key'][1]['autocomplete']=='new-password'
+    assert 'value' not in byid['model-api-key'][1]
+    assert "const data=await api('/model-settings')" in source
+    assert "await api('/model-settings','POST'" in source
+    assert "$('model-api-key').value=''" in source
+    assert 'data.service_instance!==previousInstance' in source
+    assert 'innerHTML' not in source
+
+
 def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     elements = Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
     byid = {attrs['id']: (tag, attrs) for tag, attrs in elements if 'id' in attrs}
@@ -92,6 +110,7 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert "finding.append(questionCitation(citation,data))" in source
     assert "questionSourceLabels[item.source_type]" in source
     assert "if(data.answer_basis==='MODEL_PROJECT_EVIDENCE')return data.cached?'ask.basis.modelCached':'ask.basis.modelLive'" in source
+    assert "ANALYSIS_INCOMPLETE:'ask.basis.analysisIncomplete'" in source
     assert "if(basisKey)article.append(elT('div',basisKey,{},'question-basis'))" in source
     assert "body.append(el('pre',JSON.stringify(e.locator,null,2)))" not in source
     assert "citationLocation({file_name:null,locator:e.locator})" in source

@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
 import secrets
+import socket
 import subprocess
 import sys
 import threading
@@ -93,6 +94,13 @@ def valid_api_key(value: str) -> bool:
     except UnicodeEncodeError:
         return False
     return 16 <= len(encoded) <= 256 and not any(char.isspace() for char in value)
+
+
+def loopback_port_in_use(port: int) -> bool:
+    """Check the fixed local target without stopping or inspecting its process."""
+    with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.25)
+        return probe.connect_ex(('127.0.0.1',port))==0
 
 
 def custom_profile(fields: dict[str, list[str]], api_key: str) -> ProviderProfile:
@@ -275,6 +283,15 @@ class SetupHandler(BaseHTTPRequestHandler):
             if self.server.child is not None:
                 self._send(409, b"Already started")
                 return
+            if loopback_port_in_use(self.server.app_port):
+                fields["api_key"] = [""];api_key = ""
+                self._send(409, page(
+                    self.server.csrf_token,
+                    message=(f"Port {self.server.app_port} is already used by another local service. "
+                             "Stop that CIRP service, then submit this form again."),
+                    profile=self.server.profile, remember=self.server.remember,
+                ))
+                return
             try:
                 if remember:
                     enable_remember(self.server.data_dir, profile.provider)
@@ -334,6 +351,9 @@ def main(argv: list[str] | None = None, *, forced_provider: str | None = None) -
         return 0
     initial_message = ""
     if profile.provider != "custom" and remember_enabled(data_dir, profile.provider) and not args.replace_key:
+        if loopback_port_in_use(args.app_port):
+            print(f"[STOP] Port {args.app_port} is already used by another local service; the saved key was not loaded.",flush=True)
+            return 2
         try:
             api_key = load_api_key(data_dir, profile.provider)
         except LocalCredentialError:

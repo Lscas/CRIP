@@ -28,6 +28,14 @@ ACTIVE=('QUEUED','RUNNING')
 EXTRACTION_BATCH_SIZE=4
 EXTRACTION_BATCH_BYTES=8800
 
+def _isolated_parse_retry_needed(row: dict | None) -> bool:
+    if not row:return False
+    try:
+        if row['status']!='FAILED':return False
+        summary=json.loads(row['summary'] or '{}')
+    except (KeyError,TypeError,ValueError,json.JSONDecodeError):return False
+    return any('PermissionError' in str(value) for value in summary.get('warnings',[]))
+
 def deterministic_extraction_skip_reason(evidence: dict) -> str | None:
     section=str((evidence.get('locator') or {}).get('section') or '').upper()
     if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
@@ -335,6 +343,15 @@ class Runner:
                 futures=[pool.submit(self.parse_one,run,did) for did in batch]
                 for future in futures:
                     future.result();self.update_coverage(rid)
+            # A Windows renderer/OCR process can transiently lose access while several
+            # large documents start together. Retry only that proven transient class,
+            # once, after the competing document processes have finished.
+            for did in batch:
+                row=self.db.one('SELECT status,summary FROM document_results WHERE run_id=? AND document_id=?',
+                                (rid,did),False)
+                if not _isolated_parse_retry_needed(row):continue
+                self.db.execute('DELETE FROM document_results WHERE run_id=? AND document_id=?',(rid,did))
+                self.parse_one(run,did,workers);self.update_coverage(rid)
 
     def parse_one(self,run,did,page_workers=1):
         doc=self.db.one('SELECT * FROM documents WHERE id=?',(did,))

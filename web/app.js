@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const I = window.CIRPI18n;
 I.init();
 document.querySelectorAll('[data-i18n-initial]').forEach(node=>I.bindText(node,node.dataset.i18nInitial));
-const state = {project:null,run:null,runStatus:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,workflows:[],workflowPagination:null,workflowsRun:null,workflowLoadPromise:null,connectorStatuses:[],connectorItems:[],refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,uploading:false,asking:false};
+const state = {project:null,run:null,runStatus:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,workflows:[],workflowPagination:null,workflowsRun:null,workflowLoadPromise:null,connectorStatuses:[],connectorItems:[],refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,modelSettings:null,uploading:false,asking:false};
 const labels = {MATERIAL:'kind.MATERIAL',INSPECTION:'kind.INSPECTION'};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function elT(tag,key,params={},cls){return I.bindText(el(tag,null,cls),key,params);}
@@ -17,6 +17,37 @@ async function api(path,method='GET',body){
  return r.json();
 }
 function error(fn){return async(...args)=>{try{await fn(...args);}catch(e){toast(e.message);}};}
+const modelPresets={
+ deepseek:{base_url:'https://api.deepseek.com',model:'deepseek-v4-flash',input_rate:'4.40',output_rate:'13.20'},
+ gemini:{base_url:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-3.6-flash',input_rate:'7.50',output_rate:'37.50'}
+};
+function syncModelSettings(usePreset=false){
+ const provider=$('model-provider').value,live=provider!=='mock',custom=provider==='custom',preset=modelPresets[provider];
+ $('model-live-fields').hidden=!live;$('model-approved').required=live;$('model-remember').disabled=!live;
+ for(const id of ['model-base-url','model-name']){$(id).readOnly=live&&!custom;$(id).required=live;}
+ if(usePreset){
+  if(preset){$('model-base-url').value=preset.base_url;$('model-name').value=preset.model;$('model-input-rate').value=preset.input_rate;$('model-output-rate').value=preset.output_rate;}
+  else if(custom){$('model-base-url').value='';$('model-name').value='';$('model-input-rate').value='0';$('model-output-rate').value='0';}
+  $('model-api-key').value='';$('model-approved').checked=false;I.bindText($('model-key-status'),'modelSettings.keyUnknown');
+ }
+}
+async function openModelSettings(){
+ const data=await api('/model-settings');state.modelSettings=data;$('model-provider').value=data.provider;
+ $('model-base-url').value=data.api_base_url||modelPresets[data.provider]?.base_url||'';
+ $('model-name').value=data.model||modelPresets[data.provider]?.model||'';
+ $('model-input-rate').value=data.input_rate||modelPresets[data.provider]?.input_rate||'0';
+ $('model-output-rate').value=data.output_rate||modelPresets[data.provider]?.output_rate||'0';
+ $('model-api-key').value='';$('model-remember').checked=Boolean(data.saved_profile||data.saved_key||data.local_model);
+ $('model-approved').checked=false;I.bindText($('model-key-status'),data.saved_key?'modelSettings.keySaved':'modelSettings.keyNotSaved');
+ syncModelSettings(false);$('apply-model-settings').disabled=!data.restart_supported;$('model-settings-dialog').showModal();
+}
+async function waitForModelRestart(previousInstance){
+ for(let attempt=0;attempt<80;attempt++){
+  await new Promise(resolve=>setTimeout(resolve,500));
+  try{const response=await fetch('/api/settings',{cache:'no-store'});if(response.ok){const data=await response.json();if(data.service_instance&&data.service_instance!==previousInstance){location.reload();return;}}}catch{}
+ }
+ throw new Error(I.t('modelSettings.restartTimeout'));
+}
 function remainingText(seconds){const minutes=Math.max(1,Math.round(seconds/60));return minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} hr ${minutes%60} min`;}
 function renderProgress(run){
  const progress=run.progress||{percent:0},percent=Math.max(0,Math.min(100,Number(progress.percent)||0));
@@ -130,7 +161,8 @@ function citationLocation(item){
 const questionSourceLabels={SPECIFICATION:'Specification',RFI:'RFI',SUBMITTAL:'Submittal',EMAIL:'Email',OTHER:'Other source'};
 const questionBasisKeys={
  WORKFLOW_INDEX:'ask.basis.workflowIndex',LOCAL_PROJECT_EVIDENCE:'ask.basis.localEvidence',
- RETRIEVAL_ONLY:'ask.basis.retrievalOnly',NO_MATCHING_EVIDENCE:'ask.basis.noEvidence'
+ RETRIEVAL_ONLY:'ask.basis.retrievalOnly',NO_MATCHING_EVIDENCE:'ask.basis.noEvidence',
+ ANALYSIS_INCOMPLETE:'ask.basis.analysisIncomplete'
 };
 function questionBasisKey(data){
  if(data.answer_basis==='MODEL_PROJECT_EVIDENCE')return data.cached?'ask.basis.modelCached':'ask.basis.modelLive';
@@ -460,6 +492,15 @@ async function uploadFiles(files){
 }
 $('new-project').onclick=()=>{$('project-dialog').showModal();$('project-input').focus();};
 $('close-project').onclick=()=>{$('project-dialog').close();};
+$('model-settings-open').onclick=error(openModelSettings);
+$('close-model-settings').onclick=()=>{$('model-api-key').value='';$('model-settings-dialog').close();};
+$('model-provider').onchange=()=>syncModelSettings(true);
+$('model-settings-form').onsubmit=error(async event=>{event.preventDefault();const apply=$('apply-model-settings'),provider=$('model-provider').value,previous=state.settings.service_instance;apply.disabled=true;
+ try{
+  await api('/model-settings','POST',{provider,api_base_url:$('model-base-url').value.trim(),model:$('model-name').value.trim(),api_key:$('model-api-key').value,input_rate:$('model-input-rate').value||'0',output_rate:$('model-output-rate').value||'0',remember:$('model-remember').checked,approved:provider==='mock'||$('model-approved').checked});
+  $('model-api-key').value='';$('model-settings-dialog').close();toast(I.t('modelSettings.restarting'));await waitForModelRestart(previous);
+ }finally{apply.disabled=false;}
+});
 $('close-reconcile').onclick=()=>{$('reconcile-dialog').close();};
 $('reconcile-resolution').onchange=syncReconcileAmount;
 $('reconcile-form').onsubmit=error(async e=>{e.preventDefault();const resolution=$('reconcile-resolution').value;

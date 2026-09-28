@@ -655,6 +655,24 @@ def test_mock_question_returns_retrieval_context_without_fabricated_answer(clien
     assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?', (run['id'],)) == []
 
 
+def test_failed_document_blocks_project_answer_before_retrieval_or_model(client,project):
+    run=_evidence(client,project,['Domestic water service pipe shall be 2 inch Type L copper.'])
+    client.app.state.db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(
+        run['id'],run['document_ids'][0],'FAILED',json.dumps({
+            'status':'FAILED','fragments':[],'pages':[],
+            'warnings':['Parse failed: PermissionError.']})))
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'run_id':run['id'],'question':'What is the water service pipe material and size?'})
+
+    assert response.status_code==200
+    value=response.json()
+    assert value['status']=='ANALYSIS_INCOMPLETE'
+    assert value['answer_basis']=='ANALYSIS_INCOMPLETE' and value['retrieved_count']==0
+    assert value['citations']==[] and 'failed parsing' in value['answer']
+    assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+
 def test_live_answer_is_exactly_cited_and_budgeted(client, project, tmp_path):
     run = _evidence(client, project, ['Domestic water service pipe shall be 2 inch Type L copper.'])
     db = client.app.state.db

@@ -1,0 +1,37 @@
+{
+  "status": "READY",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 2000,
+  "max_context_chars": 26000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User explicitly requested repair followed by a DeepSeek analysis of the three already uploaded files on 2026-09-27.",
+  "notes": [
+    "Retry only the reproduced concurrent PermissionError once and only after the document batch finishes.",
+    "Do not load, save, forget or forward a credential while the target application port is occupied.",
+    "Do not retrieve or answer questions from a run containing a terminal FAILED document.",
+    "Implementation validation is offline; a separately authorized live run may use the existing project budget only after DeepSeek is live-ready."
+  ],
+  "task_id": "DEV-124",
+  "title": "Recover transient multi-file parsing and fail closed before project answers",
+  "requirement_ids": ["FR-INGEST-004", "FR-API-005", "FR-LOCAL-001", "FR-QA-001"],
+  "allowed_paths": [
+    "app/parser_worker.py", "app/runner.py", "app/questions.py",
+    "scripts/gemini_local_setup.py", "tests/app/test_api.py",
+    "tests/app/test_parsers.py", "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_questions.py", "tests/web/test_display_contract.py",
+    "web/app.js", "web/i18n.js", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/LOCAL_DEPLOY.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/PERFORMANCE_BASELINE.md",
+    "docs/DEV_STATE.md", "tasks/DEV-124.json", "changes/CR-0139.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py tests/app/test_parsers.py tests/app/test_gemini_local_setup.py tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-124",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Recover one proven transient multi-file parser failure without broad retries, make live startup port conflicts explicit before credential handling, and prevent incomplete runs from presenting project answers."
+}

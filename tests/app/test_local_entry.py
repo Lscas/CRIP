@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 from app.local_entry import LOCAL_HOSTS, check_port, local_settings, port_number
+from app.model_configuration import configured_settings, save_active_configuration
 from app.settings import Settings
 from scripts import local_deploy
 
@@ -73,6 +74,17 @@ def test_live_accepts_loopback_openai_compatible_model_without_key_or_price(tmp_
     result=local_settings(live=True)
     assert result.live_errors()==[] and result.is_local_model()
     assert result.public()['mode']=='Local model mode' and result.inference_parameters()=={}
+
+
+def test_standard_local_start_reuses_explicitly_saved_local_profile(tmp_path):
+    base=Settings(tmp_path,start_worker=False,allowed_hosts=LOCAL_HOSTS)
+    selected=configured_settings(
+        base,provider='custom',api_base_url='http://127.0.0.1:11434/v1',
+        model='qwen3:8b',input_rate='0',output_rate='0')
+    save_active_configuration(selected)
+    loaded=local_settings(tmp_path)
+    assert loaded.provider==selected.provider and loaded.is_local_model()
+    assert local_settings(tmp_path,use_saved=False).provider=='mock'
 
 
 @pytest.mark.parametrize('base_url',[
@@ -182,6 +194,11 @@ def test_local_command_safe_defaults():
     cmd=local_deploy.make_command(Path(sys.executable),args())
     assert cmd[1:]==['-m','app.local_entry','--port','8000','--no-browser']
     assert '--live' not in cmd
+
+
+def test_local_command_can_explicitly_bypass_saved_profile():
+    cmd=local_deploy.make_command(Path(sys.executable),args(mock=True))
+    assert cmd[-1]=='--mock' and '--live' not in cmd
 
 
 def test_remote_command_uses_separate_port():

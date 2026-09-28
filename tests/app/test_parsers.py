@@ -10,7 +10,7 @@ import pytest
 from PIL import Image,ImageDraw
 from app.parsers import (MAX_FRAGMENT_BYTES,document_context,parse_file,revision,
                          split_email_history,workflow_references)
-from app.parser_worker import save_result
+from app.parser_worker import safe_failure_warning,save_result
 from app.visual_pipeline import (PDF_CROP_COORDINATE_SYSTEM, ocr_pdf_page,
                                  render_pdf_page, render_visual_png)
 from app.workflows import build_workflow_index
@@ -1180,3 +1180,9 @@ def test_parser_worker_progress_write_is_atomic(tmp_path):
     save_result(destination,result)
     assert destination.read_text(encoding='utf-8')
     assert not destination.with_name(destination.name+'.tmp').exists()
+
+def test_parser_worker_failure_warning_keeps_type_without_message_or_path():
+    try:raise PermissionError('secret source path and operating-system detail')
+    except PermissionError as exc:warning=safe_failure_warning(exc)
+    assert warning=='Parse failed: PermissionError.'
+    assert 'secret' not in warning and '\\' not in warning and '/' not in warning

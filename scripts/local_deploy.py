@@ -91,6 +91,8 @@ def ensure_environment(*, use_current: bool = False, root: Path = ROOT) -> Path:
 def make_command(python: Path, args: argparse.Namespace) -> list[str]:
     if args.remote and args.live:
         raise ValueError('Remote preview remains mock-only. Live API mode starts locally with --live.')
+    if args.live and getattr(args,'mock',False):
+        raise ValueError('--live and --mock cannot be used together.')
     if args.remote and args.data_dir:
         raise ValueError('Remote preview must use isolated .local/preview-data, not the production data directory.')
     port = args.port if args.port is not None else (8001 if args.remote else 8000)
@@ -103,6 +105,8 @@ def make_command(python: Path, args: argparse.Namespace) -> list[str]:
             command.append('--no-browser')
         if args.live:
             command.append('--live')
+        if getattr(args,'mock',False):
+            command.append('--mock')
         if args.data_dir:
             command.extend(['--data-dir', str(Path(args.data_dir).resolve())])
     return command
@@ -114,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--data-dir')
     parser.add_argument('--live', action='store_true')
+    parser.add_argument('--mock', action='store_true', help='Ignore a saved model profile and start offline')
     parser.add_argument('--remote', action='store_true', help='Use an existing Cloudflare Quick Tunnel for mock preview; cloudflared is required')
     parser.add_argument('--use-current-env', action='store_true', help='Development and test only; do not install dependencies')
     parser.add_argument('--install-only', action='store_true')

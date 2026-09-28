@@ -5299,6 +5299,16 @@ class ProjectQuestions:
     def ask(self, run: dict, question: str, workflow_index: dict | None = None) -> dict:
         if run.get('status') not in ('PARTIAL','COMPLETED'):
             raise DomainError('Select a completed or partial analysis run before asking a question.',409)
+        failed=(self.db.one(
+            "SELECT COUNT(*) AS count FROM document_results WHERE run_id=? AND status='FAILED'",
+            (run['id'],))['count'] if run.get('project_id') else 0)
+        if failed:
+            return {'run_id':run['id'],'question':question,'status':'ANALYSIS_INCOMPLETE',
+                    'answer':(f'{failed} selected project file{"s" if failed!=1 else ""} failed parsing. '
+                              'Re-run analysis successfully before relying on a project answer.'),
+                    'answer_basis':'ANALYSIS_INCOMPLETE','citations':[],'source_findings':[],
+                    'workflow_statuses':[],'workflow_conflicts':[],
+                    'retrieved_count':0,'cached':False}
         inventory=_workflow_inventory_answer(question,workflow_index)
         if inventory:
             return {'run_id':run['id'],'question':question,'status':'ANSWERED',**inventory,

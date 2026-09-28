@@ -10,6 +10,11 @@ import pytest
 from scripts import gemini_local_setup as setup
 
 
+@pytest.fixture(autouse=True)
+def unused_app_port(monkeypatch):
+    monkeypatch.setattr(setup,"loopback_port_in_use",lambda port:False)
+
+
 def test_live_child_env_scrubs_inherited_secrets(monkeypatch):
     monkeypatch.setenv("CIRP_API_KEY", "inherited")
     secret_names = (
@@ -215,6 +220,24 @@ def test_existing_child_returns_conflict_without_second_spawn(monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_occupied_app_port_rejects_before_key_storage_or_child_start(monkeypatch,tmp_path):
+    monkeypatch.setattr(setup,"loopback_port_in_use",lambda port:True)
+    monkeypatch.setattr(setup,"save_api_key",lambda *a:pytest.fail("must not store"))
+    monkeypatch.setattr(setup,"forget_api_key",lambda *a:pytest.fail("must not forget"))
+    monkeypatch.setattr(setup,"start_live_child",lambda *a:pytest.fail("must not start"))
+    server=setup.SetupServer(("127.0.0.1",0),8010,setup.DEEPSEEK_PROFILE,data_dir=tmp_path)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    try:
+        with pytest.raises(HTTPError) as rejected:
+            post(server,{"csrf":server.csrf_token,"approved":"yes","remember":"yes",
+                         "api_key":"synthetic-valid-key"})
+        assert rejected.value.code==409
+        body=rejected.value.read().decode("utf-8")
+        assert "Port 8010 is already used" in body and "synthetic-valid-key" not in body
+    finally:
+        server.shutdown();server.server_close();thread.join(timeout=2)
 
 
 def test_saved_current_user_key_starts_without_setup_page(monkeypatch, tmp_path):

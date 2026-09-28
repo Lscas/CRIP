@@ -85,7 +85,8 @@
       "priority": "P0",
       "status": "planned",
       "acceptance_criteria": [
-        "失败文件被列出，其他文件继续处理。"
+        "失败文件被列出，其他文件继续处理。",
+        "A document that fails with a concurrent Windows PermissionError is retried exactly once after its document batch finishes; other failure classes are not retried automatically."
       ],
       "decision_source": "已批准的产品目标；实现尚未交付",
       "spec_section": "docs/PRODUCT_SPEC.md"
@@ -679,6 +680,7 @@
       "acceptance_criteria": [
         "A run can use 1, 2, or 4 bounded local parser/OCR workers across documents.",
         "A single PDF can use the selected workers across bounded page chunks while preserving page order and equivalent output.",
+        "A concurrent document PermissionError receives one isolated retry using the selected page-worker count, without retrying model work or unrelated parser failures.",
         "Up to four adjacent fragments/8.8 KB batch only inside one ordinary or exact workflow scope; an RFI/Submittal ID, role, status or family change closes the batch, and routing-only Email evidence closes locally.",
         "Paid model calls remain serial and every call is recorded in the project ledger."
       ],
@@ -694,7 +696,10 @@
       "acceptance_criteria": [
         "Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.",
         "The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.",
-        "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer."
+        "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.",
+        "The local application settings dialog can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.",
+        "A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.",
+        "A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data."
       ],
       "decision_source": "User request on 2026-09-14 to let customers configure their own API or choose a local model.",
       "spec_section": "docs/LOCAL_VALIDATION.md"
@@ -1334,6 +1339,7 @@
       "acceptance_criteria": [
         "提供Windows CMD及macOS/Linux入口；首次隔离安装，失败不得宣布启动。",
         "默认模拟入口不读取.env；端口冲突拒绝启动、不杀其他进程。",
+        "The live-key setup refuses an occupied application port before loading, saving, forgetting, or passing a credential to a child process.",
         "已有依赖环境真实HTTP示例流程和重启持久化通过；未验证平台/依赖安装如实报告。",
         "原远程预览保护和预算不变，不将本机端口公开。"
       ],

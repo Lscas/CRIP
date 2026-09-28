@@ -9,7 +9,7 @@
 
 EML: one body/related root; Gmail/Yahoo/Proton/Outlook history, signatures, resources and nested messages stay inert. Same-line metadata stays outside IDs; statuses require complete allowlisted values and descriptions stay neutral. Exact scopes do not cross-donate fields/prompts; valid Subject priority remains.
 | 图片/DWG | 常见图片本机OCR并建立视觉任务；DXF对象元数据；GNU LibreDWG本机DWG→DXF后按对象解析，转换和对象解析均成功时标记`OBJECT_METADATA`，否则`UNAVAILABLE`；原文件不改 | DWG Xref/自定义对象/字体完整恢复、复杂Layout；真实用户DWG仍需样本验收 |
-| Model | Mock; DeepSeek text/selective vision; Gemini text; configurable OpenAI-compatible or loopback local text model; extraction batches ≤4 fragments/8.8 KB inside one ordinary/exact workflow scope; routing-only Email closes locally; verification ≤4 fields per exact evidence scope | Generic-adapter vendor parameters/vision, model discovery, non-loopback LAN, drawing-region detection, live crop/batch comparison, construction benchmark and L2 escalation |
+| Model | In-app settings for Mock, fixed official DeepSeek/Gemini, custom OpenAI-compatible HTTPS, or loopback local text model; safe same-port restart; extraction batches ≤4 fragments/8.8 KB inside one ordinary/exact workflow scope; routing-only Email closes locally; verification ≤4 fields per exact evidence scope | Generic-adapter vendor parameters/vision, model discovery, non-loopback LAN, drawing-region detection, live crop/batch comparison, construction benchmark and L2 escalation |
 | 材料/QA | 原子要求、Tag属性、字段证据、CSI locator；发布前排除泛称、非执行QA、重复/错挂证据、RFI问句、被拒Submittal、邮件头/历史，保留混合来源中的有效依据；全部有效RFI答复/Submittal/Email正文决定条件性和人工审核 | 完整选项、实体归并、结构化数量、复杂条件/广义语义评估；审批权限和语义关系裁决 |
 | 冲突 | 同Tag/属性/单位的不同值；按可用内部日期采用新值并保留差异 | 单位等值、广义跨专业冲突和设计状态解释 |
 | 缺失 | 未解析/未分析/关联上下文缺失明确列出 | 自动判断所有设计缺失的完整性 |

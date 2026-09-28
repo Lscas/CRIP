@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import hmac
 import logging
+import secrets
+import threading
 from functools import lru_cache
 from decimal import Decimal
 from contextlib import asynccontextmanager
@@ -17,6 +19,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel,ConfigDict,Field
 from filelock import FileLock,Timeout as LockTimeout
 from app.settings import Settings,ROOT,VERSION
+from app.local_credentials import LocalCredentialError
+from app.model_configuration import (clear_active_configuration, configured_settings,
+                                     public_configuration, save_active_configuration)
 from app.db import Database,DomainError,dumps,now,uid
 from app.uploads import Uploads
 from app.gateway import Gateway
@@ -93,6 +98,16 @@ class QuestionInput(Input):
     run_id:str=Field(min_length=1,max_length=128)
     question:str=Field(min_length=3,max_length=1000)
 
+class ModelConfigurationInput(Input):
+    provider:Literal['mock','deepseek','gemini','custom']
+    api_base_url:str=Field(default='',max_length=2048)
+    model:str=Field(default='',max_length=160)
+    api_key:str=Field(default='',max_length=256,repr=False)
+    input_rate:Decimal=Field(default=Decimal('0'),ge=0,le=100000,max_digits=18,decimal_places=6)
+    output_rate:Decimal=Field(default=Decimal('0'),ge=0,le=100000,max_digits=18,decimal_places=6)
+    remember:bool=True
+    approved:bool=False
+
 class ReconcileCallInput(Input):
     resolution:Literal['NOT_BILLED','BILLED']
     actual_cny:Decimal=Field(default=Decimal('0'),ge=0,le=100000)
@@ -109,6 +124,7 @@ class ReviewInput(Input):
 
 def create_app(settings:Settings|None=None)->FastAPI:
     s=settings or Settings.from_env();s.data_dir.mkdir(parents=True,exist_ok=True)
+    instance_id=secrets.token_hex(12);provider_change_lock=threading.Lock();restarting=[False]
     db=Database(s.data_dir/'cirp.sqlite3');uploads=Uploads(db,s);gateway=Gateway(s,db);runner=Runner(db,s,uploads,gateway)
     questions=ProjectQuestions(db,gateway)
     connectors=ExternalConnectors(s,uploads)
@@ -175,7 +191,43 @@ def create_app(settings:Settings|None=None)->FastAPI:
     @app.get('/api/health/version')
     def health():return {'app_version':VERSION,'spec_version':VERSION,'schema_version':'0.2.0','provider':s.provider}
     @app.get('/api/settings')
-    def settings_view():return s.public()
+    def settings_view():return {**s.public(),'service_instance':instance_id}
+    @app.get('/api/model-settings')
+    def model_settings_view():
+        return {**public_configuration(s),
+                'restart_supported':callable(getattr(app.state,'request_model_restart',None)),
+                'service_instance':instance_id}
+    @app.post('/api/model-settings',status_code=202)
+    def model_settings_update(data:ModelConfigurationInput):
+        if s.remote_enabled or s.render_free_preview:
+            raise DomainError('Model settings can be changed only from the local single-user application.',403)
+        if data.provider!='mock' and not data.approved:
+            raise DomainError('Confirm the endpoint, data transfer, rates, and possible API charges.')
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is already restarting with a new model configuration.',409)
+            restart=getattr(app.state,'request_model_restart',None)
+            if not callable(restart):
+                raise DomainError('Restart CIRP with the standard local launcher before changing model settings.',409)
+            if db.one("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING') LIMIT 1",required=False):
+                raise DomainError('Pause or finish the active analysis before changing model settings.',409)
+            if db.one("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING') LIMIT 1",required=False):
+                raise DomainError('Finish the active semantic verification before changing model settings.',409)
+            if db.one('SELECT id FROM model_calls WHERE actual_units IS NULL LIMIT 1',required=False):
+                raise DomainError('Reconcile unresolved API calls before changing model settings.',409)
+            try:
+                candidate=configured_settings(
+                    s,provider=data.provider,api_base_url=data.api_base_url,model=data.model,
+                    api_key=data.api_key,input_rate=data.input_rate,output_rate=data.output_rate)
+                if data.remember and candidate.provider!='mock':save_active_configuration(candidate)
+                else:clear_active_configuration(s.data_dir)
+            except (ValueError,LocalCredentialError) as exc:
+                raise DomainError(str(exc)) from exc
+            except OSError as exc:
+                raise DomainError('The model settings could not be saved locally.') from exc
+            restarting[0]=True
+            restart(candidate)
+        return {'status':'RESTARTING','provider':candidate.provider,
+                'model':candidate.cheap_model if candidate.provider!='mock' else 'mock-no-network'}
     @app.get('/api/demo-files/{name}')
     def demo_file(name:str):
         if name not in ('01_original.txt','02_revision.txt'):
@@ -257,7 +309,10 @@ def create_app(settings:Settings|None=None)->FastAPI:
             uploads,doc,[(item.attachment_index,item.expected_sha256) for item in data.attachments])
         return {'count':len(imported),'imports':imported}
     @app.post('/api/projects/{pid}/analysis-runs',status_code=202)
-    def run_create(pid:str,data:RunInput|None=None):return runner.create(pid,(data or RunInput()).local_workers)
+    def run_create(pid:str,data:RunInput|None=None):
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')
     def runs_get(pid:str):return [runner.get(x['id']) for x in db.all('SELECT id FROM runs WHERE project_id=? ORDER BY created_at DESC',(pid,))]
     @app.post('/api/projects/{pid}/questions')
@@ -290,11 +345,17 @@ def create_app(settings:Settings|None=None)->FastAPI:
                              or requires_cross_workflow_relation_index(question)
                              or requires_email_action_index(question)
                              or requires_email_header_index(question)) else None)
-        return questions.ask(run,question,workflow_index)
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            return questions.ask(run,question,workflow_index)
     @app.get('/api/analysis-runs/{rid}')
     def run_get(rid:str):return runner.get(rid)
     @app.post('/api/analysis-runs/{rid}/{action}')
-    def run_control(rid:str,action:Literal['pause','resume','cancel']):return runner.control(rid,action)
+    def run_control(rid:str,action:Literal['pause','resume','cancel']):
+        if action!='resume':return runner.control(rid,action)
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            return runner.control(rid,action)
     @app.get('/api/analysis-runs/{rid}/cost')
     def run_cost(rid:str):return db.cost(runner.get(rid)['project_id'])
     @app.get('/api/analysis-runs/{rid}/takeoffs')
@@ -493,7 +554,9 @@ def create_app(settings:Settings|None=None)->FastAPI:
         run=runner.get(row['run_id'])
         if run['status'] in ('RUNNING','QUEUED'):raise DomainError('分析正在运行，核验会自动进行',409)
         if data.semantic:
-            return JSONResponse(runner.verifier.enqueue(record_id,data.expected_version),status_code=202)
+            with provider_change_lock:
+                if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+                return JSONResponse(runner.verifier.enqueue(record_id,data.expected_version),status_code=202)
         return runner.verifier.refresh(record_id)
 
     @app.get('/api/records/{record_id}/verification-history')

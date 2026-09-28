@@ -664,6 +664,30 @@ def test_selected_local_workers_parse_two_documents_concurrently(client,project,
     assert peak==2 and runner.get(run['id'])['coverage']['pages_processed']==2
 
 
+def test_permission_failure_retries_once_after_document_batch(client,project,monkeypatch):
+    upload(client,project['id'],'one.txt',b'one');upload(client,project['id'],'two.txt',b'two')
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs',json={'local_workers':2}).json()
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    failed_id=run['document_ids'][1];calls=[]
+    def parse(run_arg,did,page_workers=1):
+        calls.append((did,page_workers))
+        failed=did==failed_id and sum(value[0]==did for value in calls)==1
+        summary={'status':'FAILED' if failed else 'SUCCESS','fragments':[],
+                 'pages':[] if failed else [{'page':1,'status':'TEXT_EXTRACTED'}],
+                 'warnings':['Parse failed: PermissionError at visual_pipeline.py:74.'] if failed else [],
+                 'visual_tasks':[],'geometry_summaries':[],'takeoffs':[]}
+        db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+                   (run_arg['id'],did,summary['status'],json.dumps(summary)))
+    monkeypatch.setattr(runner,'parse_one',parse)
+
+    runner.parse_documents(run)
+
+    assert [workers for did,workers in calls if did==failed_id]==[1,2]
+    assert db.one('SELECT status FROM document_results WHERE run_id=? AND document_id=?',
+                  (run['id'],failed_id))['status']=='SUCCESS'
+
+
 def test_adjacent_extraction_batching_is_bounded_and_respects_legacy_single_tasks():
     def evidence(number,page,text='x',section=None):
         return {'evidence_id':f'EV-{number}','document_id':'DOC-1','raw_text':text,

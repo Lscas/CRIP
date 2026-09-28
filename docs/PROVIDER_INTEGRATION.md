@@ -1,4 +1,10 @@
 # DeepSeek 文本/视觉与 Google Gemini 文本适配器
+
+## In-app model settings
+
+Local users can open **Model API settings** from the application header and choose Mock, DeepSeek, Gemini, a custom OpenAI-compatible HTTPS API, or a loopback local model. The existing gateway and budget ledger are reused; this is not a second dispatch path. Official provider choices keep their fixed endpoint/model restrictions. A custom remote endpoint requires HTTPS, a key, and positive confirmed CNY rates; only `localhost` or a literal loopback address may use HTTP, omit the key, and use zero rates. Generic custom endpoints remain text-only and receive no DeepSeek/Gemini-specific request parameters.
+
+Applying settings performs no model call. It is blocked by an active analysis, active semantic verification, or any unresolved model call. The local single-user service then restarts on the same port. Keys are never returned to the browser after submission and are persisted only when the user selects Windows current-user DPAPI storage. The non-secret active profile permits the normal launcher to reuse the selection; `--mock` explicitly bypasses it.
 **规格版本：** 0.2.6
 当前 `app/gateway.py` 已实现OpenAI风格chat/completions HTTP接口；不包含秘密。文本使用`deepseek-v4-flash`，页面视觉只允许`deepseek-v4-flash-vision-exp`，不自动升级到其他模型。
 
