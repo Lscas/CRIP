@@ -1,6 +1,7 @@
 """本地单用户HTTP入口。默认不调用付费API。"""
 from __future__ import annotations
 import json
+import hashlib
 import hmac
 import logging
 import secrets
@@ -95,7 +96,7 @@ class WorkflowClassificationInput(Input):
     status:str|None=Field(default=None,max_length=80)
     note:str=Field(default='',max_length=1000)
 class QuestionInput(Input):
-    run_id:str=Field(min_length=1,max_length=128)
+    run_id:str|None=Field(default=None,min_length=1,max_length=128)
     question:str=Field(min_length=3,max_length=1000)
 
 class ModelConfigurationInput(Input):
@@ -315,9 +316,34 @@ def create_app(settings:Settings|None=None)->FastAPI:
             return runner.create(pid,(data or RunInput()).local_workers)
     @app.get('/api/projects/{pid}/analysis-runs')
     def runs_get(pid:str):return [runner.get(x['id']) for x in db.all('SELECT id FROM runs WHERE project_id=? ORDER BY created_at DESC',(pid,))]
+    def project_knowledge(pid:str)->dict:
+        db.one('SELECT id FROM projects WHERE id=?',(pid,))
+        documents=[dict(row) for row in db.all(
+            'SELECT id,sha256 FROM documents WHERE project_id=? ORDER BY id',(pid,))]
+        snapshot='SN-'+hashlib.sha256(dumps(documents).encode()).hexdigest()[:32]
+        row=db.one("""SELECT id FROM runs
+                      WHERE project_id=? AND status IN ('PARTIAL','COMPLETED')
+                      ORDER BY created_at DESC,rowid DESC LIMIT 1""",(pid,),required=False)
+        active=bool(db.one("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING') LIMIT 1",
+                           required=False))
+        if not row:
+            return {'available':False,'run_id':None,'current':False,'active_update':active,
+                    'created_at':None,'status':None,'document_count':0}
+        run=runner.get(row['id'])
+        return {'available':True,'run_id':run['id'],'current':run['snapshot_id']==snapshot,
+                'active_update':active,'created_at':run['created_at'],'status':run['status'],
+                'document_count':len(run['document_ids'])}
+    @app.get('/api/projects/{pid}/knowledge')
+    def project_knowledge_get(pid:str):return project_knowledge(pid)
     @app.post('/api/projects/{pid}/questions')
     def question_ask(pid:str,data:QuestionInput):
-        run=runner.get(data.run_id)
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid)
+            if not knowledge['available']:
+                raise DomainError('Analyze this project once before asking a question.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
         if run['project_id']!=pid:raise DomainError('The selected analysis run does not belong to this project.',404)
         question=data.question.strip()
         if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')

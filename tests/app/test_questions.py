@@ -655,6 +655,47 @@ def test_mock_question_returns_retrieval_context_without_fabricated_answer(clien
     assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?', (run['id'],)) == []
 
 
+def test_project_question_automatically_uses_latest_saved_analysis(client,project):
+    run=_evidence(client,project,['Domestic water service pipe shall be 2 inch Type L copper.'])
+
+    knowledge=client.get(f'/api/projects/{project["id"]}/knowledge')
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'question':'What is the water service pipe material and size?'})
+
+    assert knowledge.status_code==200
+    assert knowledge.json()=={
+        'available':True,'run_id':run['id'],'current':True,'active_update':False,
+        'created_at':run['created_at'],'status':'PARTIAL','document_count':1,
+    }
+    assert response.status_code==200 and response.json()['run_id']==run['id']
+    assert response.json()['answer_basis']=='RETRIEVAL_ONLY'
+    assert client.app.state.db.all('SELECT id FROM model_calls WHERE run_id=?',(run['id'],))==[]
+
+    upload(client,project['id'],'new-revision.txt',b'new project revision')
+    stale=client.get(f'/api/projects/{project["id"]}/knowledge').json()
+    assert stale['available'] is True and stale['run_id']==run['id'] and stale['current'] is False
+
+
+def test_project_question_without_saved_analysis_fails_before_model_work(client,project):
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'question':'What material is required?'})
+    assert response.status_code==409
+    assert response.json()['detail']=='Analyze this project once before asking a question.'
+    assert client.app.state.db.all('SELECT id FROM model_calls')==[]
+
+
+def test_project_question_prefers_newest_saved_analysis(client,project):
+    older=_evidence(client,project,['Old saved evidence.'])
+    newer=_evidence(client,project,['Current saved evidence.'])
+
+    response=client.post(f'/api/projects/{project["id"]}/questions',json={
+        'question':'What evidence is current?'})
+
+    assert older['id']!=newer['id']
+    assert response.status_code==200 and response.json()['run_id']==newer['id']
+    assert response.json()['citations'][0]['quote']=='Current saved evidence.'
+
+
 def test_failed_document_blocks_project_answer_before_retrieval_or_model(client,project):
     run=_evidence(client,project,['Domestic water service pipe shall be 2 inch Type L copper.'])
     client.app.state.db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(

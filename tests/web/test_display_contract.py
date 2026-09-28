@@ -87,6 +87,7 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
                for tag,attrs in elements)
     assert byid['model-api-key'][1]['type']=='password'
     assert byid['model-api-key'][1]['autocomplete']=='new-password'
+    assert 'disabled' not in byid['model-api-key'][1] and 'readonly' not in byid['model-api-key'][1]
     assert 'value' not in byid['model-api-key'][1]
     assert "const data=await api('/model-settings')" in source
     assert "await api('/model-settings','POST'" in source
@@ -95,6 +96,8 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
     assert 'model-settings-dialog' not in source
     assert "$('model-api-key').value=''" in source
     assert 'data.service_instance!==previousInstance' in source
+    assert 'current.service_instance!==state.settings.service_instance' in source
+    assert "setInterval(reloadForServiceChange,4000)" in source
     assert 'innerHTML' not in source
 
 
@@ -107,6 +110,9 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
     assert byid['question-form'][0] == 'form'
     assert byid['project-question'][1]['maxlength'] == '1000'
     assert "api(`/projects/${state.project}/questions`,'POST'" in source
+    assert "state.knowledge=await api(`/projects/${state.project}/knowledge`)" in source
+    assert "'POST',{question}" in source
+    assert "'POST',{run_id:state.run,question}" not in source
     assert "source.append(quote,location,open);return source" in source
     assert "showEvidence(item.evidence_id,{start:item.start,end:item.end},data.run_id)" in source
     assert "const findings=data.source_findings||[]" in source

@@ -58,6 +58,18 @@ def test_model_settings_endpoint_applies_local_profile_without_model_call(client
     assert 'api_key' not in response.text and '127.0.0.1:11434' not in response.text
 
 
+def test_model_settings_endpoint_accepts_a_replacement_key_without_echo(client):
+    selected=[];client.app.state.request_model_restart=selected.append
+    replacement='synthetic-replacement-key-for-offline-test'
+    response=client.post('/api/model-settings',json={
+        'provider':'deepseek','api_key':replacement,'input_rate':'4.4','output_rate':'13.2',
+        'remember':False,'approved':True})
+    assert response.status_code==202 and len(selected)==1
+    assert selected[0].api_key==replacement
+    assert replacement not in response.text and 'api_key' not in response.text
+    assert client.app.state.db.all('SELECT * FROM model_calls')==[]
+
+
 def test_model_settings_endpoint_does_not_echo_rejected_key(client):
     client.app.state.request_model_restart=lambda value:None
     response=client.post('/api/model-settings',json={

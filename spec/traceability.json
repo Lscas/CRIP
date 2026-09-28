@@ -934,7 +934,7 @@
         "start-custom-model.ps1"
       ],
       "verification_report": "docs/LOCAL_VALIDATION.md",
-      "progress_note": "The English main application now has a dedicated Model API Settings section, reachable from the sidebar or header and loaded with the page instead of using a modal dialog or separate setup server. It reuses the existing OpenAI-compatible gateway for Mock, fixed official DeepSeek/Gemini profiles, a custom HTTPS API, or a loopback local model. Applying a change is local-only, never returns the key, blocks active analysis/semantic verification/unresolved calls, persists remote keys only with Windows current-user DPAPI, and performs an orderly same-port service restart. A no-network loopback runtime acceptance switched Mock to qwen3:8b with a new service instance and no model call."
+      "progress_note": "The English main application has a dedicated Model API Settings section and every open tab now detects a completed same-port restart before retaining stale provider controls. The API key field remains write-only and explicitly accepts a new or replacement key. The existing gateway, budget, active-work block and Windows current-user DPAPI boundaries remain unchanged; offline replacement-key tests make no model call."
     },
     {
       "requirement_id": "FR-PROMPT-001",
@@ -1875,7 +1875,32 @@
         "scripts/benchmark_question_search.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "A selected run containing any terminal FAILED document returns ANALYSIS_INCOMPLETE before retrieval, deterministic answer paths or model dispatch. Existing grounded answer and exact-citation contracts remain unchanged for runs without failed documents."
+      "progress_note": "Project questions no longer require the browser's Analysis Run history selection. With no run_id, the server automatically uses the project's newest saved PARTIAL or COMPLETED analysis; explicit run_id remains compatible and project-scoped. A read-only knowledge status identifies the saved run, active updates and whether newer files are excluded. New terminal results automatically replace the prior default, while every existing grounding, exact-citation, budget and failed-document boundary remains unchanged."
+    },
+    {
+      "requirement_id": "FR-QA-PROJECT-KNOWLEDGE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/main.py",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_latest_saved_project_analysis_selection_stale_snapshot_status_and_run_independent_browser_question_flow",
+      "implemented_product_paths": [
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/PROJECT_QUESTIONS.md",
+      "progress_note": "The project knowledge endpoint selects the newest saved PARTIAL or COMPLETED run, reports active/stale state without evidence text, and lets the browser ask without an Analysis Run selection."
     },
     {
       "requirement_id": "FR-QA-EMAIL-SUBJECT-001",

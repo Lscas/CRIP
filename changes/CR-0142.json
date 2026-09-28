@@ -1,0 +1,29 @@
+{
+  "change_id": "CR-0142",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-API-006", "FR-QA-001", "FR-QA-PROJECT-KNOWLEDGE-001", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "summary": "Reload stale tabs after a model restart and make project Q&A automatically use the newest saved terminal analysis instead of the browser's Analysis Run selection.",
+  "decision_refs": [
+    "User report on 2026-09-27 that a replacement API key could not be entered/restarted and manual Analysis Run selection made project Q&A too cumbersome"
+  ],
+  "affected_paths": [
+    "app/main.py", "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_model_configuration.py", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/LOCAL_VALIDATION.md",
+    "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-127.json", "changes/CR-0142.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested both workflow simplifications and a fix.",
+  "known_limitations": [
+    "Newly uploaded files are not silently included until the user starts an analysis update.",
+    "Project questions remain independent requests rather than a persistent multi-turn conversation."
+  ]
+}

@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const I = window.CIRPI18n;
 I.init();
 document.querySelectorAll('[data-i18n-initial]').forEach(node=>I.bindText(node,node.dataset.i18nInitial));
-const state = {project:null,run:null,runStatus:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,workflows:[],workflowPagination:null,workflowsRun:null,workflowLoadPromise:null,connectorStatuses:[],connectorItems:[],refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,modelSettings:null,uploading:false,asking:false};
+const state = {project:null,run:null,runStatus:null,knowledge:null,records:[],recordCounts:{},recordPagination:null,recordsRun:null,recordLoadPromise:null,takeoffs:[],takeoffsRun:null,workflows:[],workflowPagination:null,workflowsRun:null,workflowLoadPromise:null,connectorStatuses:[],connectorItems:[],refreshPromise:null,unresolvedCalls:[],kind:'MATERIAL',kindTouched:false,settings:null,modelSettings:null,uploading:false,asking:false};
 const labels = {MATERIAL:'kind.MATERIAL',INSPECTION:'kind.INSPECTION'};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function elT(tag,key,params={},cls){return I.bindText(el(tag,null,cls),key,params);}
@@ -48,6 +48,13 @@ async function waitForModelRestart(previousInstance){
  }
  throw new Error(I.t('modelSettings.restartTimeout'));
 }
+async function reloadForServiceChange(){
+ try{
+  const response=await fetch('/api/settings',{cache:'no-store'});if(!response.ok)return;
+  const current=await response.json();
+  if(state.settings?.service_instance&&current.service_instance!==state.settings.service_instance)location.reload();
+ }catch{}
+}
 function remainingText(seconds){const minutes=Math.max(1,Math.round(seconds/60));return minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} hr ${minutes%60} min`;}
 function renderProgress(run){
  const progress=run.progress||{percent:0},percent=Math.max(0,Math.min(100,Number(progress.percent)||0));
@@ -66,7 +73,7 @@ async function projects(selected){
  all.forEach(p=>$('project-select').append(new Option(p.name,p.id)));
  if(selected||all.length){$('project-select').value=selected||all[0].id;await selectProject($('project-select').value);}
 }
-async function selectProject(id){state.project=id;state.run=null;state.runStatus=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowPagination=null;state.workflowsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
+async function selectProject(id){state.project=id;state.run=null;state.runStatus=null;state.knowledge=null;state.records=[];state.recordCounts={};state.recordPagination=null;state.recordsRun=null;state.takeoffs=[];state.takeoffsRun=null;state.workflows=[];state.workflowPagination=null;state.workflowsRun=null;state.unresolvedCalls=[];state.kindTouched=false;
  $('question-results').replaceChildren();updateQuestionAvailability();
  renderConnectorItems();
  if(!id){I.bindText($('project-name'),'project.none');$('reconciliation-panel').hidden=true;$('save-budget').disabled=true;renderRecords();renderTakeoffs();renderWorkflows();return;}
@@ -88,7 +95,7 @@ async function refresh(){
   tr.append(name,el('td',(u.size/1024/1024).toFixed(2)+' MB'),I.bindStatus(el('td'),u.state),verification);$('files-body').append(tr);
  });
  I.bindText($('file-total'),'files.total',{count:manifest.documents.length});
- const runs=await api(`/projects/${state.project}/analysis-runs`);$('run-select').replaceChildren(optionT('run.select'));
+ const runs=await api(`/projects/${state.project}/analysis-runs`);state.knowledge=await api(`/projects/${state.project}/knowledge`);$('run-select').replaceChildren(optionT('run.select'));
  runs.forEach(r=>$('run-select').append(I.bindText(new Option('',r.id),()=>r.created_at.slice(0,19).replace('T',' ')+' · '+I.status(r.status))));
  if(!state.run&&runs.length)state.run=runs[0].id;
  if(state.run){$('run-select').value=state.run;await refreshRun();}else{state.runStatus=null;updateQuestionAvailability();renderRecords();renderTakeoffs();renderWorkflows();I.bindText($('run-state'),'run.notStarted');}
@@ -100,7 +107,10 @@ async function refreshRun(forceRecords=false){
  const task=(async()=>{
    const rid=state.run;const run=await api('/analysis-runs/'+rid);
    if(rid!==state.run)return;
-   state.runStatus=run.status;
+   const previousStatus=state.runStatus;state.runStatus=run.status;
+   if(state.project&&['PARTIAL','COMPLETED'].includes(run.status)&&!['PARTIAL','COMPLETED'].includes(previousStatus||'')){
+    state.knowledge=await api(`/projects/${state.project}/knowledge`);
+   }
   const active=['QUEUED','RUNNING'].includes(run.status);
   const cost=await api(`/analysis-runs/${rid}/cost`);
  if(forceRecords||(!active&&state.recordsRun!==rid)){
@@ -143,10 +153,15 @@ async function refreshRun(forceRecords=false){
  try{await task;}finally{if(state.refreshPromise===task)state.refreshPromise=null;}
 }
 function updateQuestionAvailability(){
- const ready=Boolean(state.project&&state.run&&['PARTIAL','COMPLETED'].includes(state.runStatus));
+ const knowledge=state.knowledge,ready=Boolean(state.project&&knowledge?.available&&!knowledge.active_update);
  $('project-question').disabled=!ready||state.asking;
  $('ask-submit').disabled=!ready||state.asking||$('project-question').value.trim().length<3||state.unresolvedCalls.length>0;
- if(!state.asking)I.bindText($('question-status'),ready?'ask.ready':'ask.selectRun');
+ if(!state.asking){
+  if(!state.project)I.bindText($('question-status'),'ask.selectProject');
+  else if(knowledge?.active_update)I.bindText($('question-status'),'ask.updating');
+  else if(!knowledge?.available)I.bindText($('question-status'),'ask.analyzeFirst');
+  else I.bindText($('question-status'),knowledge.current?'ask.readySaved':'ask.readyOutdated',{date:knowledge.created_at.slice(0,19).replace('T',' ')});
+ }
 }
 function citationLocation(item){
  const locator=item.locator||{},parts=[item.file_name];
@@ -493,6 +508,7 @@ async function uploadFiles(files){
 $('new-project').onclick=()=>{$('project-dialog').showModal();$('project-input').focus();};
 $('close-project').onclick=()=>{$('project-dialog').close();};
 $('model-settings-open').onclick=error(async()=>{await loadModelSettings();$('model-settings').scrollIntoView({behavior:'smooth'});history.replaceState(null,'','#model-settings');});
+$('model-settings-nav').onclick=error(loadModelSettings);
 $('model-provider').onchange=()=>syncModelSettings(true);
 $('model-settings-form').onsubmit=error(async event=>{event.preventDefault();const apply=$('apply-model-settings'),provider=$('model-provider').value,previous=state.settings.service_instance;apply.disabled=true;
  try{
@@ -530,10 +546,10 @@ for(const b of document.querySelectorAll('[data-kind]'))b.onclick=error(async()=
 $('results-load-more').onclick=error(async()=>{await loadRecordPage();renderRecords();});
 $('workflow-load-more').onclick=error(async()=>{await loadWorkflowPage();renderWorkflows();});
 $('project-question').oninput=updateQuestionAvailability;
-$('question-form').onsubmit=error(async event=>{event.preventDefault();if(!state.project||!state.run)return;
+$('question-form').onsubmit=error(async event=>{event.preventDefault();if(!state.project||!state.knowledge?.available)return;
  const question=$('project-question').value.trim();state.asking=true;updateQuestionAvailability();I.bindText($('question-status'),'ask.searching');
  try{
-  const result=await api(`/projects/${state.project}/questions`,'POST',{run_id:state.run,question});
+  const result=await api(`/projects/${state.project}/questions`,'POST',{question});
   renderQuestionAnswer(question,result);$('project-question').value='';await refreshRun();
  }finally{state.asking=false;updateQuestionAvailability();}
 });
@@ -544,4 +560,6 @@ for(const fmt of ['json','xlsx'])$('export-'+fmt).onclick=()=>{if(state.run)loca
  $('vision-disclosure').hidden=!(state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready);
  if(state.settings.storage_warning){I.bindMessage($('environment-warning'),state.settings.storage_warning);$('environment-warning').hidden=false;}
  await loadConnectorStatus();renderConnectorItems();await projects();setInterval(()=>{if(state.run)refreshRun().catch(()=>{});},2500);
+ setInterval(reloadForServiceChange,4000);window.addEventListener('focus',reloadForServiceChange);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)reloadForServiceChange();});
 })().catch(e=>toast(e.message));

@@ -490,6 +490,7 @@ A local customer can start CIRP with a customer-selected OpenAI-compatible text 
 - The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or budgets.
 - A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.
 - A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data.
+- Every open application tab detects a completed same-port service restart and reloads its non-secret configuration, so an older Mock tab cannot hide the active provider's replacement-key controls.
 
 ## FR-PROMPT-001 · Prompt Git 版本化
 
@@ -1032,6 +1033,18 @@ A user may ask an English question about a selected completed analysis run and r
 - A strict count or list question filtered by one bounded explicit status applicable to every requested workflow type may use the same complete index for RFI and Submittal identifiers. Only groups with one distinct explicit detected-or-manual status supporting the requested disposition enter the confirmed result; groups containing that disposition plus another explicit status are excluded from the result and reported separately as ambiguous, while relationship state, missing documents and reference-only identifiers never manufacture a status. Email-derived workflow contexts participate, lists retain complete totals with at most 50 confirmed and 50 ambiguous values per category, and no evidence retrieval, model call or budget action is added.
 - Question task identity normalizes only repeated whitespace so equivalent spacing variants reuse one settled response without changing the submitted prompt; letter case, punctuation and identifiers remain significant, and exact settled task identities from before normalization remain recoverable.
 - A question containing an explicit pure-numeric RFI identifier uses the parser's exact leading-zero equivalence through one bounded local identifier supplement; bare numbers, prefixed or compound RFI identifiers and Submittal identifiers remain exact, and no provider call is added.
+
+## FR-QA-PROJECT-KNOWLEDGE-001 · Maintained saved project knowledge
+
+优先级：P0；状态：implemented
+
+Project questions automatically use the newest saved usable analysis without requiring the user to select an Analysis Run.
+
+- When run_id is omitted, the server selects the newest PARTIAL or COMPLETED analysis belonging to the project; an explicit run_id remains supported and project-scoped.
+- A read-only project knowledge response reports availability, the selected run, terminal status, document count, active update state and whether the saved snapshot matches current project files, without returning evidence or credentials.
+- The browser enables project questions from saved knowledge independently of the Analysis Run history selector and sends no run_id; a newer terminal analysis automatically becomes the default.
+- Newly uploaded files do not silently enter old knowledge. The browser identifies the saved analysis as out of date until a new analysis completes, while immutable historical evidence and reviews remain available.
+- Automatic selection changes no grounding, exact-citation, project isolation, budget, unresolved-call, cache, failed-document or no-automatic-retry rule.
 
 ## FR-QA-EMAIL-SUBJECT-001 · Ground Email subject answers
 
