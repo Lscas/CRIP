@@ -674,6 +674,17 @@ def test_contract_diagnostic_never_persists_key_shaped_validation_path(context,t
     g.close()
 
 
+def test_project_answer_contract_diagnostic_has_a_stable_safe_reason(context,tmp_path):
+    db,run,ev=context;g=Gateway(settings(tmp_path,api_key='test-not-real'),db)
+
+    diagnostic=g._terminal_diagnostic(
+        'PROJECT_ANSWER',ValueError('answer contains a numeric claim absent from its citations'))
+
+    assert diagnostic=={'kind':'CONTRACT_ERROR','class':'PROJECT_ANSWER',
+                        'exception':'ValueError','validator':'numeric_support'}
+    g.close()
+
+
 @pytest.mark.parametrize('upstream_id',[
     'test-not-real',
     'prefix-test-not-real-suffix',

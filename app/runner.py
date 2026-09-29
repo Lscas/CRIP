@@ -425,6 +425,28 @@ class Runner:
         parts.extend('Visual limitation: '+value for value in data.get('limitations',[]))
         return '\n'.join(parts)
 
+    @staticmethod
+    def _sync_visual_page_statuses(summary: dict) -> None:
+        tasks=summary.get('visual_tasks',[]);by_page={}
+        for task in tasks:
+            page=task.get('page')
+            if type(page) is int:by_page.setdefault(page,[]).append(task.get('status'))
+        for page in summary.get('pages',[]):
+            statuses=by_page.get(page.get('page'))
+            if not statuses:continue
+            if any(status in {'FAILED_CONTRACT','FAILED_RENDER'} for status in statuses):
+                visual_status='FAILED'
+            elif any(status=='PAUSED_PROVIDER' for status in statuses):
+                visual_status='PAUSED_PROVIDER'
+            elif any(status=='PENDING' for status in statuses):
+                visual_status='PENDING'
+            elif all(status=='VISION_EXTRACTED' for status in statuses):
+                visual_status='COMPLETED'
+            elif all(status=='BLOCKED_NOT_ENABLED' for status in statuses):
+                visual_status='BLOCKED_NOT_ENABLED'
+            else:visual_status='PARTIAL'
+            page['visual_status']=visual_status
+
     def process_visual_tasks(self,run):
         rows=self.db.all('''SELECT r.document_id,r.status,r.summary,d.name,d.sha256,d.size,d.object_key
                             FROM document_results r JOIN documents d ON d.id=r.document_id
@@ -435,6 +457,7 @@ class Runner:
             if run['provider']=='mock' or not self.s.vision_enabled:
                 for task in tasks:
                     if task.get('status')=='PENDING':task['status']='BLOCKED_NOT_ENABLED'
+                self._sync_visual_page_statuses(summary)
                 if '页面视觉任务未启用；本机OCR结果仍保留。' not in summary['warnings']:
                     summary['warnings'].append('页面视觉任务未启用；本机OCR结果仍保留。')
                 self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
@@ -449,6 +472,7 @@ class Runner:
                 storage_id=run['id']+':'+eid
                 if self.db.one('SELECT id FROM evidence WHERE id=?',(storage_id,),False):
                     task['status']='VISION_EXTRACTED'
+                    self._sync_visual_page_statuses(summary)
                     self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                     (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                     self.update_coverage(run['id'])
@@ -491,9 +515,11 @@ class Runner:
                     summary['warnings'].append(f'PDF/图片第{page}页无法生成有界视觉派生图；其余页面继续处理。')
                 except ProviderPaused:
                     task['status']='PAUSED_PROVIDER'
+                    self._sync_visual_page_statuses(summary)
                     self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                     (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                     raise
+                self._sync_visual_page_statuses(summary)
                 self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                 (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                 self.update_coverage(run['id'])

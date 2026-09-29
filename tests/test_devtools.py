@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from scripts.context_pack import build,ROOT
 from scripts.build_bundle_manifest import source_files
+from scripts.check_changes import declared_test_exists
 from scripts.run_checks import build_commands
 
 def test_context_pack_is_bounded_and_contains_only_selected_requirements():
@@ -30,6 +31,14 @@ def test_source_bundle_manifest_excludes_runtime_outputs():
     included = [path.relative_to(ROOT).parts for path in source_files()]
     assert all('outputs' not in parts for parts in included)
     assert all('.git' not in parts for parts in included)
+
+
+def test_change_check_accepts_test_nodes_commands_and_named_public_fixtures():
+    assert declared_test_exists('tests/app/test_api.py::test_parser_timeout_keeps_completed_page_progress')
+    assert declared_test_exists('python scripts/run_checks.py --area all')
+    assert declared_test_exists('node --test tests/web/i18n.test.mjs')
+    assert declared_test_exists('public upstream python-oxmsg MSG fixtures')
+    assert not declared_test_exists('tests/app/not-a-real-test.py::test_missing')
 
 def test_all_checks_include_every_runtime_and_fail_closed_without_node():
     with pytest.raises(RuntimeError, match='Node.js is required'):

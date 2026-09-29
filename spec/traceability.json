@@ -184,7 +184,7 @@
         "tests/app/test_gateway_budget.py"
       ],
       "contract_tests": [],
-      "test_scope": "local_offline_with_pending_live",
+      "test_scope": "local_offline_stage_progress_eta_and_persisted_page_visual_status_with_pending_live",
       "implemented_product_paths": [
         "app/visual_pipeline.py",
         "app/gateway.py",
@@ -797,7 +797,7 @@
         "web/app.js"
       ],
       "verification_report": null,
-      "progress_note": "The local dashboard now shows a stage-weighted analysis percentage, an elapsed-time estimated finish, coverage, cost, and aggregate timing. Polling is serialized and active runs avoid full result loading; the complete production dashboard remains planned."
+      "progress_note": "The local dashboard shows a stage-weighted analysis percentage, an elapsed-time estimated finish, coverage and aggregate timing. Persisted page summaries now derive a visual status from their visual-task states. Polling is serialized and active runs avoid full result loading; the complete production dashboard remains planned."
     },
     {
       "requirement_id": "FR-API-001",
@@ -1859,7 +1859,7 @@
       "contract_tests": [
         "tests/app/test_questions.py"
       ],
-      "test_scope": "offline_retrieval_exact_duplicate_context_deduplication_generic_pdf_email_rfi_submittal_source_supplements_numeric_rfi_identity_numeric_workflow_scoped_numeric_measurement_property_measurement_unit_specification_section_revision_label_drawing_identifier_clause_identifier_email_address_role_and_rfi_question_response_role_grounding_date_date_role_workflow_scoped_date_role_and_exact_workflow_identifier_grounding_per_citation_workflow_disposition_grounding_retrieved_and_full_run_disposition_conflict_deterministic_exact_item_status_inline_source_provenance_exact_status_citation_deterministic_run_inventory_count_list_and_explicit_status_filter_normalized_cache_structured_drawing_specification_rfi_submittal_email_comparison_mocktransport_not_construction_accuracy",
+      "test_scope": "offline_bounded_adjacent_page_and_visual_sheet_routing_multi_window_retrieval_exact_duplicate_context_deduplication_generic_pdf_email_rfi_submittal_source_supplements_numeric_rfi_identity_exact_structured_arithmetic_numeric_workflow_scoped_numeric_measurement_property_measurement_unit_specification_section_revision_label_drawing_identifier_clause_identifier_email_address_role_and_rfi_question_response_role_grounding_date_date_role_workflow_scoped_date_role_and_exact_workflow_identifier_grounding_safe_contract_diagnostics_per_citation_workflow_disposition_grounding_retrieved_and_full_run_disposition_conflict_deterministic_exact_item_status_inline_source_provenance_exact_status_citation_deterministic_run_inventory_count_list_and_explicit_status_filter_normalized_cache_structured_drawing_specification_rfi_submittal_email_comparison_mocktransport_not_construction_accuracy",
       "implemented_product_paths": [
         "app/questions.py",
         "app/workflows.py",
@@ -1875,7 +1875,32 @@
         "scripts/benchmark_question_search.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "Project questions no longer require the browser's Analysis Run history selection. With no run_id, the server automatically uses the project's newest saved PARTIAL or COMPLETED analysis; explicit run_id remains compatible and project-scoped. A read-only knowledge status identifies the saved run, active updates and whether newer files are excluded. New terminal results automatically replace the prior default, while every existing grounding, exact-citation, budget and failed-document boundary remains unchanged."
+      "progress_note": "Project questions automatically use the newest saved terminal project analysis. Retrieval now keeps bounded native same-page siblings, uses a retained visual Sheet locator only as a native-page routing hint, and preserves multiple distant matches in one long fragment. Explicitly requested structured arithmetic is locally recomputed from cited non-date/non-identifier operands; conversions, date math, rounding and geometry inference remain blocked. Terminal answer failures retain only a stable safe diagnostic category."
+    },
+    {
+      "requirement_id": "FR-QA-REPAIR-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/gateway.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_gateway_budget.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_gateway_budget.py"
+      ],
+      "test_scope": "offline_bounded_adjacent_page_and_visual_sheet_routing_multi_window_retrieval_exact_structured_arithmetic_and_safe_contract_diagnostics",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/gateway.py",
+        "prompts/project-question/system.md",
+        "spec/schemas/project-answer.schema.json"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "Bounded native page siblings and multi-window fragments repair split context; visual Sheet labels route only to native page evidence. Explicit arithmetic uses a structured contract and local exact recomputation. Terminal failures keep a stable safe reason code."
     },
     {
       "requirement_id": "FR-QA-PROJECT-KNOWLEDGE-001",

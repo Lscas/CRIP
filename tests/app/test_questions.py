@@ -553,6 +553,65 @@ def test_retrieval_indexes_updated_sheet_locator(client, project):
     assert fallback and fallback[0]['evidence_id'] == 'EV-QA-1'
 
 
+def test_retrieval_uses_visual_sheet_locator_only_to_route_to_native_page_text(
+        client, project):
+    rows=[f'General clear opening sheet coordination note {index}.' for index in range(160)]
+    rows.append('Clear opening is 36 inches wide.')
+    run=_evidence(client,project,rows)
+    db=client.app.state.db
+    stored=db.all('SELECT id,payload FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))
+    for page,row in enumerate(stored,1):
+        payload=json.loads(row['payload'])
+        payload['locator']['page_number']=page
+        payload['locator']['sheet']=None
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    native=json.loads(stored[-1]['payload'])
+    vision={**native,'evidence_id':'EV-VISION-SHEET','raw_text':'Visible sheet identifier: A5.01',
+            'locator':{**native['locator'],'page_number':161,'sheet':'A5.01'},
+            'content_basis':'MODEL_VISION_OUTPUT','extraction_method':'VISION'}
+    db.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(
+        run['id']+':EV-VISION-SHEET',run['id'],project['id'],native['document_id'],
+        json.dumps(vision),'EXTRACTED',None,''))
+
+    found=retrieve_evidence(db,run,'What is the clear opening on Sheet A5.01?')
+
+    assert 'EV-QA-161' in {item['evidence_id'] for item in found}
+    assert 'EV-VISION-SHEET' not in {item['evidence_id'] for item in found}
+    assert next(item for item in found if item['evidence_id']=='EV-QA-161')['locator']['sheet'] is None
+
+
+def test_retrieval_includes_adjacent_native_fragments_from_the_same_page(client, project):
+    run=_evidence(client,project,[
+        *(f'Unrelated landscape note {index}.' for index in range(12)),
+        'Parking calculation inputs follow on this schedule.',
+        '18 at 60; 50% of 48.',
+    ])
+    db=client.app.state.db
+    for index,row in enumerate(db.all(
+            'SELECT id,payload FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))):
+        payload=json.loads(row['payload'])
+        payload['locator']['page_number']=99 if index>=12 else index+1
+        payload['locator']['sheet']=None
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+
+    found=retrieve_evidence(db,run,'Calculate the parking total from the schedule inputs.')
+    db.evidence_search_available=False
+    fallback=retrieve_evidence(db,run,'Calculate the parking total from the schedule inputs.')
+
+    expected={'EV-QA-13','EV-QA-14'}
+    assert expected.issubset({item['evidence_id'] for item in found})
+    assert expected.issubset({item['evidence_id'] for item in fallback})
+
+
+def test_long_prompt_window_keeps_distant_query_terms():
+    text='alpha requirement '+('middle filler '*400)+'omega requirement'
+
+    window=questions_module._window(text,['alpha','omega'])
+
+    assert len(window)<=questions_module._MAX_FRAGMENT_CHARS
+    assert 'alpha requirement' in window and 'omega requirement' in window
+
+
 def test_retrieval_keeps_a_late_exact_paragraph_locator_under_candidate_pressure(
         client, project):
     rows=['Paragraph requirements 2 3 1 general note.' for _ in range(160)]
@@ -843,7 +902,8 @@ def test_live_answer_rejects_a_quote_not_in_supplied_evidence(client, project, t
 
     call = db.one('SELECT state,response,error FROM model_calls WHERE run_id=?', (run['id'],))
     assert call['state'] == 'SETTLED_ERROR' and call['response'] is None
-    assert json.loads(call['error'])['class'] == 'PROJECT_ANSWER'
+    diagnostic=json.loads(call['error'])
+    assert diagnostic['class']=='PROJECT_ANSWER' and diagnostic['validator']=='exact_quote'
 
 
 def test_live_answer_settles_an_opposite_disposition_error_without_retry(
@@ -870,7 +930,8 @@ def test_live_answer_settles_an_opposite_disposition_error_without_retry(
     call=db.one('SELECT state,response,error FROM model_calls WHERE run_id=?',(run['id'],))
     assert len(requests)==1
     assert call['state']=='SETTLED_ERROR' and call['response'] is None
-    assert json.loads(call['error'])['class']=='PROJECT_ANSWER'
+    diagnostic=json.loads(call['error'])
+    assert diagnostic['class']=='PROJECT_ANSWER' and diagnostic['validator']=='disposition_support'
 
 
 def test_live_answer_settles_a_conflicting_disposition_error_without_retry(
@@ -915,6 +976,66 @@ def test_answer_rejects_a_numeric_claim_missing_from_its_citation(client, projec
 
     with pytest.raises(ValueError,match='numeric'):
         validate_answer_model(wrong,evidence,'What is the water service pipe material and size?')
+
+
+def test_answer_accepts_explicit_bounded_arithmetic_with_source_operands(client, project):
+    source='Parking inputs: 18 spaces at 60, plus 50% of 48 spaces.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Calculate the total parking spaces.')
+    answer={
+        'status':'ANSWERED',
+        'answer':'18 x 60 = 1080; 50% x 48 = 24; total = 1104.',
+        'source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+        'calculations':[
+            {'operator':'MULTIPLY','operands':['18','60'],'result':'1080'},
+            {'operator':'MULTIPLY','operands':['50%','48'],'result':'24'},
+            {'operator':'ADD','operands':['1080','24'],'result':'1104'},
+        ],
+    }
+
+    validate_answer_model(answer,evidence,'Calculate the total parking spaces.')
+
+
+def test_answer_rejects_incorrect_or_unrequested_calculation(client, project):
+    source='Parking inputs: 18 spaces at 60.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Calculate the total parking spaces.')
+    wrong={
+        'status':'ANSWERED','answer':'18 x 60 = 999.','source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+        'calculations':[{'operator':'MULTIPLY','operands':['18','60'],'result':'999'}],
+    }
+
+    with pytest.raises(ValueError,match='calculation'):
+        validate_answer_model(wrong,evidence,'Calculate the total parking spaces.')
+    correct={**wrong,'answer':'18 x 60 = 1080.',
+             'calculations':[{'operator':'MULTIPLY','operands':['18','60'],'result':'1080'}]}
+    with pytest.raises(ValueError,match='calculation'):
+        validate_answer_model(correct,evidence,'What parking inputs are listed?')
+    hidden={**wrong,'answer':'The total is 1080.',
+            'calculations':[{'operator':'MULTIPLY','operands':['18','60'],'result':'1080'}]}
+    with pytest.raises(ValueError,match='operand is absent'):
+        validate_answer_model(hidden,evidence,'Calculate the total parking spaces.')
+    rounded={**wrong,'answer':'60 / 18 = 3.333333333333333333333333333.',
+             'calculations':[{'operator':'DIVIDE','operands':['60','18'],
+                              'result':'3.333333333333333333333333333'}]}
+    with pytest.raises(ValueError,match='rounding'):
+        validate_answer_model(rounded,evidence,'Calculate the parking ratio.')
+
+
+def test_calculation_cannot_use_dates_or_workflow_identifiers_as_operands(client, project):
+    source='RFI 42 was issued 2026-01-05.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(client.app.state.db,run,'Calculate 2026 minus 42.')
+    answer={
+        'status':'ANSWERED','answer':'2026 - 42 = 1984.','source_findings':[],
+        'citations':[{'evidence_id':'EV-QA-1','quote':source}],
+        'calculations':[{'operator':'SUBTRACT','operands':['2026','42'],'result':'1984'}],
+    }
+
+    with pytest.raises(ValueError,match='operand absent'):
+        validate_answer_model(answer,evidence,'Calculate 2026 minus 42.')
 
 
 def test_numeric_grounding_accepts_commas_and_leading_zero_formatting(client, project):

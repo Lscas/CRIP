@@ -1,5 +1,12 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-28 project-answer retrieval and arithmetic repair
+
+- Synthetic offline retrieval fixtures reproduce a later native fact hidden behind 160 generic matches, route an exact visual Sheet locator to the same document page, and confirm that only native text enters the answer context. Another fixture proves a value-only sibling fragment on the same page is retained without outranking an exact Paragraph match. A long-fragment fixture retains both distant matched concepts inside the 2,600-character prompt bound.
+- Structured calculation fixtures accept an explicitly requested `18 x 60`, `50% x 48`, then `1080 + 24` chain only after CIRP independently recomputes each Decimal result from cited operands and prior verified results. Incorrect results and calculations not requested by the question fail closed. Existing unsupported-number fixtures remain in the complete project-question regression.
+- A gateway fixture records `numeric_support` as a stable terminal answer diagnostic without persisting the exception message, provider response or evidence text. A visual-run fixture confirms the persisted page summary reports `COMPLETED` when its visual task is extracted, including crash-recovery reuse of already committed visual evidence.
+- The complete `tests/app/test_questions.py` module passed after the repair. Focused gateway and runner regressions also passed. No customer document, `.local` data, credential, live provider or paid API was accessed; the 633-page Kapolei benchmark has not yet been rerun against a live model after this code change.
+
 ## 2026-09-28 budget-module removal and Kapolei product-path result
 
 - Offline contracts verify that project creation, model configuration, run APIs, the browser and readable exports expose no CIRP project budget, rate, price confirmation or cost total. A legacy budget row does not block an otherwise eligible model request; existing legacy rows are retained and not reset.

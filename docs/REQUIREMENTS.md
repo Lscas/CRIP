@@ -431,6 +431,7 @@ Show run coverage, current materials and QA review results, analysis percentage,
 
 - Dashboard data comes from persisted run/register state and is not invented by a model.
 - While analysis is active, show a stage-weighted percentage and an elapsed-time ETA; label it as an estimate and show Estimating when there is not enough progress data.
+- When a persisted page has visual-analysis tasks, its summary records a derived visual status consistent with the task states: pending, completed, blocked, paused, partial or failed.
 
 ## FR-API-001 · Provider abstraction
 
@@ -1037,6 +1038,18 @@ A user may ask an English question about a selected completed analysis run and r
 - A strict count or list question filtered by one bounded explicit status applicable to every requested workflow type may use the same complete index for RFI and Submittal identifiers. Only groups with one distinct explicit detected-or-manual status supporting the requested disposition enter the confirmed result; groups containing that disposition plus another explicit status are excluded from the result and reported separately as ambiguous, while relationship state, missing documents and reference-only identifiers never manufacture a status. Email-derived workflow contexts participate, lists retain complete totals with at most 50 confirmed and 50 ambiguous values per category, and no evidence retrieval, model call or budget action is added.
 - Question task identity normalizes only repeated whitespace so equivalent spacing variants reuse one settled response without changing the submitted prompt; letter case, punctuation and identifiers remain significant, and exact settled task identities from before normalization remain recoverable.
 - A question containing an explicit pure-numeric RFI identifier uses the parser's exact leading-zero equivalence through one bounded local identifier supplement; bare numbers, prefixed or compound RFI identifiers and Submittal identifiers remain exact, and no provider call is added.
+
+## FR-QA-REPAIR-001 · Bounded adjacent retrieval and verified arithmetic
+
+优先级：P0；状态：implemented
+
+Project questions retain bounded adjacent native evidence and may publish only explicitly requested arithmetic that CIRP independently verifies from cited operands.
+
+- Ordinary retrieval may add at most three nearby native non-vision fragments from each of at most eight matched document pages so split values remain adjacent without outranking exact identifier matches.
+- When an explicit Sheet/Drawing identifier matches a retained visual Sheet locator, that locator may route retrieval to at most eight matching document pages and 40 native fragments per page, but model-vision narration remains excluded from answer evidence and cannot ground the Sheet claim.
+- A long native fragment uses bounded multi-window prompt text so distant matched concepts remain visible within the existing per-fragment and total character limits; exact citations continue to validate against the complete immutable fragment.
+- Only an explicitly requested ADD, SUBTRACT, MULTIPLY or DIVIDE chain may introduce a top-level result. Every first-step operand is a non-date, non-identifier literal from cited text, later operands may use a prior verified result, percentages are limited to multiplication or division, and exact local recomputation matches every published result. Unit conversion, date arithmetic, rounding, geometry inference and unsupported values fail closed.
+- A terminal project-answer contract failure records only a stable bounded diagnostic category such as citation_scope, exact_quote, numeric_support or calculation after usage settlement; provider response text, evidence text and credentials are not retained, displayed or automatically retried.
 
 ## FR-QA-PROJECT-KNOWLEDGE-001 · Maintained saved project knowledge
 

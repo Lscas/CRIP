@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0144",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001", "FR-QA-REPAIR-001", "FR-UI-001", "NFR-SECURITY-001"],
+  "summary": "Repair bounded project-question retrieval, add locally verified explicit arithmetic, retain stable safe answer diagnostics and synchronize persisted page visual status.",
+  "decision_refs": [
+    "User request on 2026-09-28 to repair the diagnosed CIRP answer-quality failures",
+    "Kapolei fixed-question comparison identifying retrieval and sibling-fragment grouping as the dominant sampled failure"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/gateway.py", "app/runner.py",
+    "prompts/project-question/system.md", "spec/schemas/project-answer.schema.json",
+    "tests/app/test_questions.py", "tests/app/test_gateway_budget.py", "tests/app/test_api.py", "tests/test_devtools.py",
+    "scripts/check_changes.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-129.json", "changes/CR-0144.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py", "tests/app/test_gateway_budget.py", "tests/app/test_api.py", "tests/test_devtools.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly said to begin fixing the diagnosed trouble-log and answer-quality causes.",
+  "known_limitations": [
+    "Visual Sheet metadata is used only as a page-routing hint; visual narration remains excluded and cannot ground an answer.",
+    "Arithmetic is limited to exact addition, subtraction, multiplication and division over cited plain numeric operands; date arithmetic, rounding, unit conversion and geometry inference remain unsupported.",
+    "This change has offline regression evidence and does not itself rerun the paid 633-page Kapolei benchmark."
+  ]
+}

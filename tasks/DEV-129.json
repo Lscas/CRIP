@@ -1,0 +1,37 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 16000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User requested that the diagnosed CIRP project-answer failures be repaired on 2026-09-28.",
+  "notes": [
+    "Do not read, log or return saved provider credentials.",
+    "Do not call a paid provider or delete, reset or rewrite .local project data.",
+    "Keep model-vision narration excluded from project-answer evidence.",
+    "Preserve exact citation, workflow identity, date, measurement and no-automatic-retry boundaries."
+  ],
+  "task_id": "DEV-129",
+  "title": "Repair project-answer retrieval and bounded calculations",
+  "requirement_ids": ["FR-QA-REPAIR-001", "FR-UI-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/gateway.py", "app/runner.py",
+    "prompts/project-question/system.md", "spec/schemas/project-answer.schema.json",
+    "tests/app/test_questions.py", "tests/app/test_gateway_budget.py", "tests/app/test_api.py", "tests/test_devtools.py",
+    "scripts/check_changes.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-129.json", "changes/CR-0144.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python -m pytest tests/app/test_gateway_budget.py tests/app/test_api.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-129",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Improve CIRP answer quality by retaining bounded adjacent native evidence, routing exact visual Sheet matches to native page text, validating explicit arithmetic locally, storing safe failure categories and synchronizing visual page status."
+}

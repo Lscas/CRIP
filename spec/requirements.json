@@ -616,7 +616,8 @@
       "status": "planned",
       "acceptance_criteria": [
         "Dashboard data comes from persisted run/register state and is not invented by a model.",
-        "While analysis is active, show a stage-weighted percentage and an elapsed-time ETA; label it as an estimate and show Estimating when there is not enough progress data."
+        "While analysis is active, show a stage-weighted percentage and an elapsed-time ETA; label it as an estimate and show Estimating when there is not enough progress data.",
+        "When a persisted page has visual-analysis tasks, its summary records a derived visual status consistent with the task states: pending, completed, blocked, paused, partial or failed."
       ],
       "decision_source": "Approved product objective; D-27 adds percentage and ETA while the complete production dashboard remains planned.",
       "spec_section": "docs/PRODUCT_SPEC.md"
@@ -1470,6 +1471,22 @@
         "A question containing an explicit pure-numeric RFI identifier uses the parser's exact leading-zero equivalence through one bounded local identifier supplement; bare numbers, prefixed or compound RFI identifiers and Submittal identifiers remain exact, and no provider call is added."
       ],
       "decision_source": "D-29: the user requested a Trunk Tools-style ability to ask questions and answer from existing project files.",
+      "spec_section": "docs/PROJECT_QUESTIONS.md"
+    },
+    {
+      "id": "FR-QA-REPAIR-001",
+      "title": "Bounded adjacent retrieval and verified arithmetic",
+      "statement": "Project questions retain bounded adjacent native evidence and may publish only explicitly requested arithmetic that CIRP independently verifies from cited operands.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Ordinary retrieval may add at most three nearby native non-vision fragments from each of at most eight matched document pages so split values remain adjacent without outranking exact identifier matches.",
+        "When an explicit Sheet/Drawing identifier matches a retained visual Sheet locator, that locator may route retrieval to at most eight matching document pages and 40 native fragments per page, but model-vision narration remains excluded from answer evidence and cannot ground the Sheet claim.",
+        "A long native fragment uses bounded multi-window prompt text so distant matched concepts remain visible within the existing per-fragment and total character limits; exact citations continue to validate against the complete immutable fragment.",
+        "Only an explicitly requested ADD, SUBTRACT, MULTIPLY or DIVIDE chain may introduce a top-level result. Every first-step operand is a non-date, non-identifier literal from cited text, later operands may use a prior verified result, percentages are limited to multiplication or division, and exact local recomputation matches every published result. Unit conversion, date arithmetic, rounding, geometry inference and unsupported values fail closed.",
+        "A terminal project-answer contract failure records only a stable bounded diagnostic category such as citation_scope, exact_quote, numeric_support or calculation after usage settlement; provider response text, evidence text and credentials are not retained, displayed or automatically retried."
+      ],
+      "decision_source": "The 2026-09-28 fixed Kapolei comparison identified retrieval and sibling-fragment grouping as the dominant sampled answer-quality failure, and the user requested repair.",
       "spec_section": "docs/PROJECT_QUESTIONS.md"
     },
     {

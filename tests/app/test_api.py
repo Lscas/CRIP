@@ -1292,6 +1292,10 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
     assert evidence['locator']['sheet']=='A-1' and evidence['confidence'] is None
     assert evidence['content_basis']=='MODEL_VISION_OUTPUT'
     assert evidence['image_crop_uri'].endswith('/pages/1/image') and 'synthetic-not-real' not in json.dumps(evidence)
+    current=json.loads(client.app.state.db.one(
+        'SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+        (run['id'],document['document_id']))['summary'])
+    assert current['pages'][0]['visual_status']=='COMPLETED'
     preview=client.get(evidence['image_crop_uri'])
     assert preview.status_code==200 and preview.headers['content-type']=='image/png' and preview.content.startswith(b'\x89PNG')
     # Simulate a process dying after evidence commit but before the task-state update.
@@ -1306,6 +1310,7 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
         'SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
         (run['id'],document['document_id']))['summary'])
     assert repaired['visual_tasks'][0]['status']=='VISION_EXTRACTED'
+    assert repaired['pages'][0]['visual_status']=='COMPLETED'
 
 
 def test_run_page_image_returns_a_validated_source_coordinate_crop(client,project,tmp_path):

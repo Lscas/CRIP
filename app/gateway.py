@@ -24,6 +24,25 @@ _SAFE_REQUEST_ID = re.compile(r'^[A-Za-z0-9._:/=+-]{1,160}$')
 _SAFE_RETRY_AFTER = re.compile(
     r'^(?:[0-9]{1,10}|[A-Za-z]{3}, [0-9]{2} [A-Za-z]{3} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT)$')
 _SAFE_PROVIDER_CODE = re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
+_ANSWER_CONTRACT_REASON_PATTERNS = (
+    ('calculation','calculation'),
+    ('numeric','numeric_support'),
+    ('measurement','measurement_support'),
+    ('date','date_support'),
+    ('drawing','drawing_support'),
+    ('sheet','drawing_support'),
+    ('paragraph','clause_support'),
+    ('clause','clause_support'),
+    ('email','email_support'),
+    ('disposition','disposition_support'),
+    ('workflow','workflow_support'),
+    ('source finding','source_finding'),
+    ('comparison','comparison'),
+    ('citation','citation_scope'),
+    ('quote','exact_quote'),
+    ('原句','exact_quote'),
+    ('引用','exact_quote'),
+)
 _PROVIDER_ERROR_CODES = frozenset({
     'INVALID_ARGUMENT', 'FAILED_PRECONDITION', 'UNAUTHENTICATED', 'PERMISSION_DENIED',
     'NOT_FOUND', 'RESOURCE_EXHAUSTED', 'CANCELLED', 'INTERNAL', 'UNAVAILABLE',
@@ -534,6 +553,14 @@ class Gateway:
         if (isinstance(validator,str) and _SAFE_PROVIDER_CODE.fullmatch(validator)
                 and not self._contains_api_key(validator)):
             diagnostic['validator']=validator
+        elif result_class=='PROJECT_ANSWER':
+            if isinstance(exc,json.JSONDecodeError):
+                diagnostic['validator']='json_decode'
+            else:
+                message=str(exc).casefold()
+                diagnostic['validator']=next(
+                    (code for pattern,code in _ANSWER_CONTRACT_REASON_PATTERNS
+                     if pattern in message),'answer_contract')
         return diagnostic
 
     def _recover_terminal(self, run_id: str, task_key: str, validator) -> ModelResult | None:
@@ -933,9 +960,13 @@ class Gateway:
             if not isinstance(text,str) or len(text)>50000:raise ValueError('question response was empty or too large')
             data=json.loads(text);validate_answer_model(data,evidence,question)
         except Exception as exc:
+            diagnostic=self._terminal_diagnostic('PROJECT_ANSWER',exc)
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
-                diagnostic=self._terminal_diagnostic('PROJECT_ANSWER',exc))
-            raise InvalidModelOutput('The project question response failed its evidence contract; the cost was recorded and the request was not retried.') from exc
+                diagnostic=diagnostic)
+            raise InvalidModelOutput(
+                'The project question response failed its evidence contract '
+                f'({diagnostic.get("validator","answer_contract")}); the cost was recorded '
+                'and the request was not retried.') from exc
         self.db.finalize_model_call(attempt,actual,usage,provider_id,response=data)
         return ModelResult(data,attempt,False,self.s.provider)
 

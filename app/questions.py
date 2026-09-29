@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from email.utils import getaddresses
 from functools import lru_cache
 from typing import TYPE_CHECKING
@@ -32,6 +33,10 @@ _MAX_IDENTIFIER_CANDIDATES = 12
 _MAX_RESULTS = 8
 _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
+_MAX_ADJACENT_ANCHORS = 8
+_MAX_ADJACENT_ROWS = 3
+_MAX_EXACT_SHEET_PAGES = 8
+_MAX_EXACT_PAGE_ROWS = 40
 _MAX_WORKFLOW_CONFLICT_CITATION_SOURCES = 32
 # ponytail: keep Q&A at 50 values per category; use the paginated Workflow Reviewer above this ceiling.
 _MAX_WORKFLOW_INVENTORY_VALUES = 50
@@ -798,6 +803,17 @@ _EMAIL_PARTICIPANT_VALUE_HEADER = re.compile(
     r'(?P<value>[^\r\n]{1,4000})[ \t]*$')
 _NUMERIC_LITERAL = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:/\d+(?:\.\d+)?)?'
 _NUMERIC_VALUE = re.compile(rf'(?<!\w){_NUMERIC_LITERAL}(?!\w)')
+_CALCULATION_INTENT = re.compile(
+    r'\b(?:calculate|compute|arithmetic|sum|total|add|subtract|difference|'
+    r'multiply|product|divide|percentage|percent\s+of)\b',re.I)
+_CALCULATION_NUMBER = re.compile(
+    r'^(?P<sign>-?)(?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?P<percent>%?)$')
+_CALCULATION_OPERATOR_IN_ANSWER = {
+    'ADD':re.compile(r'(?:\+|\b(?:add|plus|sum|total)\b)',re.I),
+    'SUBTRACT':re.compile(r'(?:-|\b(?:subtract|minus|difference)\b)',re.I),
+    'MULTIPLY':re.compile(r'(?:[x×*]|\b(?:multiply|multiplied|times|product)\b)',re.I),
+    'DIVIDE':re.compile(r'(?:/|÷|\b(?:divide|divided|quotient)\b)',re.I),
+}
 _COMPACT_MEASUREMENT_UNIT_SUFFIX = (
     r'(?:inch(?:es)?|in\.|feet|foot|ft\.?|mm|cm|m|psi|kpa|mpa|bar|gpm|cfm|'
     r'lpm|l\s*/\s*s|pounds?|lbs?|kilograms?|kgs?|tons?)')
@@ -3516,6 +3532,79 @@ def _numeric_values(text: str) -> set[str]:
     return {value for _,_,value in _numeric_occurrences(text)}
 
 
+def _calculation_number(value: str, *, allow_percent: bool) -> tuple[Decimal,bool,str]:
+    match=_CALCULATION_NUMBER.fullmatch(value.strip())
+    if match is None or (match['percent'] and not allow_percent):
+        raise ValueError('calculation contains an invalid numeric value')
+    try:number=Decimal(match['sign']+match['number'].replace(',',''))
+    except InvalidOperation as exc:
+        raise ValueError('calculation contains an invalid numeric value') from exc
+    if not number.is_finite():raise ValueError('calculation contains a non-finite value')
+    canonical=format(number.normalize(),'f')
+    if '.' in canonical:canonical=canonical.rstrip('0').rstrip('.')
+    if canonical in {'-0',''}:canonical='0'
+    return number,bool(match['percent']),canonical
+
+
+def _calculation_source_values(text: str) -> set[tuple[str,bool]]:
+    """Return calculation operands while excluding identifiers and full dates."""
+    reserved=[(start,end) for start,end,_ in _date_occurrences(text)]
+    reserved.extend((start,end) for _,start,end in _workflow_identity_spans(text))
+    reserved.extend((start,end) for _,start,end in _spec_section_occurrences(text))
+    reserved.extend((start,end) for _,start,end in _revision_label_occurrences(text))
+    reserved.extend((start,end) for _,start,end in _drawing_identifier_occurrences(text))
+    reserved.extend((start,end) for _,start,end in _clause_identifier_occurrences(text))
+    values=set()
+    for start,end,value in _numeric_occurrences(text):
+        if any(left<=start and end<=right for left,right in reserved):continue
+        percent=bool(re.match(r'\s*(?:%|percent\b)',text[end:end+12],re.I))
+        values.add((value,percent))
+    return values
+
+
+def _validate_calculations(value: dict, question: str, quotes: list[str]) -> set[str]:
+    calculations=value.get('calculations',[])
+    if not calculations:return set()
+    if value['status']!='ANSWERED' or not _CALCULATION_INTENT.search(question):
+        raise ValueError('calculation was not explicitly requested')
+    source_values=_calculation_source_values('\n'.join(quotes))
+    available=set(source_values);derived=set()
+    answer_values=_numeric_values(value['answer'])
+    for calculation in calculations:
+        parsed=[_calculation_number(item,allow_percent=True)
+                for item in calculation['operands']]
+        if any((canonical,percent) not in available
+               for _,percent,canonical in parsed):
+            raise ValueError('calculation contains an operand absent from its citations')
+        operator=calculation['operator']
+        if any(canonical not in answer_values for _,_,canonical in parsed):
+            raise ValueError('calculation operand is absent from the answer')
+        if not _CALCULATION_OPERATOR_IN_ANSWER[operator].search(value['answer']):
+            raise ValueError('calculation operator is absent from the answer')
+        if operator in {'SUBTRACT','DIVIDE'} and len(parsed)!=2:
+            raise ValueError('calculation operator requires exactly two operands')
+        if operator in {'ADD','SUBTRACT'} and any(percent for _,percent,_ in parsed):
+            raise ValueError('calculation cannot add or subtract percentages')
+        numbers=[number/(Decimal(100) if percent else Decimal(1))
+                 for number,percent,_ in parsed]
+        if operator=='ADD':expected=sum(numbers,Decimal(0))
+        elif operator=='SUBTRACT':expected=numbers[0]-numbers[1]
+        elif operator=='MULTIPLY':
+            expected=Decimal(1)
+            for number in numbers:expected*=number
+        else:
+            if numbers[1]==0:raise ValueError('calculation cannot divide by zero')
+            expected=numbers[0]/numbers[1]
+        result,_,canonical=_calculation_number(calculation['result'],allow_percent=False)
+        if operator=='DIVIDE' and result*numbers[1]!=numbers[0]:
+            raise ValueError('calculation division would require rounding')
+        if result!=expected:raise ValueError('calculation result does not match its operands')
+        if canonical not in answer_values:
+            raise ValueError('calculation result is absent from the answer')
+        derived.add(canonical);available.add((canonical,False))
+    return derived
+
+
 def _spec_section_occurrences(text: str) -> list[tuple[str,int,int]]:
     return [(match['division']+match['group']+match['section']+
              (match['extension'] or ''),match.start(),match.end())
@@ -4610,8 +4699,10 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
                              identity_citations: list[str] | None = None,
                              drawing_citations: list[str] | None = None,
                              clause_citations: list[str] | None = None,
-                             scope_workflow: bool = True) -> None:
+                             scope_workflow: bool = True,
+                             derived_values: set[str] | None = None) -> None:
     quote_values=_numeric_values(' '.join(quotes))
+    derived_values=derived_values or set()
     identity_citations=identity_citations or quotes
     supported_identities=_workflow_identities_in(identity_citations)
     identifier_spans=[(start,end) for identity,start,end in _workflow_identity_spans(claim)
@@ -4638,7 +4729,7 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
     email_spans=[(start,end) for value,start,end in _email_address_occurrences(claim)
                  if value in supported_emails]
     for start,end,value in _numeric_occurrences(claim):
-        if value in quote_values:continue
+        if value in quote_values or value in derived_values:continue
         if any(left<=start and end<=right for left,right in identifier_spans):continue
         if any(left<=start and end<=right for left,right in section_spans):continue
         if any(left<=start and end<=right for left,right in revision_spans):continue
@@ -4661,7 +4752,9 @@ def _require_numeric_support(claim: str, quotes: list[str], label: str,
         supported_property_units.update(_numeric_property_unit_values(quote))
         supported_scoped_property_units.update(
             _workflow_numeric_property_unit_values(quote,identity_text))
-    if _workflow_numeric_values(claim)-supported_scoped:
+    claimed_scoped={item for item in _workflow_numeric_values(claim)
+                    if item[1] not in derived_values}
+    if claimed_scoped-supported_scoped:
         raise ValueError(label+' contains a workflow numeric claim absent from its citations')
     if _numeric_unit_values(claim)-supported_units:
         raise ValueError(label+' contains a measurement unit absent from its citations')
@@ -4828,7 +4921,8 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str],
                     diversify: bool = False, source_families: tuple[str,...] = (),
                     identifier_terms: tuple[str,...] = ()) -> list[dict]:
     if getattr(db,'evidence_search_available',False):
-        query='''SELECT e.id AS evidence_row_id,e.payload,d.name AS file_name,
+        query='''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                        e.payload,d.name AS file_name,
                         e.document_id AS source_document_id,
                                 bm25(evidence_search,2,1.5,1) AS search_rank
                          FROM evidence_search
@@ -4862,7 +4956,8 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str],
     # FTS5 is optional.  The compatibility path favors complete results over
     # row-order truncation.  One local scan is also cheaper than repeating
     # JSON extraction for every expanded term and locator field.
-    return db.all('''SELECT e.id AS evidence_row_id,e.payload,d.name AS file_name,
+    return db.all('''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                            e.payload,d.name AS file_name,
                             e.document_id AS source_document_id
                      FROM evidence e
                      JOIN documents d ON d.id=e.document_id
@@ -4871,15 +4966,126 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str],
                        AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION' ''',[run_id])
 
 
+def _vision_sheet_pages(db: Database, run_id: str, question: str) -> set[tuple[str,int]]:
+    """Use a visual sheet label only as a page-routing hint, never as answer text."""
+    targets=_drawing_identifier_values(question)
+    if not targets:return set()
+    pages=set()
+    rows=db.all('''SELECT e.document_id AS source_document_id,e.payload
+                   FROM evidence e WHERE e.run_id=?
+                     AND (COALESCE(json_extract(e.payload,'$.content_basis'),'')='MODEL_VISION_OUTPUT'
+                          OR COALESCE(json_extract(e.payload,'$.extraction_method'),'')='VISION')
+                   ORDER BY e.rowid''',
+                (run_id,))
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        sheet=str(locator.get('sheet') or '').strip();page=locator.get('page_number')
+        if type(page) is not int or page<1 or not sheet:continue
+        if targets & _drawing_identifier_values('Sheet '+sheet):
+            pages.add((row['source_document_id'],page))
+            if len(pages)>=_MAX_EXACT_SHEET_PAGES:break
+    return pages
+
+
+def _native_page_rows(db: Database, run_id: str, pages: set[tuple[str,int]],
+                      *, limit_per_page: int, scope_bonus: int) -> list[dict]:
+    rows=[]
+    for document_id,page in sorted(pages):
+        found=db.all('''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                               e.payload,d.name AS file_name,
+                               e.document_id AS source_document_id
+                        FROM evidence e JOIN documents d ON d.id=e.document_id
+                        WHERE e.run_id=? AND e.document_id=?
+                          AND CAST(json_extract(e.payload,'$.locator.page_number') AS INTEGER)=?
+                          AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                          AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                        ORDER BY e.rowid LIMIT ?''',
+                     (run_id,document_id,page,limit_per_page))
+        for row in found:row['_page_scope_bonus']=scope_bonus
+        rows.extend(found)
+    return rows
+
+
+def _adjacent_anchor_rows(rows: list[dict], concepts: list[tuple[str,tuple[str,...]]]
+                          ) -> list[dict]:
+    ranked=[]
+    for row in rows:
+        try:evidence=json.loads(row['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        text=evidence.get('raw_text')
+        if not isinstance(text,str) or not text.strip():continue
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        locator_text=' '.join(str(locator.get(key) or '')
+                              for key in ('section','sheet','page','paragraph'))
+        searchable=_workflow_search_aliases(
+            ' '.join((text,row['file_name'],locator_text)).casefold())
+        token_counts=Counter(_TOKEN.findall(searchable))
+        hits=sum(_concept_match(searchable,token_counts,variants) is not None
+                 for _,variants in concepts)
+        if hits:ranked.append((hits,row.get('search_rank',0),row['storage_rowid'],row))
+    ranked.sort(key=lambda item:(-item[0],item[1],item[2]))
+    return [item[3] for item in ranked[:_MAX_ADJACENT_ANCHORS]]
+
+
+def _adjacent_rows(db: Database, run_id: str, anchors: list[dict]) -> list[dict]:
+    rows=[];seen_pages=set()
+    for anchor in anchors:
+        try:evidence=json.loads(anchor['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        page=locator.get('page_number');document_id=anchor.get('source_document_id')
+        page_key=(document_id,page)
+        if type(page) is not int or page<1 or not document_id or page_key in seen_pages:continue
+        seen_pages.add(page_key)
+        found=db.all('''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                               e.payload,d.name AS file_name,
+                               e.document_id AS source_document_id
+                        FROM evidence e JOIN documents d ON d.id=e.document_id
+                        WHERE e.run_id=? AND e.document_id=?
+                          AND CAST(json_extract(e.payload,'$.locator.page_number') AS INTEGER)=?
+                          AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                          AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                        ORDER BY ABS(e.rowid-?),e.rowid LIMIT ?''',
+                     (run_id,document_id,page,anchor['storage_rowid'],_MAX_ADJACENT_ROWS))
+        for row in found:row['_adjacent_context']=True
+        rows.extend(found)
+        if len(seen_pages)>=_MAX_ADJACENT_ANCHORS:break
+    return rows
+
+
+def _merge_candidate_rows(rows: list[dict], supplements: list[dict]) -> list[dict]:
+    by_id={row['evidence_row_id']:row for row in rows}
+    for row in supplements:
+        existing=by_id.get(row['evidence_row_id'])
+        if existing is None:
+            rows.append(row);by_id[row['evidence_row_id']]=row
+        elif row.get('_page_scope_bonus',0)>existing.get('_page_scope_bonus',0):
+            existing['_page_scope_bonus']=row['_page_scope_bonus']
+        if existing is not None and row.get('_adjacent_context'):
+            existing['_adjacent_context']=True
+    return rows
+
+
 def _window(text: str, terms: list[str]) -> str:
     if len(text) <= _MAX_FRAGMENT_CHARS:
         return text
     positions=[match.start() for term in terms if (match:=_term_pattern(term).search(text))]
-    anchor=min(positions,default=0)
-    start=max(0,anchor-_MAX_FRAGMENT_CHARS//3)
-    end=min(len(text),start+_MAX_FRAGMENT_CHARS)
-    start=max(0,end-_MAX_FRAGMENT_CHARS)
-    return text[start:end]
+    positions=sorted(set(positions))
+    if len(positions)<=1:
+        anchor=positions[0] if positions else 0
+        start=max(0,anchor-_MAX_FRAGMENT_CHARS//3)
+        end=min(len(text),start+_MAX_FRAGMENT_CHARS)
+        start=max(0,end-_MAX_FRAGMENT_CHARS)
+        return text[start:end]
+    separator='\n...\n';segment=max(160,(_MAX_FRAGMENT_CHARS-
+        len(separator)*(len(positions)-1))//len(positions))
+    windows=[]
+    for position in positions:
+        start=max(0,position-segment//3);end=min(len(text),start+segment)
+        start=max(0,end-segment);windows.append(text[start:end])
+    return separator.join(windows)[:_MAX_FRAGMENT_CHARS]
 
 
 def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
@@ -4900,6 +5106,12 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
     diversify=requires_source_diversity(question)
     rows=_candidate_rows(
         db,run['id'],search_terms,diversify,source_families,identifier_terms)
+    exact_pages=_vision_sheet_pages(db,run['id'],question)
+    if exact_pages:
+        _merge_candidate_rows(rows,_native_page_rows(
+            db,run['id'],exact_pages,limit_per_page=_MAX_EXACT_PAGE_ROWS,scope_bonus=40))
+    _merge_candidate_rows(rows,_adjacent_rows(
+        db,run['id'],_adjacent_anchor_rows(rows,concepts)))
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -4917,7 +5129,8 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         concept_hits=[(label,_concept_match(searchable,token_counts,variants))
                       for label,variants in concepts]
         concept_hits=[(label,match) for label,match in concept_hits if match is not None]
-        if not concept_hits:continue
+        scope_bonus=int(row.get('_page_scope_bonus',0))
+        if not concept_hits and not scope_bonus and not row.get('_adjacent_context'):continue
         actual_matches=[];score=0
         for label,match in concept_hits:
             actual,direct,count=match
@@ -4928,6 +5141,7 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
             score+=count
         score+=min(6,len(concept_hits))
         if len(concept_hits)==len(concepts):score+=8
+        score+=scope_bonus
         evidence={**evidence,'file_name':row['file_name'],
                   'prompt_text':_window(text,actual_matches),'_question_terms':actual_matches,
                   '_source_document_id':row['source_document_id']}
@@ -5092,6 +5306,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         answer_email_action_contexts.extend(finding_email_action_contexts)
         answer_workflow_action_contexts.extend(finding_workflow_action_contexts)
         answer_workflow_subject_contexts.extend(finding_workflow_subject_contexts)
+    derived_values=_validate_calculations(value,question,answer_quotes)
     if value['status']=='ANSWERED':
         if (top_level_quotes
                 and _needs_disposition_ambiguity_check(value['answer'],date_question)):
@@ -5149,7 +5364,7 @@ def validate_answer_model(value: dict, evidence: list[dict], question: str = '')
         _require_numeric_support(
             value['answer'],answer_quotes,'answer',answer_identity_texts,
             answer_drawing_texts,answer_clause_texts,
-            scope_workflow=not value['source_findings'])
+            scope_workflow=not value['source_findings'],derived_values=derived_values)
         _require_disposition_support(value['answer'],answer_quotes,'answer')
         email_subject_question=_is_email_subject_question(question)
         if (email_subject_question
@@ -5505,6 +5720,7 @@ class ProjectQuestions:
             })
         return {'run_id':run['id'],'question':question,'status':result.data['status'],
                 'answer':result.data['answer'],'citations':citations,'source_findings':findings,
+                'calculations':result.data.get('calculations',[]),
                 'answer_basis':'MODEL_PROJECT_EVIDENCE',
                 'workflow_statuses':[],'workflow_conflicts':[],
                 'retrieved_count':len(evidence),'cached':result.cached}
