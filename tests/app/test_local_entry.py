@@ -1,12 +1,17 @@
 """Local startup invariants using synthetic configuration and no live model calls."""
 from argparse import Namespace, ArgumentTypeError
+from dataclasses import replace
 from pathlib import Path
 import socket
 import sys
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from fastapi.testclient import TestClient
+import app.local_entry as local_entry
 from app.local_entry import LOCAL_HOSTS, check_port, local_settings, port_number
+from app.main import create_app
 from app.model_configuration import configured_settings, save_active_configuration
 from app.settings import Settings
 from scripts import local_deploy
@@ -27,6 +32,46 @@ def test_mock_ignores_env_and_does_not_read_dotenv(tmp_path, monkeypatch):
     assert s.project_bytes==10_000_000_000 and not s.remote_enabled
 
 
+@pytest.mark.parametrize('value,expected', [(None, False), (True, True), (False, False)])
+def test_normal_reference_layout_override_never_reads_environment(tmp_path, monkeypatch, value, expected):
+    monkeypatch.setenv('CIRP_REFERENCE_LAYOUT_ENABLED', 'true')
+    monkeypatch.setattr(Settings, 'from_env', Mock(side_effect=AssertionError('must not load dotenv')))
+    result = local_settings(tmp_path, use_saved=False, reference_layout_enabled=value)
+    assert result.provider == 'mock' and result.reference_layout_enabled is expected
+
+
+@pytest.mark.parametrize('value,expected', [(None, False), (True, True), (False, False)])
+def test_saved_profile_stub_replaces_only_reference_layout_flag(tmp_path, monkeypatch, value, expected):
+    saved = Settings(tmp_path, provider='deepseek', live_enabled=True, api_key='synthetic-key',
+                     cheap_model='deepseek-v4-flash', reference_reasoning_effort='low',
+                     allowed_hosts=('saved-host',), project_bytes=123, reference_layout_enabled=True)
+    monkeypatch.setattr('app.local_entry.load_active_configuration', lambda base: saved)
+    monkeypatch.setattr(Settings, 'from_env', Mock(side_effect=AssertionError('must not load dotenv')))
+    result = local_settings(tmp_path, reference_layout_enabled=value)
+    assert result == replace(saved, reference_layout_enabled=expected)
+
+
+def test_saved_temp_profile_bytes_do_not_persist_reference_layout_setting(tmp_path, monkeypatch):
+    base = Settings(tmp_path, start_worker=False, allowed_hosts=LOCAL_HOSTS)
+    selected = configured_settings(base, provider='custom', api_base_url='http://127.0.0.1:11434/v1',
+                                   model='qwen3:8b')
+    save_active_configuration(selected)
+    profile = tmp_path / 'credentials' / 'active-model-profile.json'
+    profile_bytes = profile.read_bytes()
+    assert b'reference_layout' not in profile_bytes
+    monkeypatch.setattr(Settings, 'from_env', Mock(side_effect=AssertionError('must not load dotenv')))
+    for value, expected in ((None, False), (True, True), (False, False), (None, False)):
+        result = local_settings(tmp_path, reference_layout_enabled=value)
+        assert result.provider == selected.provider and result.reference_layout_enabled is expected
+        assert profile.read_bytes() == profile_bytes
+
+
+@pytest.mark.parametrize('value', ['true', 1, object()])
+def test_reference_layout_override_requires_real_boolean(tmp_path, value):
+    with pytest.raises(ValueError, match='bool or None'):
+        local_settings(tmp_path, use_saved=False, reference_layout_enabled=value)
+
+
 def test_live_requires_complete_configuration(tmp_path,monkeypatch):
     monkeypatch.setattr(Settings,'from_env',lambda:Settings(tmp_path))
     with pytest.raises(ValueError,match='Live API is not configured'):local_settings(live=True)
@@ -42,6 +87,21 @@ def test_live_uses_existing_config_but_binds_local(tmp_path,monkeypatch):
         'project_answer_input_utf8_bytes':64000,
         'vision_input_utf8_bytes':6000,'vision_output_tokens':2000,
         'verification_input_utf8_bytes':6000,'verification_output_tokens':1400}
+
+
+@pytest.mark.parametrize('env_value,override', [
+    (env_value, override) for env_value in (False, True) for override in (None, True, False)
+])
+def test_live_reference_layout_preserves_env_value_unless_explicitly_overridden(
+        tmp_path, monkeypatch, env_value, override):
+    configured = Settings(tmp_path, provider='deepseek', live_enabled=True, api_key='synthetic-key',
+                          cheap_model='deepseek-v4-flash', reference_reasoning_effort='low',
+                          allowed_hosts=('environment-host',), reference_layout_enabled=env_value)
+    monkeypatch.setattr(Settings, 'from_env', lambda: configured)
+    monkeypatch.setattr('app.local_entry.remember_enabled', lambda *_args: False)
+    expected = env_value if override is None else override
+    result = local_settings(live=True, reference_layout_enabled=override)
+    assert result == replace(configured, allowed_hosts=LOCAL_HOSTS, reference_layout_enabled=expected)
 
 
 def test_live_saves_key_only_after_explicit_remember_marker(tmp_path,monkeypatch):
@@ -192,14 +252,115 @@ def test_local_command_can_explicitly_bypass_saved_profile():
     assert cmd[-1]=='--mock' and '--live' not in cmd
 
 
+@pytest.mark.parametrize('value,flag', [(True, '--reference-layout'), (False, '--no-reference-layout')])
+def test_local_launcher_forwards_explicit_reference_layout_switch(value, flag):
+    command = local_deploy.make_command(Path(sys.executable), args(reference_layout=value))
+    assert flag in command
+
+
+def test_legacy_launcher_namespace_without_reference_layout_remains_compatible():
+    command = local_deploy.make_command(Path(sys.executable), args())
+    assert '--reference-layout' not in command and '--no-reference-layout' not in command
+
+
 def test_remote_command_uses_separate_port():
     cmd=local_deploy.make_command(Path(sys.executable),args(remote=True))
     assert cmd[1:]==['scripts/remote_preview.py','--port','8001']
 
 
-@pytest.mark.parametrize('kw',[{'remote':True,'live':True},{'remote':True,'data_dir':'x'},{'port':80}])
+@pytest.mark.parametrize('kw',[{'remote':True,'live':True},{'remote':True,'data_dir':'x'},
+                               {'remote':True,'reference_layout':True},{'remote':True,'reference_layout':False},{'port':80}])
 def test_bad_combination_rejected_before_install(kw):
     with pytest.raises(ValueError):local_deploy.make_command(Path(sys.executable),args(**kw))
+
+
+@pytest.mark.parametrize('flag', ['--reference-layout', '--no-reference-layout'])
+def test_remote_reference_layout_is_rejected_before_any_install_or_start(flag, monkeypatch):
+    monkeypatch.setattr(local_deploy, 'ensure_environment', Mock(side_effect=AssertionError('no install')))
+    monkeypatch.setattr(local_deploy.subprocess, 'Popen', Mock(side_effect=AssertionError('no start')))
+    probe = Mock(side_effect=AssertionError('no dependency probe'))
+    cloudflared = Mock(side_effect=AssertionError('no cloudflared lookup'))
+    monkeypatch.setattr(local_deploy, 'dependency_probe', probe)
+    monkeypatch.setattr('scripts.remote_preview.find_cloudflared', cloudflared)
+    assert local_deploy.main(['--remote', flag]) == 2
+    probe.assert_not_called()
+    cloudflared.assert_not_called()
+
+
+@pytest.mark.parametrize('argv,expected', [
+    (['--no-browser'], None),
+    (['--no-browser', '--reference-layout'], True),
+    (['--no-browser', '--no-reference-layout'], False),
+])
+def test_local_entry_cli_wires_reference_layout_tristate_before_start(argv, expected, monkeypatch):
+    seen = []
+    def stop_after_parse(*_args, **kwargs):
+        seen.append(kwargs['reference_layout_enabled'])
+        raise ValueError('synthetic stop')
+    monkeypatch.setattr(local_entry, 'local_settings', stop_after_parse)
+    monkeypatch.setattr(local_entry, 'check_port', lambda _: None)
+    assert local_entry.main(argv) == 2
+    assert seen == [expected]
+
+
+@pytest.mark.parametrize('argv,expected', [
+    (['--check'], None),
+    (['--check', '--reference-layout'], True),
+    (['--check', '--no-reference-layout'], False),
+])
+def test_launcher_cli_wires_reference_layout_tristate_before_side_effects(argv, expected, monkeypatch):
+    seen = []
+    monkeypatch.setattr(local_deploy, 'make_command', lambda _python, parsed: seen.append(parsed.reference_layout) or [])
+    monkeypatch.setattr(local_deploy, 'venv_python', lambda: Path(sys.executable))
+    monkeypatch.setattr(local_deploy, 'dependency_probe', lambda _python: True)
+    assert local_deploy.main(argv) == 0
+    assert seen == [expected]
+
+
+@pytest.mark.parametrize('startup_enabled,candidate_enabled', [(True, False), (False, True)])
+def test_model_restart_cannot_change_process_reference_layout_flag(
+        tmp_path, monkeypatch, startup_enabled, candidate_enabled):
+    startup = Settings(tmp_path, start_worker=False, reference_layout_enabled=startup_enabled)
+    candidate = replace(startup, provider='mock', reference_layout_enabled=candidate_enabled)
+    applications = []
+    class Application:
+        def __init__(self, settings):
+            self.settings = settings
+            self.state = SimpleNamespace()
+    class Server:
+        count = 0
+        def __init__(self, config):
+            self.config = config
+            self.started = False
+            self.should_exit = False
+            self.index = Server.count
+            Server.count += 1
+        def run(self):
+            self.started = True
+            if self.index == 0:
+                self.config.application.state.request_model_restart(candidate)
+    def create(settings):
+        app = Application(settings)
+        applications.append(app)
+        return app
+    monkeypatch.setattr(local_entry, 'local_settings', lambda *_args, **_kwargs: startup)
+    monkeypatch.setattr(local_entry, 'check_port', lambda _: None)
+    monkeypatch.setattr(local_entry, 'create_app', create)
+    monkeypatch.setattr(local_entry.uvicorn, 'Config', lambda application, **_kwargs: SimpleNamespace(application=application))
+    monkeypatch.setattr(local_entry.uvicorn, 'Server', Server)
+    assert local_entry.main(['--no-browser']) == 0
+    assert [app.settings.reference_layout_enabled for app in applications] == [startup_enabled, startup_enabled]
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_local_settings_capability_reports_the_effective_reference_layout_flag(tmp_path, enabled):
+    settings = local_settings(tmp_path, use_saved=False, reference_layout_enabled=enabled)
+    with TestClient(create_app(replace(settings, start_worker=False)), base_url='http://127.0.0.1',
+                    headers={'X-CIRP-Client': 'browser'}) as client:
+        response = client.get('/api/settings')
+        assert response.status_code == 200
+        assert response.json()['capabilities']['reference_layout_v9']['enabled'] is enabled
+        assert client.app.state.db.one('SELECT COUNT(*) AS n FROM model_calls')['n'] == 0
 
 
 def test_no_implicit_install_in_current_env(monkeypatch,tmp_path):
@@ -229,4 +390,4 @@ def test_unchanged_install_skips_pip(tmp_path,monkeypatch):
 def test_default_root_relative_to_script_not_working_directory(tmp_path,monkeypatch):
     monkeypatch.chdir(tmp_path)
     from app.settings import ROOT
-    assert local_settings().data_dir==ROOT/'.local'
+    assert local_settings(use_saved=False).data_dir==ROOT/'.local'

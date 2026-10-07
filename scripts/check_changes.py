@@ -32,8 +32,10 @@ def check_diff(paths: list[str], records: list[dict], known_ids: set[str]) -> li
     if not relevant:return []
     if not records:return ['受控文件变化缺少新增/修改的changes记录']
     for record in records:
+        covered=[p for p in relevant if any(fnmatch.fnmatchcase(p,pattern)
+                                             for pattern in record['affected_paths'])]
         if not set(record['requirement_ids']).issubset(known_ids):errors.append('变更引用未知需求ID')
-        if record['change_type']=='spec_only' and any(p.startswith(('app/','web/')) for p in relevant):
+        if record['change_type']=='spec_only' and any(p.startswith(('app/','web/')) for p in covered):
             errors.append('产品代码改动不能伪报spec_only')
         if record['change_type'] in ('implementation','bugfix'):
             if not any(p.startswith('tests/') for p in paths):errors.append('实现改动缺少实际测试diff')

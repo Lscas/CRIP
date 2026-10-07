@@ -24,8 +24,9 @@ from app.visual_pipeline import (OCR_VERSION, local_ocr_available, ocr_image_fil
                                  ocr_pdf_page, pdf_cropbox_local_bbox,
                                  pdf_geometry_summary, PDF_CROP_COORDINATE_SYSTEM)
 
-PARSER_VERSION='multisource-48'
-PAGE_ROUTER_VERSION='pdf-page-router-1'
+PARSER_VERSION='multisource-50'
+PAGE_ROUTER_VERSION='pdf-page-router-3'
+SHEET_IDENTITY_VERSION='native-title-block-sheet-2'
 MAX_CHARS=2_000_000
 MAX_FRAGMENT_CHARS=1600
 # The default simple-task envelope is 6,000 conservative UTF-8 units. Leave
@@ -36,13 +37,17 @@ PDF_PAGE_CHUNK=4
 IMAGE_SUFFIXES={'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
 LOW_TEXT_WORDS=8
 LOW_TEXT_CHARS=80
-_SPEC_SECTION=re.compile(r'\b(?:SECTION\s+)?\d{2}\s+\d{2}\s+\d{2}\b',re.I)
+_SPEC_SECTION=re.compile(
+    r'(?i)\b(?:SECTION\s+(?:\d{5}|\d{2}(?:[ .-]+\d{2}){2})|\d{2}\s+\d{2}\s+\d{2})\b')
 _SPEC_SECTION_HEADING=re.compile(
-    r'^\s*(?:SECTION\s+)?\d{2}\s+\d{2}\s+\d{2}(?:\s*[-–—:]\s*[^;]{1,100})?\s*$',re.I)
+    r'(?i)^\s*(?:SECTION\s+(?:\d{5}|\d{2}(?:[ .-]+\d{2}){2})|'
+    r'\d{2}\s+\d{2}\s+\d{2})(?:\s*[-–—:]\s*[^;]{1,100})?\s*$')
 _SPEC_PART=re.compile(r'^\s*PART\s+[123IVX]+\b(?:\s*[-–—:]\s*.*)?$',re.I|re.M)
 _DIVISION=re.compile(r'^\s*DIVISION\s+\d{1,2}\b(?:\s*[-–—:]\s*.*)?$',re.I|re.M)
 _CLAUSE=re.compile(r'^\s*((?:\d+\.)+\d+|\d+\.|[A-Z]\.|\([a-z0-9]+\))\s+',re.I)
 _SCHEDULE=re.compile(r'\b(?:MATERIAL|EQUIPMENT|DOOR|WINDOW|FINISH|FIXTURE|PANEL|VALVE|LIGHTING)?\s*SCHEDULE\b',re.I)
+_SHEET_VALUE=re.compile(
+    r'(?i)^(?:\d{1,3}-)?[A-Z]{1,4}(?=[A-Z0-9._/-]*\d)[A-Z0-9]*(?:[._/-][A-Z0-9]+)*$')
 _RFI_HEADER=re.compile(
     r'(?im)^\s*(?:REQUEST\s+FOR\s+INFORMATION|RFI)(?![ \t]+STATUS\b)'
     r'(?:\s+(?:NO\.?|NUMBER)|\s*#)?\s*[:#-]?\s*'
@@ -705,6 +710,78 @@ def _word_lines(words: list[dict]) -> list[list[dict]]:
     return lines
 
 
+def _sheet_value(value: object) -> str | None:
+    """Return one explicit compact drawing Sheet value without inferring from callouts."""
+    candidate=str(value or '').strip().strip(':;,()[]{}').upper().translate(
+        str.maketrans({'–':'-','—':'-'}))
+    if not 2<=len(candidate)<=24 or not _SHEET_VALUE.fullmatch(candidate):return None
+    return candidate
+
+
+def _drawing_sheet_identity(words: list[dict],width: float,height: float,
+                            cropbox: tuple[float,float,float,float] | list[float]=(0,0,0,0)) -> dict:
+    """Read one unique explicit Sheet label from a bounded title-block region.
+
+    Page callouts and arbitrary sheet references are deliberately excluded.  A
+    conflict remains visible in page metadata but never populates a locator.
+    """
+    candidates={}
+    lines=_word_lines(words)
+    for line_number,line in enumerate(lines):
+        for index,word in enumerate(line):
+            label=str(word.get('text') or '').strip().strip(':').upper()
+            if label not in {'SHEET','DRAWING','DWG','DWG.'}:continue
+            previous=(str(line[index-1].get('text') or '').strip().strip(':,.').upper()
+                      if index else '')
+            if label=='SHEET' and previous in {'SEE','ON','TO','REFER','REF'}:continue
+            label_box=pdf_cropbox_local_bbox(
+                [word['x0'],word['top'],word['x1'],word['bottom']],cropbox)
+            left,top,_,bottom=label_box
+            if left<width*.55 and top<height*.55:continue
+            nearby=line[index+1:index+6]
+            value_word=None
+            same_line=[]
+            for item in nearby:
+                token=str(item.get('text') or '').strip()
+                if token.upper().strip('.:#-') in {'NO','NUMBER'}:continue
+                if _sheet_value(token):
+                    item_box=pdf_cropbox_local_bbox(
+                        [item['x0'],item['top'],item['x1'],item['bottom']],cropbox)
+                    same_line.append((max(0.0,item_box[0]-label_box[2]),item))
+            if same_line:value_word=min(same_line,key=lambda candidate:candidate[0])[1]
+            if value_word is None:
+                below=[]
+                for following in lines[line_number+1:line_number+3]:
+                    if not following:continue
+                    following_boxes=[pdf_cropbox_local_bbox(
+                        [item['x0'],item['top'],item['x1'],item['bottom']],cropbox)
+                        for item in following]
+                    vertical=min(box[1] for box in following_boxes)-bottom
+                    if vertical<0 or vertical>height*.08:continue
+                    for item,item_box in zip(following,following_boxes):
+                        center=(item_box[0]+item_box[2])/2
+                        label_center=(label_box[0]+label_box[2])/2
+                        distance=abs(center-label_center)
+                        if distance>width*.10:continue
+                        if _sheet_value(item.get('text')):
+                            below.append((distance,vertical,item))
+                if below:value_word=min(below,key=lambda candidate:(candidate[0],candidate[1]))[2]
+            if value_word is None:continue
+            value=_sheet_value(value_word.get('text'))
+            value_box=pdf_cropbox_local_bbox(
+                [value_word['x0'],value_word['top'],value_word['x1'],value_word['bottom']],cropbox)
+            bbox=[min(label_box[0],value_box[0]),min(label_box[1],value_box[1]),
+                  max(label_box[2],value_box[2]),max(label_box[3],value_box[3])]
+            candidates.setdefault(value,bbox)
+    base={'version':SHEET_IDENTITY_VERSION,'derivation':'NATIVE_TITLE_BLOCK_TEXT'}
+    if not candidates:return {**base,'status':'MISSING','sheet_number':None,'source_bbox':None}
+    if len(candidates)>1:
+        return {**base,'status':'AMBIGUOUS','sheet_number':None,'source_bbox':None,
+                'candidates':sorted(candidates)}
+    value,bbox=next(iter(candidates.items()))
+    return {**base,'status':'CONFIRMED','sheet_number':value,'source_bbox':bbox}
+
+
 def _heading_update(text: str, section: str | None, part: str | None) -> tuple[str | None,str | None,str | None]:
     value=' '.join(text.split())
     section_match=_SPEC_SECTION_HEADING.match(value)
@@ -721,11 +798,28 @@ def _heading_update(text: str, section: str | None, part: str | None) -> tuple[s
     return section,part,None
 
 
+def _usable_table(table) -> bool:
+    """Keep dense multi-row grids; reject drawing geometry and title-block boxes."""
+    try:rows=table.extract() or []
+    except Exception:return False
+    values=[[' '.join(str(cell or '').split()) for cell in row] for row in rows]
+    columns=max((len(row) for row in values),default=0)
+    if len(values)<2 or columns<2:return False
+    populated=[sum(bool(cell) for cell in row) for row in values]
+    nonempty=sum(populated);slots=len(values)*columns
+    return (sum(count>=2 for count in populated)>=2 and nonempty>=4
+            and sum(len(cell) for row in values for cell in row)>=20
+            and nonempty/slots>=.40)
+
+
 def _find_tables(page, page_type: str, text: str) -> list:
-    if page_type not in {'SPEC_PAGE','SCHEDULE'} and not _SCHEDULE.search(text):return []
-    if not _SCHEDULE.search(text) and len(page.lines or [])+len(page.rects or [])<4:return []
+    geometry_count=len(page.lines or [])+len(page.rects or [])
+    if page_type=='DRAWING':
+        if geometry_count<6:return []
+    elif page_type not in {'SPEC_PAGE','SCHEDULE'} and not _SCHEDULE.search(text):return []
+    elif not _SCHEDULE.search(text) and geometry_count<4:return []
     try:
-        return list(page.find_tables() or [])[:12]
+        return [table for table in (page.find_tables() or []) if _usable_table(table)][:12]
     except Exception:
         # Table recovery is additive. A malformed vector grid must not discard
         # native text or turn the whole document into a parser failure.
@@ -738,7 +832,7 @@ def _inside_table(word: dict, boxes: list[tuple[float,float,float,float]]) -> bo
 
 
 def _structured_pdf_fragments(page, page_number: int, words: list[dict], rev: tuple,
-                              tables: list) -> list[Fragment]:
+                              tables: list,*,spec_structure: bool=True) -> list[Fragment]:
     """Retain section, clause and table-row relationships in canonical evidence."""
     table_boxes=[tuple(float(value) for value in table.bbox) for table in tables]
     fragments=[];section=None;part=None;paragraph=None;headings=[];block=[];block_context=None;block_number=0
@@ -756,10 +850,11 @@ def _structured_pdf_fragments(page, page_number: int, words: list[dict], rev: tu
     for line in _word_lines(words):
         line_text=' '.join(item['text'] for item in line).strip()
         if not line_text:continue
-        section,part,heading=_heading_update(line_text,section,part)
+        heading=None
+        if spec_structure:section,part,heading=_heading_update(line_text,section,part)
         if heading:
             flush();paragraph=None;headings.append((min(float(item['top']) for item in line),heading))
-        clause=_CLAUSE.match(line_text)
+        clause=_CLAUSE.match(line_text) if spec_structure else None
         if clause and not heading:
             flush();paragraph=clause.group(1)
         if all(_inside_table(item,table_boxes) for item in line):
@@ -787,15 +882,34 @@ def _structured_pdf_fragments(page, page_number: int, words: list[dict], rev: tu
             values=[' '.join(str(cell or '').split()) for cell in cells]
             if not any(values):continue
             raw=' | '.join(values)
+            row_object=row_objects[row_number-1] if row_number<=len(row_objects) else None
+            row_bbox=(row_object.bbox if row_object is not None else table.bbox)
+            cell_boxes=list(getattr(row_object,'cells',[]) or []) if row_object is not None else []
+            cell_spans=[];cursor=0
+            for cell_number,value in enumerate(values,1):
+                start=cursor;end=start+len(value);cursor=end+3
+                if not value:continue
+                box=(cell_boxes[cell_number-1]
+                     if cell_number<=len(cell_boxes) and cell_boxes[cell_number-1] else row_bbox)
+                cell_spans.append((start,end,pdf_cropbox_local_bbox(box,page.cropbox)))
+            consumed=0
             for piece_number,piece in enumerate(split_text(raw),1):
-                row_bbox=(row_objects[row_number-1].bbox if row_number<=len(row_objects) else table.bbox)
+                piece_start=raw.find(piece,consumed)
+                if piece_start<0:piece_start=consumed
+                piece_end=piece_start+len(piece);consumed=piece_end
+                text_map=[]
+                for start,end,box in cell_spans:
+                    overlap_start=max(start,piece_start);overlap_end=min(end,piece_end)
+                    if overlap_start<overlap_end:
+                        text_map.append({'start':overlap_start-piece_start,'end':overlap_end-piece_start,
+                                         'bbox':box})
                 fragments.append(Fragment(
                     piece,locator(page_number=page_number,
                                   section=table_section,paragraph=f'Table {table_number} row {row_number}',
                                   bbox=pdf_cropbox_local_bbox(row_bbox,page.cropbox),
                                   coordinate_system=PDF_CROP_COORDINATE_SYSTEM,
                                   native_element_id=f'page-{page_number}-table-{table_number}-row-{row_number}-part-{piece_number}'),
-                    'TEXT_LAYER',*rev))
+                    'TEXT_LAYER',*rev,text_map=text_map))
     return sorted(fragments,key=lambda item:((item.locator.get('bbox') or [0,0])[1],
                                               (item.locator.get('bbox') or [0,0])[0],
                                               item.locator.get('native_element_id') or ''))
@@ -874,6 +988,15 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
         graphics=len(visible_page.images)+len(visible_page.lines)+len(visible_page.curves)+len(visible_page.rects)
         large_format=visible_page.width>1000 or visible_page.height>1400
         page_type=_page_type(words,page_text,graphics,visible_page.width,visible_page.height)
+        word_lines=_word_lines(words)
+        line_texts=[' '.join(str(item.get('text') or '') for item in line) for line in word_lines]
+        explicit_spec_heading=any(_SPEC_SECTION_HEADING.match(text) for text in line_texts)
+        continuation_clause=any(_CLAUSE.match(text) for text in line_texts)
+        spec_structure=(page_type=='SPEC_PAGE' or explicit_spec_heading or
+                        (page_type!='DRAWING' and not large_format and continuation_clause))
+        sheet_identity=(_drawing_sheet_identity(words,float(visible_page.width),float(visible_page.height),
+                                                visible_page.cropbox)
+                        if words and (page_type=='DRAWING' or large_format) else None)
         tables=_find_tables(visible_page,page_type,page_text)
         if tables and _SCHEDULE.search(page_text):page_type='SCHEDULE'
         low_text_density=bool(words) and graphics>0 and (
@@ -907,7 +1030,8 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
             status=('TEXT_AND_OCR_VISUAL_PENDING' if ocr else
                     'TEXT_ONLY_VISUAL_PENDING' if visual else 'TEXT_EXTRACTED')
             if visual:warnings.append(f'PDF第{index}页含图像/线条/大幅面；已排入视觉分析。')
-            fragments.extend(_structured_pdf_fragments(visible_page,index,words,rev,tables))
+            fragments.extend(_structured_pdf_fragments(
+                visible_page,index,words,rev,tables,spec_structure=spec_structure))
             if ocr:
                 ocr_rev=revision('\n'.join(item['text'] for item in ocr))
                 for item in ocr:item['internal_revision_date'],item['revision_label']=ocr_rev
@@ -915,11 +1039,17 @@ def _parse_pdf_page(path: Path, page, index: int, default_context: dict | None =
                 warnings.append(f'PDF第{index}页文字层密度低；已追加本机{OCR_VERSION}结果，需对照图面去重审核。')
             elif low_text_density:
                 warnings.append(f'PDF第{index}页文字层密度低；本机OCR未增加可用文字，仍保留视觉/人工检查。')
+        if sheet_identity and sheet_identity['status']=='CONFIRMED':
+            for fragment in fragments:fragment.locator['sheet']=sheet_identity['sheet_number']
+        elif sheet_identity and sheet_identity['status']=='AMBIGUOUS':
+            warnings.append(f'PDF第{index}页标题栏存在冲突的明确Sheet编号；未绑定到来源证据。')
         page_source=page_text or '\n'.join(fragment.text for fragment in fragments)
         page_context=annotate_workflow_fragments(fragments,page_source,str(path))
         page_context=_apply_pdf_workflow_context(fragments,page_source,page_context,default_context)
         return {'fragments':fragments,'page':{'page':index,'status':status,'page_type':page_type,
                                               'router_version':PAGE_ROUTER_VERSION,'table_count':len(tables),
+                                              'spec_structure':spec_structure,
+                                              'sheet_identity':sheet_identity,
                                               'document_type':page_context.get('document_type','UNKNOWN')},'warnings':warnings,
                 'visual_tasks':visual_tasks,'geometry_summaries':geometry,'text_chars':text_chars,
                 '_workflow_source':page_source,
@@ -1013,6 +1143,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         import pdfplumber
         default_context=document_context('',original_name)
         active_context=default_context if default_context.get('identifier') else None
+        active_spec_section=None;active_spec_part=None
         last_progress=monotonic()-PROGRESS_INTERVAL_SECONDS
         def save_progress():
             nonlocal last_progress
@@ -1026,7 +1157,7 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
         with pdfplumber.open(path) as pdf:page_count=len(pdf.pages)
         total=0;limit_reached=False
         def merge_page(result):
-            nonlocal total,limit_reached,active_context
+            nonlocal total,limit_reached,active_context,active_spec_section,active_spec_part
             number=result['page']['page']
             page_source=result.pop('_workflow_source','')
             if total>=MAX_CHARS:
@@ -1039,6 +1170,26 @@ def parse_file(path: Path, original_name: str, progress: Callable[[dict],None] |
                 result['workflow_context']=page_context
                 result['page']['document_type']=page_context.get('document_type','UNKNOWN')
                 if page_context.get('identifier'):active_context=page_context
+            if result['page'].get('spec_structure'):
+                local_section=None;local_part=None
+                for fragment in result['fragments']:
+                    value=str(fragment.locator.get('section') or '')
+                    for component in value.split(' > '):
+                        upper=component.upper()
+                        if upper.startswith(('SECTION ','DIVISION ')):
+                            local_section=component;local_part=None
+                        elif upper.startswith('PART '):local_part=component
+                if local_section:
+                    active_spec_section=local_section;active_spec_part=local_part
+                elif active_spec_section:
+                    if local_part:active_spec_part=local_part
+                    inherited=' > '.join(
+                        value for value in (active_spec_section,active_spec_part) if value)
+                    for fragment in result['fragments']:
+                        existing=fragment.locator.get('section')
+                        if not existing:fragment.locator['section']=inherited
+                        elif str(existing).upper().startswith('PART '):
+                            fragment.locator['section']=' > '.join((active_spec_section,str(existing)))
             fragments.extend(result['fragments']);pages.append(result['page'])
             warnings.extend(result['warnings']);visual_tasks.extend(result['visual_tasks'])
             geometry.extend(result['geometry_summaries']);total+=result['text_chars']

@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0166",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-MANAGED-JOB-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-EVALUATION-RUNNER-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add durable explicitly confirmed single-worker execution jobs for frozen Reference evaluations without removing existing execution paths.",
+  "decision_refs": [
+    "CRIP is the local file, task, result, citation and review management layer",
+    "A managed reference evaluation should not depend on keeping one browser tab open",
+    "Earlier confirmation cannot authorize automatic model dispatch after a service interruption"
+  ],
+  "affected_paths": [
+    "migrations/014_reference_evaluation_jobs.sql", "app/db.py",
+    "app/reference_evaluation_jobs.py", "app/runner.py", "app/verification.py", "app/main.py",
+    "spec/schemas/reference-evaluation-job.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-151.json",
+    "changes/CR-0166.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal requires CRIP to manage reproducible advanced-model tasks and reduce unnecessary manual work while retaining local evidence and explicit model-call control.",
+  "known_limitations": [
+    "Only one managed evaluation job may be active globally; this is intentional provider-call serialization.",
+    "Interrupted, stopped or halted work is resumed by creating another explicitly confirmed job rather than mutating the old job.",
+    "The browser lists the newest 20 jobs; older job rows remain available through the detail API and local database.",
+    "Offline acceptance does not run or score a stronger model."
+  ]
+}

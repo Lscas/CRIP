@@ -1,0 +1,37 @@
+{
+  "status": "IN_PROGRESS",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user objective is to continue optimizing CIRP and improve correctness; the user previously authorized database regeneration and fixed-question comparison.",
+  "notes": [
+    "Use only read-only SQLite access for retrieval comparison and never print source evidence text.",
+    "Compare immutable staging databases so an active service cannot change benchmark inputs during measurement.",
+    "Do not read or return saved credentials, make a provider request, or mutate the current .local source database.",
+    "Keep the fixed 15-question set and direct-PDF answer atoms unchanged while comparing revisions.",
+    "A retrieval benchmark measures evidence coverage, not final model-answer correctness."
+  ],
+  "task_id": "DEV-132",
+  "title": "Measure and improve Canonical V2 retrieval coverage",
+  "requirement_ids": ["FR-PARSE-001", "FR-QA-REPAIR-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/parsers.py", "app/questions.py", "scripts/benchmark_question_retrieval.py", "scripts/reparse_staging_v2.py",
+    "tests/app/test_parsers.py", "tests/app/test_questions.py", "tests/app/test_benchmark_question_retrieval.py",
+    "tests/app/test_reparse_staging_v2.py",
+    "reports/kapolei_canonical_v2_retrieval.json", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "tasks/DEV-132.json", "changes/CR-0147.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/CANONICAL_STORAGE_V2.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_benchmark_question_retrieval.py tests/app/test_reparse_staging_v2.py tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-132",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Measure the fixed Kapolei question set against immutable Canonical graph revisions without model calls, then use missed answer atoms to drive the next bounded retrieval correction while preserving exact citations and fail-closed behavior."
+}

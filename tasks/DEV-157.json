@@ -1,0 +1,60 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user approved the ponytail/grill development plan and asked CIRP development, testing and iteration to continue, with API calls allowed only after the offline implementation gate.",
+  "notes": [
+    "Keep the public QA V3 result contract and every existing citation, entity, numeric and arithmetic safety check.",
+    "Reduce only the provider-facing ANSWER payload: the model supplies atomic claims, exact citations and cited arithmetic operands; CIRP locally compiles the canonical answer text and arithmetic results.",
+    "Treat bounded extraction, listing and explicitly requested basic arithmetic as supported project-document work instead of asking the model to invent a second task classifier.",
+    "Derive a safe validator category for saved evaluation failures from the existing settled call diagnostic and execution receipt without a migration or rejected output retention.",
+    "Use synthetic offline tests for this implementation task. Run the separately authorized fixed-15 live benchmark only after the complete repository gate passes."
+  ],
+  "task_id": "DEV-157",
+  "title": "Make the Reference QA decision contract reliable",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/evidence_loop.py",
+    "app/gateway.py",
+    "app/project_qa_v2.py",
+    "app/reference_evaluations.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "spec/schemas/reference-evaluation.schema.json",
+    "web/app.js",
+    "web/i18n.js",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-157.json",
+    "changes/CR-0172.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py tests/app/test_reference_evaluations.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-157",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make grounded QA V3 answers easier for strong and small models to express while CIRP locally compiles redundant answer and arithmetic fields and exposes only safe failure diagnostics."
+}

@@ -9,10 +9,30 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, validators
 from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[1]
+
+_BASE_UNIQUE_ITEMS = Draft202012Validator.VALIDATORS['uniqueItems']
+
+
+def _receipt_unique_items(validator: Any, unique_items: Any, instance: Any, schema: Any):
+    """Fast-path source receipts whose distinct evidence IDs imply distinct items."""
+    if unique_items is True and isinstance(instance,list):
+        evidence_ids=[]
+        for item in instance:
+            if not isinstance(item,dict) or not isinstance(item.get('evidence_id'),str):
+                break
+            evidence_ids.append(item['evidence_id'])
+        else:
+            if len(evidence_ids)==len(set(evidence_ids)):
+                return
+    yield from _BASE_UNIQUE_ITEMS(validator,unique_items,instance,schema)
+
+
+_RECEIPT_VALIDATOR=validators.extend(
+    Draft202012Validator,{'uniqueItems':_receipt_unique_items})
 
 
 def load_json(path: str) -> Any:
@@ -29,7 +49,8 @@ def registry() -> Registry:
 
 def validate_schema(name: str, value: Any) -> None:
     schema = load_json(f'spec/schemas/{name}.schema.json')
-    Draft202012Validator(schema, registry=registry(), format_checker=FormatChecker()).validate(value)
+    validator=_RECEIPT_VALIDATOR if name=='reference-model-input-receipt' else Draft202012Validator
+    validator(schema, registry=registry(), format_checker=FormatChecker()).validate(value)
 
 
 def evidence_references(value: Any) -> set[str]:

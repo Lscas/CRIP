@@ -1,0 +1,272 @@
+{
+  "fixture_purpose": "SYNTHETIC_CONTRACT_ONLY",
+  "state": "CANDIDATE_NOT_PRODUCT_KNOWLEDGE",
+  "approved_for_scored_evaluation": false,
+  "used_for_prompt_or_rule_tuning": false,
+  "human_adjudication": null,
+  "live_tests": "NONE",
+  "paid_calls": 0,
+  "distribution": {
+    "PROJECT_FACT": 4,
+    "RELATIONSHIP": 3,
+    "ARITHMETIC": 3,
+    "GENERAL_KNOWLEDGE": 5,
+    "BOUNDARY": 5
+  },
+  "sources": [
+    {
+      "id": "SYNTHETIC_FACTS",
+      "kind": "SYNTHETIC_CONTRACT_SOURCE"
+    },
+    {
+      "id": "SYNTHETIC_NOTE",
+      "kind": "SYNTHETIC_BENCHMARK_ATTACHMENT",
+      "input_channel": "UNTRUSTED_EVIDENCE_ATTACHMENT",
+      "requires_receipt_proof": true,
+      "path": "reports/fixtures/synthetic_holdout_note.txt",
+      "sha256": "44fdf6906b0c266a4698583b6b623fb1626362ebc8df3ba3662d197308bd2dca",
+      "bytes": 261
+    }
+  ],
+  "questions": [
+    {
+      "id": "P01",
+      "category": "PROJECT_FACT",
+      "question": "Synthetic project_fact contract case 1: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "P02",
+      "category": "PROJECT_FACT",
+      "question": "Synthetic project_fact contract case 2: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "P03",
+      "category": "PROJECT_FACT",
+      "question": "Synthetic project_fact contract case 3: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "P04",
+      "category": "PROJECT_FACT",
+      "question": "Synthetic project_fact contract case 4: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "R01",
+      "category": "RELATIONSHIP",
+      "question": "Synthetic relationship contract case 1: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "R02",
+      "category": "RELATIONSHIP",
+      "question": "Synthetic relationship contract case 2: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "R03",
+      "category": "RELATIONSHIP",
+      "question": "Synthetic relationship contract case 3: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "A01",
+      "category": "ARITHMETIC",
+      "question": "Synthetic arithmetic contract case 1: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "A02",
+      "category": "ARITHMETIC",
+      "question": "Synthetic arithmetic contract case 2: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "A03",
+      "category": "ARITHMETIC",
+      "question": "Synthetic arithmetic contract case 3: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "G01",
+      "category": "GENERAL_KNOWLEDGE",
+      "question": "Synthetic general_knowledge contract case 1: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "G02",
+      "category": "GENERAL_KNOWLEDGE",
+      "question": "Synthetic general_knowledge contract case 2: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "G03",
+      "category": "GENERAL_KNOWLEDGE",
+      "question": "Synthetic general_knowledge contract case 3: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "G04",
+      "category": "GENERAL_KNOWLEDGE",
+      "question": "Synthetic general_knowledge contract case 4: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "G05",
+      "category": "GENERAL_KNOWLEDGE",
+      "question": "Synthetic general_knowledge contract case 5: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_FACTS"
+      ]
+    },
+    {
+      "id": "B01",
+      "category": "BOUNDARY",
+      "question": "Synthetic boundary contract case 1: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": []
+    },
+    {
+      "id": "B02",
+      "category": "BOUNDARY",
+      "question": "Synthetic boundary contract case 2: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": []
+    },
+    {
+      "id": "B03",
+      "category": "BOUNDARY",
+      "question": "Synthetic boundary contract case 3: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": []
+    },
+    {
+      "id": "B04",
+      "category": "BOUNDARY",
+      "question": "Synthetic boundary contract case 4: identify the test marker.",
+      "expected_facts": [
+        "This is synthetic validator input, not an engineering answer."
+      ],
+      "human_adjudication": null,
+      "source_refs": []
+    },
+    {
+      "id": "B05",
+      "category": "BOUNDARY",
+      "question": "What document status is printed in the synthetic attachment?",
+      "expected_facts": [
+        "The synthetic note labels itself DRAFT."
+      ],
+      "human_adjudication": null,
+      "source_refs": [
+        "SYNTHETIC_NOTE"
+      ],
+      "attachment_refs": [
+        "SYNTHETIC_NOTE"
+      ],
+      "input_channel": "UNTRUSTED_EVIDENCE_ATTACHMENT",
+      "required_execution_proof": [
+        "Synthetic receipt must identify this attachment before any scored use."
+      ]
+    }
+  ]
+}

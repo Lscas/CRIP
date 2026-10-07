@@ -445,6 +445,9 @@ class VerificationService:
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():
                 raise DomainError('已有活跃分析，请结束后核验', 409)
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
+                raise DomainError('A managed Reference evaluation job is active.',409)
             existing = c.execute("SELECT * FROM verification_jobs WHERE record_id=? AND state IN ('QUEUED','RUNNING')", (record_id,)).fetchone()
             if existing:
                 return dict(existing)
@@ -461,6 +464,8 @@ class VerificationService:
             if not job or job['state'] != 'QUEUED': return
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone(): return
             if c.execute("SELECT id FROM verification_jobs WHERE state='RUNNING'").fetchone(): return
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():return
             c.execute("UPDATE verification_jobs SET state='RUNNING',updated_at=? WHERE id=?", (now(), job_id))
         job = self.db.one('SELECT * FROM verification_jobs WHERE id=?', (job_id,))
         row, record, _ = self.load(job['record_id'])

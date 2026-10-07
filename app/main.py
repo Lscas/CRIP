@@ -17,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse,JSONResponse,Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel,ConfigDict,Field
+from pydantic import BaseModel,ConfigDict,Field,StrictInt
 from filelock import FileLock,Timeout as LockTimeout
 from app.settings import Settings,ROOT,VERSION
 from app.local_credentials import LocalCredentialError
@@ -25,7 +25,7 @@ from app.model_configuration import (clear_active_configuration, configured_sett
                                      public_configuration, save_active_configuration)
 from app.db import Database,DomainError,dumps,now,uid
 from app.uploads import Uploads
-from app.gateway import Gateway
+from app.gateway import Gateway,InvalidModelOutput
 from app.runner import Runner
 from app.exporter import (collect,as_json,as_xlsx,reviewer_record_display,
                           reviewer_record_is_visible)
@@ -57,12 +57,24 @@ from app.questions import (ProjectQuestions,requires_email_attachment_relation_i
                            requires_workflow_metadata_index,
                            requires_workflow_party_index,
                            requires_workflow_status_index,requires_workflow_subject_index)
+from app.project_qa_v2 import ProjectQAV2
+from app.evidence_loop import ProjectEvidenceLoop
+from app.page_selector import (COMPLETE_SELECTOR_VERSION as SELECTOR_VERSION,
+                               LAYOUT_BOUND_SELECTOR_VERSION,select_pages)
+from app.reference_results import ReferenceResultStore
+from app.reference_cases import ReferenceCaseStore
+from app.reference_evaluations import ReferenceEvaluationStore
+from app.reference_evaluation_jobs import ReferenceEvaluationJobStore
+from app.reference_readiness import ReferenceReadiness
+from app.reference_scorecards import ReferenceScorecardStore
 from contracts.runtime_rules import EvidenceScope,validate_candidate,validate_schema
 
 class Input(BaseModel):model_config=ConfigDict(extra='forbid')
 class ProjectInput(Input):
     name:str=Field(min_length=1,max_length=150)
-class RunInput(Input):local_workers:Literal[1,2,4]=2
+class RunInput(Input):
+    local_workers:Literal[1,2,4]=2
+    analysis_mode:Literal['LEGACY_ANALYSIS','REFERENCE_QA']='LEGACY_ANALYSIS'
 class UploadInput(Input):name:str=Field(min_length=1,max_length=240);size:int=Field(ge=0)
 class ConnectorInput(Input):
     access_token:str=Field(min_length=1,max_length=16384,repr=False)
@@ -97,10 +109,13 @@ class QuestionInput(Input):
     question:str=Field(min_length=3,max_length=1000)
 
 class ModelConfigurationInput(Input):
-    provider:Literal['mock','deepseek','gemini','custom']
+    provider:Literal['mock','deepseek','gemini','openai','custom']
     api_base_url:str=Field(default='',max_length=2048)
     model:str=Field(default='',max_length=160)
     api_key:str=Field(default='',max_length=256,repr=False)
+    vision_enabled:bool=False
+    structured_output_mode:Literal['json_object','json_schema']='json_object'
+    reasoning_effort:Literal['none','low','high','max']='none'
     remember:bool=True
     approved:bool=False
 
@@ -116,13 +131,92 @@ class ReviewInput(Input):
     note:str=Field(default='',max_length=4000)
     candidate:dict|None=None
     quantity_action:Literal['PENDING','VERIFIED','REJECTED']|None=None
+class ReferenceResultReviewInput(Input):
+    action:Literal['ACCEPTED','REJECTED']
+    expected_version:int=Field(ge=0)
+    note:str=Field(default='',max_length=2000)
+class ReferenceEvaluationInput(Input):
+    run_id:str=Field(min_length=1,max_length=128)
+    name:str=Field(min_length=1,max_length=150)
+    questions:list[str]=Field(min_length=1,max_length=50)
+    profile_id:Literal['FLASH_NONE','FLASH_LOW','PRO']|None=None
+    selector_version:Literal['literal-page-selector-9']|None=None
+class ReferenceEvaluationCloneInput(Input):
+    profile_id:Literal['FLASH_NONE','FLASH_LOW','PRO']|None=None
+class ReferenceQuestionInput(QuestionInput):
+    profile_id:Literal['FLASH_NONE','FLASH_LOW','PRO']|None=None
+    selector_version:Literal['literal-page-selector-9']|None=None
+    preview_proof:'ReferencePreviewProofInput|None'=None
+class ReferenceQuestionPreviewInput(QuestionInput):
+    profile_id:Literal['FLASH_NONE','FLASH_LOW','PRO']|None=None
+    selector_version:Literal['literal-page-selector-9']|None=None
+class ReferencePreviewProofInput(Input):
+    proof_version:Literal['reference-preview-proof-1']
+    project_id:str=Field(min_length=1,max_length=128)
+    run_id:str=Field(min_length=1,max_length=128)
+    snapshot_id:str=Field(min_length=1,max_length=128)
+    normalized_question_sha256:str=Field(pattern=r'^[0-9a-f]{64}$')
+    selector_version:Literal['literal-page-selector-9']
+    context_policy:Literal['COMPLETE_SELECTED_SCOPE_WITH_LAYOUT_BINDING_V1']
+    profile_version:Literal['reference-text-profile-1']
+    profile_id:Literal['FLASH_NONE','FLASH_LOW','PRO']
+    route_sha256:str=Field(pattern=r'^[0-9a-f]{64}$')
+    selection_id:str=Field(min_length=1,max_length=128)
+    initial_evidence_manifest_sha256:str=Field(pattern=r'^[0-9a-f]{64}$')
+    prompt_contract_hash:str=Field(pattern=r'^[0-9a-f]{64}$')
+ReferenceQuestionInput.model_rebuild()
+class ReferenceEvaluationExecuteInput(Input):
+    preview_proof:ReferencePreviewProofInput|None=None
+    replay_only:bool=False
+class ReferenceEvaluationJobInput(Input):
+    confirmed:Literal[True]
+class ReferenceEvaluationAdjudicationInput(Input):
+    verdict:Literal['FULLY_USABLE','PARTIAL','UNUSABLE']
+    unsupported_claim:bool=False
+    expected_version:int=Field(ge=0)
+    note:str=Field(default='',max_length=2000)
+class ReferenceCaseCreateInput(Input):
+    run_id:str=Field(min_length=1,max_length=128)
+    question:str=Field(min_length=3,max_length=1000)
+    result_id:str|None=Field(default=None,min_length=1,max_length=128)
+    evaluation_id:str|None=Field(default=None,min_length=1,max_length=128)
+    question_id:str|None=Field(default=None,min_length=1,max_length=128)
+    attachments:list[str]=Field(default_factory=list,max_length=50)
+    supplemental_question:str|None=Field(default=None,max_length=1000)
+    note:str|None=Field(default=None,max_length=4000)
+class ReferenceCaseUpdateInput(Input):
+    expected_version:StrictInt=Field(ge=0)
+    status:Literal['OPEN','NEEDS_INFORMATION','IN_REVIEW','RESOLVED']|None=None
+    assignee:str|None=Field(default=None,max_length=240)
+    note:str|None=Field(default=None,max_length=4000)
+    resolution:str|None=Field(default=None,max_length=4000)
+    attachments:list[str]=Field(default_factory=list,max_length=50)
+    supplemental_question:str|None=Field(default=None,max_length=1000)
+class ReferenceCaseFollowupInput(Input):
+    expected_version:StrictInt=Field(ge=0)
+    run_id:str=Field(min_length=1,max_length=128)
+    result_id:str=Field(min_length=1,max_length=128)
+    supplemental_document_ids:list[str]=Field(min_length=1,max_length=50)
+    note:str=Field(default='',max_length=4000)
 
 
 def create_app(settings:Settings|None=None)->FastAPI:
     s=settings or Settings.from_env();s.data_dir.mkdir(parents=True,exist_ok=True)
     instance_id=secrets.token_hex(12);provider_change_lock=threading.Lock();restarting=[False]
     db=Database(s.data_dir/'cirp.sqlite3');uploads=Uploads(db,s);gateway=Gateway(s,db);runner=Runner(db,s,uploads,gateway)
-    questions=ProjectQuestions(db,gateway)
+    questions=ProjectQuestions(db,gateway);questions_v2=ProjectQAV2(db,gateway,uploads)
+    questions_v3=ProjectEvidenceLoop(db,gateway,uploads)
+    reference_results=ReferenceResultStore(db,uploads)
+    reference_cases=ReferenceCaseStore(db,uploads)
+    reference_evaluations=ReferenceEvaluationStore(db,reference_results)
+    reference_readiness=ReferenceReadiness(
+        db,reference_evaluations,lambda:gateway.s,select_pages)
+    reference_scorecards=ReferenceScorecardStore(db,reference_evaluations)
+    reference_evaluation_jobs=ReferenceEvaluationJobStore(
+        db,reference_evaluations,lambda:gateway.s,
+        lambda evaluation_id,item_id:_execute_reference_evaluation_item(
+            evaluation_id,item_id,managed=True))
+    runner.reference_evaluation_jobs=reference_evaluation_jobs
     connectors=ExternalConnectors(s,uploads)
     @asynccontextmanager
     async def lifespan(app):
@@ -140,7 +234,17 @@ def create_app(settings:Settings|None=None)->FastAPI:
                 openapi_url=None if s.remote_enabled else '/openapi.json')
     access=PreviewAccess(s)
     app.state.db=db;app.state.runner=runner;app.state.gateway=gateway;app.state.uploads=uploads
-    app.state.connectors=connectors;app.state.settings=s
+    app.state.connectors=connectors;app.state.settings=s;app.state.reference_results=reference_results
+    app.state.reference_cases=reference_cases
+    app.state.reference_evaluations=reference_evaluations
+    app.state.reference_readiness=reference_readiness
+    app.state.reference_scorecards=reference_scorecards
+    app.state.reference_evaluation_jobs=reference_evaluation_jobs
+    def _require_reference_layout_enabled()->None:
+        # This is a startup release gate, deliberately independent of mutable
+        # gateway/provider settings.
+        if not s.reference_layout_enabled:
+            raise DomainError('Reference layout v9 is not enabled for this CIRP startup.',409)
     app.add_middleware(TrustedHostMiddleware,allowed_hosts=list(s.allowed_hosts))
     @app.middleware('http')
     async def guard(request,call_next):
@@ -208,12 +312,16 @@ def create_app(settings:Settings|None=None)->FastAPI:
                 raise DomainError('Pause or finish the active analysis before changing model settings.',409)
             if db.one("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING') LIMIT 1",required=False):
                 raise DomainError('Finish the active semantic verification before changing model settings.',409)
+            if reference_evaluation_jobs.active() is not None:
+                raise DomainError('Stop or finish the managed Reference evaluation job first.',409)
             if db.one('SELECT id FROM model_calls WHERE actual_units IS NULL LIMIT 1',required=False):
                 raise DomainError('Reconcile unresolved API calls before changing model settings.',409)
             try:
                 candidate=configured_settings(
                     s,provider=data.provider,api_base_url=data.api_base_url,model=data.model,
-                    api_key=data.api_key)
+                    api_key=data.api_key,vision_enabled=data.vision_enabled,
+                    structured_output_mode=data.structured_output_mode,
+                    reasoning_effort=data.reasoning_effort)
                 if data.remember and candidate.provider!='mock':save_active_configuration(candidate)
                 else:clear_active_configuration(s.data_dir)
             except (ValueError,LocalCredentialError) as exc:
@@ -304,28 +412,47 @@ def create_app(settings:Settings|None=None)->FastAPI:
     def run_create(pid:str,data:RunInput|None=None):
         with provider_change_lock:
             if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
-            return runner.create(pid,(data or RunInput()).local_workers)
+            request=data or RunInput()
+            return runner.create(pid,request.local_workers,request.analysis_mode)
     @app.get('/api/projects/{pid}/analysis-runs')
     def runs_get(pid:str):return [runner.get(x['id']) for x in db.all('SELECT id FROM runs WHERE project_id=? ORDER BY created_at DESC',(pid,))]
-    def project_knowledge(pid:str)->dict:
+    def _analysis_mode(row:dict)->str:
+        try:capabilities=json.loads(row['capabilities'])
+        except (TypeError,ValueError,json.JSONDecodeError):return 'LEGACY_ANALYSIS'
+        return capabilities.get('analysis_mode','LEGACY_ANALYSIS')
+    def project_knowledge(pid:str,analysis_mode:str='LEGACY_ANALYSIS',
+                          include_active_run:bool=False)->dict:
         db.one('SELECT id FROM projects WHERE id=?',(pid,))
         documents=[dict(row) for row in db.all(
             'SELECT id,sha256 FROM documents WHERE project_id=? ORDER BY id',(pid,))]
         snapshot='SN-'+hashlib.sha256(dumps(documents).encode()).hexdigest()[:32]
-        row=db.one("""SELECT id FROM runs
-                      WHERE project_id=? AND status IN ('PARTIAL','COMPLETED')
-                      ORDER BY created_at DESC,rowid DESC LIMIT 1""",(pid,),required=False)
-        active=bool(db.one("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING') LIMIT 1",
-                           required=False))
-        if not row:
-            return {'available':False,'run_id':None,'current':False,'active_update':active,
-                    'created_at':None,'status':None,'document_count':0}
-        run=runner.get(row['id'])
-        return {'available':True,'run_id':run['id'],'current':run['snapshot_id']==snapshot,
-                'active_update':active,'created_at':run['created_at'],'status':run['status'],
-                'document_count':len(run['document_ids'])}
+        terminal=next((row for row in db.all("""SELECT id,capabilities FROM runs
+                       WHERE project_id=? AND status IN ('PARTIAL','COMPLETED')
+                       ORDER BY created_at DESC,rowid DESC""",(pid,))
+                       if _analysis_mode(row)==analysis_mode),None)
+        active_row=next((row for row in db.all("""SELECT id,capabilities FROM runs
+                         WHERE project_id=? AND status IN ('QUEUED','RUNNING')
+                         ORDER BY created_at DESC,rowid DESC""",(pid,))
+                         if _analysis_mode(row)==analysis_mode),None)
+        active=active_row is not None
+        if not terminal:
+            value={'available':False,'run_id':None,'current':False,'active_update':active,
+                   'created_at':None,'status':None,'document_count':0}
+        else:
+            run=runner.get(terminal['id'])
+            value={'available':True,'run_id':run['id'],'current':run['snapshot_id']==snapshot,
+                   'active_update':active,'created_at':run['created_at'],'status':run['status'],
+                   'document_count':len(run['document_ids'])}
+        if include_active_run:
+            value['active_run_id']=active_row['id'] if active_row else None
+            if s.reference_layout_enabled:
+                value['snapshot_id']=run['snapshot_id'] if terminal else None
+        return value
     @app.get('/api/projects/{pid}/knowledge')
     def project_knowledge_get(pid:str):return project_knowledge(pid)
+    @app.get('/api/projects/{pid}/reference-knowledge')
+    def reference_knowledge_get(pid:str):
+        return project_knowledge(pid,'REFERENCE_QA',True)
     @app.post('/api/projects/{pid}/questions')
     def question_ask(pid:str,data:QuestionInput):
         run_id=data.run_id
@@ -364,7 +491,349 @@ def create_app(settings:Settings|None=None)->FastAPI:
                              or requires_email_header_index(question)) else None)
         with provider_change_lock:
             if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            reference_evaluation_jobs.require_no_active()
             return questions.ask(run,question,workflow_index)
+    @app.post('/api/projects/{pid}/questions-v2/preview')
+    def question_v2_preview(pid:str,data:QuestionInput):
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid)
+            if not knowledge['available']:
+                raise DomainError('Analyze this project once before previewing QA V2.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
+        if run['project_id']!=pid:
+            raise DomainError('The selected analysis run does not belong to this project.',404)
+        return questions_v2.preview(run,data.question.strip())
+    @app.post('/api/projects/{pid}/questions-v2')
+    def question_v2_ask(pid:str,data:QuestionInput):
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid)
+            if not knowledge['available']:
+                raise DomainError('Analyze this project once before asking QA V2.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
+        if run['project_id']!=pid:
+            raise DomainError('The selected analysis run does not belong to this project.',404)
+        question=data.question.strip()
+        if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            reference_evaluation_jobs.require_no_active()
+            return questions_v2.ask(run,question)
+    @app.post('/api/projects/{pid}/questions-v3/preview')
+    def question_v3_preview(pid:str,data:ReferenceQuestionPreviewInput):
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid,'REFERENCE_QA')
+            if not knowledge['available']:
+                raise DomainError('Analyze this project once before previewing QA V3.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
+        if run['project_id']!=pid:
+            raise DomainError('The selected analysis run does not belong to this project.',404)
+        question=data.question.strip()
+        if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
+        if data.selector_version is None:
+            return questions_v3.preview(run,question)
+        _require_reference_layout_enabled()
+        if data.profile_id is None:
+            raise DomainError('Selector v9 preview requires a canonical named text profile.',409)
+        from app.reference_text_profiles import profile as reference_text_profile
+        return questions_v3.preview(
+            run,question,selector_version=LAYOUT_BOUND_SELECTOR_VERSION,
+            route=reference_text_profile(data.profile_id))
+    @app.post('/api/projects/{pid}/page-selections/preview')
+    def page_selection_preview(pid:str,data:QuestionInput):
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid,'REFERENCE_QA')
+            if not knowledge['available']:
+                raise DomainError('Prepare this project once before selecting pages.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
+        if run['project_id']!=pid:
+            raise DomainError('The selected analysis run does not belong to this project.',404)
+        question=data.question.strip()
+        if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
+        return select_pages(db,run,question,selector_version=SELECTOR_VERSION).public()
+    @app.post('/api/projects/{pid}/questions-v3')
+    def question_v3_ask(pid:str,data:ReferenceQuestionInput):
+        if data.selector_version is not None and data.run_id is None:
+            raise DomainError('Selector v9 Ask requires an explicit analysis run.',409)
+        run_id=data.run_id
+        if run_id is None:
+            knowledge=project_knowledge(pid,'REFERENCE_QA')
+            if not knowledge['available']:
+                raise DomainError('Analyze this project once before asking QA V3.',409)
+            run_id=knowledge['run_id']
+        run=runner.get(run_id)
+        if run['project_id']!=pid:
+            raise DomainError('The selected analysis run does not belong to this project.',404)
+        question=data.question.strip()
+        if len(question)<3:raise DomainError('Enter a question with at least three non-space characters.')
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            reference_evaluation_jobs.require_no_active()
+            if data.selector_version is not None:
+                _require_reference_layout_enabled()
+                if data.profile_id is None or data.preview_proof is None:
+                    raise DomainError('Selector v9 Ask requires a named profile and preview proof.',409)
+            route=(reference_evaluations.profile_for_id(data.profile_id,gateway.s)
+                   if data.profile_id else None)
+            result,saved=_execute_reference_question(
+                run,question,
+                LAYOUT_BOUND_SELECTOR_VERSION if data.selector_version is not None else SELECTOR_VERSION,
+                route=route,
+                preview_proof=(data.preview_proof.model_dump() if data.preview_proof else None))
+            return {**result,'result_id':saved['result_id'],'review':saved['review']}
+    def _execute_reference_question(
+            run:dict,question:str,selector_version:str=SELECTOR_VERSION,route:dict|None=None,
+            preview_proof:dict|None=None)->tuple[dict,dict]:
+        if preview_proof is not None:
+            result=questions_v3.ask(
+                run,question,selector_version,route=route,preview_proof=preview_proof)
+        else:
+            result=(questions_v3.ask(run,question,selector_version,route=route)
+                    if route is not None else questions_v3.ask(run,question,selector_version))
+        current=gateway.s
+        receipts=result.get('execution_receipts',[])
+        model=(receipts[-1]['model'] if result.get('execution_profile') and receipts else
+               ('mock-no-network' if current.provider=='mock' else
+                current.vision_model if result.get('answer_basis')==
+                'MODEL_QA_V3_MULTIMODAL_EVIDENCE_LOOP' else current.cheap_model))
+        saved=reference_results.save(run,question,result,current.provider,model)
+        return result,saved
+    @app.get('/api/projects/{pid}/reference-results')
+    def reference_result_list(pid:str,run_id:str|None=None,
+                              offset:int=Query(default=0,ge=0),
+                              limit:int=Query(default=20,ge=1,le=50)):
+        return reference_results.list(pid,run_id,offset,limit)
+    @app.get('/api/projects/{pid}/reference-results/export.json')
+    def reference_result_export(
+            pid:str,run_id:str|None=None,
+            review_status:Literal['PENDING','ACCEPTED','REJECTED','NOT_APPLICABLE']|None=None):
+        value=reference_results.export(pid,run_id,review_status);raw=dumps(value)
+        suffix=f'-{run_id}' if run_id else ''
+        return Response(raw,media_type='application/json',headers={
+            'Content-Disposition':f'attachment; filename="cirp-reference-{pid}{suffix}.json"'})
+    @app.get('/api/projects/{pid}/reference-results/compare')
+    def reference_result_compare(pid:str,baseline_run_id:str,candidate_run_id:str):
+        return reference_results.compare(pid,baseline_run_id,candidate_run_id)
+    @app.get('/api/reference-results/{result_id}')
+    def reference_result_get(result_id:str):return reference_results.get(result_id)
+    @app.get('/api/reference-results/{result_id}/history')
+    def reference_result_history(result_id:str):return reference_results.history(result_id)
+    @app.get('/api/reference-results/{result_id}/projection-review')
+    def reference_projection_review(result_id:str,request:Request):
+        if request.query_params:
+            raise DomainError('Projection source review does not accept client source parameters.',422)
+        return JSONResponse(reference_results.get_projection_review_view(result_id),
+                            headers={'Cache-Control':'no-store'})
+    @app.get('/api/reference-results/{result_id}/projection-review/sources/{ordinal}/image')
+    def reference_projection_review_image(result_id:str,ordinal:int,request:Request):
+        if request.query_params:
+            raise DomainError('Projection source review does not accept client source parameters.',422)
+        return Response(reference_results.get_projection_review_image(result_id,ordinal),
+                        media_type='image/png',headers={'Cache-Control':'no-store'})
+    @app.post('/api/reference-results/{result_id}/review')
+    def reference_result_review(result_id:str,data:ReferenceResultReviewInput):
+        return reference_results.review(
+            result_id,data.action,data.expected_version,data.note)
+    @app.get('/api/projects/{pid}/reference-cases')
+    def reference_case_list(pid:str,
+                            status:Literal['OPEN','NEEDS_INFORMATION','IN_REVIEW','RESOLVED']|None=None,
+                            assignee:str|None=Query(default=None,max_length=240),
+                            run_id:str|None=Query(default=None,max_length=128),
+                            offset:int=Query(default=0,ge=0),limit:int=Query(default=50,ge=1,le=100)):
+        return reference_cases.list(pid,status=status,assignee=assignee,run_id=run_id,offset=offset,limit=limit)
+    @app.post('/api/projects/{pid}/reference-cases',status_code=201)
+    def reference_case_create(pid:str,data:ReferenceCaseCreateInput):
+        return reference_cases.create(
+            pid,data.run_id,data.question,result_id=data.result_id,evaluation_id=data.evaluation_id,
+            question_id=data.question_id,attachments=data.attachments,
+            supplemental_question=data.supplemental_question,note=data.note,actor='local-user')
+    @app.get('/api/reference-cases/{case_id}')
+    def reference_case_get(case_id:str):return reference_cases.get(case_id)
+    @app.post('/api/reference-cases/{case_id}/update')
+    def reference_case_update(case_id:str,data:ReferenceCaseUpdateInput):
+        return reference_cases.update(
+            case_id,data.expected_version,status=data.status,assignee=data.assignee,note=data.note,
+            resolution=data.resolution,attachments=data.attachments,
+            supplemental_question=data.supplemental_question,actor='local-user')
+    @app.post('/api/reference-cases/{case_id}/follow-up-results')
+    def reference_case_followup_result(case_id:str,data:ReferenceCaseFollowupInput):
+        return reference_cases.link_followup(
+            case_id,data.expected_version,data.run_id,data.result_id,
+            data.supplemental_document_ids,data.note,actor='local-user')
+    @app.post('/api/projects/{pid}/reference-evaluations',status_code=201)
+    def reference_evaluation_create(pid:str,data:ReferenceEvaluationInput):
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            selector_version=data.selector_version or SELECTOR_VERSION
+            if data.selector_version is not None:
+                _require_reference_layout_enabled()
+                if data.profile_id is None:
+                    raise DomainError('Reference layout evaluation requires a canonical named text profile.',409)
+            return reference_evaluations.create(
+                pid,data.run_id,data.name,data.questions,
+                reference_evaluations.profile_for_id(data.profile_id,gateway.s),selector_version)
+    @app.get('/api/projects/{pid}/reference-evaluations')
+    def reference_evaluation_list(pid:str,offset:int=Query(default=0,ge=0),
+                                  limit:int=Query(default=10,ge=1,le=20)):
+        return reference_evaluations.list(pid,offset,limit)
+    @app.get('/api/projects/{pid}/reference-evaluations/compare')
+    def reference_evaluation_compare(
+            pid:str,baseline_evaluation_id:str,candidate_evaluation_id:str):
+        return reference_evaluations.compare(
+            pid,baseline_evaluation_id,candidate_evaluation_id)
+    @app.get('/api/projects/{pid}/reference-evaluation-jobs')
+    def reference_evaluation_job_list(
+            pid:str,limit:int=Query(default=20,ge=1,le=20)):
+        return reference_evaluation_jobs.list(pid,limit)
+    @app.get('/api/reference-evaluations/{evaluation_id}')
+    def reference_evaluation_get(evaluation_id:str):
+        return reference_evaluations.get(evaluation_id)
+    @app.get('/api/reference-evaluations/{evaluation_id}/readiness')
+    def reference_evaluation_readiness(evaluation_id:str):
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            return reference_readiness.build(evaluation_id)
+    @app.get('/api/reference-evaluations/{evaluation_id}/scorecard')
+    def reference_evaluation_scorecard(evaluation_id:str):
+        return reference_scorecards.scorecard(evaluation_id)
+    @app.post('/api/reference-evaluations/{evaluation_id}/items/{item_id}/adjudication')
+    def reference_evaluation_adjudicate(
+            evaluation_id:str,item_id:str,data:ReferenceEvaluationAdjudicationInput):
+        return reference_scorecards.adjudicate(
+            evaluation_id,item_id,data.verdict,data.unsupported_claim,
+            data.expected_version,data.note)
+    @app.get('/api/reference-evaluations/{evaluation_id}/items/{item_id}/adjudication-history')
+    def reference_evaluation_adjudication_history(
+            evaluation_id:str,item_id:str,offset:int=Query(default=0,ge=0),
+            limit:int=Query(default=50,ge=1,le=100)):
+        return reference_scorecards.history(evaluation_id,item_id,offset,limit)
+    @app.post('/api/reference-evaluations/{evaluation_id}/clone',status_code=201)
+    def reference_evaluation_clone(evaluation_id:str,data:ReferenceEvaluationCloneInput|None=None):
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            if reference_evaluations.get(evaluation_id)['selector_version']==LAYOUT_BOUND_SELECTOR_VERSION:
+                _require_reference_layout_enabled()
+            return reference_evaluations.clone_for_profile(
+                evaluation_id,reference_evaluations.profile_for_id(
+                    data.profile_id if data else None,gateway.s))
+    @app.post('/api/reference-evaluations/{evaluation_id}/jobs',status_code=202)
+    def reference_evaluation_job_create(
+            evaluation_id:str,data:ReferenceEvaluationJobInput):
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            if reference_evaluations.get(evaluation_id)['selector_version']==LAYOUT_BOUND_SELECTOR_VERSION:
+                _require_reference_layout_enabled()
+            return reference_evaluation_jobs.create(evaluation_id,data.confirmed)
+    @app.get('/api/reference-evaluation-jobs/{job_id}')
+    def reference_evaluation_job_get(job_id:str):
+        return reference_evaluation_jobs.get(job_id)
+    @app.post('/api/reference-evaluation-jobs/{job_id}/stop')
+    def reference_evaluation_job_stop(job_id:str):
+        return reference_evaluation_jobs.stop(job_id)
+    @app.post('/api/reference-evaluations/{evaluation_id}/items/{item_id}/preview')
+    def reference_evaluation_preview(evaluation_id:str,item_id:str):
+        context=reference_evaluations.item_context(evaluation_id,item_id)
+        if context['selector_version']==LAYOUT_BOUND_SELECTOR_VERSION:
+            _require_reference_layout_enabled()
+            return {
+                'evaluation_id':evaluation_id,'item_id':item_id,
+                'question':context['item']['question'],
+                **questions_v3.preview(
+                    context['run'],context['item']['question'],
+                    selector_version=LAYOUT_BOUND_SELECTOR_VERSION,route=context['profile']),
+            }
+        return {
+            'evaluation_id':evaluation_id,'item_id':item_id,
+            'question':context['item']['question'],
+            'page_selection':select_pages(
+                db,context['run'],context['item']['question'],
+                selector_version=context['selector_version']).public(),
+        }
+    def _execute_reference_evaluation_item(
+            evaluation_id:str,item_id:str,managed:bool=False,
+            preview_proof:dict|None=None,replay_only:bool=False)->dict:
+        with provider_change_lock:
+            if restarting[0]:raise DomainError('CIRP is restarting with a new model configuration.',409)
+            context=reference_evaluations.item_context(evaluation_id,item_id)
+            layout_bound=context['selector_version']==LAYOUT_BOUND_SELECTOR_VERSION
+            if preview_proof is not None and not layout_bound:
+                raise DomainError('Preview proof is only supported for selector v9 evaluations.',409)
+            terminal=context['saved_result'] is not None or context['saved_failure'] is not None
+            if replay_only and not terminal:
+                raise DomainError('REPLAY_ONLY requires a saved terminal evaluation item.',409)
+            # A pending v9 proof goes straight to ask(), where _prepare_initial
+            # runs exactly once before reservation. Terminal replay has no ask,
+            # so it locally rebuilds the proof before authenticating saved data.
+            if terminal and preview_proof is not None:
+                current=questions_v3.preview(
+                    context['run'],context['item']['question'],
+                    selector_version=LAYOUT_BOUND_SELECTOR_VERSION,route=context['profile'])
+                if preview_proof!=current['preview_proof']:
+                    raise DomainError('PREVIEW_STALE: Preview this evaluation item again before executing.',409)
+            if context['saved_result'] is not None:
+                authenticated=reference_evaluations.authenticate_item_result(
+                    context['evaluation'],context['item'],context['item']['result_id'])
+                return {'evaluation':reference_evaluations.get(evaluation_id),
+                        'result':authenticated,'replayed':True,
+                        'execution_telemetry':{
+                            'scope':'CURRENT_EXECUTE','model_call_count':0,
+                            'decision_count':0,'cached_decision_count':0}}
+            if context['saved_failure'] is not None:
+                saved_execution=reference_evaluations.authenticate_item_failure(
+                    context['evaluation'],context['item'],context['profile'],context['saved_failure'])
+                return {'evaluation':reference_evaluations.get(evaluation_id),
+                        'result':None,'failure':context['saved_failure'],'replayed':True,
+                        **({'failure_execution':saved_execution} if saved_execution is not None else {}),
+                        'execution_telemetry':{
+                            'scope':'CURRENT_EXECUTE','model_call_count':0,
+                            'decision_count':0,'cached_decision_count':0}}
+            if layout_bound:
+                _require_reference_layout_enabled()
+            if not managed:reference_evaluation_jobs.require_no_active()
+            route=reference_evaluations.require_profile(evaluation_id,gateway.s)
+            try:
+                runtime_result,saved=_execute_reference_question(
+                    context['run'],context['item']['question'],
+                    context['selector_version'],route=route,preview_proof=preview_proof)
+            except InvalidModelOutput as exc:
+                if db.unresolved_calls(context['evaluation']['project_id']):raise
+                evaluation,failure=reference_evaluations.fail(
+                    evaluation_id,item_id,'MODEL_OUTPUT_REJECTED',
+                    exc.execution_receipt,exc.failure_execution)
+                response={'evaluation':evaluation,'result':None,'failure':failure,'replayed':False}
+                if exc.failure_execution is not None:
+                    receipts=exc.failure_execution['execution_receipts']
+                    response.update({
+                        'failure_execution':exc.failure_execution,
+                        'execution_telemetry':{
+                            'scope':'CURRENT_EXECUTE',
+                            'model_call_count':sum(not receipt.get('cached',False) for receipt in receipts),
+                            'decision_count':len(receipts),
+                            'cached_decision_count':sum(bool(receipt.get('cached',False)) for receipt in receipts)}})
+                return response
+            evaluation=reference_evaluations.attach(
+                evaluation_id,item_id,saved['result_id'])
+            receipts=runtime_result.get('execution_receipts',[])
+            return {'evaluation':evaluation,'result':saved,'replayed':False,
+                    'execution_telemetry':{
+                        'scope':'CURRENT_EXECUTE',
+                        'model_call_count':runtime_result.get('model_call_count',0),
+                        'decision_count':len(receipts),
+                        'cached_decision_count':sum(bool(item.get('cached')) for item in receipts)}}
+    @app.post('/api/reference-evaluations/{evaluation_id}/items/{item_id}/execute')
+    def reference_evaluation_execute(
+            evaluation_id:str,item_id:str,data:ReferenceEvaluationExecuteInput|None=None):
+        return _execute_reference_evaluation_item(
+            evaluation_id,item_id,
+            preview_proof=(data.preview_proof.model_dump() if data and data.preview_proof else None),
+            replay_only=bool(data and data.replay_only))
     @app.get('/api/analysis-runs/{rid}')
     def run_get(rid:str):return runner.get(rid)
     @app.post('/api/analysis-runs/{rid}/{action}')

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-comparison.schema.json",
+  "title": "Deterministic comparison of two saved Reference QA runs",
+  "$defs": {
+    "review": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["PENDING", "ACCEPTED", "REJECTED", "NOT_APPLICABLE"]},
+        "version": {"type": "integer", "minimum": 0},
+        "event_id": {"type": ["string", "null"], "maxLength": 160}
+      },
+      "required": ["status", "version", "event_id"],
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "snapshot_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "status": {"enum": ["PARTIAL", "COMPLETED"]},
+        "created_at": {"type": "string", "minLength": 1, "maxLength": 80},
+        "result_count": {"type": "integer", "minimum": 0, "maximum": 2000}
+      },
+      "required": ["run_id", "snapshot_id", "status", "created_at", "result_count"],
+      "additionalProperties": false
+    },
+    "version": {
+      "type": "object",
+      "properties": {
+        "result_id": {"type": "string", "pattern": "^QAR-[0-9a-f]{32}$"},
+        "status": {"enum": ["ANSWERED", "CANNOT_ANSWER", "NEED_USER_INPUT", "MODEL_DISABLED"]},
+        "answer_basis": {"type": "string", "minLength": 1, "maxLength": 120},
+        "answer": {"type": "string"},
+        "missing": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 500}},
+        "calculations": {"type": "array", "maxItems": 8, "items": {"type": "object"}},
+        "citations": {"type": "array", "maxItems": 48, "items": {"type": "object"}},
+        "result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "outcome_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 180},
+        "model": {"type": "string", "minLength": 1, "maxLength": 180},
+        "review": {"$ref": "#/$defs/review"},
+        "created_at": {"type": "string", "minLength": 1, "maxLength": 80}
+      },
+      "required": ["result_id", "status", "answer_basis", "answer", "missing", "calculations", "citations", "result_hash", "outcome_hash", "provider", "model", "review", "created_at"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "comparison_id": {"type": "string", "pattern": "^QACMP-[0-9a-f]{32}$"},
+    "comparison_version": {"const": "reference-comparison-1"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "policy": {"const": "SAVED_PUBLIC_OUTCOME_ONLY_NO_PRECEDENCE"},
+    "model_called": {"const": false},
+    "baseline": {"$ref": "#/$defs/run"},
+    "candidate": {"$ref": "#/$defs/run"},
+    "summary": {
+      "type": "object",
+      "properties": {
+        "ADDED": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "REMOVED": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "CHANGED": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "UNCHANGED": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "TOTAL": {"type": "integer", "minimum": 0, "maximum": 1000}
+      },
+      "required": ["ADDED", "REMOVED", "CHANGED", "UNCHANGED", "TOTAL"],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "question": {"type": "string", "minLength": 3, "maxLength": 1000},
+          "change": {"enum": ["ADDED", "REMOVED", "CHANGED", "UNCHANGED"]},
+          "review_changed": {"type": "boolean"},
+          "processing_changed": {"type": "boolean"},
+          "baseline_versions": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/version"}},
+          "candidate_versions": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/version"}}
+        },
+        "required": ["question_key", "question", "change", "review_changed", "processing_changed", "baseline_versions", "candidate_versions"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["comparison_id", "comparison_version", "project_id", "policy", "model_called", "baseline", "candidate", "summary", "items"],
+  "additionalProperties": false
+}

@@ -1,0 +1,39 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal explicitly assigns local version, result, citation and review management to CRIP around the advanced-model reference implementation.",
+  "notes": [
+    "Compare saved public outcomes only; never infer controlling engineering meaning or document precedence.",
+    "Export and comparison must be read-only, bounded and make zero model calls.",
+    "Keep Reference controls separate from legacy analysis and legacy export paths.",
+    "Do not read .local customer data, saved credentials or live provider state during validation."
+  ],
+  "task_id": "DEV-138",
+  "title": "Export and compare Reference QA result versions",
+  "requirement_ids": ["FR-REFERENCE-RESULT-LIFECYCLE-001", "FR-REFERENCE-WORKSPACE-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/reference_results.py", "app/main.py",
+    "spec/schemas/reference-comparison.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_results.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-138.json",
+    "changes/CR-0153.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_results.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "node --check web/i18n.js",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-138",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Add bounded complete Reference-result JSON export and deterministic two-run result comparison without model calls, legacy-path changes or semantic-precedence claims."
+}

@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0176",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Run and independently adjudicate same-snapshot compact-reference DeepSeek Flash and V4 Pro evaluations.",
+  "decision_refs": [
+    "The user authorized API calls and requested Flash followed by Pro comparison",
+    "DEV-159 compact references and DEV-160 exact Pro selection passed their full offline repository gates",
+    "The frozen 15-question run, snapshot, ordered question hash and selector are already preserved",
+    "Historical verification note: same frozen identity",
+    "Historical verification note: all terminal",
+    "Historical verification note: zero unresolved calls",
+    "Historical verification note: saved local comparison",
+    "Historical verification note: manual adjudication against frozen direct-PDF key",
+    "Historical verification note: scripts/check_changes.py",
+    "Historical verification note: scripts/build_bundle_manifest.py"
+  ],
+  "affected_paths": [
+    "reports/kapolei_reference_qa_compact_flash_pro_2026-10-03.json",
+    "reports/kapolei_reference_qa_compact_flash_pro_2026-10-03.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-161.json", "changes/CR-0176.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "scripts/run_checks.py --area all",
+    "scripts/check_changes.py",
+    "scripts/build_bundle_manifest.py"
+  ],
+  "product_implementation_changed": false,
+  "approval_evidence": "The user explicitly authorized API calls for continued Flash and Pro development comparison.",
+  "known_limitations": [
+    "One 15-question project fixture does not establish general construction-document accuracy.",
+    "Human adjudication is required because contract validity does not prove completeness or correctness.",
+    "Provider pricing, latency and model behavior may change after this dated run."
+  ]
+}

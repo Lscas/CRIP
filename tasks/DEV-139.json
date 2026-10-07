@@ -1,0 +1,40 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal explicitly requires CRIP to manage local tasks, versions, results, citations and review around an advanced-model reference implementation.",
+  "notes": [
+    "Freeze one terminal REFERENCE_QA run, snapshot, ordered question set and non-secret model profile per evaluation.",
+    "Creating, listing, reading and previewing evaluation tasks must make zero model calls.",
+    "Execute only one explicitly selected question per request through the existing QA V3 and result store; never add an automatic paid batch retry.",
+    "Keep legacy analysis and the existing single-question Reference QA workflow unchanged.",
+    "Do not read .local customer data, saved credentials or live provider state during offline validation."
+  ],
+  "task_id": "DEV-139",
+  "title": "Manage frozen Reference QA evaluation tasks",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-WORKSPACE-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/reference_evaluations.py", "app/main.py", "app/db.py",
+    "migrations/012_reference_evaluations.sql", "spec/schemas/reference-evaluation.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-139.json",
+    "changes/CR-0154.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_evaluations.py tests/app/test_reference_results.py tests/app/test_evidence_loop.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "node --check web/i18n.js",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-139",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Turn a bounded ordered question set into a frozen, resumable local Reference evaluation task whose questions explicitly execute through existing QA V3 and link to immutable saved results without changing legacy workflows."
+}

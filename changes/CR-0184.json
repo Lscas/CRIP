@@ -1,0 +1,45 @@
+{
+  "change_id": "CR-0184",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001"
+  ],
+  "summary": "Send QA V3 evidence with a compact deterministic document/page/scope relation pack while removing repeated per-row file and locator metadata.",
+  "decision_refs": [
+    "The existing selector already retains document, page, locator and storage order, so no new graph database or semantic inference is required.",
+    "Exact source text and E aliases remain unchanged; source_groups is navigation metadata and cannot support a claim or calculation by itself.",
+    "On the frozen fixed-15 input, the grouped shape reduced serialized input metadata for every question by 2,325 to 9,404 bytes without a model call.",
+    "Historical verification note: deterministic page grouping and original source-order restoration",
+    "Historical verification note: source-group coverage without source-text duplication",
+    "Historical verification note: QA V3 MockTransport request and recovery regression",
+    "Historical verification note: frozen fixed-15 zero-call serialized-input measurement",
+    "Historical verification note: full Python, localization, spec, change and bundle gates"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/gateway.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "tests/app/test_evidence_loop.py",
+    "reports/kapolei_reference_relation_pack_v1_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-169.json", "changes/CR-0184.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py",
+    "tests/app/test_evidence_loop.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested implementation of relational file context in model input.",
+  "known_limitations": [
+    "The first relation pack exposes only deterministic containment and source order; it does not infer table-header, exception, supersession or cross-document semantic edges.",
+    "Offline input reduction and contract tests do not establish live Flash or Pro answer-quality improvement.",
+    "A paid C1/C3/C5 smoke remains a separate explicit validation step."
+  ]
+}

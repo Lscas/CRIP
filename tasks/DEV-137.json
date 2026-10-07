@@ -1,0 +1,41 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal explicitly assigns local file, project, task, version, result, citation and review management to CRIP around an advanced-model reference implementation.",
+  "notes": [
+    "Keep legacy analysis and Ask the project bound to legacy knowledge.",
+    "Reference preparation, preview, result reads and review must make zero model calls.",
+    "Persist only validated public decisions and citations, never hidden model reasoning or image bytes.",
+    "Use an additive migration; do not read or modify .local customer data during tests.",
+    "No live provider request or fixed customer benchmark is authorized by this task."
+  ],
+  "task_id": "DEV-137",
+  "title": "Add the managed Reference QA workspace",
+  "requirement_ids": ["FR-REFERENCE-WORKSPACE-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/reference_results.py", "app/main.py", "app/db.py",
+    "migrations/011_reference_results.sql", "spec/schemas/reference-result.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_results.py", "tests/app/test_evidence_loop.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-137.json",
+    "changes/CR-0152.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_results.py tests/app/test_evidence_loop.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "node --check web/i18n.js",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-137",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make Reference QA a separate browser workflow and persist every validated terminal result, normalized citation and optimistic-lock human review event locally without changing legacy product paths."
+}

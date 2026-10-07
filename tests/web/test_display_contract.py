@@ -9,6 +9,68 @@ from app.main import create_app
 from app.settings import Settings, ROOT
 from scripts.build_cloudflare import build
 
+def test_followup_flow_has_explicit_frozen_preview_contract():
+    """The browser supplement flow keeps preview and request scopes explicit."""
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    for token in ('caseFlowByCase', 'selectedIds', 'preparedRunId', 'selectionId',
+                  'sameOpenCase', 'caseFlowBlocked', 'caseFlowLinkUnknown', 'renderPreparedRun'):
+        assert token in source or token in translations
+    assert 'questions-v3/preview' in source
+    assert "questions-v3`,'POST'" in source
+    assert "follow-up-results`,'POST'" in source
+    assert "memory.selectedIds.every" in source
+    assert 'caseFlowTitle' in translations
+
+
+def test_case_writes_and_refresh_are_runtime_guarded():
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert "state.caseFlowBusy=true;save.disabled=true" in source
+    assert "state.caseFlowBusy=true;link.disabled=true" in source
+    assert "if(!state.project||caseFlowBlocked())return;" in source
+    assert "if(caseFlowBlocked())return;state.caseFlowBusy=true;updateReferenceAvailability();const apply=" in source
+    assert "Promise.all([api(`/projects/${project}/analysis-runs`),api(`/projects/${project}/reference-knowledge`)])" in source
+    assert "freshSelection.selection_id!==proof.selectionId" in source
+    assert "memory.preparedForCaseVersion===currentCase().version" in source
+    assert "memory.preparedSelectedIds" in source
+    assert "memory.preview=null;sync();const result=await api(`/projects/${project}/questions-v3`" in source
+    assert "if(caseFlowBlocked()||!state.project)return;state.caseFlowBusy=true" in source
+    assert "state.caseFlowBusy=false;apply.disabled=false;updateReferenceAvailability();if(state.referenceCaseSelected)renderReferenceCaseDetail();" in source
+    assert "const attachedIds=new Set((currentCase().attachments||[]).map(value=>value.document_id)),newIds=ids.filter(id=>!attachedIds.has(id))" in source
+    assert "attachments:newIds,note:I.t('reference.caseFlowUploadNote')" in source
+    assert "attachments:[...attachedIds,...newIds]" not in source
+    assert "else toast(I.t('reference.caseFlowAlreadyAttached'))" in source
+    assert "(fresh.followups||[]).some(followup=>followup.result_id===result.result_id)" in source
+    assert "memory.pendingResultId=result.result_id;memory.pendingRunId=runId;memory.pendingQuestion=item.question;await recoverPendingReferenceResult(caseId,project);" in source
+    assert "await recoverPendingReferenceResult(caseId,project);if(!sameOpenCase(project,caseId))return;" in source
+    assert "async function recoverPendingReferenceResult" in source
+    assert "const saved=await api(`/reference-results/${resultId}`)" in source
+    assert "saved.result_id!==resultId||saved.project_id!==project||saved.run_id!==memory.pendingRunId||saved.question!==memory.pendingQuestion" in source
+    assert "delete memory.pendingResultId;delete memory.pendingRunId;delete memory.pendingQuestion;" in source
+    assert "function upsertReferenceResult(saved)" in source
+    assert "state.referenceResults=[result,...state.referenceResults]" not in source
+    assert "const project=state.project;if(!project){state.referenceResults=[];renderReferenceResults();return;}" in source
+    assert "const data=await api(`/projects/${project}/reference-results?limit=50`);if(state.project!==project)return;" in source
+    assert "const project=state.project;if(!project)return;" in source
+    assert "knowledge=await api(`/projects/${project}/reference-knowledge`);if(state.project!==project)return;" in source
+    assert "runs=await api(`/projects/${project}/analysis-runs`);if(state.project!==project)return;await loadReferenceResults();if(state.project!==project)return;" in source
+    assert "const item=state.referenceCaseSelected,renderedProject=state.project;if(!item)return;" in source
+    assert "state.referenceCaseSelected=data;renderReferenceCaseDetail();await recoverPendingReferenceResult(caseId,project);" in source
+    assert source.count("if(!sameOpenCase(project,caseId)||") >= 6
+    assert "state.referenceCaseSelected=fresh;if((fresh.followups||[]).some(followup=>followup.result_id===result.result_id))linkedCase=fresh;else{renderReferenceCaseDetail();toast(I.t('reference.caseFlowLinkUnknown'));return;}" in source
+    assert "reference.caseFlowLinkedRefreshPending" in source
+    assert "reference.caseFlowAlreadyAttached" in translations
+    assert "reference.caseFlowLinkUnknown" in translations
+    assert "existing saved-result picker" not in translations
+    for identifier in ('start','reference-prepare','reference-preview','reference-evaluation-run-managed',
+                       'question-form','reference-evaluation-run-form','reference-evaluation-form',
+                       "$('reference-evaluations').addEventListener('click'"):
+        assert identifier in source
+    assert "if(state.caseFlowBusy){event.preventDefault();event.stopImmediatePropagation();}" in source
+    assert "if(state.caseFlowBusy||state.referenceEvaluationBusy)return;" in source
+    assert "if(state.caseFlowBusy||state.referenceEvaluationJobStarting)return;" in source
+
 
 class Elements(HTMLParser):
     def __init__(self, text):
@@ -77,7 +139,10 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
     byid={attrs['id']:(tag,attrs) for tag,attrs in elements if 'id' in attrs}
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')
     for item in ('model-settings-open','model-settings','model-settings-form','model-provider',
-                 'model-base-url','model-name','model-api-key',
+                 'model-base-url','model-name','model-deepseek-model','model-deepseek-option',
+                 'model-api-key','model-vision-enabled',
+                 'model-reasoning-effort','model-reasoning-option',
+                 'model-structured-output','model-structured-option',
                  'model-remember','model-approved','apply-model-settings'):
         assert item in byid
     assert byid['model-settings'][0]=='section'
@@ -98,6 +163,18 @@ def test_model_api_settings_are_customer_visible_and_never_render_a_saved_key():
     assert 'data.service_instance!==previousInstance' in source
     assert 'current.service_instance!==state.settings.service_instance' in source
     assert "setInterval(reloadForServiceChange,4000)" in source
+    assert "visionSupported=custom||openai||(deepseek&&deepseekModel==='deepseek-flash')" in source
+    assert "structuredSupported=custom||openai" in source
+    assert "$('model-structured-option').hidden=!structuredSupported" in source
+    assert any(tag=='option' and attrs.get('value')=='openai' for tag,attrs in elements)
+    assert "structured_output_mode:$('model-structured-output').value" in source
+    assert "reasoning_effort:provider==='deepseek'?$('model-reasoning-effort').value:'none'" in source
+    assert "model:provider==='deepseek'?$('model-deepseek-model').value" in source
+    assert byid['model-deepseek-model'][0]=='select'
+    assert any(tag=='option' and attrs.get('value')=='deepseek-flash' for tag,attrs in elements)
+    assert any(tag=='option' and attrs.get('value')=='deepseek-v4-pro' for tag,attrs in elements)
+    assert any(tag=='option' and attrs.get('value')=='deepseek-v4-pro' and 'disabled' not in attrs
+               for tag,attrs in elements)
     assert 'innerHTML' not in source
 
 
@@ -252,8 +329,123 @@ def test_live_vision_has_explicit_full_page_data_transfer_disclosure():
     source=(ROOT/'web/app.js').read_text(encoding='utf-8')
     translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
     assert 'id="vision-disclosure"' in html and 'full-page PNG derivatives and parsed text' in html
-    assert "state.settings.provider==='deepseek'&&state.settings.capabilities?.vision?.ready" in source
+    assert "state.settings.capabilities?.vision?.ready" in source
     assert 'Live vision sends eligible full-page PNG derivatives' in translations
+
+
+def test_reference_qa_is_a_separate_managed_workspace():
+    elements=Elements((ROOT/'web/index.html').read_text(encoding='utf-8')).items
+    byid={attrs['id']:(tag,attrs) for tag,attrs in elements if 'id' in attrs}
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    expected=(
+        'reference-qa','reference-prepare','reference-run-status','reference-question-form',
+        'reference-question','reference-preview','reference-ask','reference-status',
+        'reference-preview-results','reference-results-refresh','reference-export-json',
+        'reference-results','reference-compare-baseline','reference-compare-candidate',
+        'reference-compare','reference-compare-status','reference-comparison-results',
+        'reference-evaluation-form','reference-evaluation-name',
+        'reference-evaluation-questions','reference-evaluation-create',
+        'reference-evaluation-refresh','reference-evaluation-status','reference-evaluations',
+        'reference-evaluation-readiness-status','reference-evaluation-readiness',
+        'reference-evaluation-scorecard-status','reference-evaluation-scorecard',
+        'reference-evaluation-compare-baseline','reference-evaluation-compare-candidate',
+        'reference-evaluation-compare','reference-evaluation-compare-status',
+        'reference-evaluation-comparison-results','reference-evaluation-jobs-status',
+        'reference-evaluation-jobs',
+        'reference-evaluation-run-dialog','reference-evaluation-run-form',
+        'reference-evaluation-run-summary','reference-evaluation-run-source',
+        'reference-evaluation-run-profile','reference-evaluation-run-confirm',
+        'reference-evaluation-run-cancel','reference-evaluation-run-start',
+        'reference-evaluation-run-managed')
+    assert all(item in byid for item in expected)
+    assert byid['reference-question-form'][0]=='form'
+    assert byid['reference-question'][1]['maxlength']=='1000'
+    assert byid['reference-evaluation-form'][0]=='form'
+    assert byid['reference-evaluation-name'][1]['maxlength']=='150'
+    assert byid['reference-evaluation-questions'][1]['maxlength']=='50049'
+    assert byid['reference-evaluation-run-dialog'][0]=='dialog'
+    assert byid['reference-evaluation-run-form'][0]=='form'
+    assert byid['reference-evaluation-run-confirm'][1]['type']=='checkbox'
+    assert 'required' in byid['reference-evaluation-run-confirm'][1]
+    assert 'disabled' in byid['reference-evaluation-run-start'][1]
+    assert byid['reference-evaluation-run-managed'][1]['type']=='button'
+    assert 'disabled' in byid['reference-evaluation-run-managed'][1]
+    assert any(tag=='a' and attrs.get('href')=='#reference-qa'
+               and attrs.get('data-i18n')=='nav.reference' for tag,attrs in elements)
+    assert "analysis_mode:'REFERENCE_QA'" in source
+    assert "api(`/projects/${state.project}/questions-v3/preview`,'POST',{question})" in source
+    assert "api(`/projects/${state.project}/questions-v3`,'POST',{question})" in source
+    assert "api(`/projects/${project}/reference-results?limit=50`)" in source
+    assert "api(`/projects/${state.project}/reference-evaluations?limit=20`)" in source
+    assert "api(`/projects/${state.project}/reference-evaluation-jobs?limit=20`)" in source
+    assert "const project=state.project,questions=referenceEvaluationQuestions()" in source
+    assert "api(`/projects/${project}/reference-evaluations`,'POST'" in source
+    assert "api(`/reference-evaluations/${evaluation.evaluation_id}/clone`,'POST',layoutBound?{profile_id:targetProfile}:undefined)" in source
+    assert "api(`/reference-evaluations/${evaluation.evaluation_id}/readiness`)" in source
+    assert "api(`/reference-evaluations/${evaluation.evaluation_id}/scorecard`)" in source
+    assert "api(`/reference-evaluations/${data.evaluation_id}/items/${item.item_id}/adjudication`,'POST'" in source
+    assert "api(`/reference-evaluations/${data.evaluation_id}/items/${item.item_id}/adjudication-history?limit=50`)" in source
+    assert "api(`/reference-evaluations/${evaluationId}/jobs`,'POST',{confirmed:true})" in source
+    assert "api(`/reference-evaluation-jobs/${job.job_id}/stop`,'POST')" in source
+    assert "api(`/projects/${state.project}/reference-evaluations/compare?${query}`)" in source
+    assert "new URLSearchParams({baseline_evaluation_id:baseline,candidate_evaluation_id:candidate})" in source
+    assert 'compatibleReferenceEvaluations(selected,item)' in source
+    assert 'first.selector_version!==second.selector_version' in source
+    assert 'selector:evaluation.selector_version' in source
+    assert "'reference.evaluationReadinessSelector',{selector:data.selector_version}" in source
+    assert 'item.question_key===other.question_key&&item.question===other.question' in source
+    assert "sameReferenceProfile(evaluation.profile,activeReferenceProfile())" in source
+    assert "data.baseline,'reference.evaluationBaseline'" in source
+    assert "data.candidate,'reference.evaluationCandidate'" in source
+    assert "api(`/reference-evaluations/${evaluation.evaluation_id}/items/${item.item_id}/preview`,'POST')" in source
+    assert "api(`/reference-evaluations/${evaluation.evaluation_id}/items/${item.item_id}/execute`,'POST')" in source
+    batch=source[source.index('async function runReferenceEvaluationBatch'):source.index('function renderReferenceEvaluations')]
+    assert 'for(const item of pending)' in batch
+    assert batch.index('state.referenceEvaluationBusy=true') < batch.index('await api(`/reference-evaluations/${evaluationId}`)')
+    assert batch.index('unresolved-model-calls') < batch.index("/execute`,'POST')")
+    assert 'await api(`/reference-evaluations/${current.evaluation_id}/items/${item.item_id}/execute`' in batch
+    assert "current.items.filter(item=>item.state==='PENDING')" in batch
+    assert "data.failure?'reference.evaluationBatchFailed':'reference.evaluationBatchSaved'" in batch
+    assert 'stopRequested' in batch and 'Promise.all' not in batch and 'setInterval' not in batch
+    assert source.count("current.items.filter(item=>item.state==='PENDING')")==1
+    assert source.count("evaluation.items.filter(item=>item.state==='PENDING')")==1
+    assert "else if(item.failure)" in source
+    assert "$('reference-evaluation-run-dialog').showModal()" in source
+    assert "$('reference-evaluation-run-confirm').checked" in source
+    assert source.count('runReferenceEvaluationBatch(evaluationId)')==2
+    assert "api(`/reference-results/${item.result_id}/review`,'POST'" in source
+    assert "location.href=`/api/projects/${state.project}/reference-results/export.json`" in source
+    assert "api(`/projects/${state.project}/reference-results/compare?${query}`)" in source
+    assert "referenceExecutionReceipts(item.result.execution_receipts)" in source
+    assert "referenceExecutionReceipts([item.failure.execution_receipt])" in source
+    assert "item.failure.validator_category" in source
+    assert "reference.evaluationFailureCategory" in source
+    assert "receipt.system_text_bytes+receipt.user_text_bytes" in source
+    assert "reference.executionReceiptSafe" in source
+    assert "source_text_included" not in source
+    assert "new URLSearchParams({baseline_run_id:baseline,candidate_run_id:candidate})" in source
+    assert "reference.change.'+item.change" in source
+    assert "renderComparisonSide(item.baseline_versions,'reference.baseline')" in source
+    assert "renderComparisonSide(item.candidate_versions,'reference.candidate')" in source
+    assert "(r.capabilities?.analysis_mode||'LEGACY_ANALYSIS')==='LEGACY_ANALYSIS'" in source
+    assert 'Preparation and preview are local.' in translations
+    assert 'Only an explicit Run question action may call the model.' in translations
+    assert 'without another model call' in translations
+    assert 'Each question may send locally selected source-page text' in translations
+    assert 'possible document transfer and provider charges' in translations
+    assert 'There is no automatic retry.' in translations
+    assert 'Browser mode requires this page to remain open.' in translations
+    assert 'An interrupted service never resumes automatically' in translations
+    assert 'does not decide which answer is correct, newer, or controlling' in translations
+    assert 'Preserves the same run, snapshot, and question order. This makes no model call.' in translations
+    assert 'does not judge correctness or document precedence' in translations
+    assert 'The plan contains no source text and makes no model call.' in translations
+    assert 'no authorization to run' in translations
+    assert 'CIRP records the human verdict and threshold math but never infers correctness.' in translations
+    assert 'uses only saved contract state and explicit engineer verdicts' in translations
+    assert 'page.file_name' in source and 'page.selected_text_bytes' in source
+    assert 'innerHTML' not in source
 
 
 def test_vision_output_is_never_rendered_as_an_original_quote():
@@ -262,3 +454,21 @@ def test_vision_output_is_never_rendered_as_an_original_quote():
     assert "e.extraction_method==='VISION'?'evidence.visionTitle':'evidence.title'" in source
     assert "q.text_basis==='MODEL_VISION_OUTPUT'" in source
     assert '视觉模型输出仅作为整页审查提示' in translations
+
+
+def test_reference_human_follow_up_is_explicit_local_and_uses_uploaded_documents_only():
+    source=(ROOT/'web/app.js').read_text(encoding='utf-8')
+    html=(ROOT/'web/index.html').read_text(encoding='utf-8')
+    translations=(ROOT/'web/i18n.js').read_text(encoding='utf-8')
+    assert '/reference-cases' in source
+    assert 'referenceCaseButton({run_id:item.run_id,question:item.question,result_id:item.result_id})' in source
+    assert 'evaluation_id:evaluation.evaluation_id,question_id:item.item_id' in source
+    assert 'state.documents.forEach(document=>' in source
+    assert 'reference.caseReopenHelp' in source and 'reference.previewV8Summary' in source
+    assert '/follow-up-results' in source and 'reference.caseFollowupHelp' in source
+    assert 'reference.caseFollowupProof' in source
+    assert 'source_text_clipped' not in source
+    assert 'id="reference-cases-panel"' in html
+    assert 'reference.casesDescription' in html
+    assert 'Human follow-up' in translations and '人工跟进待办' in translations
+    assert 'Link saved new answer' in translations and '关联已保存的新答案' in translations

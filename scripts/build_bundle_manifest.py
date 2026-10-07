@@ -36,7 +36,7 @@ def ignored_dir(relative: Path) -> bool:
 
 def ignored_file(relative: Path) -> bool:
     name = relative.name
-    if relative == Path("BUNDLE_MANIFEST.json") or ignored_dir(relative.parent):
+    if name == ".git" or relative == Path("BUNDLE_MANIFEST.json") or ignored_dir(relative.parent):
         return True
     if name == ".env.example":
         return False

@@ -1,0 +1,55 @@
+{
+  "change_id": "CR-0169",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-REFERENCE-PAGE-SELECTION-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-READINESS-001",
+    "FR-REFERENCE-MODEL-COMPARISON-001"
+  ],
+  "summary": "Freeze Reference page-selector versions and use a four-page v4 default for new tasks while retaining six-page v3 replay for all existing tasks.",
+  "decision_refs": [
+    "The active goal requires local verifiable page selection to reduce unnecessary advanced-model input",
+    "The current fixed 15-question task selected six pages for every question, but the independently recorded answer page ranked within the first four for all 15 questions",
+    "Changing a global selector without freezing its version would make existing evaluation inputs non-reproducible"
+  ],
+  "affected_paths": [
+    "migrations/016_reference_evaluation_selector_version.sql", "app/db.py",
+    "app/page_selector.py", "app/evidence_loop.py", "app/reference_evaluations.py",
+    "app/reference_readiness.py", "app/reference_scorecards.py",
+    "app/reference_evaluation_jobs.py", "app/main.py",
+    "spec/schemas/reference-evaluation.schema.json",
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-job.schema.json",
+    "web/app.js", "web/i18n.js",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py", "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_scorecards.py",
+    "tests/web/test_display_contract.py",
+    "reports/kapolei_reference_page_selection_v4_2026-10-01.json",
+    "docs/REFERENCE_QA.md", "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md",
+    "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-154.json", "changes/CR-0169.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py", "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_scorecards.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requires CIRP to reduce unnecessary LLM input through lightweight local verifiable page selection while managing versioned tasks and results.",
+  "known_limitations": [
+    "The four-page gate proves expected source-page inclusion for the fixed fixture, not answer correctness or completeness.",
+    "Existing evaluations intentionally retain selector v3 and its six-page default; they are not silently upgraded.",
+    "The 48,000-byte local selection ceiling remains for audit compatibility, while model evidence is separately serialized under 18,000 bytes.",
+    "No advanced-model request or paid benchmark is run by this implementation task."
+  ]
+}

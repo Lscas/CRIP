@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/project-evidence-decision.schema.json",
+  "title": "Bounded project evidence-loop decision",
+  "type": "object",
+  "properties": {
+    "status": {
+      "enum": ["ANSWER", "NEED_EVIDENCE", "NEED_USER_INPUT", "CANNOT_ANSWER"]
+    },
+    "reason_code": {
+      "enum": [
+        "ENOUGH_EVIDENCE",
+        "MISSING_SOURCE_TEXT",
+        "MISSING_IDENTIFIER",
+        "MISSING_PROJECT_FILE",
+        "CONFLICTING_SOURCES",
+        "UNSUPPORTED_TASK",
+        "NO_NEW_EVIDENCE"
+      ]
+    },
+    "missing_facts": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"type": "string", "minLength": 1, "maxLength": 240}
+    },
+    "requests": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {"enum": ["FIND_IDENTIFIER", "SEARCH_TEXT"]},
+          "query": {"type": "string", "minLength": 2, "maxLength": 200}
+        },
+        "required": ["tool", "query"],
+        "additionalProperties": false
+      }
+    },
+    "answer": {
+      "type": "object",
+      "properties": {
+            "claims": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+                  "citations": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {"const": "TEXT"},
+                            "evidence_ref": {"type": "string", "pattern": "^E[1-9][0-9]{0,2}$"}
+                          },
+                          "required": ["type", "evidence_ref"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {"const": "IMAGE_REGION"},
+                            "region_ref": {"type": "string", "pattern": "^V[1-9][0-9]{0,2}$"},
+                            "observation": {"type": "string", "minLength": 1, "maxLength": 1000},
+                            "needs_review": {"const": true}
+                          },
+                          "required": ["type", "region_ref", "observation", "needs_review"],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": ["text", "citations"],
+                "additionalProperties": false
+              }
+            },
+            "calculations": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "operator": {"enum": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "PERCENT_OF"]},
+                  "operands": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]+)?$",
+                      "maxLength": 48
+                    }
+                  },
+                  "citations": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {"const": "TEXT"},
+                        "evidence_ref": {"type": "string", "pattern": "^E[1-9][0-9]{0,2}$"}
+                      },
+                      "required": ["type", "evidence_ref"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["operator", "operands", "citations"],
+                "additionalProperties": false
+              }
+            },
+            "coverage": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part_ref": {"type": "string", "pattern": "^P[1-9][0-9]?$"},
+                  "claim_indexes": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "items": {"type": "integer", "minimum": 0, "maximum": 11}
+                  },
+                  "calculation_indexes": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {"type": "integer", "minimum": 0, "maximum": 7}
+                  }
+                },
+                "required": ["part_ref", "claim_indexes", "calculation_indexes"],
+                "additionalProperties": false
+              }
+            }
+          },
+      "required": ["claims", "calculations", "coverage"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["status", "reason_code", "missing_facts", "requests", "answer"],
+  "additionalProperties": false
+}

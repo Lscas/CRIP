@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires an advanced-model reference implementation while CRIP retains local file, task, result, citation and review management and sends only lightweight selected evidence.",
+  "notes": [
+    "Keep LEGACY_ANALYSIS, legacy questions, QA V2 and non-multimodal custom profiles unchanged.",
+    "QA V3 may attach only pages already admitted by the transparent local selector.",
+    "Image citations remain review-required and image observations cannot support arithmetic.",
+    "No live provider, saved credential, customer database or .local data is used by validation.",
+    "Browser Reference Run/Ask controls and the fixed 15-question live benchmark remain separate gates."
+  ],
+  "task_id": "DEV-136",
+  "title": "Add bounded selected-page multimodal input to Reference QA",
+  "requirement_ids": ["FR-REFERENCE-MULTIMODAL-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/evidence_loop.py", "app/gateway.py", "app/project_qa_v2.py",
+    "app/model_configuration.py", "app/settings.py", "app/main.py",
+    "prompts/project-evidence-loop/system.md",
+    "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_evidence_loop.py", "tests/app/test_model_configuration.py",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-136.json",
+    "changes/CR-0151.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_evidence_loop.py tests/app/test_model_configuration.py tests/app/test_project_qa_v2.py tests/app/test_gateway_budget.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "node --check web/i18n.js",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-136",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Attach only transparently selected source-page previews to QA V3 when the configured model explicitly supports images, preserve exact region and image-hash provenance, and retain all existing default product paths."
+}

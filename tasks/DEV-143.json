@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly approved rerunning CRIP and comparing the new results with the prior Codex answers, then directed continued implementation of the advanced-model Reference workflow.",
+  "notes": [
+    "Use the fixed 15 questions, the same independent direct-PDF answer fixture and Reference run RUN-6322ca9598a74c768c91117a7fa05834.",
+    "Freeze a new text-only DeepSeek evaluation after the separate experimental-vision task settled with one contract error and stopped before later items.",
+    "Execute strictly one question at a time, check unresolved calls before every item, never retry automatically and stop on any error.",
+    "Compare saved validated results with the prior 3/15 CIRP product-path result and the independently recorded Codex/direct-PDF answers; distinguish routing, contract validity and answer correctness.",
+    "Completed as a staged development comparison: selector v2 reached the independently recorded source page for 14/15 questions; 20 provider decisions all settled with zero unresolved calls and no automatic retries; seven questions saved contract-valid terminal results and three were strictly fully usable, unchanged from the prior product path's 3/15.",
+    "The release gate remains closed. S1 and S2 were not automatically rerun after later fixes, so the report must not be presented as a homogeneous final-build benchmark."
+  ],
+  "task_id": "DEV-143",
+  "title": "Run and compare fixed Reference QA evaluation",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-EVALUATION-RUNNER-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "reports/kapolei_reference_qa_live_2026-09-30.json",
+    "reports/kapolei_reference_qa_live_2026-09-30.md",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "README.md", "CHANGELOG.md", "tasks/DEV-143.json", "changes/CR-0158.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-143",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "final_quality_review",
+  "objective": "Run the fixed 15-question Reference QA task through the product's frozen text-only DeepSeek profile, preserve every saved outcome, and compare it transparently with the prior CIRP product path and independently recorded Codex/direct-PDF answers."
+}

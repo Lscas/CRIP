@@ -34,17 +34,24 @@ def check_port(port: int) -> None:
 
 
 def local_settings(data_dir: Path | None = None, *, live: bool = False,
-                   use_saved: bool = True) -> Settings:
+                   use_saved: bool = True,
+                   reference_layout_enabled: bool | None = None) -> Settings:
+    if reference_layout_enabled is not None and not isinstance(reference_layout_enabled, bool):
+        raise ValueError('reference_layout_enabled must be a bool or None.')
     resolved_data_dir = (data_dir or ROOT / '.local').resolve()
     if not live:
         # Do not inherit paid-mode switches or API keys from the outer process.
         mock = Settings(data_dir=resolved_data_dir, allowed_hosts=LOCAL_HOSTS)
-        if not use_saved:return mock
-        try:
-            saved=load_active_configuration(mock)
-        except LocalCredentialError as exc:
-            raise ValueError(str(exc)) from exc
-        return saved or mock
+        if use_saved:
+            try:
+                saved=load_active_configuration(mock)
+            except LocalCredentialError as exc:
+                raise ValueError(str(exc)) from exc
+            selected=saved or mock
+        else:
+            selected=mock
+        return replace(selected, reference_layout_enabled=(
+            False if reference_layout_enabled is None else reference_layout_enabled))
     settings = Settings.from_env()
     errors = settings.live_errors()
     if errors:
@@ -57,7 +64,10 @@ def local_settings(data_dir: Path | None = None, *, live: bool = False,
             save_api_key(resolved_data_dir, settings.provider, settings.api_key)
         except (LocalCredentialError, OSError) as exc:
             raise ValueError('The API key could not be loaded from Windows current-user encrypted storage; the live service was not started.') from exc
-    return replace(settings, data_dir=resolved_data_dir, allowed_hosts=LOCAL_HOSTS)
+    return replace(settings, data_dir=resolved_data_dir, allowed_hosts=LOCAL_HOSTS,
+                   reference_layout_enabled=(settings.reference_layout_enabled
+                                             if reference_layout_enabled is None
+                                             else reference_layout_enabled))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,11 +77,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--live', action='store_true', help='Explicitly load live-provider settings; model charges are possible only after Start analysis is clicked')
     parser.add_argument('--mock', action='store_true', help='Ignore any saved model profile and start in offline Mock mode')
+    parser.add_argument('--reference-layout', action=argparse.BooleanOptionalAction, default=None,
+                        help='Explicitly enable or disable the experimental Reference v9 layout entry for this local process')
     args = parser.parse_args(argv)
     try:
         if args.live and args.mock:raise ValueError('--live and --mock cannot be used together.')
         check_port(args.port)
-        settings = local_settings(args.data_dir, live=args.live, use_saved=not args.mock)
+        settings = local_settings(args.data_dir, live=args.live, use_saved=not args.mock,
+                                  reference_layout_enabled=args.reference_layout)
     except (ValueError, OSError) as exc:
         print('[STOP] ' + str(exc), flush=True)
         return 2
@@ -124,7 +137,9 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             stop_notice.set();thread.join(timeout=2)
         if next_settings[0] is None:return 0 if server.started else 1
-        settings=replace(next_settings[0],data_dir=settings.data_dir,allowed_hosts=LOCAL_HOSTS)
+        # This flag is process-start configuration, not a model-profile setting.
+        settings=replace(next_settings[0],data_dir=settings.data_dir,allowed_hosts=LOCAL_HOSTS,
+                         reference_layout_enabled=settings.reference_layout_enabled)
         print('[RESTART] Applying the selected model configuration. No model request was made.',flush=True)
 
 

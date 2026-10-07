@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/project-projection-decision-v2.schema.json",
+  "title": "PDF projection selection and missing-source decision v2, never an answer",
+  "type": "object",
+  "required": ["contract_version", "projection_input_sha256", "status", "reason_code", "missing_facts", "requests", "selections"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {"const": "project-projection-decision-2"},
+    "projection_input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["REVIEW_REQUIRED", "NEED_EVIDENCE", "NEED_USER_INPUT", "CANNOT_ANSWER"]},
+    "reason_code": {"enum": ["OBJECT_CONDITION_REVIEW_REQUIRED", "MISSING_SOURCE_TEXT", "MISSING_IDENTIFIER", "MISSING_PROJECT_FILE", "UNREADABLE_PROJECT_SOURCE", "CONFLICTING_SOURCES", "UNSUPPORTED_TASK", "SOURCE_PROJECTION_INCOMPLETE", "INSUFFICIENT_EVIDENCE"]},
+    "missing_facts": {
+      "type": "array", "maxItems": 12, "uniqueItems": true,
+      "items": {
+        "type": "object", "required": ["part_ref", "gap_code"], "additionalProperties": false,
+        "properties": {
+          "part_ref": {"type": "string", "pattern": "^P[1-9][0-9]*$"},
+          "gap_code": {"enum": ["SOURCE_TEXT", "IDENTIFIER", "PROJECT_FILE", "READABLE_SOURCE", "OBJECT_CONDITION", "SOURCE_CONFLICT", "UNSUPPORTED_TASK", "PROJECTION_GEOMETRY"]}
+        }
+      }
+    },
+    "requests": {
+      "type": "array", "maxItems": 2,
+      "items": {
+        "type": "object", "required": ["tool", "query"], "additionalProperties": false,
+        "properties": {
+          "tool": {"enum": ["FIND_IDENTIFIER", "SEARCH_TEXT"]},
+          "query": {"type": "string", "minLength": 2, "maxLength": 200}
+        }
+      }
+    },
+    "selections": {
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object", "required": ["row_ref", "part_refs"], "additionalProperties": false,
+        "properties": {
+          "row_ref": {"type": "string", "pattern": "^X[1-9][0-9]*$"},
+          "part_refs": {"type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": {"type": "string", "pattern": "^P[1-9][0-9]*$"}}
+        }
+      }
+    }
+  }
+}

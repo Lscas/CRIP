@@ -1,0 +1,29 @@
+{
+  "change_id": "CR-0158",
+  "spec_version": "0.2.6",
+  "change_type": "spec_only",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-EVALUATION-RUNNER-001", "NFR-SECURITY-001"],
+  "summary": "Run the fixed 15-question Reference QA evaluation with the explicit DeepSeek text profile and compare saved validated outcomes with the prior CIRP run and independent direct-PDF answers.",
+  "decision_refs": [
+    "The user explicitly approved rerunning CRIP and comparing it with the prior Codex answers",
+    "Selector v2 passed the zero-call source-page gate for 14 of 15 questions versus 10 of 15 for v1",
+    "The first experimental-vision question settled with a contract error, remained recorded and stopped the sequence before later items"
+  ],
+  "affected_paths": [
+    "reports/kapolei_reference_qa_live_2026-09-30.json",
+    "reports/kapolei_reference_qa_live_2026-09-30.md",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "README.md", "CHANGELOG.md", "tasks/DEV-143.json", "changes/CR-0158.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "scripts/context_pack.py", "scripts/build_bundle_manifest.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": false,
+  "approval_evidence": "The user said to rerun CRIP, compare the new result with the prior Codex answer, and explicitly allowed the run.",
+  "known_limitations": [
+    "The fixed set covers one project and does not establish general construction-document accuracy.",
+    "Model results remain subject to exact-citation validation and human review; page identity alone is not correctness.",
+    "Provider-account charges are external to CIRP; calls remain one at a time with unresolved-call blocking and no automatic retry."
+  ]
+}

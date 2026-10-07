@@ -28,3 +28,9 @@ playwright-report/
 .dev.vars
 .dev.vars.*
 dist/
+
+# Local/private validation output is not part of new public source commits.
+# Already tracked historical artifacts are unchanged by these rules.
+/outputs/
+/tmp/
+/reports/

@@ -1,0 +1,53 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 24000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly requested implementation of relational file context in model input.",
+  "notes": [
+    "Reuse saved document, page, locator and storage-order metadata rather than adding a graph database or semantic relation model.",
+    "Keep exact source text in the existing evidence aliases and make source_groups navigation-only metadata.",
+    "Deduplicate repeated file and locator metadata so the new input is smaller on every frozen fixed-15 question.",
+    "Do not make a provider call until offline structure and input-size gates pass."
+  ],
+  "task_id": "DEV-169",
+  "title": "Add a compact deterministic relation pack to QA V3 input",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001"
+  ],
+  "allowed_paths": [
+    "app/page_selector.py",
+    "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "tests/app/test_evidence_loop.py",
+    "reports/kapolei_reference_relation_pack_v1_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-169.json",
+    "changes/CR-0184.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Every admitted evidence alias occurs exactly once in one source group and retains its exact source text",
+    "Groups expose deterministic file, page, locator scope and original source order without copying source text",
+    "File names and locators are shared by source_groups instead of repeated on every provider-facing evidence item",
+    "The fixed-15 zero-call measurement is smaller for every question than the prior flat input metadata shape",
+    ".venv\\Scripts\\python.exe -m pytest -q",
+    "node tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "deterministic_local_input_implementation",
+  "objective": "Expose useful file and source relationships to QA V3 with less repeated input and no new semantic inference."
+}

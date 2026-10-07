@@ -1,0 +1,37 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly authorized rebuilding all CIRP databases and instructed implementation to begin on 2026-09-28.",
+  "notes": [
+    "Do not read, log or return saved provider credentials or private source-document content.",
+    "Do not mutate the existing .local database or source objects while developing or testing the rebuild path.",
+    "Build into a separate staging database and require validation before any cutover.",
+    "Preserve exact source spans, non-vision evidence boundaries, human decisions and fail-closed answer behavior.",
+    "Do not make a paid model, OCR service or remote CAD call."
+  ],
+  "task_id": "DEV-130",
+  "title": "Build the rebuildable canonical document graph",
+  "requirement_ids": ["FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/canonical.py", "app/db.py", "app/runner.py", "app/questions.py",
+    "migrations", "scripts/rebuild_canonical_v2.py", "tests/app/test_canonical.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/CANONICAL_STORAGE_V2.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "README.md", "CHANGELOG.md", "tasks/DEV-130.json", "changes/CR-0145.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/CANONICAL_STORAGE_V2.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_canonical.py -q",
+    "python -m pytest tests/app/test_questions.py tests/app/test_api.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-130",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Replace fixed evidence fragments as the only retrieval representation with a deterministic canonical hierarchy, exact identifiers, spatial bounds and rebuildable local indexes while retaining immutable source evidence and offline staging safety."
+}

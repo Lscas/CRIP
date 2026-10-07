@@ -1,0 +1,57 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 24000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked CIRP development, testing and iteration to continue after the Flash/Pro benchmark.",
+  "notes": [
+    "Fix the demonstrated whole-field omissions before another paid benchmark.",
+    "Derive answer parts only from explicit question grammar, never source evidence or an answer key.",
+    "Require every part and every emitted answer item to participate in a local mapping.",
+    "Keep public QA V2 answers, legacy routes, evidence selection and saved historical results unchanged.",
+    "Make no provider call; validate the fixed 15-question checklist and synthetic contract locally."
+  ],
+  "task_id": "DEV-164",
+  "title": "Require complete mappings for explicit multi-part Reference answers",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/evidence_loop.py",
+    "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py",
+    "reports/kapolei_reference_answer_parts_v5_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-164.json",
+    "changes/CR-0179.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Explicit comma lists and parallel question clauses produce deterministic P1..Pn parts while an unsplittable question stays one P1",
+    "ANSWER rejects missing, duplicate, empty, out-of-range and unmapped part coverage before public compilation",
+    "The prompt payload and request identity include the same required answer parts",
+    "The fixed 15 questions produce 41 parts, including D2/D3/D4 at 3/3/2, with zero provider calls",
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py tests/app/test_project_qa_v2.py tests/app/test_reference_evaluations.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "implementation",
+  "objective": "Prevent a structurally valid QA V3 answer from silently omitting an explicit requested field without adding another model, parser or semantic framework."
+}

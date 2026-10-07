@@ -89,8 +89,11 @@ def ensure_environment(*, use_current: bool = False, root: Path = ROOT) -> Path:
 
 
 def make_command(python: Path, args: argparse.Namespace) -> list[str]:
+    reference_layout = getattr(args, 'reference_layout', None)
     if args.remote and args.live:
         raise ValueError('Remote preview remains mock-only. Live API mode starts locally with --live.')
+    if args.remote and reference_layout is not None:
+        raise ValueError('Remote preview cannot enable or disable the local experimental Reference layout.')
     if args.live and getattr(args,'mock',False):
         raise ValueError('--live and --mock cannot be used together.')
     if args.remote and args.data_dir:
@@ -107,6 +110,10 @@ def make_command(python: Path, args: argparse.Namespace) -> list[str]:
             command.append('--live')
         if getattr(args,'mock',False):
             command.append('--mock')
+        if reference_layout is True:
+            command.append('--reference-layout')
+        elif reference_layout is False:
+            command.append('--no-reference-layout')
         if args.data_dir:
             command.extend(['--data-dir', str(Path(args.data_dir).resolve())])
     return command
@@ -119,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--data-dir')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--mock', action='store_true', help='Ignore a saved model profile and start offline')
+    parser.add_argument('--reference-layout', action=argparse.BooleanOptionalAction, default=None,
+                        help='Explicitly enable or disable the experimental Reference v9 layout for local startup')
     parser.add_argument('--remote', action='store_true', help='Use an existing Cloudflare Quick Tunnel for mock preview; cloudflared is required')
     parser.add_argument('--use-current-env', action='store_true', help='Development and test only; do not install dependencies')
     parser.add_argument('--install-only', action='store_true')

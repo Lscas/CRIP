@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0163",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-NATIVE-STRUCTURED-OUTPUT-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add a custom-profile-only native strict JSON Schema option for Reference QA V2/V3, with pre-dispatch compatibility checks, frozen identity and no fallback.",
+  "decision_refs": [
+    "The advanced model remains the reference analyst while CIRP manages bounded evidence and validates returned results",
+    "Official OpenAI Structured Outputs documentation distinguishes schema adherence from basic JSON mode",
+    "Provider capability must be user-declared because arbitrary OpenAI-compatible and local endpoints do not share one guaranteed feature set"
+  ],
+  "affected_paths": [
+    "app/settings.py", "app/model_configuration.py", "app/gateway.py",
+    "app/reference_evaluations.py", "app/main.py",
+    "spec/schemas/reference-evaluation.schema.json", "web/index.html", "web/app.js",
+    "web/i18n.js", "tests/app/test_gateway_budget.py",
+    "tests/app/test_model_configuration.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/PROVIDER_INTEGRATION.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md",
+    "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-148.json", "changes/CR-0163.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_gateway_budget.py", "tests/app/test_model_configuration.py",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user instructed continued implementation of the new Reference framework without deleting existing features.",
+  "known_limitations": [
+    "The option is limited to custom OpenAI-compatible Chat Completions routes and does not configure the Responses API.",
+    "Only QA V2 answers and QA V3 evidence decisions use native schema mode; older task families retain JSON object mode.",
+    "Offline request-envelope validation does not prove that a configured provider supports strict structured output or improves answer quality."
+  ]
+}

@@ -33,6 +33,13 @@ def gemini_settings(tmp_path,**kw):
     values.update(kw)
     return settings(tmp_path, **values)
 
+def openai_settings(tmp_path,**kw):
+    values={'provider':'openai','api_base_url':'https://api.openai.com/v1',
+            'cheap_model':'gpt-test-model','vision_model':'gpt-test-model',
+            'structured_output_mode':'json_schema','api_protocol':'responses'}
+    values.update(kw)
+    return settings(tmp_path, **values)
+
 def test_verification_normalizer_downgrades_only_safe_format_repairs():
     data={'checks':[{'path':'/name','status':'SUPPORTED','citations':[
         {'evidence_id':'EV-1','quote':'Concrete','role':'SUPPORT'}],
@@ -74,6 +81,168 @@ def test_cheap_payload_and_cache(context,tmp_path):
     assert call['provider_request_id']=='upstream-test'
     assert call['reserved_units']==1
     assert call['request_hash']==hashlib.sha256(dumps(requests[0]).encode()).hexdigest()
+
+
+def test_reference_native_schema_payload_is_explicit_strict_and_has_no_fallback(context,tmp_path):
+    db,_,_=context
+    selected=settings(
+        tmp_path,provider='custom-0123456789abcdef',
+        api_base_url='https://models.example/v1',cheap_model='advanced-model',
+        vision_model='advanced-model',structured_output_mode='json_schema')
+    gateway=Gateway(selected,db)
+
+    payload=gateway.payload(
+        [{'role':'system','content':'Return JSON.'}],1200,
+        response_schema=gateway.evidence_decision_schema,
+        schema_name='cirp_evidence_decision_v3')
+    response_format=payload['response_format']
+    assert response_format['type']=='json_schema'
+    assert response_format['json_schema']['name']=='cirp_evidence_decision_v3'
+    assert response_format['json_schema']['strict'] is True
+    serialized=dumps(response_format['json_schema']['schema'])
+    assert '"oneOf"' not in serialized and '"const"' not in serialized
+    assert '"anyOf"' in serialized and '"enum"' in serialized
+    assert gateway.payload([{'role':'system','content':'Return JSON.'}],1200)[
+        'response_format']=={'type':'json_object'}
+    with pytest.raises(InvalidModelOutput,match='incompatible'):
+        gateway.payload(
+            [{'role':'system','content':'Return JSON.'}],1200,
+            response_schema=gateway.schema,schema_name='incompatible_extraction')
+    with pytest.raises(InvalidModelOutput,match='name is invalid'):
+        gateway.payload(
+            [{'role':'system','content':'Return JSON.'}],1200,
+            response_schema=gateway.evidence_decision_schema,schema_name='bad schema name')
+    assert db.all('SELECT * FROM model_calls')==[]
+    gateway.close()
+
+
+def test_openai_responses_payload_converts_selected_image_and_uses_text_format(context,tmp_path):
+    db,_,_=context
+    gateway=Gateway(openai_settings(tmp_path,vision_enabled=True),db)
+    payload=gateway.payload([
+        {'role':'system','content':'Return JSON.'},
+        {'role':'user','content':[
+            {'type':'text','text':'Use this selected page.'},
+            {'type':'image_url','image_url':{'url':'data:image/png;base64,c3ludGhldGlj'}},
+        ]},
+    ],1200,response_schema=gateway.answer_v2_schema,
+       schema_name='cirp_project_answer_v2')
+
+    assert payload['store'] is False and payload['max_output_tokens']==1200
+    assert 'messages' not in payload and 'response_format' not in payload
+    assert payload['text']['format']['type']=='json_schema'
+    assert payload['text']['format']['name']=='cirp_project_answer_v2'
+    assert payload['text']['format']['strict'] is True
+    parts=payload['input'][1]['content']
+    assert parts[0]=={'type':'input_text','text':'Use this selected page.'}
+    assert parts[1]=={'type':'input_image','image_url':'data:image/png;base64,c3ludGhldGlj',
+                     'detail':'auto'}
+    gateway.close()
+
+
+def test_openai_responses_answer_normalizes_typed_output_and_usage(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    answer={
+        'status':'INSUFFICIENT','answer':'The selected source does not state the answer.',
+        'claims':[],'missing':['The requested value is not stated.'],'calculations':[],
+    }
+    def handler(request):
+        requests.append((str(request.url),json.loads(request.content)))
+        return httpx.Response(200,json={
+            'id':'resp_offline_test','object':'response','status':'completed',
+            'output':[
+                {'type':'reasoning','id':'rs_test','content':[],'summary':[]},
+                {'type':'message','status':'completed','role':'assistant','content':[
+                    {'type':'output_text','text':json.dumps(answer),'annotations':[]},
+                ]},
+            ],
+            'usage':{'input_tokens':80,'output_tokens':30,'total_tokens':110,
+                     'output_tokens_details':{'reasoning_tokens':10}},
+        })
+    gateway=Gateway(openai_settings(tmp_path),db,
+                    httpx.Client(transport=httpx.MockTransport(handler)))
+
+    value=gateway.answer_v2(run,'What value is stated?',[evidence],[])
+
+    assert value.data==answer and not value.cached
+    assert len(requests)==1 and requests[0][0]=='https://api.openai.com/v1/responses'
+    request=requests[0][1]
+    assert request['store'] is False and request['model']=='gpt-test-model'
+    assert request['text']['format']['type']=='json_schema'
+    assert request['max_output_tokens']>0 and 'messages' not in request
+    call=db.one('SELECT state,provider_request_id,usage FROM model_calls WHERE run_id=?',
+                (run['id'],))
+    usage=json.loads(call['usage'])
+    assert call['state']=='SETTLED' and call['provider_request_id']=='resp_offline_test'
+    assert usage['prompt_tokens']==80 and usage['completion_tokens']==30
+    assert usage['completion_tokens_details']['reasoning_tokens']==10
+    gateway.close()
+
+
+def test_openai_responses_refusal_is_settled_without_text_or_retry(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    refusal={
+        'id':'resp_refusal_test','object':'response','status':'completed',
+        'output':[{'type':'message','status':'completed','role':'assistant','content':[
+            {'type':'refusal','refusal':'synthetic refusal text that must not persist'},
+        ]}],
+        'usage':{'input_tokens':70,'output_tokens':8,'total_tokens':78},
+    }
+    gateway=Gateway(openai_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json=refusal))[1])))
+
+    with pytest.raises(InvalidModelOutput,match='cost was recorded'):
+        gateway.answer_v2(run,'What value is stated?',[evidence],[])
+    with pytest.raises(InvalidModelOutput,match='自动再次收费'):
+        gateway.answer_v2(run,'What value is stated?',[evidence],[])
+
+    call=db.one('SELECT state,response,error,usage FROM model_calls WHERE run_id=?',(run['id'],))
+    assert len(requests)==1 and call['state']=='SETTLED_ERROR' and call['response'] is None
+    assert 'synthetic refusal text' not in dumps(call)
+    assert json.loads(call['usage'])['completion_tokens']==8
+    gateway.close()
+
+
+def test_reference_output_mode_changes_durable_call_identity(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    answer={
+        'status':'INSUFFICIENT','answer':'The selected source does not state the answer.',
+        'claims':[],'missing':['The requested value is not stated.'],'calculations':[],
+    }
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200,json={
+            'id':f'output-mode-{len(requests)}',
+            'choices':[{'finish_reason':'stop','message':{'content':json.dumps(answer)}}],
+            'usage':{'prompt_tokens':80,'completion_tokens':30},
+        })
+    common={
+        'provider':'custom-0123456789abcdef',
+        'api_base_url':'http://127.0.0.1:11434/v1','api_key':'',
+        'cheap_model':'reference-model','vision_model':'reference-model',
+    }
+    compatible=Gateway(
+        settings(tmp_path,**common,structured_output_mode='json_object'),db,
+        httpx.Client(transport=httpx.MockTransport(handler)))
+    strict=Gateway(
+        settings(tmp_path,**common,structured_output_mode='json_schema'),db,
+        httpx.Client(transport=httpx.MockTransport(handler)))
+
+    first=compatible.answer_v2(run,'What value is stated?',[evidence],[])
+    second=strict.answer_v2(run,'What value is stated?',[evidence],[])
+    replay=strict.answer_v2(run,'What value is stated?',[evidence],[])
+
+    assert not first.cached and not second.cached and replay.cached
+    assert len(requests)==2
+    assert requests[0]['response_format']=={'type':'json_object'}
+    assert requests[1]['response_format']['type']=='json_schema'
+    calls=db.all('SELECT task_key,state FROM model_calls ORDER BY rowid')
+    assert len(calls)==2 and len({item['task_key'] for item in calls})==2
+    assert {item['state'] for item in calls}=={'SETTLED'}
+    compatible.close();strict.close()
 
 
 def test_adjacent_evidence_uses_one_paid_request_and_one_recovery_family(context,tmp_path):
@@ -531,7 +700,7 @@ def test_gemini_identity_gate_blocks_before_http(context,tmp_path,change):
 
 @pytest.mark.parametrize('change',[
     {'api_base_url':'https://example.invalid'},
-    {'cheap_model':'deepseek-v4-pro'},
+    {'cheap_model':'deepseek-v4.1-pro'},
 ])
 def test_deepseek_identity_gate_blocks_before_http(context,tmp_path,change):
     db,run,ev=context
@@ -539,6 +708,15 @@ def test_deepseek_identity_gate_blocks_before_http(context,tmp_path,change):
               httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError()))))
     with pytest.raises(ProviderPaused):g.extract(run,ev)
     assert db.model_call_stats(run['project_id'])['calls']==0
+
+def test_deepseek_pro_uses_the_independent_exact_model_id(context,tmp_path):
+    db,run,ev=context;requests=[]
+    g=Gateway(settings(tmp_path,cheap_model='deepseek-v4-pro'),db,
+              httpx.Client(transport=httpx.MockTransport(
+                  lambda request:(requests.append(request),httpx.Response(200,json=body(ev)))[1])))
+    assert g.extract(run,ev).data==result(ev)
+    assert len(requests)==1
+    assert json.loads(requests[0].content)['model']=='deepseek-v4-pro'
 
 def test_provider_mismatch_blocks_before_http(context,tmp_path):
     db,run,ev=context

@@ -30,7 +30,6 @@
     "BUNDLE_MANIFEST.json"
   ],
   "context_files": [
-    "docs/ARCHITECTURE.md",
     "docs/IMPLEMENTATION_STATUS.md"
   ],
   "acceptance_tests": [

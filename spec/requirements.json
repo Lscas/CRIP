@@ -100,6 +100,8 @@
       "acceptance_criteria": [
         "Evidence 可定位到页和 bbox。",
         "Native PDF pages retain a deterministic page type, specification section or clause context, and detected table-row coordinates when available.",
+        "A drawing page propagates one unique explicit native-text Sheet value found in a bounded title-block region to its source evidence; callouts, unlabeled codes, vision narration and conflicting Sheet values do not establish Sheet identity.",
+        "Detectable vector drawing tables retain row text plus exact per-cell text offsets and bounding boxes, and explicitly labelled legacy five-digit specification Sections remain addressable without treating arbitrary five-digit numbers as Sections.",
         "A generic-name multi-page PDF carries the latest exact RFI/Submittal scope to continuation pages until another exact workflow heading replaces it."
       ],
       "decision_source": "Approved product goal; the user approved the page-router, specification-structure and table-evidence update on 2026-09-15.",
@@ -698,10 +700,10 @@
         "Remote endpoints require HTTPS, an API key, and positive customer-confirmed CNY token rates; HTTP and an empty key are allowed only for a loopback local model.",
         "The provider identity binds the API base URL and model so a run cannot resume under a different custom configuration.",
         "The generic route uses chat/completions structured text only, sends no provider-specific reasoning parameter, and does not enable page-image transfer.",
-          "The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or model-call history.",
+        "The normal local application includes a dedicated Settings section, not a modal dialog or separate setup server, where the customer can select Mock, DeepSeek, Gemini, a custom HTTPS OpenAI-compatible API, or a loopback local model and safely restart the single local service without deleting project data or model-call history.",
         "A settings change is blocked during active analysis, semantic verification, or any unresolved model call; API keys are never returned and optional persistence uses Windows current-user DPAPI with a non-secret active-profile file.",
-        "A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data."
-        ,"Every open application tab detects a completed same-port service restart and reloads its non-secret configuration, so an older Mock tab cannot hide the active provider's replacement-key controls."
+        "A normal local start reuses an explicitly saved active profile, while an explicit --mock start bypasses it without deleting the saved profile or project data.",
+        "Every open application tab detects a completed same-port service restart and reloads its non-secret configuration, so an older Mock tab cannot hide the active provider's replacement-key controls."
       ],
       "decision_source": "User request on 2026-09-14 to let customers configure their own API or choose a local model.",
       "spec_section": "docs/LOCAL_VALIDATION.md"
@@ -1106,7 +1108,9 @@
       ],
       "priority": "P0",
       "status": "superseded",
-      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "superseded_by": [
+        "FR-MODEL-BUDGET-REMOVAL-001"
+      ],
       "decision_source": "D-30 removed CIRP project budgets, price inputs, cost totals and monetary dispatch gates on 2026-09-27.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
@@ -1120,7 +1124,9 @@
       ],
       "priority": "P0",
       "status": "superseded",
-      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "superseded_by": [
+        "FR-MODEL-BUDGET-REMOVAL-001"
+      ],
       "decision_source": "D-30 removed monetary reservation and budget enforcement while retaining unresolved-call and no-automatic-retry safety.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
@@ -1134,7 +1140,9 @@
       ],
       "priority": "P0",
       "status": "superseded",
-      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "superseded_by": [
+        "FR-MODEL-BUDGET-REMOVAL-001"
+      ],
       "decision_source": "D-30 removed price configuration from the application.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
@@ -1148,7 +1156,9 @@
       ],
       "priority": "P0",
       "status": "superseded",
-      "superseded_by": ["FR-MODEL-BUDGET-REMOVAL-001"],
+      "superseded_by": [
+        "FR-MODEL-BUDGET-REMOVAL-001"
+      ],
       "decision_source": "D-30 removed budget-blocked states and cost totals; ordinary partial-run transparency remains required.",
       "spec_section": "docs/PRODUCT_SPEC.md"
     },
@@ -1842,6 +1852,359 @@
       "spec_section": "docs/PROJECT_QUESTIONS.md"
     },
     {
+      "id": "FR-CANONICAL-GRAPH-001",
+      "title": "Rebuild project knowledge as a canonical document graph",
+      "statement": "CIRP should preserve engineering-document hierarchy, exact source spans, spatial bounds and explicit identifiers in a deterministic local graph whose search projections can be rebuilt without treating fixed-size evidence fragments as the only knowledge representation.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A separate offline staging build projects immutable non-vision parser evidence into document, page, section, paragraph and text-block nodes with deterministic parent edges, exact source-evidence provenance and content hashes. The build never modifies the source database, source objects, human reviews or provider ledger.",
+        "Exact Sheet, Paragraph and supported typed locator values are stored in a normalized identifier table. Source text and locator paths have a local FTS projection when FTS5 is available, and source bounding boxes have an R*Tree projection when R*Tree is available; complete deterministic fallbacks remain available without either extension.",
+        "New parser output synchronizes the canonical graph locally without a provider call. Rebuilds are idempotent, preserve model-vision narration as non-source context, expose integrity counts and fail closed on malformed payloads or cross-project references. No automatic database cutover or deletion occurs."
+      ],
+      "decision_source": "The user authorized full database regeneration on 2026-09-28 to replace the fragment-only document representation.",
+      "spec_section": "docs/CANONICAL_STORAGE_V2.md"
+    },
+    {
+      "id": "FR-QA-V2-001",
+      "title": "Build effective-source evidence bundles for QA V2",
+      "statement": "An independent QA V2 path should select the effective document versions from explicit metadata and assemble bounded structural source-text evidence with exact provenance before any answer-model or question-time vision call.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "For documents in one analysis run, exact filename lineages use one unambiguous explicit issue date first and a safely comparable revision label second. A newer full version supersedes an older full version in that lineage, while Addendum, ASI, RFI, PCD and Bulletin lineages remain delta overlays. Missing, invalid, conflicting or tied metadata keeps every competing source active and reports the ambiguity; upload order never establishes precedence.",
+        "QA V2 retrieves only Canonical source-text nodes from active documents. Exact typed identifiers are intersected before bounded lexical search, and a match expands to its exact structural path or table rather than an unrelated fixed fragment. The bundle is capped by UTF-8 byte budgets and retains document, page, path, quote, evidence ID, extraction method and available source bbox for every included citation. Model-vision narration is excluded as answer source text.",
+        "A separate project questions-v2 preview endpoint accepts a saved PARTIAL or COMPLETED run, verifies project and READY Canonical scope, and returns the effective-source decision and evidence bundle without a provider request. The legacy project-question endpoint remains unchanged during staged validation; answer synthesis, claim-level validation and question-time image-region reading are not claimed by this slice."
+      ],
+      "decision_source": "The user authorized a system-architecture rebuild of Feature 8 after the fixed live benchmark showed retrieval and fragmented context as the dominant sampled failure.",
+      "spec_section": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "id": "FR-QA-V2-ANSWER-001",
+      "title": "Generate and validate claim-bound QA V2 answers",
+      "statement": "QA V2 answers should consist only of atomic claims with source-local citations, explicit missing information and locally verified arithmetic, using a concise independent model contract rather than the legacy general-answer prompt.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The QA V2 model output is limited to ANSWERED, PARTIAL or INSUFFICIENT. ANSWERED requires cited claims and no missing item, PARTIAL requires both claims and missing items, and INSUFFICIENT requires no claims plus an explicit missing reason. The displayed answer must equal the ordered claim text and cannot add an uncited introduction or conclusion.",
+        "Every text citation names an evidence ID supplied in the current bundle and copies an exact substring from that source node. Each explicit claim number must occur in that claim's quoted evidence unless it is the locally recomputed result of an explicitly requested calculation. Addition, subtraction, multiplication, division and percentage-of use Decimal operands found in the cited source; percentage-of accepts exactly a cited base and cited percentage. Unit conversion, rounding, date arithmetic, image arithmetic and geometry inference are rejected.",
+        "The new answer-v2 task family uses the existing audited gateway and durable model-call ledger, includes prompt/schema/model/inference/evidence state in its recovery fingerprint, never automatically retries a settled failure, and recovers repeated whitespace-equivalent questions from one settled response. The legacy answer method and endpoint remain unchanged during validation."
+      ],
+      "decision_source": "The Feature 8 rebuild requires claims to bind independently to evidence and must remove the legacy all-purpose prompt as the eventual general-answer path.",
+      "spec_section": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "id": "FR-QA-V2-VISION-001",
+      "title": "Read bounded drawing regions at question time",
+      "statement": "When a question is spatial, drawing-oriented or grounded only by OCR, QA V2 should optionally send a small page overview and one source-bbox crop to an enabled vision model and retain the observation as a separately reviewable image-region citation.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A visual question selects at most one active-document page already routed by the evidence bundle. The renderer sends one bounded page overview and, when a compatible source bbox exists, one padded local crop from that same page; it never sends a whole PDF, drawing set or unrelated page.",
+        "An IMAGE_REGION citation must copy a supplied region ID, document ID, page number and bbox exactly, include a direct visual observation, and retain needs_review=true. It cannot masquerade as quoted text or support a calculation. Unsupported providers, missing regions or render failures produce the explicit QUESTION_TIME_VISUAL_CONTEXT_UNAVAILABLE missing code instead of silently answering as if pixels were read.",
+        "The multimodal answer uses the existing audited gateway, enabled DeepSeek vision route, request bounds, durable settlement and no-automatic-retry policy. Its task fingerprint includes image hashes and visual metadata, while image bytes are not persisted as evidence text."
+      ],
+      "decision_source": "The user authorized a multimodal redesign but the architecture grill rejected sending entire PDFs or drawing sets to a model; local region routing is the bounded alternative.",
+      "spec_section": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "id": "FR-QA-V2-RELEASE-001",
+      "title": "Gate QA V2 cutover and remove legacy general retrieval",
+      "statement": "QA V2 should replace the browser's legacy general-answer path only after a frozen same-snapshot benchmark proves retrieval, contract and answer quality; deterministic workflow answers remain, and the superseded legacy general retrieval is then deleted.",
+      "priority": "P0",
+      "status": "planned",
+      "acceptance_criteria": [
+        "A read-only same-database benchmark compares legacy retrieval with QA V2 on the frozen 15 questions, emits only counts and locked atom names, performs zero provider calls, and proves at least 90 percent overall retrieval-atom coverage, no critical question below 80 percent, and no regression in the currently complete questions.",
+        "A controlled answer replay on the same evidence snapshot achieves at least 98 percent contract-valid responses and at least 12 of 15 fully usable answers with no unsupported factual claim. Model or reasoning escalation is tested only after the evidence bundle meets the retrieval gate.",
+        "After both gates pass, the browser submits general project questions to QA V2, deterministic workflow-index answers remain available, rollback evidence is retained, and the old general retrieval/prompt branch is removed rather than maintained indefinitely. Until then the legacy endpoint remains the product default and no cutover is claimed."
+      ],
+      "decision_source": "The architecture grill requires a strangler rollout and evidence-based cutover because the current live benchmark is 3 of 15 usable answers and the unaccepted Canonical candidate regressed retrieval.",
+      "spec_section": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "id": "FR-QA-EVIDENCE-LOOP-001",
+      "title": "Acquire missing project evidence through a bounded QA loop",
+      "statement": "An independent QA V3 feature should let one configured model either produce a complete claim-bound answer, request narrowly scoped local source evidence, ask the user for a missing project file, or stop, without exposing hidden reasoning or replacing existing question paths.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "QA V3 preview and answer endpoints are added beside the unchanged legacy and QA V2 endpoints. Preview resolves the initial transparent local page selection without a model call, and the browser does not switch to QA V3 automatically.",
+        "The decision contract permits only ANSWER, NEED_EVIDENCE, NEED_USER_INPUT and CANNOT_ANSWER with bounded reason codes, named missing facts, at most two allowlisted requests and one stable answer object whose claims, calculations and coverage stay empty for non-answer decisions. CIRP deterministically restates only explicit comma-list items and parallel question clauses as P1..Pn answer parts, without reading source evidence or an answer key. For ANSWER, the provider supplies only atomic claims, compact E1..En or V1..Vn references assigned by bounded input order, optional requested arithmetic with cited source-number operands, and one local claim/calculation mapping for every required part. Missing, empty, out-of-range or extra answer mappings fail before publication, and every emitted claim or calculation must support at least one part. CIRP maps aliases back to the exact local evidence or region identity, resolves prompt-visible source text or supplied region metadata, joins the claims, compares source numerics by exact Decimal value across comma, currency and trailing-zero formatting, computes Decimal results including one-base/many-percentage expansion, appends readable arithmetic claims and then revalidates one complete public QA V2 answer. Every calculation citation set must collectively contain all operands; layout context alone never supplies one. Real evidence and region IDs remain local in receipts and canonical results. A missing terminal explanation is replaced only by a generic no-fact message. Direct extraction, bounded multi-field listing, comparison and explicitly requested basic arithmetic are supported project-document tasks. If a question names a compact Building/Bldg identifier, an answer naming another identifier or supported only by citations explicitly naming another building fails closed; CIRP does not infer entities absent from text. Hidden chain-of-thought is neither requested nor persisted.",
+        "Only project-scoped FIND_IDENTIFIER and SEARCH_TEXT are allowed. Equivalent requests are rejected; one question permits at most three decisions and two evidence rounds, and no new immutable evidence stops locally. Source admission keeps the conservative 18,000-byte exact-prefix budget calculated with per-row IDs, repeated file/locator metadata and JSON overhead. Provider input sends each exact text once under its E alias plus deterministic, non-citable source_groups that share file/page/locator scopes and source order, enter request identity and add no facts or inference. Selectors v5-v7 may add at most 6,000 bytes of exact-token layout without evicting admitted source rows.",
+        "Each decision has an independently audited answer-v3-r0 through answer-v3-r2 task identity. Exact settled provider payloads are revalidated and locally compiled on recovery, while malformed, unresolved or response-less calls are never automatically retried. A rejected response stores only a bounded validator category, including granular numeric and calculation categories, and never provider output or document text; a frozen evaluation may derive and display that category only through its validated execution receipt and settled call diagnostic. Offline tests use synthetic MockTransport only and do not claim live-model or fixed-benchmark quality."
+      ],
+      "decision_source": "The user approved a management-first CRIP architecture and explicitly requested the discussed bounded evidence loop as a new feature while retaining all existing behavior.",
+      "spec_section": "docs/EVIDENCE_LOOP_V3.md"
+    },
+    {
+      "id": "FR-REFERENCE-PAGE-SELECTION-001",
+      "title": "Prepare reference QA with transparent local page selection",
+      "statement": "A separate reference-QA run should prepare immutable parser evidence locally and select a small, inspectable set of source pages for the configured advanced model without first building a Canonical graph, extracting requirements across the corpus, or reconstructing engineering semantics.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Creating an analysis run with analysis_mode=REFERENCE_QA performs the existing local file parse and OCR path, then ends with a saved page catalog. It makes no model call and skips visual-model processing, Canonical graph construction, full-corpus requirement extraction, record assembly and semantic verification. LEGACY_ANALYSIS remains the default and its behavior is retained.",
+        "The local page selector reads only immutable parser evidence in the selected run snapshot, excludes model-vision narration, ranks literal source-text, parser-locator and file-name matches with deterministic reason codes, and reports its version, matched terms, candidate and exclusion counts, selected evidence IDs, explicit revision metadata and a stable selection ID. It uses no embedding, semantic graph or model call.",
+        "One selection is limited to the frozen selector's page count and 48,000 UTF-8 source bytes: historical selector v3 retains six pages and selectors v4 through current v7 use four. Text clipping keeps an exact source prefix, selected evidence remains eligible for exact-quote validation, and an independent preview endpoint exposes the complete selection audit before any question-time model request.",
+        "QA V3 uses the transparent page selector for its initial context and every FIND_IDENTIFIER or SEARCH_TEXT supplement. Existing legacy question and QA V2 paths remain available, the browser stays on its existing path, and offline tests do not claim live advanced-model quality."
+      ],
+      "decision_source": "The user set the CRIP target as a management layer around an advanced-model reference implementation, with lightweight local verifiable page selection and without semantic reconstruction before the model.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-MULTIMODAL-001",
+      "title": "Send only selected source pages to the reference model",
+      "statement": "When the configured advanced model explicitly supports image input, QA V3 should attach only locally selected source-page previews and preserve exact page, region and image-hash provenance without changing existing default analysis or question paths.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "DeepSeek and a custom OpenAI-compatible profile can explicitly enable or disable image_url input. Enabled DeepSeek uses its existing fixed vision preset, while disabled DeepSeek keeps Reference QA on the selected text model; a custom image-capable route uses the same selected model for text and images. Gemini, Mock and profiles without the declaration remain non-multimodal. The non-secret capability flag survives local profile save/load and is frozen into an evaluation; failures never toggle it or retry automatically, while API keys remain write-only and separately protected.",
+        "For each QA V3 decision, CIRP locally renders only pages already admitted by the transparent selector. It sends at most three PAGE_OVERVIEW PNGs, no more than 32 MiB each and 48 MiB total; supplemental selections take priority in the following decision, and no complete PDF, project folder or unselected page is attached.",
+        "Every attached page exposes a stable region ID, source document, page, full-page bbox, coordinate system, contributing evidence IDs and SHA-256 of the exact sent image. An IMAGE_REGION claim must copy the supplied region identity and bounds, remain needs_review=true and cannot support arithmetic; CIRP enriches the validated citation with the audited coordinate system and image hash.",
+        "The prompt, selected model, bounded source text, region metadata and exact image hashes enter the durable answer-v3 round fingerprint. A settled equivalent request recovers without a second call, malformed visual answers fail the existing no-retry contract, and synthetic MockTransport tests make no external request or live-model quality claim."
+      ],
+      "decision_source": "The active user goal requires an advanced-model reference implementation while CIRP locally manages files, page selection, task state, citations and review without pre-model semantic reconstruction.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-WORKSPACE-001",
+      "title": "Manage reference runs, answers, citations and reviews",
+      "statement": "CIRP should expose Reference QA as a separate managed workspace whose runs, model answers, exact citations, source snapshot and human review history persist locally without replacing the legacy analysis or question workspace.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The browser provides separate controls to prepare a REFERENCE_QA run, preview the transparent page selection and submit one QA V3 question. Legacy analysis and Ask the project remain on LEGACY_ANALYSIS knowledge; QA V3 defaults only to the newest saved REFERENCE_QA run, so creating a reference run cannot silently redirect the legacy question path.",
+        "Every valid terminal QA V3 response is stored locally as one immutable result version with project, run, snapshot, exact submitted question, provider, model, result hash and bounded decision/page-selection audit. Exact text and image-region citations are normalized into first-class citation rows and rechecked against the saved run evidence or supplied visual regions before persistence. Equivalent recovered responses reuse the same result identity, and hidden reasoning is rejected rather than stored.",
+        "An answered result starts PENDING and supports ACCEPTED or REJECTED human review with an expected-version check, local-engineer actor, optional note and immutable before/after event history. Non-answer outcomes remain NOT_APPLICABLE, result and source evidence are never rewritten by review, and stale concurrent review requests fail closed.",
+        "Project-scoped list, detail, review and review-history APIs plus the browser result cards expose answer status, review state, source citations and original-page access. Listing, detail, preview and review make zero model calls; all new data remains local, existing records and databases are preserved through an additive migration, and offline tests use synthetic evidence only."
+      ],
+      "decision_source": "The user defined CRIP primarily as management software for local files, projects, tasks, versions, results, citations and review around an advanced-model reference analyst.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-RESULT-LIFECYCLE-001",
+      "title": "Export and compare reference result versions",
+      "statement": "CIRP should let an engineer export the complete local Reference QA audit record and compare two saved Reference runs without asking a model or pretending that deterministic record differences establish engineering meaning or precedence.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A project-scoped JSON export returns bounded, schema-versioned Reference results with immutable result payloads, normalized citations and complete review-event history. It can be limited to one Reference run or one review state, rejects non-Reference runs and oversized exports, uses an attachment filename, and makes no model call.",
+        "A read-only comparison accepts two distinct terminal REFERENCE_QA runs in the same project, groups results by normalized question, and reports ADDED, REMOVED, CHANGED or UNCHANGED. Outcome matching ignores run IDs, snapshot IDs, evidence IDs and request telemetry while retaining answer text, missing facts, calculations and source-readable citation content; exact result hashes, provider/model/basis and review-state changes remain separately visible.",
+        "The comparison returns stable run/snapshot identities, deterministic ordering, summary counts and a stable comparison ID. It does not choose a controlling answer, infer document precedence or call an LLM, and fails closed for cross-project, active, legacy or identical runs.",
+        "The separate Reference QA browser exposes JSON export and two-run comparison controls, renders result-version changes as text without HTML injection, and leaves legacy analysis, exports and Ask the project unchanged. Offline tests use synthetic evidence only and do not claim live-model quality."
+      ],
+      "decision_source": "The active goal assigns local project, task, version, result, citation and review management to CRIP around an advanced-model reference analyst.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-EVALUATION-001",
+      "title": "Manage frozen Reference QA evaluation tasks",
+      "statement": "CIRP should manage a bounded ordered Reference QA question set as a local resumable evaluation task tied to one immutable source snapshot and one explicit model profile, while each question continues to use the existing bounded evidence loop and immutable result store.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A user can create a project-scoped evaluation containing 1 through 50 unique normalized questions against one terminal REFERENCE_QA run. Creation freezes the run ID, snapshot ID, ordered question-set hash, page-selector version, provider, text model, vision capability and inference mode, and makes no model call.",
+        "Evaluation list and detail APIs deterministically expose READY, IN_PROGRESS or COMPLETE progress, per-question pending, linked-result or safe terminal-failure state, answer-status, failure and review-status counts. They are bounded local reads, make no model call and reject cross-project, legacy, active or malformed inputs without changing existing results.",
+        "A user can preview any pending evaluation question through the existing transparent selector without a model call. One explicit execute action runs only that selected question through the existing QA V3 evidence loop, saves and links either a validated immutable Reference result or a bounded safe terminal contract/preflight failure. A failure never retains rejected provider text or an unvalidated answer; when an execution receipt identifies a settled contract error, the API and browser may expose only its bounded validator category. Replaying either terminal state returns it without another call.",
+        "Execution fails before dispatch if the active model profile no longer matches the frozen evaluation profile. The browser shows the frozen profile, progress and each question, labels execution as a possible model request, uses safe text rendering and leaves legacy analysis and single-question Reference QA unchanged. Offline tests use synthetic evidence and do not claim live-model quality."
+      ],
+      "decision_source": "The active user goal assigns local task, version, result, citation and review management to CRIP and requires a reproducible advanced-model reference implementation rather than manual one-off prompts.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-EVALUATION-RUNNER-001",
+      "title": "Run remaining Reference evaluation questions sequentially",
+      "statement": "CIRP should reduce manual evaluation work by running the remaining questions of one frozen Reference task sequentially after one explicit user confirmation, while retaining per-question call safety, resumability and a stop-after-current boundary.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A task with pending questions offers a Run pending questions action that first shows the frozen task name, provider/model, pending count, an upper bound of three model decisions per question and a clear possible-provider-charge disclosure. Dispatch cannot start until the user explicitly checks the confirmation in that dialog.",
+        "After confirmation, the browser invokes the existing single-item execution endpoint strictly one question at a time and waits for an immutable result link or safe terminal-failure record before moving to the next item. It never uses parallel dispatch, never retries an error automatically and never starts or resumes merely because the page loaded.",
+        "Before every next question the controller refreshes unresolved provider-call state. A locally rejected or safely settled contract-invalid answer is recorded as a failed item and does not block later questions; it is not retried. Any unresolved call, profile mismatch, provider transport/policy error or unclassified failed request stops the sequence and leaves later items pending. Stop after current prevents the next dispatch but does not interrupt or duplicate the active item.",
+        "Progress is visible after every terminal question, including failed-item count. Closing or refreshing the browser stops client-side dispatch; reopening the task derives completed, failed and pending work from local records, so another explicit confirmation resumes only pending items. Existing single-question Reference QA and legacy analysis remain unchanged, and offline tests make no provider call."
+      ],
+      "decision_source": "The user defined CRIP as a labor-saving standalone management platform while preserving explicit control over expensive or uncertain model operations.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-PAGE-ROUTING-002",
+      "title": "Route explicit identifiers and project-cover questions",
+      "statement": "Reference QA should route explicit engineering identifiers to matching parser-locator pages and narrowly recognized multi-field project-cover questions to drawing covers before ordinary literal mentions, while keeping selection local, deterministic, bounded and free of reconstructed engineering semantics.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A labelled Sheet, Drawing, Section, Paragraph, RFI or Submittal query contributes both its normalized labelled phrase and bare identifier value. A Sheet, Drawing, RFI or Submittal value must contain a digit, so ordinary phrases such as sheet counts or drawing sheets are not promoted as identifiers.",
+        "A boundary-safe exact match between a bare query identifier and a parser sheet, section or paragraph locator receives a visible EXACT_IDENTIFIER_LOCATOR reason and outranks source-text mentions. Matching document versions remain visible, and the selector does not infer revision precedence.",
+        "For each query term, source-text score is capped across the page rather than multiplied by the number of parser fragments. Per-row hit strength may order exact source rows inside the selected page but cannot make a dense page win through repeated generic text.",
+        "A question must explicitly request at least two of project name, job number, address and scope of work before page 1 of a file whose name explicitly identifies drawings or plans receives a visible DRAWING_COVER_INTENT reason. One generic field cannot trigger the rule, and no cover contents, entity relationship or project semantics are inferred.",
+        "The selector remains deterministic, uses no Canonical graph, embeddings, model output or reviewer state, retains the 48,000-byte default, and supports the frozen six-page v3 and four-page v4 policies. Synthetic tests make no provider call, and fixed 15-question page-identity reports contain no source text or prompt content."
+      ],
+      "decision_source": "The fixed Reference preview first missed explicit A3.40, RFI 016 and M5.01 source pages, then left S1 unresolved because a multi-field project-identity question was dominated by generic terms even though the drawing cover was available locally.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-NATIVE-STRUCTURED-OUTPUT-001",
+      "title": "Opt into native structured output for Reference QA",
+      "statement": "An official OpenAI Responses or custom OpenAI-compatible model profile may explicitly constrain Reference QA decisions with a native strict JSON Schema response format, while the existing JSON-object route remains available and no custom-provider capability is guessed or retried.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The local model-settings form offers JSON object or strict JSON Schema for the official OpenAI Responses provider and custom OpenAI-compatible routes. Mock, DeepSeek and Gemini retain their existing JSON-object payloads, and the non-secret choice survives a supported local restart.",
+        "When strict JSON Schema is selected, QA V2 answers and QA V3 evidence decisions send the exact expanded task schema with a stable schema name and strict=true through Chat Completions response_format or Responses text.format according to the frozen provider protocol. Extraction, page vision, legacy project questions and semantic verification retain their existing output contract.",
+        "Before dispatch, CIRP converts the Reference contracts' oneOf branches to anyOf and literal const values to one-value enums. It rejects unsupported conditional keywords, objects that permit additional properties, objects with optional property definitions, or invalid schema names without reserving or sending a model call.",
+        "The selected output mode is included in QA V2 and V3 durable call identity and in every newly frozen Reference evaluation profile. Existing frozen profiles without the field are read as json_object, and changing the active mode causes profile mismatch before evaluation dispatch.",
+        "CIRP still parses and locally validates every returned object, handles refusal, truncation or invalid content through the existing safe failure boundary, and never falls back or retries automatically. Offline tests inspect request envelopes only and do not claim that an untested custom provider supports the feature or improves answer quality."
+      ],
+      "decision_source": "The active user goal uses stronger models as the reference analyst while CRIP manages local evidence, reproducible tasks and validated results; native schema enforcement reduces avoidable formatting failures without adding semantic preprocessing.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-OPENAI-RESPONSES-001",
+      "title": "Use the official OpenAI Responses API as a managed model provider",
+      "statement": "A local user may select the official OpenAI Responses API as the Reference model transport while CIRP retains bounded local evidence selection, durable request identity, usage settlement, result validation and human review.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The local model-settings form offers OpenAI Responses API as an additive provider with the fixed official https://api.openai.com/v1 base, a user-entered exact model ID, write-only API key handling, optional Windows current-user DPAPI persistence and explicit document-transfer/possible-charge confirmation. Saving configuration performs no provider request and leaves every existing provider and feature available.",
+        "Official OpenAI requests use POST /responses with store=false, max_output_tokens and text.format. Existing text messages are converted to Responses input, and only explicitly enabled, page-selected bounded images are converted from the existing image_url parts to input_image data URLs; no tool, conversation or previous_response_id state is enabled.",
+        "CIRP normalizes completed output_text and input/output token usage into its existing gateway contract while ignoring reasoning items. A refusal, incomplete response, unexpected output item, missing usage or invalid local contract is never published; a billable response is settled with a safe diagnostic, rejected text and hidden reasoning are not persisted, and the request is not automatically retried or downgraded.",
+        "The non-secret api_protocol is persisted and frozen in every new Reference evaluation profile and added to durable call identity only for the new Responses transport, so existing Chat Completions task and cache identities remain unchanged. Older frozen profiles normalize to chat_completions and a protocol mismatch blocks before dispatch.",
+        "Automated acceptance uses only synthetic MockTransport responses and makes no external model call. It proves request shape, bounded image conversion, typed-output and usage normalization, safe refusal settlement and no automatic retry, but does not claim model availability, pricing, answer quality or benchmark improvement."
+      ],
+      "decision_source": "The user chose advanced models as the reference analyst while CIRP remains the local management, evidence-selection, validation and review layer; an official Responses transport removes an unnecessary compatibility hop without rebuilding engineering semantics before the model.",
+      "spec_section": "docs/PROVIDER_INTEGRATION.md"
+    },
+    {
+      "id": "FR-REFERENCE-MODEL-COMPARISON-001",
+      "title": "Clone and compare same-snapshot Reference model evaluations",
+      "statement": "CIRP should let a user reuse one frozen Reference question set under a different active model profile and compare the two saved evaluations locally without changing source scope, calling a model during management operations, or asserting which answer is correct.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A user can clone an existing Reference evaluation only after selecting a different active model profile. The clone receives a new task identity and frozen profile but preserves the exact project, run, snapshot, ordered normalized questions, question-set hash and page-selector version; the source task is unchanged and cloning makes no model call.",
+        "A comparison is accepted only for two distinct evaluations in the same project whose run ID, snapshot ID, question-set hash, page-selector version, question ordinals, question keys and normalized question text all match. Cross-project or mismatched source/question/input-policy tasks fail before reading model output or dispatching a request.",
+        "The deterministic comparison shows each side's frozen profile and saved public terminal outcome: answer status, answer or missing facts, calculations, citations, provider/model, result and outcome hashes, review status, bounded safe failure, or pending state. It reports only PENDING, CHANGED or UNCHANGED and explicitly does not infer correctness, document precedence or a preferred model.",
+        "The Reference browser exposes Clone for active model and filters candidate comparisons to tasks with identical source and question identity. All content uses text-safe rendering, comparison is bounded to 50 questions and 8 MiB, and clone/compare controls are disabled while another evaluation action is active.",
+        "Offline tests prove stable clone identity, same-profile rejection, changed and unchanged outcomes, safe-failure display, mismatch rejection, deterministic comparison IDs and zero model-call records. They do not claim that a stronger model has been run or that answer quality improved."
+      ],
+      "decision_source": "The active goal requires an advanced-model reference implementation managed by CIRP; a same-snapshot clone and comparison removes manual question recreation and creates an auditable A/B path without adding semantic preprocessing.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-MANAGED-JOB-001",
+      "title": "Run a frozen Reference evaluation as a durable managed job",
+      "statement": "CIRP should execute the pending questions of one frozen Reference evaluation as a durable local job after explicit user confirmation, so the browser may close while per-question call safety, saved progress, stop boundaries and no-automatic-resume behavior remain enforceable.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The user must see the frozen source/model identity, pending-question count, maximum of three model decisions per question, possible document transfer and provider-charge disclosure, then explicitly confirm before a managed job can be queued. Job creation persists only local management state and makes no model call.",
+        "One global CIRP worker processes at most one managed evaluation job and one question at a time through the existing single-item QA V3 execution and immutable-result path. Each saved result or bounded safe terminal failure is committed before the next question; there is no parallel dispatch, fallback or automatic retry.",
+        "An active managed job excludes analysis runs, semantic verification, model-profile changes and every other model-answer dispatch. Before each question it rechecks the frozen profile and unresolved-call ledger; a mismatch, unresolved call, provider/safety failure or competing work halts before another question is sent and stores only a bounded reason code.",
+        "Stop after current lets an in-flight question settle and prevents the next dispatch. Service shutdown or restart marks queued/running work interrupted and never resumes it automatically. Any remaining questions require a newly created explicitly confirmed job, while completed item results remain immutable and reusable.",
+        "The Reference browser retains the existing one-question and browser-sequential paths, adds managed-job start/status/stop controls with safe text rendering, and polls only while a known job is active. Offline tests use synthetic responses, prove durable progress/interruption/failure behavior and make no external provider call or answer-quality claim."
+      ],
+      "decision_source": "The user defined CRIP as a labor-saving standalone management platform; a browser-bound loop is not durable enough for managed advanced-model evaluation, while automatic restart would violate explicit paid-call control.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-READINESS-001",
+      "title": "Inspect a whole Reference evaluation input plan before authorization",
+      "statement": "CIRP should expose a deterministic zero-call readiness manifest for every frozen Reference evaluation so a user can inspect page scope, input volume, selection warnings and operational blockers before deciding whether to authorize model execution.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A read-only evaluation endpoint runs the task's frozen literal page-selector version for all 1 through 50 questions against the same saved run and snapshot. It returns the selector version, stable question and selection identities, per-question page metadata, selected byte counts, limit exclusions and bounded version-conflict notices, plus aggregate unique/repeated pages, documents, pending input bytes and maximum remaining model decisions.",
+        "The manifest contains question text and page metadata only. It excludes selected source text, previews and source evidence IDs, uses no Canonical graph, embeddings, model output or reviewer state, records model_called=false and makes no provider or durable model-call record.",
+        "A stable manifest identity depends only on the frozen evaluation and deterministic selections. A separate status identity reports exact frozen-profile match, provider readiness, unresolved calls, active analysis, verification or managed jobs, and pending work, so operational changes cannot rewrite the input-plan identity.",
+        "Readiness inspection never authorizes, queues, resumes or retries model work. READY means only that the existing explicit confirmation gate may be opened; BLOCKED and NO_PENDING expose bounded reason codes. The browser states this boundary, renders only text-safe metadata and retains all existing single-question, browser-sequential and managed-job paths.",
+        "Offline tests prove deterministic identities, selected/no-source questions, raw-source exclusion, profile and active-job status changes, no-pending behavior, schema validation and zero model calls. They do not run a stronger model or claim answer-quality improvement."
+      ],
+      "decision_source": "The user wants CRIP to reduce unnecessary LLM input and manage stronger-model work locally while retaining explicit control over document transfer and paid execution.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-BENCHMARK-001",
+      "title": "Human-adjudicate a fixed Reference benchmark and compute its release gate",
+      "statement": "CIRP should preserve explicit engineer verdicts for every terminal item in a frozen Reference evaluation and compute the fixed 15-question release threshold from immutable contract outcomes and those verdicts without asking a model or inferring correctness.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A terminal evaluation item can receive an explicit FULLY_USABLE, PARTIAL or UNUSABLE engineer verdict, an independent unsupported-factual-claim flag and a bounded note. Pending items cannot be adjudicated; only answered results can be fully usable, partial or marked with an unsupported claim, and a fully usable result cannot simultaneously carry that flag.",
+        "Every adjudication uses an expected version, stores local-engineer, immutable before/after values and timestamp in an append-only event, and never rewrites the model result, citations, source evidence or ordinary ACCEPTED/REJECTED result review. Stale, cross-evaluation and invalid outcome/verdict combinations fail locally.",
+        "A deterministic scorecard reports pending/terminal work, contract-valid model responses, contract failures, model-disabled outcomes, answered items, adjudication coverage, verdict counts and unsupported-claim count. It includes only result identities and hashes rather than answer or citation content, is bounded to 4 MiB and makes no model call.",
+        "The fixed gate applies only to a non-Mock 15-question evaluation after execution and adjudication are complete. Its mechanical thresholds are at least 15 contract-valid non-disabled responses, at least 12 fully usable engineer verdicts and zero answers flagged with an unsupported claim. Other task sizes, Mock profiles and incomplete work cannot pass.",
+        "The browser exposes the scorecard, verdict editor and bounded history with safe text rendering and explicitly says that CIRP records human decisions rather than inferring correctness. Offline tests prove threshold transitions, audit/CAS behavior, outcome restrictions, source-answer exclusion and zero provider calls; they do not claim that the pending stronger-model benchmark has run."
+      ],
+      "decision_source": "The approved release gate already requires 98 percent contract-valid responses, at least 12 of 15 fully usable answers and no unsupported factual claim, but ordinary accepted/rejected result review cannot represent those independent benchmark judgments.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-SELECTION-VERSION-001",
+      "title": "Freeze and refine Reference page-selection scope",
+      "statement": "CIRP should freeze the local page-selector version on every Reference evaluation and use bounded, explicit local scope rules for new tasks without silently changing historical evaluation inputs.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Migration 016 adds the frozen selector and backfills historical rows to six-page v3. Migrations 018 through 020 expand the allowlist without rewriting a saved row: v3 and four-page v4/v5/v6 remain replayable, while new evaluations freeze four-page literal-page-selector-7.",
+        "Evaluation page preview, initial QA V3 context, every supplemental evidence request, readiness inspection, managed execution, job metadata and benchmark scorecard use and expose the evaluation's frozen selector version. The selector version participates in selection and scorecard identities without adding semantic preprocessing or a model call.",
+        "Cloning for a different model preserves the source evaluation's selector version. Same-snapshot A/B comparison requires matching selector versions in addition to run, snapshot and ordered question identity, and the browser exposes the version before confirmation and filters incompatible pairs locally.",
+        "V5 through v7 retain v4's literal page ranking and limits. Only an original question that explicitly names Building or BLDG plus a compact identifier activates local entity scope: matching pages rank first, pages and rows explicitly naming only another Building are excluded, supplemental search queries inherit the original target, unlabelled general evidence remains eligible, and preview metadata reports the target and exclusion counts.",
+        "For v5/v6 text-layer evidence, valid saved word offsets and native bounding boxes may produce an optional bounded per-block `layout_lines` view. V7 may instead group exact saved tokens from selected blocks on one page into deterministic native columns using a fixed 80-point gap and attach the page view once. Layout never replaces source text or citation identity, remains absent from v3/v4 replay, enters the provider request fingerprint, and is capped without reducing the original 18,000-byte source context.",
+        "V6 and v7 may add only an explicit bounded allowlist of literal word forms when ordering evidence rows inside already selected pages. The original question terms alone determine page scores, page ranks and reported page matches; no stemming, synonym, semantic or model expansion is permitted.",
+        "On the same immutable fixed 15-question fixture, the independently recorded source page remains within the first four selected pages for 15 of 15 questions under v7, with unchanged page ranks from v6. The v6 D2 report records the exact target row moving from outside the v5 bounded input to row 17 and one authorized fully usable smoke result. The v7 D4 report records a controlled improvement from partial with an unsupported association to partial with no unsupported claim while the leading quantity remains omitted. The complete same-input v7 baseline records Flash at 9 contract-valid and 7 fully usable items and V4 Pro at 12 and 9; both fail the release gate."
+      ],
+      "decision_source": "The active goal requires local, lightweight and verifiable page selection to minimize unnecessary model input while CIRP manages task versions; live readiness showed 90 page references at six pages per question although every fixed expected source page ranked within the first four.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-REFERENCE-EXECUTION-RECEIPT-001",
+      "title": "Persist safe Reference model-input execution receipts",
+      "statement": "Every settled QA V3 model decision should retain a compact immutable receipt that proves the exact input identity and size without duplicating source text, prompt content, rejected output or private reasoning.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Each newly dispatched or durably recovered QA V3 decision creates a schema-validated receipt containing the local model-call ID, request hash, prompt-and-schema contract hash, normalized question hash, provider/model/protocol/output/inference modes, round, cache state and configured output bound.",
+        "The receipt lists only evidence IDs with SHA-256 hashes of the exact text sent, optional SHA-256 and byte count for the exact deterministic layout view sent, and bounded visual region IDs with sent-image hashes and byte counts. It records system, user, image and request-upper-bound byte counts while explicitly containing no source text, layout text, prompt content or chain of thought.",
+        "A publishable Reference result retains all decision receipts in round order. Before persistence, every receipt must match the same project/run, settled model-call row, request hash, question and saved source-evidence scope. Cached recovery preserves the same call and request identity without another provider request.",
+        "A contract-rejected evaluation item retains the safe receipt of its settled-error call through additive migration 017, while rejected provider text and exception details remain absent. Historical results and failures remain readable with no receipt and are never rewritten. New named-v9 failures may additionally retain a complete 1-3 receipt chain with actual accepted supplement counts through nullable migration 026. Every nonterminal receipt must revalidate as NEED_EVIDENCE, its local retrieval must add new immutable evidence, and the reconstructed input must match the next receipt. The terminal receipt must equal the existing authenticated failure receipt. Any non-NULL chain is authenticated before replay, scoring, comparison or adjudication; malformed metadata cannot fall back to legacy unknown. Genuine historical NULL metadata preserves its prior public shape and unknown totals. Reports distinguish requested versus accepted supplementation and saved execution versus current fresh/cache/replay calls.",
+        "The existing bounded JSON export includes receipts automatically, and the Reference browser shows them only as collapsed text-safe audit metadata. Synthetic Chat Completions and multimodal tests prove fresh, cached, successful and rejected paths with no external provider call or answer-quality claim."
+      ],
+      "decision_source": "The active goal requires CIRP to manage exact advanced-model inputs and results locally; frozen tasks and selectors identify intended scope but did not independently preserve the actual per-decision input identity.",
+      "spec_section": "docs/REFERENCE_QA.md"
+    },
+    {
+      "id": "FR-DEEPSEEK-MODEL-SELECTION-001",
+      "title": "Select exact DeepSeek Flash and Pro profiles",
+      "statement": "CIRP should freeze the current officially published DeepSeek V4.1 Flash or independent V4 Pro profile and reject unsupported model capabilities before dispatch.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The local settings page offers `deepseek-flash` as V4.1 Flash and `deepseek-v4-pro` as V4 Pro at the fixed official DeepSeek endpoint, keeps keys write-only, and makes no provider request merely by saving either choice.",
+        "A new DeepSeek profile freezes the selected exact ID, JSON-object output and Chat Completions protocol. Thinking defaults to disabled; an explicit bounded Reference QA thinking level is frozen separately. Existing saved `deepseek-v4-flash` input is accepted as a provider alias and normalized for a new active Flash profile without rewriting historical evaluation, result or call identities.",
+        "V4.1 Flash may explicitly opt into selected-page image input. V4 Pro is text-only; Pro image input and unknown model IDs fail during local configuration before HTTP, reservation or model dispatch.",
+        "The existing active-work and unresolved-call gates remain unchanged. A Pro comparison must use the same run, snapshot, ordered question set and selector version; model choice alone never judges correctness.",
+        "Offline tests cover canonical Flash, V4 Pro text selection, Pro image rejection, legacy Flash aliases, unknown-model rejection, browser disclosure, localization and zero external calls. They establish local routing behavior, not live availability or answer correctness."
+      ],
+      "decision_source": "The user requested V4.1 Flash followed by V4 Pro; DeepSeek's current official model list and API documentation identify deepseek-v4-pro as an independently available text model.",
+      "spec_section": "docs/PROVIDER_INTEGRATION.md"
+    },
+    {
+      "id": "FR-REFERENCE-THINKING-001",
+      "title": "Escalate selected Reference questions to bounded DeepSeek thinking",
+      "statement": "CIRP should keep the fast non-thinking path as the default while allowing a frozen DeepSeek low, high or max thinking level only for QA V3 evidence decisions, without retaining private reasoning or changing unrelated model tasks.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "The local settings page exposes none, low, high and max only for an official DeepSeek profile. None remains the default; Mock, Gemini, OpenAI and custom profiles reject non-none Reference reasoning before HTTP.",
+        "Only QA V3 evidence-decision requests use the selected Reference reasoning parameters. Extraction, vision, verification, QA V2 and other gateway tasks retain their prior inference policy and request identity.",
+        "A thinking decision is capped at 8,000 output tokens, remains subject to the existing three-decision loop, evidence contract, no-automatic-retry and unresolved-call gates, and freezes `thinking-low`, `thinking-high` or `thinking-max` in the evaluation profile and request identity.",
+        "Provider reasoning text never enters validated answer data, durable response JSON, an execution receipt, a report or the browser. Returned reasoning-token counters remain part of ordinary usage accounting, while every receipt continues to declare `chain_of_thought_included=false`.",
+        "Offline tests prove configuration persistence, provider-scope rejection, the exact low-thinking request, reasoning usage accounting, private-reasoning exclusion and legacy non-thinking enforcement. The authorized fixed-20 live A/B records contract outcomes, direct-PDF review, latency, evidence requests, token use, estimated cost and safe abstention without writing assistant judgments as human adjudication."
+      ],
+      "decision_source": "The user asked whether CoT improves performance and requested a 20-question live test that also measures safe, timely handling of unrelated construction field questions.",
+      "spec_section": "docs/PROVIDER_INTEGRATION.md"
+    },
+    {
       "id": "FR-MODEL-BUDGET-REMOVAL-001",
       "title": "Run without a CIRP project budget module",
       "statement": "CIRP model dispatch is not gated by a project budget, configured price, exchange rate, or cumulative cost total; provider-account spending is managed outside CIRP.",
@@ -1854,6 +2217,55 @@
       ],
       "decision_source": "D-30: the user explicitly cancelled all CIRP budget modules on 2026-09-27.",
       "spec_section": "docs/PRODUCT_SPEC.md"
+    },
+    {
+      "id": "FR-REFERENCE-COMPLETE-CONTEXT-001",
+      "title": "Preserve complete selected source context for new Reference questions",
+      "statement": "New Reference questions use complete selected source pages and explicit same-document continuation scopes without artificial input character truncation; frozen historical selectors retain their old behavior.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "New single-question and evaluation paths default to selector v8; v3-v7 evaluations preserve their selector, source selection and request identity. Migration 021 adds v8 without rewriting historical values.",
+        "V8 selects up to four relevant anchor pages, retains full raw source rows in original order and full available native layout, and expands explicit same-document sheet or requested section/paragraph scope. Project, run, snapshot and literal Building exclusions remain enforced and visible.",
+        "V8 initial and supplemental evidence do not pass through the old 18 KB source, 6 KB layout, 48 KB page-selection or 64 KB request byte truncation. Selected bytes and scope exclusions remain visible; provider context rejection is reported without truncation or retry.",
+        "Complete-context requests use a distinct schema/contract fingerprint and receipt v2. Source aliases allow more than 999 rows; receipt counts and byte measurements do not impose legacy input limits. Historical receipt v1 validation remains intact.",
+        "Development context packs retain all explicitly selected documents regardless of historical character budgets, while preserving path traversal and docs-only access validation.",
+        "Offline tests verify long source and layout completeness, aliases, safe provider errors, cache separation, persistence and scope boundaries; live quality improvement requires a separate frozen comparison."
+      ],
+      "decision_source": "The user approved continuous development and explicitly removed input-character limits as a development constraint.",
+      "spec_section": "docs/FIELD_QA_DEVELOPMENT.md"
+    },
+    {
+      "id": "FR-REFERENCE-HUMAN-CASES-001",
+      "title": "Resolve unanswered and failed Reference questions through local human cases",
+      "statement": "A local engineer can track, supplement and resolve a saved Reference question regardless of whether the model answered, lacked information or failed its contract, without rewriting model results or approval history.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "Cases link to same-project/run/snapshot/question saved results or terminal evaluation items; failed items never fabricate a model result. Equivalent source outcomes create one idempotent case.",
+        "Human-owned OPEN, NEEDS_INFORMATION, IN_REVIEW and RESOLVED states include assignment, notes, supplemental questions, same-project uploaded attachments and non-empty resolution. Updates require the expected version and append immutable history.",
+        "Reopening clears the current resolution and preserves the previous response in history. Re-resolution requires an explicit new human resolution. Cases do not mutate result review, adjudication or source evidence.",
+        "GET/list make no provider call or writes; API actors are local human actions, not model-supplied fields. Project mismatches, stale writes and malformed links fail atomically.",
+        "The existing Reference workspace exposes case creation, filtering, detail, source navigation and history plus one local staged supplement flow: upload attachments, prepare a different Reference run, preview selected pages, explicitly answer, and link the saved result. It preserves human case state, immutable results and approval history; actual browser acceptance is recorded separately."
+      ],
+      "decision_source": "The approved development plan requires a useful human-handling outcome for missing information and failed QA, reusing existing application workflows.",
+      "spec_section": "docs/REFERENCE_CASES_API.md"
+    },
+    {
+      "id": "DEV-FIELD-BENCHMARK-001",
+      "title": "Measure answer quality and field response time separately from safe refusal",
+      "statement": "Maintain an unseen field-worker question set and offline metrics that distinguish answerable correctness, appropriate and inappropriate refusal, unreviewed records and end-to-end latency.",
+      "priority": "P0",
+      "status": "implemented",
+      "acceptance_criteria": [
+        "A separately named 20-question fixture covers Chinese colloquial wording, ambiguous references, clarification, source conflicts, implicit cross-project scope, insufficient evidence, safety-sensitive questions and answerable general terminology. Synthetic source snippets are labelled and do not assert new real-project facts.",
+        "Metrics keep answerable and unanswerable denominators separate; unreviewed answers are counted explicitly and never declared correct. Cached and fresh executions remain distinguishable. Missing observations are unknown, not fresh executions or zero human work. Versioned metric reports expose observed and unknown denominators and distinguish observed subtotals from exact totals; legacy records are not backfilled.",
+        "End-to-end elapsed time is measured independently of individual stage durations, alongside supplement requests and human handling minutes. The offline metrics script performs no provider call.",
+        "An explicit offline adapter can bind a complete reference-live-smoke-3 report to an independently supplied review file using its original byte hash, frozen identity and ordered full item set. Templates contain no quality judgment or answerability assumption. Conversion preserves failures and unreviewed items, labels the existing runner timing window rather than calling it field end-to-end latency, and separates saved decision/supplement counters from exact current provider calls and per-item lower bounds. File consistency is not authenticated source truth or human approval; the adapter performs no network request, database operation or model call and never overwrites its inputs or existing output files.",
+        "Existing 20-question results are immutable historical evidence; new questions and new input policies need separate live execution and independent review before any quality claim."
+      ],
+      "decision_source": "The user wants timely, reliable help for site workers across multiple project and non-project scenarios.",
+      "spec_section": "docs/FIELD_QA_DEVELOPMENT.md"
     }
   ],
   "artifact_kind": "prototype_source",

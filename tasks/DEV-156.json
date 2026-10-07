@@ -1,0 +1,54 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked to use DeepSeek V4.1 Flash as the reference and then compare it with a Pro model while retaining the same frozen CIRP input scope.",
+  "notes": [
+    "Expose the official DeepSeek V4.1 Flash model ID and show V4.1 Pro as unavailable.",
+    "Block deepseek-v4-pro because the provider currently routes it to V4.1 Flash, which cannot produce an independent comparison.",
+    "Keep historical deepseek-v4-flash profiles readable by normalizing the accepted alias for new profiles without rewriting old evaluation or call rows.",
+    "Reject the transitional Pro alias and unknown DeepSeek model IDs before HTTP.",
+    "Use only synthetic offline configuration tests; the separately authorized live benchmark is operational validation, not an acceptance-test side effect."
+  ],
+  "task_id": "DEV-156",
+  "title": "Select exact DeepSeek Flash and block false Pro comparisons",
+  "requirement_ids": [
+    "FR-DEEPSEEK-MODEL-SELECTION-001",
+    "FR-REFERENCE-MODEL-COMPARISON-001"
+  ],
+  "allowed_paths": [
+    "app/settings.py",
+    "app/model_configuration.py",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-156.json",
+    "changes/CR-0171.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_model_configuration.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-156",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Freeze the exact available DeepSeek V4.1 Flash profile, preserve historical aliases and prevent a routed Flash alias from being recorded as an independent Pro comparison."
+}

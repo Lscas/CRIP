@@ -1,0 +1,645 @@
+{
+  "LEGACY": {
+    "selection_public": {
+      "selection_id": "SEL-07efc515d918e0de68a3cb30ad975fd7",
+      "selector_version": "literal-page-selector-8",
+      "run_id": "RUN-00000000000000000000000000000001",
+      "snapshot_id": "SN-47db41ae10768f3c639142ec57b4f126",
+      "question": "On Sheet A5.01, which information applies to Panel A and Panel B?",
+      "model_called": false,
+      "semantic_graph_used": false,
+      "embeddings_used": false,
+      "ranking_policy": "LITERAL_SOURCE_PAGE_MATCHES_ONLY",
+      "query_terms": [
+        "sheet a5.01",
+        "a5.01",
+        "information",
+        "applies",
+        "panel",
+        "apply"
+      ],
+      "candidate_pages_considered": 2,
+      "selected_page_count": 2,
+      "excluded_by_candidate_limit": 0,
+      "excluded_by_page_limit": 0,
+      "excluded_by_byte_limit": 0,
+      "byte_count": 86844,
+      "max_pages": null,
+      "max_bytes": null,
+      "source_conflicts": [],
+      "entity_scope_policy": "NOT_APPLICABLE",
+      "question_entities": [],
+      "excluded_by_entity_scope": {
+        "pages": 0,
+        "evidence_rows": 0
+      },
+      "pages": [
+        {
+          "page_key": "PG-a6bc2c9f8537343cc4729a76",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 1,
+          "score": 588,
+          "matched_terms": [
+            "a5.01",
+            "panel"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL",
+            "SOURCE_TEXT_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-1",
+            "EV-PAGE-2"
+          ],
+          "source_text_bytes": 44,
+          "selected_text_bytes": 44,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "Panel A 511 FIRST NOTE\nPanel B 511 OTHER NOTE"
+        },
+        {
+          "page_key": "PG-c3ce8074be9beeca0cae0e0d",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 2,
+          "score": 576,
+          "matched_terms": [
+            "a5.01"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-3"
+          ],
+          "source_text_bytes": 86800,
+          "selected_text_bytes": 86800,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complet"
+        }
+      ],
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "anchor_page_limit": 4,
+      "anchor_page_count": 2,
+      "expanded_page_count": 0,
+      "layout_available_pages": 1,
+      "source_row_order": "SAVED_SOURCE_ORDER"
+    },
+    "selection_rows_sha256": "a9627f435eae5f6827e6c9bd298cd6efb67116b75c2ae289dfc4d071f17f144a",
+    "payload_sha256": "ce66a353305ca5fbef16cbbfad88b8ec9ddd22d22c4a274cd781515127895bfe",
+    "system_text_sha256": "12c30e44fb42465953a0bf25d00630709dfba8751be95ec43a5bd964ef88fbf7",
+    "user_text_sha256": "5da842099b1806567ace19c21723810bb00e4295263aeb954c02878d99c7c5c6",
+    "receipt": {
+      "receipt_version": "reference-model-input-receipt-2",
+      "model_call_id": "CALL-00000000000000000000000000000001",
+      "round": 1,
+      "request_hash": "7db2abae95648912d256d45b6cf13a25eb6c5ba71d2a26889f9cb93afbb1be99",
+      "prompt_contract_hash": "711e5351cd0a149a09f824b86847201b92782a6659f2342fbb1fa96bafd2c985",
+      "question_hash": "506bb3a15f45e8aa19090a0dca0fc4250f789183423d1fb3423af9a79a63bb55",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "api_protocol": "chat_completions",
+      "structured_output_mode": "json_object",
+      "inference_mode": "disabled",
+      "cached": false,
+      "source_text_included": false,
+      "prompt_content_included": false,
+      "chain_of_thought_included": false,
+      "evidence_count": 3,
+      "evidence_inputs": [
+        {
+          "evidence_id": "EV-PAGE-1",
+          "text_sha256": "c604bbd810960dfc1c6180a97b4e8249fe466179ad5e44383b71ac8e8975b610",
+          "layout_sha256": "ac7f374f3f4770dde00f72e529571abc3e57e48c047d37918dbd4f915d90b5c1",
+          "layout_bytes": 48
+        },
+        {
+          "evidence_id": "EV-PAGE-2",
+          "text_sha256": "b1f2bd9d83f73547d2ec2c8ab2a40c3bb86e22b0bedfe8ff05ec9fe39a760035"
+        },
+        {
+          "evidence_id": "EV-PAGE-3",
+          "text_sha256": "5419138c2d27bcb5696b90d1d7f61948b6418c6f2d34afe8cc68d591cd43c77d"
+        }
+      ],
+      "visual_inputs": [],
+      "system_text_bytes": 9406,
+      "user_text_bytes": 87680,
+      "image_bytes": 0,
+      "request_upper_bound_bytes": 97342,
+      "max_output_tokens": 2600,
+      "selector_version": "literal-page-selector-8",
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "ordered_evidence_manifest_sha256": "edb509ef76068806496b81bfe7b94112e5ab3e5afc7017dc1db2769afa2b2d5a",
+      "source_text_bytes": 86844
+    },
+    "execution_profile": {
+      "provider": "deepseek",
+      "text_model": "deepseek-flash",
+      "vision_enabled": false,
+      "vision_model": null
+    },
+    "fresh_calls": 1,
+    "replay_calls": 0
+  },
+  "FLASH_NONE": {
+    "selection_public": {
+      "selection_id": "SEL-07efc515d918e0de68a3cb30ad975fd7",
+      "selector_version": "literal-page-selector-8",
+      "run_id": "RUN-00000000000000000000000000000001",
+      "snapshot_id": "SN-47db41ae10768f3c639142ec57b4f126",
+      "question": "On Sheet A5.01, which information applies to Panel A and Panel B?",
+      "model_called": false,
+      "semantic_graph_used": false,
+      "embeddings_used": false,
+      "ranking_policy": "LITERAL_SOURCE_PAGE_MATCHES_ONLY",
+      "query_terms": [
+        "sheet a5.01",
+        "a5.01",
+        "information",
+        "applies",
+        "panel",
+        "apply"
+      ],
+      "candidate_pages_considered": 2,
+      "selected_page_count": 2,
+      "excluded_by_candidate_limit": 0,
+      "excluded_by_page_limit": 0,
+      "excluded_by_byte_limit": 0,
+      "byte_count": 86844,
+      "max_pages": null,
+      "max_bytes": null,
+      "source_conflicts": [],
+      "entity_scope_policy": "NOT_APPLICABLE",
+      "question_entities": [],
+      "excluded_by_entity_scope": {
+        "pages": 0,
+        "evidence_rows": 0
+      },
+      "pages": [
+        {
+          "page_key": "PG-a6bc2c9f8537343cc4729a76",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 1,
+          "score": 588,
+          "matched_terms": [
+            "a5.01",
+            "panel"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL",
+            "SOURCE_TEXT_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-1",
+            "EV-PAGE-2"
+          ],
+          "source_text_bytes": 44,
+          "selected_text_bytes": 44,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "Panel A 511 FIRST NOTE\nPanel B 511 OTHER NOTE"
+        },
+        {
+          "page_key": "PG-c3ce8074be9beeca0cae0e0d",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 2,
+          "score": 576,
+          "matched_terms": [
+            "a5.01"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-3"
+          ],
+          "source_text_bytes": 86800,
+          "selected_text_bytes": 86800,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complet"
+        }
+      ],
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "anchor_page_limit": 4,
+      "anchor_page_count": 2,
+      "expanded_page_count": 0,
+      "layout_available_pages": 1,
+      "source_row_order": "SAVED_SOURCE_ORDER"
+    },
+    "selection_rows_sha256": "a9627f435eae5f6827e6c9bd298cd6efb67116b75c2ae289dfc4d071f17f144a",
+    "payload_sha256": "ce66a353305ca5fbef16cbbfad88b8ec9ddd22d22c4a274cd781515127895bfe",
+    "system_text_sha256": "12c30e44fb42465953a0bf25d00630709dfba8751be95ec43a5bd964ef88fbf7",
+    "user_text_sha256": "5da842099b1806567ace19c21723810bb00e4295263aeb954c02878d99c7c5c6",
+    "receipt": {
+      "receipt_version": "reference-model-input-receipt-2",
+      "model_call_id": "CALL-00000000000000000000000000000001",
+      "round": 1,
+      "request_hash": "9ae89bc4938ef80f85338b07c34db5b7d024515e5e08bf37312ae8f42c558d23",
+      "prompt_contract_hash": "711e5351cd0a149a09f824b86847201b92782a6659f2342fbb1fa96bafd2c985",
+      "question_hash": "506bb3a15f45e8aa19090a0dca0fc4250f789183423d1fb3423af9a79a63bb55",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "api_protocol": "chat_completions",
+      "structured_output_mode": "json_object",
+      "inference_mode": "disabled",
+      "cached": false,
+      "source_text_included": false,
+      "prompt_content_included": false,
+      "chain_of_thought_included": false,
+      "evidence_count": 3,
+      "evidence_inputs": [
+        {
+          "evidence_id": "EV-PAGE-1",
+          "text_sha256": "c604bbd810960dfc1c6180a97b4e8249fe466179ad5e44383b71ac8e8975b610",
+          "layout_sha256": "ac7f374f3f4770dde00f72e529571abc3e57e48c047d37918dbd4f915d90b5c1",
+          "layout_bytes": 48
+        },
+        {
+          "evidence_id": "EV-PAGE-2",
+          "text_sha256": "b1f2bd9d83f73547d2ec2c8ab2a40c3bb86e22b0bedfe8ff05ec9fe39a760035"
+        },
+        {
+          "evidence_id": "EV-PAGE-3",
+          "text_sha256": "5419138c2d27bcb5696b90d1d7f61948b6418c6f2d34afe8cc68d591cd43c77d"
+        }
+      ],
+      "visual_inputs": [],
+      "system_text_bytes": 9406,
+      "user_text_bytes": 87680,
+      "image_bytes": 0,
+      "request_upper_bound_bytes": 97342,
+      "max_output_tokens": 2600,
+      "selector_version": "literal-page-selector-8",
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "ordered_evidence_manifest_sha256": "edb509ef76068806496b81bfe7b94112e5ab3e5afc7017dc1db2769afa2b2d5a",
+      "source_text_bytes": 86844,
+      "initial_evidence_manifest_sha256": "1ce57c7384a6a1a0a1f6ae13b9a399f77e096297ad62749f8719225dcc68ca12",
+      "profile_neutral_input_sha256": "7c1784743961ca8d80de7a9fd5db02339e2286f9d82d645f07c7724da538de12"
+    },
+    "execution_profile": {
+      "provider": "deepseek",
+      "text_model": "deepseek-flash",
+      "vision_enabled": false,
+      "vision_model": null,
+      "profile_version": "reference-text-profile-1",
+      "profile_id": "FLASH_NONE",
+      "max_output_tokens": 2600
+    },
+    "fresh_calls": 1,
+    "replay_calls": 0
+  },
+  "FLASH_LOW": {
+    "selection_public": {
+      "selection_id": "SEL-07efc515d918e0de68a3cb30ad975fd7",
+      "selector_version": "literal-page-selector-8",
+      "run_id": "RUN-00000000000000000000000000000001",
+      "snapshot_id": "SN-47db41ae10768f3c639142ec57b4f126",
+      "question": "On Sheet A5.01, which information applies to Panel A and Panel B?",
+      "model_called": false,
+      "semantic_graph_used": false,
+      "embeddings_used": false,
+      "ranking_policy": "LITERAL_SOURCE_PAGE_MATCHES_ONLY",
+      "query_terms": [
+        "sheet a5.01",
+        "a5.01",
+        "information",
+        "applies",
+        "panel",
+        "apply"
+      ],
+      "candidate_pages_considered": 2,
+      "selected_page_count": 2,
+      "excluded_by_candidate_limit": 0,
+      "excluded_by_page_limit": 0,
+      "excluded_by_byte_limit": 0,
+      "byte_count": 86844,
+      "max_pages": null,
+      "max_bytes": null,
+      "source_conflicts": [],
+      "entity_scope_policy": "NOT_APPLICABLE",
+      "question_entities": [],
+      "excluded_by_entity_scope": {
+        "pages": 0,
+        "evidence_rows": 0
+      },
+      "pages": [
+        {
+          "page_key": "PG-a6bc2c9f8537343cc4729a76",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 1,
+          "score": 588,
+          "matched_terms": [
+            "a5.01",
+            "panel"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL",
+            "SOURCE_TEXT_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-1",
+            "EV-PAGE-2"
+          ],
+          "source_text_bytes": 44,
+          "selected_text_bytes": 44,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "Panel A 511 FIRST NOTE\nPanel B 511 OTHER NOTE"
+        },
+        {
+          "page_key": "PG-c3ce8074be9beeca0cae0e0d",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 2,
+          "score": 576,
+          "matched_terms": [
+            "a5.01"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-3"
+          ],
+          "source_text_bytes": 86800,
+          "selected_text_bytes": 86800,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complet"
+        }
+      ],
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "anchor_page_limit": 4,
+      "anchor_page_count": 2,
+      "expanded_page_count": 0,
+      "layout_available_pages": 1,
+      "source_row_order": "SAVED_SOURCE_ORDER"
+    },
+    "selection_rows_sha256": "a9627f435eae5f6827e6c9bd298cd6efb67116b75c2ae289dfc4d071f17f144a",
+    "payload_sha256": "f57d64fda241f850d6810ba9f48b9374d85271339aeac2aa885591e5f7ed303a",
+    "system_text_sha256": "12c30e44fb42465953a0bf25d00630709dfba8751be95ec43a5bd964ef88fbf7",
+    "user_text_sha256": "5da842099b1806567ace19c21723810bb00e4295263aeb954c02878d99c7c5c6",
+    "receipt": {
+      "receipt_version": "reference-model-input-receipt-2",
+      "model_call_id": "CALL-00000000000000000000000000000001",
+      "round": 1,
+      "request_hash": "9b925cf6ed7ee696c537ec3dbb0dd3978544472630be3e7682d72b66de16406e",
+      "prompt_contract_hash": "711e5351cd0a149a09f824b86847201b92782a6659f2342fbb1fa96bafd2c985",
+      "question_hash": "506bb3a15f45e8aa19090a0dca0fc4250f789183423d1fb3423af9a79a63bb55",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "api_protocol": "chat_completions",
+      "structured_output_mode": "json_object",
+      "inference_mode": "thinking-low",
+      "cached": false,
+      "source_text_included": false,
+      "prompt_content_included": false,
+      "chain_of_thought_included": false,
+      "evidence_count": 3,
+      "evidence_inputs": [
+        {
+          "evidence_id": "EV-PAGE-1",
+          "text_sha256": "c604bbd810960dfc1c6180a97b4e8249fe466179ad5e44383b71ac8e8975b610",
+          "layout_sha256": "ac7f374f3f4770dde00f72e529571abc3e57e48c047d37918dbd4f915d90b5c1",
+          "layout_bytes": 48
+        },
+        {
+          "evidence_id": "EV-PAGE-2",
+          "text_sha256": "b1f2bd9d83f73547d2ec2c8ab2a40c3bb86e22b0bedfe8ff05ec9fe39a760035"
+        },
+        {
+          "evidence_id": "EV-PAGE-3",
+          "text_sha256": "5419138c2d27bcb5696b90d1d7f61948b6418c6f2d34afe8cc68d591cd43c77d"
+        }
+      ],
+      "visual_inputs": [],
+      "system_text_bytes": 9406,
+      "user_text_bytes": 87680,
+      "image_bytes": 0,
+      "request_upper_bound_bytes": 97342,
+      "max_output_tokens": 8000,
+      "selector_version": "literal-page-selector-8",
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "ordered_evidence_manifest_sha256": "edb509ef76068806496b81bfe7b94112e5ab3e5afc7017dc1db2769afa2b2d5a",
+      "source_text_bytes": 86844,
+      "initial_evidence_manifest_sha256": "1ce57c7384a6a1a0a1f6ae13b9a399f77e096297ad62749f8719225dcc68ca12",
+      "profile_neutral_input_sha256": "7c1784743961ca8d80de7a9fd5db02339e2286f9d82d645f07c7724da538de12"
+    },
+    "execution_profile": {
+      "provider": "deepseek",
+      "text_model": "deepseek-flash",
+      "vision_enabled": false,
+      "vision_model": null,
+      "profile_version": "reference-text-profile-1",
+      "profile_id": "FLASH_LOW",
+      "max_output_tokens": 8000
+    },
+    "fresh_calls": 1,
+    "replay_calls": 0
+  },
+  "PRO": {
+    "selection_public": {
+      "selection_id": "SEL-07efc515d918e0de68a3cb30ad975fd7",
+      "selector_version": "literal-page-selector-8",
+      "run_id": "RUN-00000000000000000000000000000001",
+      "snapshot_id": "SN-47db41ae10768f3c639142ec57b4f126",
+      "question": "On Sheet A5.01, which information applies to Panel A and Panel B?",
+      "model_called": false,
+      "semantic_graph_used": false,
+      "embeddings_used": false,
+      "ranking_policy": "LITERAL_SOURCE_PAGE_MATCHES_ONLY",
+      "query_terms": [
+        "sheet a5.01",
+        "a5.01",
+        "information",
+        "applies",
+        "panel",
+        "apply"
+      ],
+      "candidate_pages_considered": 2,
+      "selected_page_count": 2,
+      "excluded_by_candidate_limit": 0,
+      "excluded_by_page_limit": 0,
+      "excluded_by_byte_limit": 0,
+      "byte_count": 86844,
+      "max_pages": null,
+      "max_bytes": null,
+      "source_conflicts": [],
+      "entity_scope_policy": "NOT_APPLICABLE",
+      "question_entities": [],
+      "excluded_by_entity_scope": {
+        "pages": 0,
+        "evidence_rows": 0
+      },
+      "pages": [
+        {
+          "page_key": "PG-a6bc2c9f8537343cc4729a76",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 1,
+          "score": 588,
+          "matched_terms": [
+            "a5.01",
+            "panel"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL",
+            "SOURCE_TEXT_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-1",
+            "EV-PAGE-2"
+          ],
+          "source_text_bytes": 44,
+          "selected_text_bytes": 44,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "Panel A 511 FIRST NOTE\nPanel B 511 OTHER NOTE"
+        },
+        {
+          "page_key": "PG-c3ce8074be9beeca0cae0e0d",
+          "document_id": "DOC-00000000000000000000000000000001",
+          "file_name": "synthetic-v8-reference.pdf",
+          "page_number": 2,
+          "score": 576,
+          "matched_terms": [
+            "a5.01"
+          ],
+          "reason_codes": [
+            "EXACT_IDENTIFIER_LOCATOR",
+            "PARSER_LOCATOR_LITERAL"
+          ],
+          "source_evidence_ids": [
+            "EV-PAGE-3"
+          ],
+          "source_text_bytes": 86800,
+          "selected_text_bytes": 86800,
+          "issue_dates": [
+            "2025-01-01"
+          ],
+          "revision_labels": [
+            "1"
+          ],
+          "preview": "蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complete continuation. 蓝😀 complet"
+        }
+      ],
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "anchor_page_limit": 4,
+      "anchor_page_count": 2,
+      "expanded_page_count": 0,
+      "layout_available_pages": 1,
+      "source_row_order": "SAVED_SOURCE_ORDER"
+    },
+    "selection_rows_sha256": "a9627f435eae5f6827e6c9bd298cd6efb67116b75c2ae289dfc4d071f17f144a",
+    "payload_sha256": "c70f65d9e27883331f8ef599e3e98e419b0e41a85227860cd4ccd97f55ac6508",
+    "system_text_sha256": "12c30e44fb42465953a0bf25d00630709dfba8751be95ec43a5bd964ef88fbf7",
+    "user_text_sha256": "5da842099b1806567ace19c21723810bb00e4295263aeb954c02878d99c7c5c6",
+    "receipt": {
+      "receipt_version": "reference-model-input-receipt-2",
+      "model_call_id": "CALL-00000000000000000000000000000001",
+      "round": 1,
+      "request_hash": "f7f064bbf6a3ecad51144eca412c778ea79aebda801b3008a9b2550f0c106512",
+      "prompt_contract_hash": "711e5351cd0a149a09f824b86847201b92782a6659f2342fbb1fa96bafd2c985",
+      "question_hash": "506bb3a15f45e8aa19090a0dca0fc4250f789183423d1fb3423af9a79a63bb55",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "api_protocol": "chat_completions",
+      "structured_output_mode": "json_object",
+      "inference_mode": "disabled",
+      "cached": false,
+      "source_text_included": false,
+      "prompt_content_included": false,
+      "chain_of_thought_included": false,
+      "evidence_count": 3,
+      "evidence_inputs": [
+        {
+          "evidence_id": "EV-PAGE-1",
+          "text_sha256": "c604bbd810960dfc1c6180a97b4e8249fe466179ad5e44383b71ac8e8975b610",
+          "layout_sha256": "ac7f374f3f4770dde00f72e529571abc3e57e48c047d37918dbd4f915d90b5c1",
+          "layout_bytes": 48
+        },
+        {
+          "evidence_id": "EV-PAGE-2",
+          "text_sha256": "b1f2bd9d83f73547d2ec2c8ab2a40c3bb86e22b0bedfe8ff05ec9fe39a760035"
+        },
+        {
+          "evidence_id": "EV-PAGE-3",
+          "text_sha256": "5419138c2d27bcb5696b90d1d7f61948b6418c6f2d34afe8cc68d591cd43c77d"
+        }
+      ],
+      "visual_inputs": [],
+      "system_text_bytes": 9406,
+      "user_text_bytes": 87680,
+      "image_bytes": 0,
+      "request_upper_bound_bytes": 97342,
+      "max_output_tokens": 2600,
+      "selector_version": "literal-page-selector-8",
+      "context_policy": "COMPLETE_SELECTED_SCOPE_V1",
+      "source_text_clipped": false,
+      "ordered_evidence_manifest_sha256": "edb509ef76068806496b81bfe7b94112e5ab3e5afc7017dc1db2769afa2b2d5a",
+      "source_text_bytes": 86844,
+      "initial_evidence_manifest_sha256": "1ce57c7384a6a1a0a1f6ae13b9a399f77e096297ad62749f8719225dcc68ca12",
+      "profile_neutral_input_sha256": "7c1784743961ca8d80de7a9fd5db02339e2286f9d82d645f07c7724da538de12"
+    },
+    "execution_profile": {
+      "provider": "deepseek",
+      "text_model": "deepseek-v4-pro",
+      "vision_enabled": false,
+      "vision_model": null,
+      "profile_version": "reference-text-profile-1",
+      "profile_id": "PRO",
+      "max_output_tokens": 2600
+    },
+    "fresh_calls": 1,
+    "replay_calls": 0
+  }
+}

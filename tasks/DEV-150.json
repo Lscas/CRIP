@@ -1,0 +1,58 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires a managed advanced-model reference implementation on the same locally selected evidence snapshot without deleting existing behavior.",
+  "notes": [
+    "Add a zero-call clone action that reuses one frozen Reference evaluation only after the active model profile changes.",
+    "Preserve project, run, snapshot, ordered normalized questions and question-set hash while assigning a new task and frozen profile; never rewrite the source task.",
+    "Compare only same-project tasks with identical run, snapshot and complete question identity. Reject every mismatch before any model dispatch.",
+    "Show saved public answers, missing facts, calculations, citations, review status, safe failure or pending state, but classify only changed, unchanged or pending and never claim correctness, precedence or a preferred model.",
+    "Keep clone and comparison local, bounded, deterministic, text-safe and independent from model execution. No live or paid call is permitted.",
+    "Implemented project-first isolation, exact per-question compatibility checks, stable public-outcome hashes, explicit no-correctness policy, safe failure and pending comparisons, frozen-profile display, and browser controls that reuse the existing one-question execution path.",
+    "Validation completed with 29 focused backend/browser tests, 24 localization tests, 23 governance/devtools tests, and the complete 1,511-test Python suite. Node syntax checks, requirement/schema sync, context packing and the change ledger also passed; no external model call was made."
+  ],
+  "task_id": "DEV-150",
+  "title": "Clone and compare same-snapshot Reference model evaluations",
+  "requirement_ids": [
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/reference_evaluations.py",
+    "app/main.py",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-150.json",
+    "changes/CR-0165.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/EVIDENCE_LOOP_V3.md"
+  ],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_evaluations.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-150",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Create a local, deterministic path to clone one frozen Reference question set for another active model and compare the resulting same-snapshot outcomes without a management-time model call or engineering correctness claim."
+}

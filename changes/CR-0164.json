@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0164",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-OPENAI-RESPONSES-001",
+    "FR-REFERENCE-NATIVE-STRUCTURED-OUTPUT-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add an official stateless OpenAI Responses provider with bounded input conversion, typed-output normalization, frozen protocol identity and safe terminal failures while preserving every existing provider and feature.",
+  "decision_refs": [
+    "The user selected advanced models as the reference analyst and CIRP as the local management, evidence-selection, validation and review layer",
+    "Official OpenAI Responses documentation defines POST /responses, store=false, text.format and typed output items",
+    "Existing Chat Completions payload and task identities must remain unchanged because this is an additive feature"
+  ],
+  "affected_paths": [
+    "app/settings.py", "app/model_configuration.py", "app/gateway.py",
+    "app/reference_evaluations.py", "app/main.py",
+    "spec/schemas/reference-evaluation.schema.json", "web/index.html", "web/app.js",
+    "web/i18n.js", "tests/app/test_gateway_budget.py",
+    "tests/app/test_model_configuration.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/PROVIDER_INTEGRATION.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md",
+    "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-149.json", "changes/CR-0164.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_gateway_budget.py", "tests/app/test_model_configuration.py",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user instructed continued implementation of the new Reference framework without deleting existing features.",
+  "known_limitations": [
+    "No live OpenAI request was made, so model availability, account access, pricing and provider-side acceptance are unverified.",
+    "The fixed Reference question set was not rerun; no answer-quality or release-gate improvement is claimed.",
+    "OpenAI Responses remains user-selected and never becomes an automatic router, fallback or retry target."
+  ]
+}

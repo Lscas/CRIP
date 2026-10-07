@@ -1,0 +1,60 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 24000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "notes": [
+    "Treat comma, currency and trailing-zero forms as equal only after exact source numerics are parsed into Decimal values.",
+    "Keep every operand source-bound and every result checked by local Decimal arithmetic.",
+    "Expose only bounded validator categories for rejected provider output; retain no rejected answer text.",
+    "Use controlled C1/C3/C5 smoke tasks before considering another full fixed-15 run.",
+    "Roll back the attempted same-page citation closure because live results showed zero closure use and no quality gain."
+  ],
+  "task_id": "DEV-168",
+  "title": "Tighten the Reference arithmetic and numeric-evidence contract",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/project_qa_v2.py",
+    "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "tests/app/test_project_qa_v2.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_gateway_budget.py",
+    "reports/kapolei_reference_calculation_contract_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-168.json",
+    "changes/CR-0183.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Source numerics compare by Decimal value so 2,000 and 2000.00 can support the same operand without accepting an absent value",
+    "Every calculation operand still appears in cited source text and every result still equals local Decimal arithmetic",
+    "Rejected decisions expose granular bounded categories without retaining provider output or retrying",
+    "The final prompt distinguishes SEARCH_TEXT from labelled identifier lookup and states that layout-only tokens cannot support arithmetic",
+    "Controlled Pro arithmetic smokes recover C1 and C5 as fully usable while C3 remains partial; controlled Flash smokes remain insufficient for a full rerun",
+    ".venv\\Scripts\\python.exe -m pytest -q",
+    "node tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "implementation_and_controlled_live_validation",
+  "objective": "Move arithmetic formatting and validation into deterministic local code while documenting the remaining Flash content-selection boundary."
+}

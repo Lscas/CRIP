@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-result.schema.json",
+  "title": "Persisted Reference QA result",
+  "type": "object",
+  "properties": {
+    "result_id": {"type": "string", "pattern": "^QAR-[0-9a-f]{32}$"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "snapshot_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "qa_version": {"const": "3"},
+    "question": {"type": "string", "minLength": 3, "maxLength": 1000},
+    "status": {"enum": ["ANSWERED", "CANNOT_ANSWER", "NEED_USER_INPUT", "MODEL_DISABLED"]},
+    "answer_basis": {"type": "string", "minLength": 1, "maxLength": 120},
+    "provider": {"type": "string", "minLength": 1, "maxLength": 180},
+    "model": {"type": "string", "minLength": 1, "maxLength": 180},
+    "result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result": {"type": "object"},
+    "citations": {
+      "type": "array",
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ordinal": {"type": "integer", "minimum": 0},
+          "claim_index": {"type": "integer", "minimum": 0},
+          "citation_index": {"type": "integer", "minimum": 0},
+          "citation": {"type": "object"}
+        },
+        "required": ["ordinal", "claim_index", "citation_index", "citation"],
+        "additionalProperties": false
+      }
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["PENDING", "ACCEPTED", "REJECTED", "NOT_APPLICABLE"]},
+        "version": {"type": "integer", "minimum": 0},
+        "event_id": {"type": ["string", "null"], "maxLength": 160}
+      },
+      "required": ["status", "version", "event_id"],
+      "additionalProperties": false
+    },
+    "created_at": {"type": "string", "minLength": 1, "maxLength": 80},
+    "updated_at": {"type": "string", "minLength": 1, "maxLength": 80}
+  },
+  "required": [
+    "result_id", "project_id", "run_id", "snapshot_id", "qa_version", "question",
+    "status", "answer_basis", "provider", "model", "result_hash", "result",
+    "citations", "review", "created_at", "updated_at"
+  ],
+  "additionalProperties": false
+}

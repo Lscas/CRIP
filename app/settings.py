@@ -11,12 +11,17 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / 'VERSION').read_text(encoding="utf-8").strip()
-LIVE_PROVIDERS = ('deepseek', 'gemini')
+LIVE_PROVIDERS = ('deepseek', 'gemini', 'openai')
 DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 DEEPSEEK_MODEL = 'deepseek-v4-flash'
+DEEPSEEK_FLASH_MODEL = 'deepseek-flash'
+DEEPSEEK_PRO_MODEL = 'deepseek-v4-pro'
+DEEPSEEK_TEXT_MODELS = (DEEPSEEK_FLASH_MODEL, DEEPSEEK_MODEL, DEEPSEEK_PRO_MODEL)
 DEEPSEEK_VISION_MODEL = 'deepseek-v4-flash-vision-exp'
+DEEPSEEK_VISION_MODELS = (DEEPSEEK_FLASH_MODEL, DEEPSEEK_VISION_MODEL)
 GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai'
 GEMINI_MODEL = 'gemini-3.6-flash'
+OPENAI_BASE_URL = 'https://api.openai.com/v1'
 
 def flag(name: str, default: str = 'false') -> bool:
     return os.getenv(name, default).strip().lower() in {'1', 'true', 'yes'}
@@ -36,6 +41,14 @@ class Settings:
     cheap_model: str = DEEPSEEK_MODEL
     vision_enabled: bool = False
     vision_model: str = DEEPSEEK_VISION_MODEL
+    # OpenAI Responses and custom OpenAI-compatible routes may explicitly opt into
+    # native JSON Schema output. Other preset providers retain json_object.
+    structured_output_mode: str = 'json_object'
+    api_protocol: str = 'chat_completions'
+    # Reference QA may opt into bounded provider-side thinking. Other tasks stay non-thinking.
+    reference_reasoning_effort: str = 'none'
+    # Experimental UI/API release gate; never inferred from a saved API key.
+    reference_layout_enabled: bool = False
     live_enabled: bool = False
     # Conservative UTF-8 byte envelope, not a claim about exact provider tokens.
     input_limit: int = 64000
@@ -73,16 +86,28 @@ class Settings:
     def from_env(cls) -> 'Settings':
         load_dotenv(ROOT / '.env', override=False)
         provider = os.getenv('CIRP_PROVIDER', 'mock').strip().lower()
-        default_base_url = GEMINI_BASE_URL if provider == 'gemini' else DEEPSEEK_BASE_URL if provider == 'deepseek' else ''
+        default_base_url = (GEMINI_BASE_URL if provider == 'gemini' else
+                            DEEPSEEK_BASE_URL if provider == 'deepseek' else
+                            OPENAI_BASE_URL if provider == 'openai' else '')
         default_model = GEMINI_MODEL if provider == 'gemini' else DEEPSEEK_MODEL if provider == 'deepseek' else ''
+        selected_model=os.getenv('CIRP_CHEAP_MODEL', default_model)
         return cls(
             data_dir=Path(os.getenv('CIRP_DATA_DIR', str(ROOT / '.local'))).resolve(),
             provider=provider,
             api_base_url=os.getenv('CIRP_API_BASE_URL', default_base_url).rstrip('/'),
             api_key=os.getenv('CIRP_API_KEY', ''),
-            cheap_model=os.getenv('CIRP_CHEAP_MODEL', default_model),
+            cheap_model=selected_model,
             vision_enabled=flag('CIRP_VISION_ENABLED'),
-            vision_model=os.getenv('CIRP_VISION_MODEL', DEEPSEEK_VISION_MODEL),
+            vision_model=os.getenv('CIRP_VISION_MODEL',
+                                   selected_model if provider=='openai' or custom_provider(provider)
+                                   else DEEPSEEK_VISION_MODEL),
+            structured_output_mode=os.getenv('CIRP_STRUCTURED_OUTPUT_MODE','json_object').strip().lower(),
+            api_protocol=os.getenv(
+                'CIRP_API_PROTOCOL','responses' if provider=='openai' else 'chat_completions'
+            ).strip().lower(),
+            reference_reasoning_effort=os.getenv(
+                'CIRP_REFERENCE_REASONING_EFFORT','none').strip().lower(),
+            reference_layout_enabled=flag('CIRP_REFERENCE_LAYOUT_ENABLED'),
             live_enabled=flag('CIRP_LIVE_API_ENABLED'),
             input_limit=int(os.getenv('CIRP_INPUT_LIMIT_BYTES','64000')),
             output_limit=int(os.getenv('CIRP_OUTPUT_LIMIT_TOKENS','8000')),
@@ -105,7 +130,7 @@ class Settings:
 
     def live_errors(self) -> list[str]:
         errors = []
-        if not live_provider(self.provider): errors.append('CIRP_PROVIDER must be deepseek, gemini, or a valid custom profile')
+        if not live_provider(self.provider): errors.append('CIRP_PROVIDER must be deepseek, gemini, openai, or a valid custom profile')
         if not self.live_enabled: errors.append('Live API switch is disabled')
         if not self.api_key and not self.is_local_model(): errors.append('API key is not configured')
         u = urlsplit(self.api_base_url)
@@ -124,10 +149,31 @@ class Settings:
         if self.provider == 'deepseek':
             if self.api_base_url != DEEPSEEK_BASE_URL:
                 errors.append('The DeepSeek key may be sent only to the official DeepSeek endpoint')
-            if self.cheap_model != DEEPSEEK_MODEL:
-                errors.append('This release requires DeepSeek model deepseek-v4-flash')
-            if self.vision_enabled and self.vision_model != DEEPSEEK_VISION_MODEL:
-                errors.append('This release requires DeepSeek vision model deepseek-v4-flash-vision-exp')
+            if self.cheap_model not in DEEPSEEK_TEXT_MODELS:
+                errors.append('This release requires DeepSeek V4.1 Flash or V4 Pro')
+            if self.vision_enabled and self.vision_model not in DEEPSEEK_VISION_MODELS:
+                errors.append('DeepSeek image input must use an official image-capable Flash model ID')
+        if self.provider == 'openai':
+            if self.api_base_url != OPENAI_BASE_URL:
+                errors.append('The OpenAI key may be sent only to the official OpenAI API endpoint')
+            if self.vision_enabled and self.vision_model != self.cheap_model:
+                errors.append('An OpenAI profile must use the selected model for text and images')
+        if custom_provider(self.provider) and self.vision_enabled and self.vision_model != self.cheap_model:
+            errors.append('A custom multimodal profile must use the selected model for text and images')
+        if self.structured_output_mode not in ('json_object','json_schema'):
+            errors.append('Structured output mode must be json_object or json_schema')
+        if self.provider not in ('openai',) and not custom_provider(self.provider) and self.structured_output_mode != 'json_object':
+            errors.append('Native JSON Schema output is available only for OpenAI or a custom OpenAI-compatible profile')
+        if self.api_protocol not in ('chat_completions','responses'):
+            errors.append('API protocol must be chat_completions or responses')
+        if self.provider=='openai' and self.api_protocol!='responses':
+            errors.append('The OpenAI provider requires the Responses API')
+        if self.provider!='openai' and self.api_protocol!='chat_completions':
+            errors.append('Only the official OpenAI provider uses the Responses API')
+        if self.reference_reasoning_effort not in ('none','low','high','max'):
+            errors.append('Reference reasoning effort must be none, low, high, or max')
+        if self.provider!='deepseek' and self.reference_reasoning_effort!='none':
+            errors.append('Bounded Reference reasoning is currently supported only for DeepSeek')
         if type(self.input_limit) is not int or not 1 <= self.input_limit <= 64000:
             errors.append('Text-input byte limit must be between 1 and 64000')
         if type(self.output_limit) is not int or not 1 <= self.output_limit <= 8000:
@@ -143,15 +189,26 @@ class Settings:
             return {'thinking': {'type': 'disabled'}}
         return {}
 
+    def reference_inference_parameters(self) -> dict:
+        if self.provider!='deepseek' or self.reference_reasoning_effort=='none':
+            return self.inference_parameters()
+        return {
+            'thinking':{'type':'enabled'},
+            'reasoning_effort':self.reference_reasoning_effort,
+        }
+
     def inference_mode(self) -> str:
-        return ('minimal' if self.provider == 'gemini' else
-                'provider default' if custom_provider(self.provider) else 'disabled')
+        return (f'thinking-{self.reference_reasoning_effort}'
+                if self.provider=='deepseek' and self.reference_reasoning_effort!='none' else
+                'minimal' if self.provider == 'gemini' else
+                'provider default' if self.provider=='openai' or custom_provider(self.provider)
+                else 'disabled')
 
     def public(self) -> dict:
         from app.cad import cad_available, dwg_converter
         from app.visual_pipeline import local_ocr_available
         ocr_ready=local_ocr_available();dxf_ready=cad_available();converter=dwg_converter();dwg_ready=dxf_ready and converter is not None
-        vision_ready=(self.provider=='deepseek' and self.vision_enabled and not self.live_errors())
+        vision_ready=(self.provider!='mock' and self.vision_enabled and not self.live_errors())
         return {
             'version': VERSION, 'provider': self.provider,
             'mode': ('Mock mode: demo examples only' if self.provider == 'mock' else
@@ -162,6 +219,8 @@ class Settings:
             'upload_capacity_bytes': self.project_bytes, 'upload_chunk_bytes': self.chunk_bytes,
             'local_single_user': not self.remote_enabled, 'remote_preview': self.remote_enabled,
             'thinking': self.inference_mode(),
+            'structured_output_mode': self.structured_output_mode,
+            'api_protocol': self.api_protocol,
             'min_request_interval_seconds': self.min_request_interval_seconds,
             'request_limits': {
                 'text_input_utf8_bytes': min(32000,self.input_limit),
@@ -175,6 +234,15 @@ class Settings:
             'render_free_preview': self.render_free_preview,
             'storage_warning': ('Free cloud preview: mock analysis only. Data is lost after sleep, restart, or deployment. Limit: 100 MiB per project. Upload test copies and export results promptly; keep production files and operation on the local computer.' if self.render_free_preview else ''),
             'capabilities': {
+                'reference_projection_review': {
+                    'available': True, 'view_version': 'reference-projection-review-view-1',
+                    'case_workflow_available': True, 'case_view_version': 'reference-case-view-2',
+                    'saved_followup_link_available': True, 'question_creation_available': False,
+                },
+                'reference_layout_v9': {
+                    'enabled': self.reference_layout_enabled, 'stage': 'EXPERIMENTAL',
+                    'evaluation_execute_preview_proof': True,
+                },
                 'txt': 'Text with line numbers',
                 'pdf': 'Text layer, word coordinates, local OCR, page vision, and source-vector audit',
                 'docx': 'Body text and tables; embedded-image vision remains separate',

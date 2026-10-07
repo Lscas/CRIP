@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation-job.schema.json",
+  "title": "Durable explicitly confirmed Reference evaluation execution job",
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "text_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "vision_enabled": {
+          "type": "boolean"
+        },
+        "vision_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "profile_version": {"const":"reference-text-profile-1"},
+        "profile_id": {"enum":["FLASH_NONE","FLASH_LOW","PRO"]},
+        "max_output_tokens": {"enum":[2600,8000]}
+      },
+      "required": [
+        "provider",
+        "text_model",
+        "vision_enabled",
+        "vision_model",
+        "inference_mode",
+        "structured_output_mode",
+        "api_protocol"
+      ],
+      "additionalProperties": false,
+      "allOf":[{"if":{"required":["profile_version"]},"then":{"required":["profile_version","profile_id","max_output_tokens"]},"else":{"not":{"anyOf":[{"required":["profile_id"]},{"required":["max_output_tokens"]}]}}}]
+    },
+    "current_item": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^QAEITEM-[0-9a-f]{32}$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 49
+        },
+        "question": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "item_id",
+        "ordinal",
+        "question"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "job_version": {
+      "const": "reference-evaluation-job-1"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^QAEJOB-[0-9a-f]{32}$"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^QAE-[0-9a-f]{32}$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "question_set_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selector_version": {
+      "enum": [
+        "literal-page-selector-3",
+        "literal-page-selector-4",
+        "literal-page-selector-5",
+        "literal-page-selector-6",
+        "literal-page-selector-7",
+        "literal-page-selector-8", "literal-page-selector-9"
+      ]
+    },
+    "evaluation_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 150
+    },
+    "profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "state": {
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "STOP_REQUESTED",
+        "COMPLETED",
+        "STOPPED",
+        "HALTED",
+        "INTERRUPTED"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "NONE",
+        "COMPLETED",
+        "USER_STOPPED",
+        "PROFILE_CHANGED",
+        "UNRESOLVED_CALL",
+        "ACTIVE_WORK_CONFLICT",
+        "PROVIDER_HALTED",
+        "SERVICE_INTERRUPTED",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "stop_requested": {
+      "type": "boolean"
+    },
+    "pending_at_start": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "completed_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "failed_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "remaining_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "current_item": {
+      "$ref": "#/$defs/current_item"
+    },
+    "maximum_model_decisions": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 150
+    },
+    "execution_policy": {
+      "const": "EXPLICIT_CONFIRMATION_SEQUENTIAL_NO_AUTOMATIC_RETRY"
+    },
+    "confirmed_at": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "updated_at": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "started_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 80
+    },
+    "finished_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 80
+    }
+  },
+  "required": [
+    "job_version",
+    "job_id",
+    "evaluation_id",
+    "project_id",
+    "run_id",
+    "snapshot_id",
+    "question_set_hash",
+    "selector_version",
+    "evaluation_name",
+    "profile",
+    "state",
+    "reason_code",
+    "stop_requested",
+    "pending_at_start",
+    "completed_count",
+    "failed_count",
+    "remaining_count",
+    "current_item",
+    "maximum_model_decisions",
+    "execution_policy",
+    "confirmed_at",
+    "created_at",
+    "updated_at",
+    "started_at",
+    "finished_at"
+  ],
+  "additionalProperties": false
+}

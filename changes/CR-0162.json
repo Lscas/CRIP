@@ -1,0 +1,36 @@
+{
+  "change_id": "CR-0162",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-REFERENCE-PAGE-ROUTING-002",
+    "FR-REFERENCE-PAGE-SELECTION-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add a narrow multi-field drawing-cover route that recovers the remaining S1 source page and raises the zero-call fixed page-identity gate from 14/15 to 15/15.",
+  "decision_refs": [
+    "S1 was the only remaining selector-v2 miss in the fixed 15-question page-identity gate",
+    "Read-only source verification confirmed that page 1 of the PCD drawings file is the requested project identity and scope cover",
+    "Only S1 in the fixed fixture requests at least two supported cover fields, so the other 14 stay on the selector-v2 scoring path"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "tests/app/test_page_selector.py",
+    "reports/kapolei_reference_page_selection_2026-10-01.json",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md", "spec/requirements.json",
+    "spec/traceability.json", "tasks/DEV-147.json", "changes/CR-0162.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user directed continued implementation of lightweight, local, verifiable page selection for the advanced-model Reference framework.",
+  "known_limitations": [
+    "The cover route recognizes only an explicit combination of project name, job number, address and scope of work in English.",
+    "The route relies on an explicit drawings/plans file name and page 1; it does not infer cover identity from page content.",
+    "The 15/15 result is a page-identity gate and does not prove answer quality or change the historical model score."
+  ]
+}

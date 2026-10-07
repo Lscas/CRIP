@@ -1,0 +1,48 @@
+{
+  "change_id": "CR-0178",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add a bounded exact-token layout view for selector v5 evidence while preserving the original source context and v3/v4 replay.",
+  "decision_refs": [
+    "The fixed Flash/Pro benchmark showed D1 could misassociate a left-column finish with substrate code 1 and C2 could not join printed L1/L2 subtotals already present in evidence.",
+    "The saved text_map already contains the native word coordinates needed to reconstruct rows and large horizontal gaps locally.",
+    "Ponytail constraint: reuse parser coordinates and the existing QA V3 evidence object instead of adding table extraction, a semantic graph or another model call.",
+    "Historical verification note: targeted selector and QA V3 evidence-loop tests",
+    "Historical verification note: real frozen D1/C2 layout marker checks and fixed-15 page/source-atom no-regression gate with zero provider calls",
+    "Historical verification note: scripts/check_spec_sync.py",
+    "Historical verification note: scripts/check_changes.py",
+    "Historical verification note: bundle manifest check"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/evidence_loop.py", "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "spec/schemas/reference-model-input-receipt.schema.json",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py",
+    "reports/kapolei_reference_layout_context_v5_2026-10-03.json",
+    "docs/REFERENCE_QA.md", "docs/EVIDENCE_LOOP_V3.md", "docs/REQUIREMENTS.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-163.json", "changes/CR-0178.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user asked the planned CIRP development, testing and iteration to continue.",
+  "known_limitations": [
+    "The layout view represents rows and large horizontal gaps only; it does not infer table headers, spanning cells or engineering meaning.",
+    "Only selector v5 text-layer evidence with valid saved offsets and bounding boxes receives layout_lines.",
+    "This zero-call input repair does not prove that Flash or Pro will answer D1 or C2 correctly; a new frozen evaluation remains a separate paid gate."
+  ]
+}

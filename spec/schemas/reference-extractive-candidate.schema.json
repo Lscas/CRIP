@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-extractive-candidate.schema.json",
+  "title": "Offline source excerpt candidate, not an executable answer decision",
+  "type": "object",
+  "properties": {
+    "contract_version": {"const": "reference-extractive-candidate-1"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "facts": {
+      "type": "array", "maxItems": 12,
+      "items": {
+        "type": "object",
+        "properties": {
+          "block_ref": {"$ref": "#/$defs/block_ref"},
+          "part_refs": {"$ref": "#/$defs/part_refs"}
+        },
+        "required": ["block_ref", "part_refs"],
+        "additionalProperties": false
+      }
+    },
+    "calculations": {
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "part_refs": {"$ref": "#/$defs/part_refs"},
+          "operator": {"enum": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "PERCENT_OF"]},
+          "operands": {
+            "type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "block_ref": {"$ref": "#/$defs/block_ref"},
+                "number_ref": {"type": "string", "pattern": "^N[1-9][0-9]*$"}
+              },
+              "required": ["block_ref", "number_ref"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["part_refs", "operator", "operands"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["contract_version", "manifest_sha256", "facts", "calculations"],
+  "additionalProperties": false,
+  "$defs": {
+    "block_ref": {"type": "string", "pattern": "^B[1-9][0-9]*$"},
+    "part_refs": {
+      "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^P[1-9][0-9]*$"}
+    }
+  }
+}

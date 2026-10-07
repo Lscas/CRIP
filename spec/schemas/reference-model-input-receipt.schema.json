@@ -1,0 +1,424 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-model-input-receipt.schema.json",
+  "title": "Reference QA model-input execution receipt",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "receipt_version": {
+          "enum": [
+            "reference-model-input-receipt-1",
+            "reference-model-input-receipt-2",
+            "reference-model-input-receipt-3"
+          ]
+        },
+        "model_call_id": {
+          "type": "string",
+          "pattern": "^CALL-[0-9a-f]{32}$"
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "request_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "prompt_contract_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "question_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "cached": {
+          "type": "boolean"
+        },
+        "source_text_included": {
+          "const": false
+        },
+        "prompt_content_included": {
+          "const": false
+        },
+        "chain_of_thought_included": {
+          "const": false
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence_inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "evidence_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "text_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "layout_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "layout_bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "evidence_id",
+              "text_sha256"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "visual_inputs": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "region_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "image_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "image_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 33554432
+              }
+            },
+            "required": [
+              "region_id",
+              "image_sha256",
+              "image_bytes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "system_text_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "user_text_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50331648
+        },
+        "request_upper_bound_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000
+        },
+        "selector_version": {
+          "type": "string"
+        },
+        "context_policy": {
+          "type": "string"
+        },
+        "source_text_clipped": {
+          "const": false
+        },
+        "ordered_evidence_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_text_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "initial_evidence_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "profile_neutral_input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "layout_navigation_version": {
+          "const": "source-layout-navigation-1"
+        },
+        "layout_navigation_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "layout_navigation_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "receipt_version",
+        "model_call_id",
+        "round",
+        "request_hash",
+        "prompt_contract_hash",
+        "question_hash",
+        "provider",
+        "model",
+        "api_protocol",
+        "structured_output_mode",
+        "inference_mode",
+        "cached",
+        "source_text_included",
+        "prompt_content_included",
+        "chain_of_thought_included",
+        "evidence_count",
+        "evidence_inputs",
+        "visual_inputs",
+        "system_text_bytes",
+        "user_text_bytes",
+        "image_bytes",
+        "request_upper_bound_bytes",
+        "max_output_tokens"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "receipt_version": {
+                "const": "reference-model-input-receipt-3"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "selector_version",
+              "context_policy",
+              "source_text_clipped",
+              "ordered_evidence_manifest_sha256",
+              "source_text_bytes",
+              "layout_navigation_version",
+              "layout_navigation_sha256",
+              "layout_navigation_bytes",
+              "initial_evidence_manifest_sha256",
+              "profile_neutral_input_sha256"
+            ],
+            "properties": {
+              "selector_version": {
+                "const": "literal-page-selector-9"
+              },
+              "context_policy": {
+                "const": "COMPLETE_SELECTED_SCOPE_WITH_LAYOUT_BINDING_V1"
+              },
+              "source_text_clipped": {
+                "const": false
+              },
+              "evidence_inputs": {
+                "items": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "layout_sha256"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "layout_bytes"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              "visual_inputs": {
+                "maxItems": 0
+              },
+              "image_bytes": {
+                "const": 0
+              },
+              "provider": {
+                "const": "deepseek"
+              },
+              "api_protocol": {
+                "const": "chat_completions"
+              },
+              "structured_output_mode": {
+                "const": "json_object"
+              }
+            }
+          },
+          "else": {
+            "if": {
+              "properties": {
+                "receipt_version": {
+                  "const": "reference-model-input-receipt-2"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "selector_version",
+                "context_policy",
+                "source_text_clipped",
+                "ordered_evidence_manifest_sha256",
+                "source_text_bytes"
+              ],
+              "properties": {
+                "selector_version": {
+                  "const": "literal-page-selector-8"
+                },
+                "context_policy": {
+                  "const": "COMPLETE_SELECTED_SCOPE_V1"
+                },
+                "source_text_clipped": {
+                  "const": false
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "layout_navigation_version"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "layout_navigation_sha256"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "layout_navigation_bytes"
+                    ]
+                  }
+                ]
+              }
+            },
+            "else": {
+              "properties": {
+                "evidence_count": {
+                  "maximum": 256
+                },
+                "evidence_inputs": {
+                  "maxItems": 256,
+                  "items": {
+                    "properties": {
+                      "layout_bytes": {
+                        "maximum": 6000
+                      }
+                    }
+                  }
+                },
+                "system_text_bytes": {
+                  "maximum": 64000
+                },
+                "user_text_bytes": {
+                  "maximum": 64000
+                },
+                "request_upper_bound_bytes": {
+                  "maximum": 64000
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "selector_version"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "context_policy"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "source_text_clipped"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "ordered_evidence_manifest_sha256"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "source_text_bytes"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "layout_navigation_version"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "layout_navigation_sha256"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "layout_navigation_bytes"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "$ref": "reference-projection-input-receipt.schema.json"
+    },
+    {
+      "$ref": "reference-projection-loop-receipt.schema.json"
+    },
+    {
+      "$ref": "reference-projection-loop-receipt-v2.schema.json"
+    }
+  ]
+}

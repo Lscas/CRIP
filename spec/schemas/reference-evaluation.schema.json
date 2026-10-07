@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation.schema.json",
+  "title": "Frozen Reference QA evaluation task",
+  "type": "object",
+  "properties": {
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^QAE-[0-9a-f]{32}$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 150
+    },
+    "question_set_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selector_version": {
+      "enum": [
+        "literal-page-selector-3",
+        "literal-page-selector-4",
+        "literal-page-selector-5",
+        "literal-page-selector-6",
+        "literal-page-selector-7",
+        "literal-page-selector-8", "literal-page-selector-9"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "text_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "vision_enabled": {
+          "type": "boolean"
+        },
+        "vision_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "profile_version": {
+          "const": "reference-text-profile-1"
+        },
+        "profile_id": {
+          "enum": ["FLASH_NONE", "FLASH_LOW", "PRO"]
+        },
+        "max_output_tokens": {
+          "enum": [2600, 8000]
+        }
+      },
+      "required": [
+        "provider",
+        "text_model",
+        "vision_enabled",
+        "vision_model",
+        "inference_mode",
+        "structured_output_mode",
+        "api_protocol"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"required": ["profile_version"]},
+          "then": {"required": ["profile_version", "profile_id", "max_output_tokens"]},
+          "else": {"not": {"anyOf": [
+            {"required": ["profile_id"]},
+            {"required": ["max_output_tokens"]}
+          ]}}
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "IN_PROGRESS",
+        "COMPLETE"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "TOTAL": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "FAILED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ANSWERED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CANNOT_ANSWER": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "NEED_USER_INPUT": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "MODEL_DISABLED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "REVIEW_PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ACCEPTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "REJECTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "NOT_APPLICABLE": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "TOTAL",
+        "PENDING",
+        "FAILED",
+        "ANSWERED",
+        "CANNOT_ANSWER",
+        "NEED_USER_INPUT",
+        "MODEL_DISABLED",
+        "REVIEW_PENDING",
+        "ACCEPTED",
+        "REJECTED",
+        "NOT_APPLICABLE"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "pattern": "^QAEITEM-[0-9a-f]{32}$"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 49
+          },
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1000
+          },
+          "question_key": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ]
+          },
+          "result": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "failure_id": {
+                    "type": "string",
+                    "pattern": "^QAEFAIL-[0-9a-f]{32}$"
+                  },
+                  "code": {
+                    "const": "MODEL_OUTPUT_REJECTED"
+                  },
+                  "stage": {
+                    "const": "EXECUTION"
+                  },
+                  "detail": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "validator_category": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+                  },
+                  "execution_receipt": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "https://cirp.invalid/schemas/0.2.6/reference-model-input-receipt.schema.json"
+                      }
+                    ]
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "failure_id",
+                  "code",
+                  "stage",
+                  "detail",
+                  "validator_category",
+                  "execution_receipt",
+                  "created_at"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "item_id",
+          "ordinal",
+          "question",
+          "question_key",
+          "state",
+          "result",
+          "failure",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "updated_at": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    }
+  },
+  "required": [
+    "evaluation_id",
+    "project_id",
+    "run_id",
+    "snapshot_id",
+    "name",
+    "question_set_hash",
+    "selector_version",
+    "profile",
+    "status",
+    "summary",
+    "items",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false
+}

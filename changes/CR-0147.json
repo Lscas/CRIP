@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0147",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-PARSE-001", "FR-QA-REPAIR-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "summary": "Add a read-only fixed-question retrieval benchmark that compares immutable Canonical graph revisions using locked answer atoms without exposing evidence text or making model calls.",
+  "decision_refs": [
+    "Active user objective to continue optimizing CIRP and improve correctness",
+    "Kapolei product-path validation attributing most sampled failures to retrieval and fragmented structural context"
+  ],
+  "affected_paths": [
+    "app/parsers.py", "app/questions.py", "scripts/benchmark_question_retrieval.py", "scripts/reparse_staging_v2.py",
+    "tests/app/test_parsers.py", "tests/app/test_questions.py", "tests/app/test_benchmark_question_retrieval.py",
+    "tests/app/test_reparse_staging_v2.py",
+    "reports/kapolei_canonical_v2_retrieval.json", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "tasks/DEV-132.json", "changes/CR-0147.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_benchmark_question_retrieval.py", "tests/app/test_reparse_staging_v2.py",
+    "tests/app/test_questions.py", "scripts/benchmark_question_retrieval.py",
+    "scripts/reparse_staging_v2.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user directed continued correctness optimization after the Canonical V2 and drawing-structure slice passed all offline gates.",
+  "known_limitations": [
+    "The benchmark measures whether locked answer atoms appear in the bounded retrieval context; it does not score model synthesis or final answer validity.",
+    "Existing evidence created by an older parser cannot gain missing Sheet or table-row locators from an index-only rebuild and may require a full reparse into a new database.",
+    "No customer evidence text, credential, provider response or paid call is emitted by the benchmark."
+  ]
+}

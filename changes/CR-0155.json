@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0155",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-RUNNER-001", "FR-REFERENCE-EVALUATION-001", "NFR-SECURITY-001"],
+  "summary": "Add explicit-confirmation sequential execution for pending Reference evaluation questions with stop-after-current, unresolved-call preflight and resumable saved progress.",
+  "decision_refs": [
+    "Active goal: CRIP reduces human work while managing advanced-model execution locally",
+    "Reuse the existing one-item endpoint and durable model-call safety instead of creating a second queue",
+    "Never parallelize, auto-retry or auto-resume evaluation dispatch"
+  ],
+  "affected_paths": [
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-140.json",
+    "changes/CR-0155.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user defined CRIP as a labor-saving standalone local management platform and approved continued implementation of the advanced-model reference workflow.",
+  "known_limitations": [
+    "Sequential dispatch is owned by the open browser tab; closing or refreshing stops after any in-flight request and requires a new explicit confirmation to resume.",
+    "The controller does not score engineering correctness or choose a preferred model result.",
+    "No live provider or fixed 15-question benchmark is run by offline implementation tests."
+  ]
+}

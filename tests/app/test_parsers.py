@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from PIL import Image,ImageDraw
-from app.parsers import (MAX_FRAGMENT_BYTES,document_context,parse_file,revision,
+from app.parsers import (MAX_FRAGMENT_BYTES,_drawing_sheet_identity,document_context,parse_file,revision,
                          split_email_history,workflow_references)
 from app.parser_worker import safe_failure_warning,save_result
 from app.visual_pipeline import (PDF_CROP_COORDINATE_SYSTEM, ocr_pdf_page,
@@ -1104,6 +1104,170 @@ def test_pdf_spec_structure_and_schedule_rows_keep_relationships_and_route_one_c
     task=result['visual_tasks'][0]
     assert task['region_type']=='TABLE' and len(task['bbox'])==4
     assert task['coordinate_system']==PDF_CROP_COORDINATE_SYSTEM
+
+
+def test_pdf_legacy_five_digit_section_and_paragraph_are_preserved(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'legacy-spec.pdf';drawing=canvas.Canvas(str(path))
+    drawing.drawString(72,740,'SECTION 01100 - SUMMARY')
+    drawing.drawString(72,710,'PART 1 - GENERAL')
+    drawing.drawString(72,680,'1.04 CONSTRUCTION SEQUENCE')
+    drawing.drawString(72,650,'Only one floor may be vacated at a time.')
+    drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['pages'][0]['page_type']=='SPEC_PAGE'
+    matching=[item for item in result['fragments']
+              if item['locator']['paragraph']=='1.04']
+    assert matching
+    assert all('SECTION 01100' in (item['locator']['section'] or '') for item in matching)
+
+
+def test_drawing_title_block_sheet_identity_and_vector_table_are_preserved(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'drawing-table.pdf';drawing=canvas.Canvas(str(path),pagesize=(1600,1000))
+    drawing.drawString(80,900,'DETAIL 3/A7.2')
+    xs=[120,500,760];ys=[760,720,680]
+    for x in xs:drawing.line(x,ys[-1],x,ys[0])
+    for y in ys:drawing.line(xs[0],y,xs[-1],y)
+    drawing.drawString(130,732,'Discipline');drawing.drawString(510,732,'Sheets')
+    drawing.drawString(130,692,'Structural');drawing.drawString(510,692,'13')
+    drawing.drawString(1320,90,'SHEET NO. A5.01')
+    drawing.save()
+
+    result=parse_file(path,path.name)
+
+    page=result['pages'][0]
+    assert page['page_type']=='DRAWING' and page['table_count']>=1
+    assert page['sheet_identity']['status']=='CONFIRMED'
+    assert page['sheet_identity']['sheet_number']=='A5.01'
+    assert all(item['locator']['sheet']=='A5.01' for item in result['fragments'])
+    rows=[item for item in result['fragments'] if (item['locator']['paragraph'] or '').startswith('Table ')]
+    structural=next(item for item in rows if 'Structural' in item['text'] and '13' in item['text'])
+    assert len(structural['text_map'])==2
+    assert structural['text'][structural['text_map'][0]['start']:structural['text_map'][0]['end']]=='Structural'
+    assert structural['text'][structural['text_map'][1]['start']:structural['text_map'][1]['end']]=='13'
+
+
+def test_drawing_sheet_identity_ignores_callouts_and_fails_closed_on_title_block_conflict(tmp_path):
+    from reportlab.pdfgen import canvas
+    callout=tmp_path/'callout-only.pdf';drawing=canvas.Canvas(str(callout),pagesize=(1600,1000))
+    drawing.drawString(80,900,'REFER TO SHEET A7.2')
+    drawing.line(80,850,1500,850);drawing.save()
+    result=parse_file(callout,callout.name)
+    assert result['pages'][0]['sheet_identity']['status']=='MISSING'
+    assert all(item['locator']['sheet'] is None for item in result['fragments'])
+
+    conflict=tmp_path/'conflicting-title-block.pdf';drawing=canvas.Canvas(str(conflict),pagesize=(1600,1000))
+    drawing.drawString(1260,120,'SHEET NO. A5.01')
+    drawing.drawString(1260,80,'SHEET NO. A5.02')
+    drawing.line(1200,60,1550,60);drawing.save()
+    result=parse_file(conflict,conflict.name)
+    assert result['pages'][0]['sheet_identity']['status']=='AMBIGUOUS'
+    assert result['pages'][0]['sheet_identity']['candidates']==['A5.01','A5.02']
+    assert all(item['locator']['sheet'] is None for item in result['fragments'])
+    assert any('冲突的明确Sheet编号' in warning for warning in result['warnings'])
+
+
+def test_drawing_sheet_identity_uses_cropbox_local_coordinates():
+    cropbox=(1000,1000,2000,1700)
+    top_left=[
+        {'text':'SHEET','x0':1100,'top':1100,'x1':1160,'bottom':1120},
+        {'text':'A1.01','x0':1170,'top':1100,'x1':1230,'bottom':1120},
+    ]
+    assert _drawing_sheet_identity(top_left,1000,700,cropbox)['status']=='MISSING'
+
+    title_block=[
+        {'text':'SHEET','x0':1850,'top':1580,'x1':1910,'bottom':1600},
+        {'text':'A1.01','x0':1920,'top':1580,'x1':1980,'bottom':1600},
+    ]
+    identity=_drawing_sheet_identity(title_block,1000,700,cropbox)
+    assert identity['status']=='CONFIRMED' and identity['sheet_number']=='A1.01'
+    assert identity['source_bbox']==[850.0,580.0,980.0,600.0]
+
+
+def test_drawing_number_title_block_label_and_volume_prefix_are_explicit_sheet_identity():
+    words=[
+        {'text':'DRAWING','x0':850,'top':620,'x1':920,'bottom':640},
+        {'text':'NO.','x0':925,'top':620,'x1':960,'bottom':640},
+        {'text':'Q82227-21','x0':650,'top':650,'x1':750,'bottom':670},
+        {'text':'1-G0.01','x0':850,'top':650,'x1':930,'bottom':670},
+    ]
+
+    identity=_drawing_sheet_identity(words,1000,700)
+
+    assert identity['status']=='CONFIRMED' and identity['sheet_number']=='1-G0.01'
+
+
+def test_bottom_right_see_sheet_callout_does_not_conflict_with_drawing_number():
+    words=[
+        {'text':'SEE','x0':780,'top':420,'x1':820,'bottom':440},
+        {'text':'SHEET','x0':825,'top':420,'x1':880,'bottom':440},
+        {'text':'A5.11','x0':885,'top':420,'x1':940,'bottom':440},
+        {'text':'DRAWING','x0':850,'top':620,'x1':920,'bottom':640},
+        {'text':'NO.','x0':925,'top':620,'x1':960,'bottom':640},
+        {'text':'A5.01','x0':850,'top':650,'x1':930,'bottom':670},
+    ]
+
+    identity=_drawing_sheet_identity(words,1000,700)
+
+    assert identity['status']=='CONFIRMED' and identity['sheet_number']=='A5.01'
+
+
+def test_specification_context_continues_across_pages_with_parallel_workers(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'continued-section.pdf';drawing=canvas.Canvas(str(path))
+    drawing.drawString(72,740,'SECTION 01100 - SUMMARY')
+    drawing.drawString(72,710,'PART 1 - GENERAL')
+    drawing.drawString(72,680,'1.03 WORK INCLUDED')
+    drawing.showPage()
+    drawing.drawString(72,740,'1.04 CONSTRUCTION SEQUENCE')
+    drawing.drawString(72,710,'A. Only one floor may be vacant at a time.')
+    drawing.save()
+
+    result=parse_file(path,path.name,workers=2)
+    matching=[item for item in result['fragments']
+              if item['locator']['page_number']==2 and item['locator']['paragraph']=='1.04']
+
+    assert matching
+    assert all(item['locator']['section']=='SECTION 01100 > PART 1 - GENERAL'
+               for item in matching)
+
+
+def test_drawing_code_references_do_not_become_specification_paragraphs(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'code-analysis.pdf';drawing=canvas.Canvas(str(path),pagesize=(1600,1000))
+    drawing.drawString(100,850,'BUILDING G CODE ANALYSIS')
+    drawing.drawString(100,820,'602.5 TYPE V-A TWO STORIES')
+    drawing.drawString(100,790,'OCCUPANCY GROUPS E B S-1 FULLY SPRINKLERED')
+    drawing.line(100,740,1450,740);drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['pages'][0]['page_type']=='DRAWING'
+    native=[item for item in result['fragments'] if item['method']=='TEXT_LAYER']
+    assert native and all(item['locator']['paragraph']!='602.5' for item in native)
+    assert any(all(value in item['text'] for value in ('BUILDING G','602.5','FULLY SPRINKLERED'))
+               for item in native)
+
+
+def test_sparse_drawing_geometry_is_not_promoted_to_a_table(tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'sparse-grid.pdf';drawing=canvas.Canvas(str(path),pagesize=(1600,1000))
+    xs=[100,400,700,1000,1300];ys=[150,300,450,600,750,900]
+    for x in xs:drawing.line(x,ys[0],x,ys[-1])
+    for y in ys:drawing.line(xs[0],y,xs[-1],y)
+    drawing.drawString(120,870,'DETAIL TYPE A')
+    drawing.drawString(1320,90,'DRAWING NO. A9.99')
+    drawing.save()
+
+    result=parse_file(path,path.name)
+
+    assert result['pages'][0]['page_type']=='DRAWING'
+    assert result['pages'][0]['table_count']==0
+    assert not any((item['locator']['paragraph'] or '').startswith('Table ')
+                   for item in result['fragments'])
 
 
 def test_dxf_object_count_and_known_unit_geometry_are_pending_review(tmp_path):

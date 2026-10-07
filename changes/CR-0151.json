@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0151",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-MULTIMODAL-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "summary": "Add bounded selected-page image input and exact visual provenance to QA V3, plus an explicit image-capability flag for custom OpenAI-compatible model profiles, without replacing existing analysis or question paths.",
+  "decision_refs": [
+    "Active user goal: use an advanced model as the reference analyst while CRIP manages local evidence and review",
+    "Only lightweight locally selected pages enter the model request",
+    "Existing functions remain available and the architecture is introduced as a separate feature"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/gateway.py", "app/project_qa_v2.py",
+    "app/model_configuration.py", "app/settings.py", "app/main.py",
+    "prompts/project-evidence-loop/system.md",
+    "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_evidence_loop.py", "tests/app/test_model_configuration.py",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-136.json",
+    "changes/CR-0151.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_model_configuration.py",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly approved the management-first CRIP target, requested the bounded evidence loop, and instructed the agent to begin building the framework as a new feature without deleting existing functions.",
+  "known_limitations": [
+    "Reference QA and QA V3 remain API-only; the browser has no Reference Run or Ask control yet.",
+    "Results and review decisions are returned and model calls are audited, but QA V3 does not yet persist a first-class answer/review object.",
+    "No live advanced-model request or fixed 15-question quality benchmark was run."
+  ]
+}

@@ -1,5 +1,11 @@
 # v0.2.6 原句引用与核验：实际验证报告
 
+## 2026-09-30 direct-PDF answer-key user review
+
+- The user explicitly confirmed the direct-PDF Codex answers for S1 and S2 as correct.
+- The user did not remember the source facts for S3, S4 and D1, but judged each answer reasonable. The user judged S5, D2-D5 and C1-C5 reasonable or good.
+- These are two distinct review levels: S1/S2 are user-confirmed answers; the other thirteen are plausibility feedback, not page-by-page source verification. Neither level is recorded as CIRP model correctness, and the plausibility feedback must not be promoted to a human-accepted source fact.
+
 ## 2026-09-28 project-answer retrieval and arithmetic repair
 
 - Synthetic offline retrieval fixtures reproduce a later native fact hidden behind 160 generic matches, route an exact visual Sheet locator to the same document page, and confirm that only native text enters the answer context. Another fixture proves a value-only sibling fragment on the same page is retained without outranking an exact Paragraph match. A long-fragment fixture retains both distant matched concepts inside the 2,600-character prompt bound.

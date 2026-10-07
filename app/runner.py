@@ -23,6 +23,7 @@ from app.visual_pipeline import VISION_RENDER_VERSION,render_visual_png
 from app.assemble import envelopes,missing,key,material_group_key
 from contracts.runtime_rules import validate_schema
 from app.verification import VerificationService
+from app.canonical import CanonicalGraph
 
 ACTIVE=('QUEUED','RUNNING')
 EXTRACTION_BATCH_SIZE=4
@@ -93,24 +94,35 @@ class Runner:
     def __init__(self,db:Database,settings:Settings,uploads:Uploads,gateway:Gateway):
         self.db=db;self.s=settings;self.uploads=uploads;self.gateway=gateway
         self.stop_event=threading.Event();self.thread=None
+        self.reference_evaluation_jobs=None
         self.verifier=VerificationService(db,settings,gateway)
         self.parse_dir=settings.data_dir/'parsed';self.parse_dir.mkdir(exist_ok=True)
 
-    def create(self,project_id,local_workers=2):
+    def create(self,project_id,local_workers=2,analysis_mode='LEGACY_ANALYSIS'):
         if local_workers not in (1,2,4):raise DomainError('本地工作进程数必须为1、2或4')
+        if analysis_mode not in ('LEGACY_ANALYSIS','REFERENCE_QA'):
+            raise DomainError('Unknown analysis mode.',400)
         self.db.one('SELECT * FROM projects WHERE id=?',(project_id,))
-        if self.s.provider!='mock' and not live_provider(self.s.provider):raise DomainError('Provider未支持',409)
-        if self.s.provider!='mock' and self.s.live_errors():raise DomainError('；'.join(self.s.live_errors()),409)
+        if (analysis_mode=='LEGACY_ANALYSIS' and self.s.provider!='mock'
+                and not live_provider(self.s.provider)):raise DomainError('Provider未支持',409)
+        if analysis_mode=='LEGACY_ANALYSIS' and self.s.provider!='mock' and self.s.live_errors():
+            raise DomainError('；'.join(self.s.live_errors()),409)
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前仅允许一个活跃项目分析',409)
             if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，结束后再分析',409)
-            if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(project_id,)).fetchone():
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
+                raise DomainError('A managed Reference evaluation job is active.',409)
+            if (analysis_mode=='LEGACY_ANALYSIS'
+                    and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
+                                  (project_id,)).fetchone()):
                 raise DomainError('项目有待对账API请求，核对账单前不能新建或恢复付费分析',409)
             docs=[dict(d) for d in c.execute('SELECT id,sha256 FROM documents WHERE project_id=? ORDER BY id',(project_id,))]
             if not docs:raise DomainError('没有已完成上传的文件',409)
             rid=uid('RUN'); snapshot='SN-'+hashlib.sha256(dumps(docs).encode()).hexdigest()[:32]
             timestamp=time.time()
             capabilities=self.s.public()['capabilities'];capabilities['local_workers']=local_workers
+            capabilities['analysis_mode']=analysis_mode
             c.execute('''INSERT INTO runs(id,project_id,provider,snapshot_id,document_ids,status,stage,created_at,
                          started_epoch,deadline_epoch,capabilities) VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
                       (rid,project_id,self.s.provider,snapshot,dumps([d['id'] for d in docs]),'QUEUED','等待处理',now(),timestamp,
@@ -177,17 +189,27 @@ class Runner:
             r=c.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
             if not r:raise DomainError('任务不存在',404)
             if action=='resume':
+                capabilities=json.loads(r['capabilities'])
+                reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
                 resumable_failure=(r['status']=='FAILED'
                     and r['stage']=='生成可审核记录与设计差异'
                     and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(rid,)).fetchone())
                 if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not resumable_failure:
                     raise DomainError('当前任务不可恢复；已结束任务需新建分析',409)
-                if r['provider'] != self.s.provider:raise DomainError('原运行Provider与当前服务不一致，请新建分析',409)
+                if not reference_mode and r['provider'] != self.s.provider:
+                    raise DomainError('原运行Provider与当前服务不一致，请新建分析',409)
                 if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行',409)
                 if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('已有活跃任务',409)
                 if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，请结束后再恢复分析',409)
-                if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(r['project_id'],)).fetchone():raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
-                generations=self.db.authorize_run_resume_generations(c,dict(r),context_id=uid('RESUME'))
+                if c.execute("""SELECT id FROM reference_evaluation_jobs
+                                  WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
+                    raise DomainError('A managed Reference evaluation job is active.',409)
+                if (not reference_mode
+                        and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
+                                      (r['project_id'],)).fetchone()):
+                    raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
+                generations=([] if reference_mode else
+                             self.db.authorize_run_resume_generations(c,dict(r),context_id=uid('RESUME')))
                 message=('修复本地生成错误后重新生成审核记录；已完成的模型调用不会重发'
                          if resumable_failure else
                          ('恢复未完成任务；已为人工对账且仍待处理的任务创建'
@@ -209,15 +231,18 @@ class Runner:
                         (dumps({'kind':'CLIENT_ERROR','class':'PROCESS_INTERRUPTED'}),now()))
         self.db.execute("UPDATE runs SET status='INTERRUPTED',message='服务曾中断；已完成片段保留，付费请求需对账' WHERE status='RUNNING'")
         self.db.execute("UPDATE verification_jobs SET state='INTERRUPTED',message='服务中断；不自动重复付费' WHERE state='RUNNING'")
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.interrupt_active()
         self.thread=threading.Thread(target=self.loop,name='cirp-worker',daemon=True);self.thread.start()
 
     def close(self):
         self.stop_event.set()
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.request_shutdown()
         self.db.execute("UPDATE runs SET stop_requested=1 WHERE status='RUNNING'")
         self.db.execute("""UPDATE verification_jobs SET state='INTERRUPTED',message=?,updated_at=?
                          WHERE state IN ('QUEUED','RUNNING')""",
                         ('服务已停止；未发送的新请求保持未执行',now()))
         if self.thread:self.thread.join(timeout=self.s.parser_timeout+15)
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.finish_shutdown()
 
     def loop(self):
         while not self.stop_event.wait(.25):
@@ -226,6 +251,10 @@ class Runner:
             else:
                 job=self.db.one("SELECT id FROM verification_jobs WHERE state='QUEUED' ORDER BY created_at LIMIT 1",required=False)
                 if job:self.verifier.process_job(job['id'])
+                elif self.reference_evaluation_jobs:
+                    evaluation_job=self.db.one("""SELECT id FROM reference_evaluation_jobs
+                        WHERE state='QUEUED' ORDER BY created_at LIMIT 1""",required=False)
+                    if evaluation_job:self.reference_evaluation_jobs.process(evaluation_job['id'])
 
     def checkpoint(self,rid):
         r=self.db.one('SELECT stop_requested,status,deadline_epoch FROM runs WHERE id=?',(rid,))
@@ -238,11 +267,15 @@ class Runner:
         with self.db.connect(True) as c:
             row=c.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
             if not row or row['status']!='QUEUED':return
-            if row['provider'] != self.s.provider:
+            capabilities=json.loads(row['capabilities'])
+            reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
+            if not reference_mode and row['provider'] != self.s.provider:
                 c.execute('UPDATE runs SET status=?,message=? WHERE id=?',
                           ('PAUSED_PROVIDER','原运行Provider与当前服务不一致；未调用API，请新建分析',rid))
                 return
-            if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(row['project_id'],)).fetchone():
+            if (not reference_mode
+                    and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
+                                  (row['project_id'],)).fetchone()):
                 c.execute('UPDATE runs SET status=?,message=? WHERE id=?',
                           ('PAUSED_PROVIDER','项目有待对账API请求；未调用API，请先核对账单',rid))
                 return
@@ -252,10 +285,21 @@ class Runner:
             with self.timed(rid,'stage.parse'):
                 self.parse_documents(run)
             if not self.checkpoint(rid):return
+            if run.get('capabilities',{}).get('analysis_mode')=='REFERENCE_QA':
+                self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',(
+                    'PARTIAL','Local page catalog ready',
+                    'Local parsing and OCR are complete. Canonical graph construction, full-corpus model extraction, '
+                    'record assembly and semantic verification were intentionally skipped. Questions use transparent '
+                    'literal page selection over immutable parser evidence.',rid))
+                return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('本机OCR完成，处理图纸视觉页',rid))
             with self.timed(rid,'stage.vision'):
                 self.process_visual_tasks(run)
             if not self.checkpoint(rid):return
+            with self.timed(rid,'stage.canonical'):
+                canonical=CanonicalGraph(self.db).rebuild_run(run)
+                if not canonical['validation']['ok']:
+                    raise RuntimeError('canonical graph validation failed')
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('一次读取，联合提取材料与检查要求',rid))
             with self.timed(rid,'stage.extract'):
                 todo=self.db.all("SELECT rowid AS sequence,* FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY document_id,sequence",(rid,))

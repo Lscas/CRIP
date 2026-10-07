@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0161",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-EVALUATION-RUNNER-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Persist bounded safe terminal failures for frozen Reference items and reject literal Building/Bldg identity substitution without adding semantic preprocessing.",
+  "decision_refs": [
+    "The staged fixed-15 run required multiple continuation tasks because contract-rejected questions remained pending",
+    "S4 passed structural validation while answering Building G for a Building I question",
+    "The active user goal keeps task and result management local while avoiding pre-model engineering-semantic reconstruction"
+  ],
+  "affected_paths": [
+    "app/db.py", "app/gateway.py", "app/main.py", "app/project_qa_v2.py",
+    "app/reference_evaluations.py", "migrations/013_reference_evaluation_failures.sql",
+    "prompts/project-question-v2/system.md", "prompts/project-evidence-loop/system.md",
+    "spec/schemas/reference-evaluation.schema.json",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "web/app.js", "web/i18n.js", "web/index.html",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REFERENCE_QA.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-146.json",
+    "changes/CR-0161.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_project_qa_v2.py", "tests/app/test_reference_evaluations.py",
+    "tests/app/test_evidence_loop.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user directed continued implementation of the management-first Reference framework while preserving existing behavior.",
+  "known_limitations": [
+    "Only compact literal Building/Bldg identifiers are checked; other entity classes remain future evidence-driven extensions.",
+    "A terminal failed item is immutable; testing a changed prompt or model requires a new frozen evaluation rather than an automatic retry.",
+    "The change does not improve or rescore the historical fixed-15 live run by itself."
+  ]
+}

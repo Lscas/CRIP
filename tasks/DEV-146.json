@@ -1,0 +1,66 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal assigns task, result, citation and review management to CIRP and requires a lightweight verifiable boundary around the advanced-model reference analyst.",
+  "notes": [
+    "Persist only a bounded safe failure code and generic detail for local preflight or safely settled model-contract rejection; never persist rejected provider text or an unvalidated answer.",
+    "A terminal failed item is idempotent and is not retried automatically. Sequential execution may continue to later pending items only after unresolved-call state is confirmed empty.",
+    "Unresolved calls, frozen-profile mismatch, provider transport or policy errors and unclassified failures continue to stop the sequence.",
+    "Reject only literal compact Building/Bldg identity conflicts. Do not infer entities from sheet numbers, file names or a semantic graph.",
+    "The prior fixed-15 live score is historical and must not be retroactively changed without a new controlled run.",
+    "Full offline validation passed: 1,499 Python tests, 24 localization tests, 11 deployment tests, 147 synchronized requirements, 21 schemas and a 612-file bundle manifest before the final task-status refresh."
+  ],
+  "task_id": "DEV-146",
+  "title": "Persist safe evaluation failures and guard explicit question entities",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-EVALUATION-RUNNER-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/db.py",
+    "app/gateway.py",
+    "app/main.py",
+    "app/project_qa_v2.py",
+    "app/reference_evaluations.py",
+    "migrations/013_reference_evaluation_failures.sql",
+    "prompts/project-question-v2/system.md",
+    "prompts/project-evidence-loop/system.md",
+    "spec/schemas/reference-evaluation.schema.json",
+    "tests/app/test_project_qa_v2.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py",
+    "web/app.js",
+    "web/i18n.js",
+    "web/index.html",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-146.json",
+    "changes/CR-0161.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/EVIDENCE_LOOP_V3.md"
+  ],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_project_qa_v2.py tests/app/test_reference_evaluations.py tests/app/test_evidence_loop.py tests/web/test_display_contract.py -q",
+    "node tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-146",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make frozen Reference evaluations finish cleanly across safe contract failures without automatic retry, and fail closed when a model substitutes an explicit building identity named by the question."
+}

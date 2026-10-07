@@ -1,0 +1,530 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation-comparison.schema.json",
+  "title": "Deterministic comparison of two same-snapshot Reference evaluations",
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "text_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "vision_enabled": {
+          "type": "boolean"
+        },
+        "vision_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "profile_version": {"const":"reference-text-profile-1"},
+        "profile_id": {"enum":["FLASH_NONE","FLASH_LOW","PRO"]},
+        "max_output_tokens": {"enum":[2600,8000]}
+      },
+      "required": [
+        "provider",
+        "text_model",
+        "vision_enabled",
+        "vision_model",
+        "inference_mode",
+        "structured_output_mode",
+        "api_protocol"
+      ],
+      "additionalProperties": false,
+      "allOf":[{"if":{"required":["profile_version"]},"then":{"required":["profile_version","profile_id","max_output_tokens"]},"else":{"not":{"anyOf":[{"required":["profile_id"]},{"required":["max_output_tokens"]}]}}}]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "TOTAL": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "FAILED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ANSWERED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CANNOT_ANSWER": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "NEED_USER_INPUT": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "MODEL_DISABLED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "REVIEW_PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ACCEPTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "REJECTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "NOT_APPLICABLE": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "TOTAL",
+        "PENDING",
+        "FAILED",
+        "ANSWERED",
+        "CANNOT_ANSWER",
+        "NEED_USER_INPUT",
+        "MODEL_DISABLED",
+        "REVIEW_PENDING",
+        "ACCEPTED",
+        "REJECTED",
+        "NOT_APPLICABLE"
+      ],
+      "additionalProperties": false
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "evaluation_id": {
+          "type": "string",
+          "pattern": "^QAE-[0-9a-f]{32}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "IN_PROGRESS",
+            "COMPLETE"
+          ]
+        },
+        "selector_version": {
+          "enum": [
+            "literal-page-selector-3",
+            "literal-page-selector-4",
+            "literal-page-selector-5",
+            "literal-page-selector-6",
+            "literal-page-selector-7",
+            "literal-page-selector-8", "literal-page-selector-9"
+          ]
+        },
+        "profile": {
+          "$ref": "#/$defs/profile"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "created_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "evaluation_id",
+        "name",
+        "status",
+        "selector_version",
+        "profile",
+        "summary",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "PENDING",
+            "ACCEPTED",
+            "REJECTED",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "status",
+        "version",
+        "event_id"
+      ],
+      "additionalProperties": false
+    },
+    "terminal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "PENDING"
+            },
+            "outcome_hash": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "kind",
+            "outcome_hash"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "FAILURE"
+            },
+            "code": {
+              "const": "MODEL_OUTPUT_REJECTED"
+            },
+            "stage": {
+              "const": "EXECUTION"
+            },
+            "detail": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "outcome_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "code",
+            "stage",
+            "detail",
+            "outcome_hash"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RESULT"
+            },
+            "result_id": {
+              "type": "string",
+              "pattern": "^QAR-[0-9a-f]{32}$"
+            },
+            "status": {
+              "enum": [
+                "ANSWERED",
+                "CANNOT_ANSWER",
+                "NEED_USER_INPUT",
+                "MODEL_DISABLED"
+              ]
+            },
+            "answer_basis": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "answer": {
+              "type": "string"
+            },
+            "missing": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "calculations": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object"
+              }
+            },
+            "citations": {
+              "type": "array",
+              "maxItems": 48,
+              "items": {
+                "type": "object"
+              }
+            },
+            "result_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "outcome_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "review": {
+              "$ref": "#/$defs/review"
+            },
+            "initial_evidence_manifest_sha256": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "result_id",
+            "status",
+            "answer_basis",
+            "answer",
+            "missing",
+            "calculations",
+            "citations",
+            "result_hash",
+            "outcome_hash",
+            "provider",
+            "model",
+            "review"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "comparison_id": {
+      "type": "string",
+      "pattern": "^QAEVCMP-[0-9a-f]{32}$"
+    },
+    "comparison_version": {
+      "enum": ["reference-evaluation-comparison-1", "reference-evaluation-comparison-2"]
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "question_set_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selector_version": {
+      "enum": [
+        "literal-page-selector-3",
+        "literal-page-selector-4",
+        "literal-page-selector-5",
+        "literal-page-selector-6",
+        "literal-page-selector-7",
+        "literal-page-selector-8", "literal-page-selector-9"
+      ]
+    },
+    "policy": {
+      "const": "SAVED_OUTCOME_ONLY_NO_CORRECTNESS_OR_PRECEDENCE"
+    },
+    "model_called": {
+      "const": false
+    },
+    "profile_changed": {
+      "type": "boolean"
+    },
+    "baseline": {
+      "$ref": "#/$defs/evaluation"
+    },
+    "candidate": {
+      "$ref": "#/$defs/evaluation"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CHANGED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "UNCHANGED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "TOTAL": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "PENDING",
+        "CHANGED",
+        "UNCHANGED",
+        "TOTAL"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 49
+          },
+          "question_key": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1000
+          },
+          "change": {
+            "enum": [
+              "PENDING",
+              "CHANGED",
+              "UNCHANGED"
+            ]
+          },
+          "review_changed": {
+            "type": "boolean"
+          },
+          "fair_fixed_input": {
+            "type": "boolean"
+          },
+          "input_path_status": {
+            "enum": [
+              "FULL_PATH_MATCHED",
+              "DYNAMIC_PATH_DIVERGED",
+              "SAME_INITIAL_PATH_UNKNOWN_FAILURE_HISTORY",
+              "PENDING_UNEXECUTED",
+              "UNKNOWN_LEGACY",
+              "LEGACY_UNVERIFIED"
+            ]
+          },
+          "baseline": {
+            "$ref": "#/$defs/terminal"
+          },
+          "candidate": {
+            "$ref": "#/$defs/terminal"
+          }
+        },
+        "required": [
+          "ordinal",
+          "question_key",
+          "question",
+          "change",
+          "review_changed",
+          "fair_fixed_input",
+          "input_path_status",
+          "baseline",
+          "candidate"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "comparison_id",
+    "comparison_version",
+    "project_id",
+    "run_id",
+    "snapshot_id",
+    "question_set_hash",
+    "selector_version",
+    "policy",
+    "model_called",
+    "profile_changed",
+    "baseline",
+    "candidate",
+    "summary",
+    "items"
+  ],
+  "additionalProperties": false
+}

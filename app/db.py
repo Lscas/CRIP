@@ -11,6 +11,14 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 from typing import Iterator
+from app.reference_result_migration import (
+    install_reference_projection_results,
+    preflight_reference_projection_results,
+)
+from app.reference_case_migration import (
+    install_projection_human_review,
+    preflight_projection_human_review,
+)
 from app.settings import ROOT
 
 PAID_TASK_GENERATION_MARKER = ':manual-requeue:'
@@ -81,6 +89,170 @@ class Database:
             c.executescript((ROOT / 'migrations/005_upload_sources.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/006_workflow_classification_overrides.sql').read_text(encoding="utf-8"))
             self.evidence_search_available=self._install_evidence_search(c)
+            c.executescript((ROOT / 'migrations/008_canonical_document_graph.sql').read_text(encoding='utf-8'))
+            self.canonical_search_available=self._install_optional_virtual_table(
+                c,9,'migrations/009_canonical_search.sql','fts5','content_search')
+            self.canonical_bounds_available=self._install_optional_virtual_table(
+                c,10,'migrations/010_canonical_bounds.sql','rtree','content_bounds')
+            # Validate old or current reference-results state before migration
+            # 011's CREATE INDEX IF NOT EXISTS can otherwise silently repair a
+            # malformed marked database and hide an interrupted deployment.
+            self._preflight_reference_projection_results(c)
+            c.executescript((ROOT/'migrations/011_reference_results.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/012_reference_evaluations.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/013_reference_evaluation_failures.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/014_reference_evaluation_jobs.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/015_reference_evaluation_adjudications.sql').read_text(encoding='utf-8'))
+            self._install_reference_evaluation_selector_version(c)
+            self._install_reference_failure_execution_receipt(c)
+            self._install_reference_selector_v5(c)
+            self._install_reference_selector_v6(c)
+            self._install_reference_selector_v7(c)
+            self._install_reference_selector_v8(c)
+            self._install_reference_input_commitment(c)
+            # Must run before 022/023 CREATE IF NOT EXISTS can hide an
+            # interrupted or name-shadowed human-case migration state.
+            preflight_projection_human_review(c)
+            c.executescript((ROOT/'migrations/022_reference_cases.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/023_reference_case_followups.sql').read_text(encoding='utf-8'))
+            self._install_reference_selector_v9(c)
+            self._install_reference_failure_execution(c)
+            # The preceding legacy chain uses independent migration commits;
+            # schema27 must begin only after schema26 is durable.
+            self._install_reference_projection_results(c)
+            # Historical migration fixtures deliberately stop before 027; do
+            # not make schema28 mask or reject that isolated legacy state.
+            if c.execute('SELECT 1 FROM schema_migrations WHERE version=27').fetchone():
+                install_projection_human_review(c)
+
+    @staticmethod
+    def _preflight_reference_projection_results(connection: sqlite3.Connection) -> None:
+        preflight_reference_projection_results(connection)
+
+    @staticmethod
+    def _install_reference_projection_results(connection: sqlite3.Connection) -> None:
+        install_reference_projection_results(connection)
+
+    @staticmethod
+    def _install_reference_evaluation_selector_version(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=16').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluations')").fetchall()}
+        if 'selector_version' not in columns:
+            connection.executescript((
+                ROOT/'migrations/016_reference_evaluation_selector_version.sql'
+            ).read_text(encoding='utf-8'))
+            return
+        # Recover a database interrupted after ALTER TABLE but before the
+        # migration marker was persisted.  Never attempt the ALTER twice.
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(16,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_failure_execution_receipt(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=17').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluation_failures')").fetchall()}
+        if 'execution_receipt_json' not in columns:
+            connection.executescript((
+                ROOT/'migrations/017_reference_failure_execution_receipt.sql'
+            ).read_text(encoding='utf-8'))
+            return
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(17,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_failure_execution(connection:sqlite3.Connection)->None:
+        if connection.execute('SELECT 1 FROM schema_migrations WHERE version=26').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluation_failures')").fetchall()}
+        if 'failure_execution_json' not in columns:
+            try:
+                connection.executescript((ROOT/'migrations/026_reference_failure_execution.sql').read_text(encoding='utf-8'))
+            except sqlite3.DatabaseError:
+                if connection.in_transaction:
+                    connection.rollback()
+                raise
+            return
+        connection.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_selector_v5(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=18').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/018_reference_selector_v5.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v5 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v6(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=19').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/019_reference_selector_v6.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v6 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v7(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=20').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/020_reference_selector_v7.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v7 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v8(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=21').fetchone():return
+        connection.executescript((ROOT/'migrations/021_reference_selector_v8.sql').read_text(encoding='utf-8'))
+        if connection.execute('PRAGMA foreign_key_check').fetchall():
+            raise RuntimeError('Reference selector v8 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v9(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=25').fetchone():return
+        connection.executescript((ROOT/'migrations/025_reference_selector_v9.sql').read_text(encoding='utf-8'))
+        if connection.execute('PRAGMA foreign_key_check').fetchall():
+            raise RuntimeError('Reference selector v9 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_input_commitment(connection:sqlite3.Connection)->None:
+        """Install migration 24 safely after an interrupted ALTER TABLE.
+
+        The new columns deliberately remain nullable: only named reference
+        profiles require them, and historical calls must retain their original
+        authentication semantics.
+        """
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('model_calls')").fetchall()}
+        for name in ('reference_input_commitment_version',
+                     'reference_input_commitment_sha256'):
+            if name not in columns:
+                connection.execute(f'ALTER TABLE model_calls ADD COLUMN {name} TEXT')
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(24,datetime('now'))")
+        connection.commit()
 
     @staticmethod
     def _install_evidence_search(connection: sqlite3.Connection) -> bool:
@@ -102,6 +274,24 @@ class Database:
             raise
         return connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_search'"
+        ).fetchone() is not None
+
+    @staticmethod
+    def _install_optional_virtual_table(connection: sqlite3.Connection,version: int,
+                                        relative_path: str,module: str,table: str) -> bool:
+        installed=connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)
+        ).fetchone()
+        migrated=connection.execute(
+            'SELECT 1 FROM schema_migrations WHERE version=?',(version,)
+        ).fetchone()
+        if installed and migrated:return True
+        try:connection.executescript((ROOT/relative_path).read_text(encoding='utf-8'))
+        except sqlite3.OperationalError as exc:
+            if f'no such module: {module}' in str(exc).casefold():return False
+            raise
+        return connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)
         ).fetchone() is not None
 
     @contextmanager
@@ -182,7 +372,8 @@ class Database:
                 raise CallSafetyError('A model call cannot be both verification and project Q&A.',409)
             if interactive_question:
                 if (not run or run['status'] not in ('PARTIAL','COMPLETED')
-                        or not re.fullmatch(r'answer:[0-9a-f]{64}',task_key)):
+                        or not re.fullmatch(
+                            r'answer(?:-v2(?:-vision)?|-v3-r[0-2])?:[0-9a-f]{64}',task_key)):
                     raise CallSafetyError('The project question is not bound to a completed analysis snapshot.',409)
                 if c.execute("SELECT id FROM runs WHERE status IN ('RUNNING','QUEUED')").fetchone():
                     raise CallSafetyError('Wait for the active analysis to finish before asking a model question.',409)
@@ -226,7 +417,8 @@ class Database:
     def finalize_model_call(self, aid: str, amount: Decimal, usage: dict,
                             provider_id: str | None, *, response: dict | None = None,
                             cache_key: str | None = None, diagnostic: dict | None = None,
-                            cache_ttl_seconds: int = 86400) -> None:
+                            cache_ttl_seconds: int = 86400,
+                            reference_input_commitment:tuple[str,str]|None=None) -> None:
         """Atomically persist one billed provider response and its terminal result.
 
         Exactly one of ``response`` or ``diagnostic`` is required for gateway
@@ -244,7 +436,8 @@ class Database:
         if response is not None and not isinstance(response,dict):
             raise DomainError('模型有效响应必须是JSON对象')
         if diagnostic is not None:
-            allowed={'kind','class','exception','path','validator'}
+            from app.answer_diagnostics import valid_numeric_diagnostic
+            allowed={'kind','class','exception','path','validator','semantic_detail'}
             safe_code=re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
             safe_path=re.compile(r'^[A-Za-z0-9_.-]{0,160}$')
             if (not isinstance(diagnostic,dict) or set(diagnostic)-allowed
@@ -254,6 +447,8 @@ class Database:
                     or any(not isinstance(diagnostic.get(key),str)
                            or not (safe_path if key=='path' else safe_code).fullmatch(diagnostic[key])
                            for key in ('exception','path','validator') if key in diagnostic)):
+                raise DomainError('模型失败诊断不符合安全终态格式')
+            if 'semantic_detail' in diagnostic and not valid_numeric_diagnostic(diagnostic):
                 raise DomainError('模型失败诊断不符合安全终态格式')
         if cache_key is not None and response is None:
             raise DomainError('没有有效响应时禁止写入缓存')
@@ -270,6 +465,10 @@ class Database:
         usage_json = dumps(usage)
         response_json = dumps(response) if response is not None else None
         diagnostic_json = dumps(diagnostic) if diagnostic is not None else None
+        if reference_input_commitment is not None:
+            version,digest=reference_input_commitment
+            if version!='reference-input-commitment-1' or not re.fullmatch(r'[0-9a-f]{64}',digest):
+                raise DomainError('Reference input commitment is invalid.')
         state = 'SETTLED_ERROR' if diagnostic is not None else 'SETTLED'
         updated_at = now()
         expires_epoch = time.time() + cache_ttl_seconds
@@ -286,12 +485,15 @@ class Database:
                     raise DomainError('已存在的模型调用终态损坏') from exc
                 if (row['state'] != state or stored_usage != usage
                         or row['provider_request_id'] != provider_id
-                        or stored_response != response or stored_diagnostic != diagnostic):
+                        or stored_response != response or stored_diagnostic != diagnostic
+                        or row['reference_input_commitment_version'] != (reference_input_commitment[0] if reference_input_commitment else None)
+                        or row['reference_input_commitment_sha256'] != (reference_input_commitment[1] if reference_input_commitment else None)):
                     raise DomainError('不一致的重复终态持久化')
                 return
             c.execute('''UPDATE model_calls SET actual_units=?,state=?,usage=?,provider_request_id=?,
-                         response=?,error=?,updated_at=? WHERE id=?''',
-                      (n,state,usage_json,provider_id,response_json,diagnostic_json,updated_at,aid))
+                         response=?,error=?,reference_input_commitment_version=?,reference_input_commitment_sha256=?,updated_at=? WHERE id=?''',
+                      (n,state,usage_json,provider_id,response_json,diagnostic_json,
+                       *(reference_input_commitment or (None,None)),updated_at,aid))
             if cache_key is not None:
                 c.execute('INSERT OR REPLACE INTO cache VALUES(?,?,?,?)',
                           (cache_key,row['project_id'],response_json,expires_epoch))

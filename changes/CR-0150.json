@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0150",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-PAGE-SELECTION-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "summary": "Add an opt-in reference-QA preparation mode and transparent literal page selection, and use it for QA V3 evidence without replacing existing default analysis or question paths.",
+  "decision_refs": [
+    "Active user goal: advanced-model reference implementation managed by CRIP",
+    "Local, lightweight and verifiable page selection",
+    "No engineering-semantic reconstruction before the question-time model"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/evidence_loop.py", "app/runner.py", "app/main.py",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "docs/REFERENCE_QA.md", "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-135.json",
+    "changes/CR-0150.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_gateway_budget.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user-provided goal explicitly requires this architecture and the prior request authorized building it as a new feature while retaining existing behavior.",
+  "known_limitations": [
+    "Reference QA and page-selection preview are API-only and are not yet browser controls.",
+    "This slice supplies selected source text; selected original page images are not yet sent through the QA V3 decision route.",
+    "No live advanced-model or fixed 15-question benchmark was run."
+  ]
+}

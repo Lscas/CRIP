@@ -35,6 +35,7 @@ _MAX_FRAGMENT_CHARS = 2600
 _MAX_CONTEXT_CHARS = 18000
 _MAX_ADJACENT_ANCHORS = 8
 _MAX_ADJACENT_ROWS = 3
+_MAX_STRUCTURAL_ROWS = 24
 _MAX_EXACT_SHEET_PAGES = 8
 _MAX_EXACT_PAGE_ROWS = 40
 _MAX_WORKFLOW_CONFLICT_CITATION_SOURCES = 32
@@ -83,13 +84,19 @@ _RFI_HEADER = re.compile(r'(?im)^\s*(?:rfi|request\s+for\s+information)\b')
 _SUBMITTAL_HEADER = re.compile(r'(?im)^\s*(?:submittal|submission)\b')
 _EMAIL_HEADER = re.compile(r'(?im)^\s*(?:from|to|cc|subject):')
 _DRAWING_HEADER = re.compile(r'(?im)^\s*(?:sheet|drawing|dwg\.?|detail)\b')
-_CSI_SECTION = re.compile(r'(?i)^\s*(?:section\s+)?\d{2}(?:\s+\d{2}){1,2}\b')
+_CSI_SECTION = re.compile(
+    r'(?i)^\s*(?:section\s+(?:\d{5}|\d{2}(?:[ .-]+\d{2}){1,2})|'
+    r'\d{2}(?:\s+\d{2}){1,2})\b')
 _SPEC_SECTION_VALUE = re.compile(r'''(?ix)(?<!\w)
     (?:section|csi(?:\s+section)?|spec(?:ification)?(?:\s+section)?)
     \s*[:#-]?\s*
     (?P<division>\d{2})(?:\s+|\s*[.-]\s*)
     (?P<group>\d{2})(?:\s+|\s*[.-]\s*)
     (?P<section>\d{2})(?P<extension>\.\d{2})?(?!\w)(?!\.\d)
+''')
+_LEGACY_SPEC_SECTION_VALUE = re.compile(r'''(?ix)(?<!\w)
+    (?:section|csi(?:\s+section)?|spec(?:ification)?(?:\s+section)?)
+    \s*[:#-]?\s*(?P<section>\d{5})(?!\w)(?![.-]\d)
 ''')
 _REVISION_PREFIX = r'(?:\brevision\b|\brev\.?)'
 _REVISION_LABEL_STRONG = re.compile(
@@ -3606,9 +3613,12 @@ def _validate_calculations(value: dict, question: str, quotes: list[str]) -> set
 
 
 def _spec_section_occurrences(text: str) -> list[tuple[str,int,int]]:
-    return [(match['division']+match['group']+match['section']+
+    values=[(match['division']+match['group']+match['section']+
              (match['extension'] or ''),match.start(),match.end())
             for match in _SPEC_SECTION_VALUE.finditer(text)]
+    values.extend((match['section'],match.start(),match.end())
+                  for match in _LEGACY_SPEC_SECTION_VALUE.finditer(text))
+    return sorted(set(values),key=lambda value:(value[1],value[2],value[0]))
 
 
 def _spec_section_values(text: str) -> set[str]:
@@ -4920,6 +4930,38 @@ def _fts_query(terms: list[str]) -> str:
 def _candidate_rows(db: Database, run_id: str, terms: list[str],
                     diversify: bool = False, source_families: tuple[str,...] = (),
                     identifier_terms: tuple[str,...] = ()) -> list[dict]:
+    canonical_ready=db.one(
+        "SELECT 1 FROM canonical_builds WHERE run_id=? AND state='READY'",(run_id,),False)
+    if getattr(db,'canonical_search_available',False) and canonical_ready:
+        query='''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                        e.payload,d.name AS file_name,
+                        e.document_id AS source_document_id,
+                        bm25(content_search,1,1.5,2) AS search_rank
+                 FROM content_search
+                 JOIN content_nodes n ON n.rowid=content_search.rowid
+                 JOIN evidence e ON e.id=n.source_storage_id
+                 JOIN documents d ON d.id=e.document_id
+                 WHERE content_search MATCH ? AND n.run_id=? AND n.is_source_text=1
+                   {family_filter}
+                 ORDER BY search_rank,e.rowid LIMIT ?'''
+        match=_fts_query(terms)
+        rows=db.all(query.format(family_filter=''),[match,run_id,_MAX_CANDIDATES])
+        seen={row['evidence_row_id'] for row in rows}
+        if identifier_terms:
+            extra=db.all(query.format(family_filter=''),
+                         [_fts_query(list(identifier_terms)),run_id,_MAX_IDENTIFIER_CANDIDATES])
+            for row in extra:
+                if row['evidence_row_id'] not in seen:
+                    rows.append(row);seen.add(row['evidence_row_id'])
+        if not diversify:return rows
+        families=(source_families if len(source_families)>=2 else tuple(_FAMILY_SQL_FILTERS))
+        for family in families:
+            extra=db.all(query.format(family_filter='AND '+_FAMILY_SQL_FILTERS[family]),
+                         [match,run_id,_MAX_FAMILY_CANDIDATES])
+            for row in extra:
+                if row['evidence_row_id'] not in seen:
+                    rows.append(row);seen.add(row['evidence_row_id'])
+        return rows
     if getattr(db,'evidence_search_available',False):
         query='''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
                         e.payload,d.name AS file_name,
@@ -4964,6 +5006,55 @@ def _candidate_rows(db: Database, run_id: str, terms: list[str],
                      WHERE e.run_id=?
                        AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
                        AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION' ''',[run_id])
+
+
+def _canonical_identifier_rows(db: Database,run_id: str,question: str) -> list[dict]:
+    if not db.one("SELECT 1 FROM canonical_builds WHERE run_id=? AND state='READY'",(run_id,),False):
+        return []
+    targets=[]
+    for match in _DRAWING_IDENTIFIER.finditer(question):
+        kind=match['kind'].casefold().rstrip('.')
+        identifier_type='DETAIL' if kind=='detail' else 'SHEET'
+        targets.append((identifier_type,match['label'].upper().translate(
+            str.maketrans({'–':'-','—':'-'}))))
+    for value in _clause_identifier_values(question):
+        kind,label=value.split(':',1);targets.append((kind,label))
+    for value in _spec_section_values(question):targets.append(('SPEC_SECTION',value))
+    targets.extend(_workflow_identities(question))
+    targets=list(dict.fromkeys(targets))[:16]
+    if not targets:return []
+    groups={}
+    for kind,value in targets:groups.setdefault(kind,[]).append(value.replace(' ',''))
+    scope_clauses=[];args=[run_id,run_id]
+    for kind,values in groups.items():
+        placeholders=','.join('?' for _ in values)
+        scope_clauses.append(f'''EXISTS (
+            SELECT 1 FROM ancestors scope
+            JOIN content_identifiers i ON i.node_id=scope.node_id
+            WHERE scope.source_id=n.id AND i.is_source_text=1
+              AND i.identifier_type=?
+              AND REPLACE(i.normalized_value,' ','') IN ({placeholders})
+        )''')
+        args.extend((kind,*values))
+    query=f'''WITH RECURSIVE ancestors(source_id,node_id,parent_id) AS (
+                 SELECT id,id,parent_id FROM content_nodes
+                  WHERE run_id=? AND is_source_text=1
+                 UNION ALL
+                 SELECT scope.source_id,parent.id,parent.parent_id
+                   FROM ancestors scope JOIN content_nodes parent ON parent.id=scope.parent_id
+             )
+             SELECT DISTINCT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                      e.payload,d.name AS file_name,e.document_id AS source_document_id
+               FROM content_nodes n
+               JOIN evidence e ON e.id=n.source_storage_id
+               JOIN documents d ON d.id=e.document_id
+               WHERE n.run_id=? AND n.is_source_text=1
+                 AND {' AND '.join(scope_clauses)}
+               ORDER BY e.rowid LIMIT ?'''
+    args.append(_MAX_EXACT_PAGE_ROWS)
+    rows=db.all(query,args)
+    for row in rows:row['_page_scope_bonus']=60
+    return rows
 
 
 def _vision_sheet_pages(db: Database, run_id: str, question: str) -> set[tuple[str,int]]:
@@ -5055,6 +5146,37 @@ def _adjacent_rows(db: Database, run_id: str, anchors: list[dict]) -> list[dict]
     return rows
 
 
+def _structural_sibling_rows(db: Database,run_id: str,anchors: list[dict]) -> list[dict]:
+    """Expand a matched table row to its bounded native sibling rows."""
+    rows=[];seen=set()
+    for anchor in anchors:
+        try:evidence=json.loads(anchor['payload'])
+        except (TypeError,ValueError,json.JSONDecodeError):continue
+        locator=evidence.get('locator') if isinstance(evidence.get('locator'),dict) else {}
+        paragraph=str(locator.get('paragraph') or '')
+        match=re.fullmatch(r'(?i)Table\s+(\d+)\s+row\s+\d+',paragraph)
+        page=locator.get('page_number');document_id=anchor.get('source_document_id')
+        if not match or type(page) is not int or page<1 or not document_id:continue
+        key=(document_id,page,match.group(1))
+        if key in seen:continue
+        seen.add(key)
+        prefix=f'Table {match.group(1)} row '
+        found=db.all('''SELECT e.id AS evidence_row_id,e.rowid AS storage_rowid,
+                               e.payload,d.name AS file_name,
+                               e.document_id AS source_document_id
+                        FROM evidence e JOIN documents d ON d.id=e.document_id
+                        WHERE e.run_id=? AND e.document_id=?
+                          AND CAST(json_extract(e.payload,'$.locator.page_number') AS INTEGER)=?
+                          AND json_extract(e.payload,'$.locator.paragraph') LIKE ?
+                          AND COALESCE(json_extract(e.payload,'$.content_basis'),'')!='MODEL_VISION_OUTPUT'
+                          AND COALESCE(json_extract(e.payload,'$.extraction_method'),'')!='VISION'
+                        ORDER BY e.rowid LIMIT ?''',
+                     (run_id,document_id,page,prefix+'%',_MAX_STRUCTURAL_ROWS))
+        for row in found:row['_structural_context']=True
+        rows.extend(found)
+    return rows
+
+
 def _merge_candidate_rows(rows: list[dict], supplements: list[dict]) -> list[dict]:
     by_id={row['evidence_row_id']:row for row in rows}
     for row in supplements:
@@ -5065,6 +5187,8 @@ def _merge_candidate_rows(rows: list[dict], supplements: list[dict]) -> list[dic
             existing['_page_scope_bonus']=row['_page_scope_bonus']
         if existing is not None and row.get('_adjacent_context'):
             existing['_adjacent_context']=True
+        if existing is not None and row.get('_structural_context'):
+            existing['_structural_context']=True
     return rows
 
 
@@ -5106,12 +5230,14 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
     diversify=requires_source_diversity(question)
     rows=_candidate_rows(
         db,run['id'],search_terms,diversify,source_families,identifier_terms)
+    _merge_candidate_rows(rows,_canonical_identifier_rows(db,run['id'],question))
     exact_pages=_vision_sheet_pages(db,run['id'],question)
     if exact_pages:
         _merge_candidate_rows(rows,_native_page_rows(
             db,run['id'],exact_pages,limit_per_page=_MAX_EXACT_PAGE_ROWS,scope_bonus=40))
-    _merge_candidate_rows(rows,_adjacent_rows(
-        db,run['id'],_adjacent_anchor_rows(rows,concepts)))
+    anchors=_adjacent_anchor_rows(rows,concepts)
+    _merge_candidate_rows(rows,_adjacent_rows(db,run['id'],anchors))
+    _merge_candidate_rows(rows,_structural_sibling_rows(db,run['id'],anchors))
     ranked=[]
     for row in rows:
         try:evidence=json.loads(row['payload'])
@@ -5130,7 +5256,8 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
                       for label,variants in concepts]
         concept_hits=[(label,match) for label,match in concept_hits if match is not None]
         scope_bonus=int(row.get('_page_scope_bonus',0))
-        if not concept_hits and not scope_bonus and not row.get('_adjacent_context'):continue
+        structural=bool(row.get('_structural_context'))
+        if not concept_hits and not scope_bonus and not row.get('_adjacent_context') and not structural:continue
         actual_matches=[];score=0
         for label,match in concept_hits:
             actual,direct,count=match
@@ -5142,6 +5269,7 @@ def retrieve_evidence(db: Database, run: dict, question: str) -> list[dict]:
         score+=min(6,len(concept_hits))
         if len(concept_hits)==len(concepts):score+=8
         score+=scope_bonus
+        if structural:score+=20
         evidence={**evidence,'file_name':row['file_name'],
                   'prompt_text':_window(text,actual_matches),'_question_terms':actual_matches,
                   '_source_document_id':row['source_document_id']}

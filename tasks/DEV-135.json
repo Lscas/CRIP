@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires advanced-model reference analysis with CRIP management and lightweight, local, verifiable page selection without pre-model engineering-semantic reconstruction.",
+  "notes": [
+    "Keep LEGACY_ANALYSIS as the default and retain legacy questions and QA V2.",
+    "REFERENCE_QA performs local parse/OCR only and must make no model call during preparation.",
+    "Page selection reads immutable parser source evidence only; it must not use Canonical nodes, embeddings, extracted records or model-vision narration.",
+    "QA V3 uses the selector but retains its bounded decision loop and exact-answer contract.",
+    "Tests use local fixtures and MockTransport only."
+  ],
+  "task_id": "DEV-135",
+  "title": "Add reference-QA preparation and transparent local page selection",
+  "requirement_ids": ["FR-REFERENCE-PAGE-SELECTION-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/page_selector.py", "app/evidence_loop.py", "app/runner.py", "app/main.py",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "docs/REFERENCE_QA.md", "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-135.json",
+    "changes/CR-0150.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_page_selector.py tests/app/test_evidence_loop.py tests/app/test_project_qa_v2.py tests/app/test_gateway_budget.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-135",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Add an opt-in parse-only reference run and a deterministic, bounded, auditable source-page selector, then route QA V3 evidence acquisition through it without changing existing default product paths."
+}

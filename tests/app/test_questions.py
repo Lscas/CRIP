@@ -603,6 +603,31 @@ def test_retrieval_includes_adjacent_native_fragments_from_the_same_page(client,
     assert expected.issubset({item['evidence_id'] for item in fallback})
 
 
+def test_retrieval_expands_a_matched_table_header_to_all_bounded_rows(client,project):
+    run=_evidence(client,project,[
+        'Discipline | Sheet Count',
+        'General | 7','Architectural | 48','Structural | 13',
+        'Mechanical | 20','Fire Protection | 8','Plumbing | 19',
+        *(f'Unrelated note {index}.' for index in range(20)),
+    ])
+    db=client.app.state.db
+    for index,row in enumerate(db.all(
+            'SELECT id,payload FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],)),1):
+        payload=json.loads(row['payload']);payload['locator']['page_number']=1
+        if index<=7:payload['locator']['paragraph']=f'Table 1 row {index}'
+        db.execute('UPDATE evidence SET payload=? WHERE id=?',(json.dumps(payload),row['id']))
+    question=('Using the discipline sheet counts on the Volume I cover sheet, '
+              'what is the total number of base drawing sheets?')
+
+    found=retrieve_evidence(db,run,question)
+    db.evidence_search_available=False
+    fallback=retrieve_evidence(db,run,question)
+
+    expected={f'EV-QA-{index}' for index in range(1,8)}
+    assert expected.issubset({item['evidence_id'] for item in found})
+    assert expected.issubset({item['evidence_id'] for item in fallback})
+
+
 def test_long_prompt_window_keeps_distant_query_terms():
     text='alpha requirement '+('middle filler '*400)+'omega requirement'
 
@@ -2245,6 +2270,21 @@ def test_answer_accepts_formatting_equivalent_specification_sections(
             'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
 
     validate_answer_model(answer,evidence,'Which section applies?')
+
+
+def test_legacy_five_digit_specification_section_requires_an_explicit_label(
+        client,project):
+    source='Section 01100 paragraph 1.04 requires one floor at a time.'
+    run=_evidence(client,project,[source])
+    evidence=retrieve_evidence(
+        client.app.state.db,run,'What does Section 01100 paragraph 1.04 require?')
+    answer={'status':'ANSWERED','answer':'Section 01100 requires one floor at a time.',
+            'source_findings':[],
+            'citations':[{'evidence_id':'EV-QA-1','quote':source}]}
+
+    assert _spec_section_values('Section 01100 applies; value 01100 alone does not.')=={'01100'}
+    assert _spec_section_values('Value 01100 alone does not identify a section.')==set()
+    validate_answer_model(answer,evidence,'What does Section 01100 paragraph 1.04 require?')
 
 
 def test_specification_section_can_use_one_exact_evidence_locator(client, project):

@@ -1,0 +1,574 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation-readiness.schema.json",
+  "title": "Zero-call Reference evaluation input-scope and operational readiness manifest",
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "text_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "vision_enabled": {
+          "type": "boolean"
+        },
+        "vision_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "profile_version": {"const":"reference-text-profile-1"},
+        "profile_id": {"enum":["FLASH_NONE","FLASH_LOW","PRO"]},
+        "max_output_tokens": {"enum":[2600,8000]}
+      },
+      "required": [
+        "provider",
+        "text_model",
+        "vision_enabled",
+        "vision_model",
+        "inference_mode",
+        "structured_output_mode",
+        "api_protocol"
+      ],
+      "additionalProperties": false,
+      "allOf":[{"if":{"required":["profile_version"]},"then":{"required":["profile_version","profile_id","max_output_tokens"]},"else":{"not":{"anyOf":[{"required":["profile_id"]},{"required":["max_output_tokens"]}]}}}]
+    },
+    "warning": {
+      "enum": [
+        "NO_SELECTED_SOURCE",
+        "SOURCE_VERSION_CONFLICT",
+        "CANDIDATE_LIMIT_REACHED",
+        "PAGE_LIMIT_REACHED",
+        "BYTE_LIMIT_REACHED"
+      ]
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "page_key": {
+          "type": "string",
+          "pattern": "^PG-[0-9a-f]{24}$"
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "file_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "page_number": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "matched_terms": {
+          "type": "array",
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "DRAWING_COVER_INTENT",
+              "EXACT_IDENTIFIER_LOCATOR",
+              "FILE_NAME_LITERAL",
+              "PARSER_LOCATOR_LITERAL",
+              "QUESTION_ENTITY_MATCH",
+              "SOURCE_TEXT_LITERAL"
+            ]
+          }
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_text_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "selected_text_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "issue_date_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issue_dates": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "revision_label_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision_labels": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "required": [
+        "page_key",
+        "document_id",
+        "file_name",
+        "page_number",
+        "score",
+        "matched_terms",
+        "reason_codes",
+        "evidence_count",
+        "source_text_bytes",
+        "selected_text_bytes",
+        "issue_date_count",
+        "issue_dates",
+        "revision_label_count",
+        "revision_labels"
+      ],
+      "additionalProperties": false
+    },
+    "warning_counts": {
+      "type": "object",
+      "properties": {
+        "NO_SELECTED_SOURCE": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "SOURCE_VERSION_CONFLICT": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CANDIDATE_LIMIT_REACHED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "PAGE_LIMIT_REACHED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "BYTE_LIMIT_REACHED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "NO_SELECTED_SOURCE",
+        "SOURCE_VERSION_CONFLICT",
+        "CANDIDATE_LIMIT_REACHED",
+        "PAGE_LIMIT_REACHED",
+        "BYTE_LIMIT_REACHED"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "readiness_version": {
+      "const": "reference-evaluation-readiness-1"
+    },
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^QARDY-[0-9a-f]{32}$"
+    },
+    "status_id": {
+      "type": "string",
+      "pattern": "^QARDYST-[0-9a-f]{32}$"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^QAE-[0-9a-f]{32}$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "question_set_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selector_version": {
+      "enum": [
+        "literal-page-selector-3",
+        "literal-page-selector-4",
+        "literal-page-selector-5",
+        "literal-page-selector-6",
+        "literal-page-selector-7",
+        "literal-page-selector-8", "literal-page-selector-9"
+      ]
+    },
+    "policy": {
+      "const": "LOCAL_LITERAL_SELECTION_MANIFEST_NO_MODEL_CALL"
+    },
+    "model_called": {
+      "const": false
+    },
+    "source_text_included": {
+      "const": false
+    },
+    "semantic_graph_used": {
+      "const": false
+    },
+    "embeddings_used": {
+      "const": false
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "BLOCKED",
+        "NO_PENDING"
+      ]
+    },
+    "ready_to_confirm": {
+      "type": "boolean"
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ACTIVE_PROFILE_MISMATCH",
+          "MODEL_DISABLED",
+          "PROVIDER_NOT_READY",
+          "UNRESOLVED_CALLS",
+          "ACTIVE_ANALYSIS",
+          "ACTIVE_VERIFICATION",
+          "ACTIVE_MANAGED_JOB",
+          "NO_PENDING_QUESTIONS"
+        ]
+      }
+    },
+    "checks": {
+      "type": "object",
+      "properties": {
+        "profile_match": {
+          "type": "boolean"
+        },
+        "provider_ready": {
+          "type": "boolean"
+        },
+        "unresolved_call_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_analysis": {
+          "type": "boolean"
+        },
+        "active_verification": {
+          "type": "boolean"
+        },
+        "active_managed_job": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "profile_match",
+        "provider_ready",
+        "unresolved_call_count",
+        "active_analysis",
+        "active_verification",
+        "active_managed_job"
+      ],
+      "additionalProperties": false
+    },
+    "frozen_profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "active_profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "question_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "pending_question_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "maximum_remaining_model_decisions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 150
+        },
+        "maximum_page_images_per_decision": {
+          "enum": [
+            0,
+            3
+          ]
+        },
+        "maximum_remaining_page_image_attachments": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 450
+        },
+        "selected_question_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "no_selected_source_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "total_page_references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pending_page_references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_page_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repeated_page_references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_document_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sum_selected_text_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sum_pending_selected_text_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warning_question_counts": {
+          "$ref": "#/$defs/warning_counts"
+        }
+      },
+      "required": [
+        "question_count",
+        "pending_question_count",
+        "maximum_remaining_model_decisions",
+        "maximum_page_images_per_decision",
+        "maximum_remaining_page_image_attachments",
+        "selected_question_count",
+        "no_selected_source_count",
+        "total_page_references",
+        "pending_page_references",
+        "unique_page_count",
+        "repeated_page_references",
+        "unique_document_count",
+        "sum_selected_text_bytes",
+        "sum_pending_selected_text_bytes",
+        "warning_question_counts"
+      ],
+      "additionalProperties": false
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 49
+          },
+          "question_key": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1000
+          },
+          "item_state": {
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ]
+          },
+          "would_dispatch": {
+            "type": "boolean"
+          },
+          "selection_id": {
+            "type": "string",
+            "pattern": "^SEL-[0-9a-f]{32}$"
+          },
+          "candidate_pages_considered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selected_page_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selected_text_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "excluded_by_candidate_limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "excluded_by_page_limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "excluded_by_byte_limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source_conflict_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source_conflicts": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2400
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/warning"
+            }
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/page"
+            }
+          }
+        },
+        "required": [
+          "ordinal",
+          "question_key",
+          "question",
+          "item_state",
+          "would_dispatch",
+          "selection_id",
+          "candidate_pages_considered",
+          "selected_page_count",
+          "selected_text_bytes",
+          "excluded_by_candidate_limit",
+          "excluded_by_page_limit",
+          "excluded_by_byte_limit",
+          "source_conflict_count",
+          "source_conflicts",
+          "warnings",
+          "pages"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "readiness_version",
+    "manifest_id",
+    "status_id",
+    "evaluation_id",
+    "project_id",
+    "run_id",
+    "snapshot_id",
+    "question_set_hash",
+    "selector_version",
+    "policy",
+    "model_called",
+    "source_text_included",
+    "semantic_graph_used",
+    "embeddings_used",
+    "status",
+    "ready_to_confirm",
+    "blockers",
+    "checks",
+    "frozen_profile",
+    "active_profile",
+    "summary",
+    "questions"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The controlled Reference evaluation exposed repeated settled QA V3 contract failures across both text and vision routes before any result could be saved.",
+  "notes": [
+    "Mirror every validator-only nested QA V2 invariant in the QA V3 system prompt instead of weakening local evidence validation.",
+    "Keep exact quote, citation scope, number support, local arithmetic and complete-answer rules unchanged.",
+    "Persist only one safe validator category for future rejected decisions; never retain invalid provider output or document text.",
+    "Do not retry or alter the existing settled S1/S2 calls.",
+    "Full validation passed: 1,496 Python tests, 24 localization tests, 11 deployment tests, 147 synchronized requirements, 21 schemas and a 605-file bundle manifest."
+  ],
+  "task_id": "DEV-144",
+  "title": "Align QA V3 prompt with its answer validator",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "prompts/project-evidence-loop/system.md", "app/gateway.py",
+    "tests/app/test_evidence_loop.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-144.json", "changes/CR-0159.json", "prompts/manifest.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py tests/app/test_gateway_budget.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-144",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make the QA V3 model-visible contract match the unchanged local nested answer validator and retain a safe machine-readable category for future rejected output without storing provider text."
+}

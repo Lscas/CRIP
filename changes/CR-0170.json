@@ -1,0 +1,46 @@
+{
+  "change_id": "CR-0170",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-RESULT-LIFECYCLE-001",
+    "FR-REFERENCE-WORKSPACE-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Persist a source-text-free execution receipt for every settled QA V3 input and retain the receipt with either the immutable result or a safe evaluation contract failure.",
+  "decision_refs": [
+    "The active goal requires CIRP to manage advanced-model task, version, result, citation and review identity locally",
+    "A frozen selector and model profile do not by themselves prove which evidence rows, images and prompt contract were sent in each model decision",
+    "A compact hash receipt closes the audit gap without duplicating source text or adding semantic preprocessing"
+  ],
+  "affected_paths": [
+    "migrations/017_reference_failure_execution_receipt.sql", "app/db.py",
+    "app/gateway.py", "app/evidence_loop.py", "app/reference_results.py",
+    "app/reference_evaluations.py", "app/main.py",
+    "spec/schemas/reference-model-input-receipt.schema.json",
+    "spec/schemas/reference-evaluation.schema.json",
+    "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_evidence_loop.py", "tests/app/test_reference_results.py",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-155.json", "changes/CR-0170.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_reference_results.py",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active goal explicitly requires an auditable advanced-model reference implementation with CRIP managing local inputs and results while minimizing unnecessary model content.",
+  "known_limitations": [
+    "Receipts prove exact hashed input identity and size, not that the selected input was relevant or that the answer was correct.",
+    "Historical results and failures remain valid without a receipt and are not rewritten.",
+    "A receipt intentionally excludes source text, prompt content, rejected provider output and private reasoning.",
+    "No external or paid model request is made by this implementation task."
+  ]
+}

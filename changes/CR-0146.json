@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0146",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-PARSE-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "summary": "Retain explicit drawing title-block Sheet identity and bounded drawing-table rows so canonical retrieval can use engineering structure before generic text relevance.",
+  "decision_refs": [
+    "Active user objective to continue optimizing CIRP and improve correctness",
+    "Kapolei fixed-question rerun showing missing Sheet locators and flattened drawing tables as dominant verified failure modes"
+  ],
+  "affected_paths": [
+    "app/parsers.py", "app/canonical.py", "app/questions.py", "app/db.py", "app/runner.py",
+    "migrations", "tests/app/test_parsers.py", "tests/app/test_canonical.py",
+    "tests/app/test_questions.py", "scripts/benchmark_question_retrieval.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/CANONICAL_STORAGE_V2.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "README.md", "CHANGELOG.md", "tasks/DEV-131.json", "changes/CR-0146.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py", "tests/app/test_canonical.py", "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user set the active objective to continue optimizing CIRP and improve correctness after reviewing the verified benchmark diagnosis and roadmap.",
+  "known_limitations": [
+    "The first slice accepts only unique explicit native-text Sheet labels in a bounded title-block region and does not infer identifiers from unlabeled codes, callouts or model vision narration.",
+    "Drawing-table recovery remains bounded to detectable vector tables; borderless and cross-page tables remain later work.",
+    "No customer document or paid provider is used for implementation acceptance until synthetic offline gates pass."
+  ]
+}

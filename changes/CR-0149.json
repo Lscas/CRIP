@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0149",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "FR-QA-V2-ANSWER-001", "NFR-SECURITY-001"],
+  "summary": "Add an independent bounded evidence-loop QA V3 feature beside legacy questions and QA V2, without deleting or switching any existing behavior.",
+  "decision_refs": [
+    "User-approved management-first CRIP direction",
+    "User-approved bounded model decision and evidence supplementation loop",
+    "Ponytail review limiting the first slice to two local text evidence tools and three model decisions"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/main.py", "app/gateway.py", "app/db.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-134.json", "changes/CR-0149.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_project_qa_v2.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user said to begin building the discussed framework as a new feature and to keep every existing capability.",
+  "known_limitations": [
+    "The first slice supplements source text through FIND_IDENTIFIER and SEARCH_TEXT only; iterative visual page requests are deferred.",
+    "The browser remains on its existing question path and no legacy or QA V2 code is deleted.",
+    "A live provider evaluation is not performed by this implementation task."
+  ]
+}
