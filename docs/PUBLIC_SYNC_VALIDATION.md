@@ -1,7 +1,57 @@
 # Public source synchronization — 2026-10-07
 
-Status: public source validation passed; feature-branch synchronization only.
+Status: CI reproducibility repair passed the new frozen Windows gate before push.
+Remote acceptance is the GitHub Actions result for the resulting commit.
 This is not default-branch release, live deployment or engineering-quality approval.
+
+## GitHub CI repair: pre-push validation — 2026-10-07
+
+GitHub Actions run `37673736407` for commit `68e9eac` failed before this repair.
+The two original profile tests depended on real Windows DPAPI and failed on
+Ubuntu. The repair isolates only those tests' secret backend in memory,
+retains every existing assertion, and retains the real-DPAPI Windows test.
+It does not change application or production credential handling.
+
+The same investigation found 505 of the 796 manifest entries differed from the
+corresponding Git blobs only by line endings: 476 CRLF and 29 mixed; all other
+bytes matched. The manifest was regenerated from a fresh LF checkout and
+compared with the exact Git archive bytes. The earlier local Windows result of 2,762
+passing Python tests and its manifest are historical working-tree evidence, not
+a GitHub CI pass or a validation of the committed bytes.
+
+The repaired targeted profile/credential checks pass 23 tests locally, including
+the real Windows DPAPI test with no skip. These overlap the new complete gate;
+they are not added to its test count.
+
+The new frozen Windows gate `ci-repair-gate-r1` completed all seven commands
+from `scripts.run_checks.build_commands('all', ...)` with exit 0:
+
+- Python: 2,762 unique tests; zero failures, errors, skips or duplicate nodes;
+  JUnit duration 1,646.072 seconds.
+- JavaScript: 24 language tests, 11 deployment-entry tests, both syntax checks.
+- Specifications: 160 requirements and 37 schemas; source manifest: 797 files.
+- All 797 source entries remained unchanged during the gate.
+- Exact Git archive verification of the staged source found 797 manifest
+  entries and 798 files including the manifest, with no missing, extra or
+  mismatched entries. The same verifier rejected the old commit's 505 mismatches.
+
+The frozen source-manifest SHA-256 is
+`b958e2f1234cefe40be39d56486a054f2873e3edad9dbd20bca86079772a9fce`;
+JUnit SHA-256 is
+`13c61313177894e7ca5db06f1dca108531a4676b2781c4c35e300b9dc98694c7`.
+Source snapshot, complete log, JUnit and result are retained locally under
+`reports/local/ci-repair-gate-r1*`; they are not uploaded with public source.
+
+Post-gate edits only record these results and correct the fixture description in
+CHANGELOG, CR-0187, DEV_STATE, IMPLEMENTATION_STATUS and this document; they do
+not inherit the earlier frozen manifest identity. The final manifest is rebuilt,
+the governance checks are repeated, and the final staged/committed Git archive
+must match before synchronization. No application or test source changes after
+the frozen gate are authorized by this metadata note.
+
+This record is written before push. It does not claim a new remote CI pass;
+check the resulting commit's Actions run for that result. No default-branch
+merge, deployment, customer-data action or model-provider call is claimed.
 
 ## Scope
 

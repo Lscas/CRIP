@@ -1,10 +1,43 @@
 """Customer model settings are local, fail closed, and never expose credentials."""
 import pytest
 
+import app.local_credentials as local_credentials
+import app.model_configuration as model_configuration
 from app.model_configuration import (configured_settings, load_active_configuration,
                                      public_configuration, save_active_configuration)
 from app.settings import Settings
 from .conftest import upload
+
+
+@pytest.fixture
+def in_memory_secret_backend(monkeypatch):
+    """Isolate profile round trips from the Windows-only DPAPI implementation."""
+    remembered=set()
+    secrets={}
+
+    def enable(data_dir, provider):
+        remembered.add((data_dir, provider))
+        return data_dir / 'synthetic-secret-marker'
+
+    def enabled(data_dir, provider):
+        return (data_dir, provider) in remembered
+
+    def save(data_dir, provider, api_key):
+        secrets[data_dir, provider]=api_key
+        return data_dir / 'synthetic-secret'
+
+    def load(data_dir, provider):
+        return secrets.get((data_dir, provider))
+
+    def forbid_real_dpapi(value):
+        raise AssertionError('test must not invoke the real DPAPI protector')
+
+    monkeypatch.setattr(local_credentials, '_protect', forbid_real_dpapi)
+    monkeypatch.setattr(model_configuration, 'enable_remember', enable)
+    monkeypatch.setattr(model_configuration, 'remember_enabled', enabled)
+    monkeypatch.setattr(model_configuration, 'save_api_key', save)
+    monkeypatch.setattr(model_configuration, 'load_api_key', load)
+    return secrets
 
 
 def test_custom_loopback_profile_round_trips_without_key(tmp_path):
@@ -36,7 +69,8 @@ def test_presets_reject_custom_native_schema_mode(tmp_path):
                 api_key='synthetic-valid-key',structured_output_mode='json_schema')
 
 
-def test_openai_profile_uses_official_stateless_responses_route(tmp_path):
+def test_openai_profile_uses_official_stateless_responses_route(
+        tmp_path,in_memory_secret_backend):
     base=Settings(tmp_path,start_worker=False)
     configured=configured_settings(
         base,provider='openai',model='gpt-test-model',
@@ -50,6 +84,9 @@ def test_openai_profile_uses_official_stateless_responses_route(tmp_path):
     assert configured.inference_mode()=='provider default'
     assert configured.live_errors()==[]
     save_active_configuration(configured)
+    profile=(base.data_dir/'credentials/active-model-profile.json').read_bytes()
+    assert b'synthetic-valid-key' not in profile
+    assert in_memory_secret_backend[base.data_dir, 'openai']=='synthetic-valid-key'
     loaded=load_active_configuration(base)
     assert loaded is not None and loaded.api_protocol=='responses'
     assert public_configuration(loaded)=={
@@ -119,7 +156,8 @@ def test_deepseek_pro_is_an_independent_text_profile_without_a_call(tmp_path):
     assert configured.live_errors()==[]
 
 
-def test_deepseek_reference_thinking_profile_round_trips_without_a_call(tmp_path):
+def test_deepseek_reference_thinking_profile_round_trips_without_a_call(
+        tmp_path,in_memory_secret_backend):
     base=Settings(tmp_path,start_worker=False)
     configured=configured_settings(
         base,provider='deepseek',model='deepseek-flash',
@@ -130,6 +168,9 @@ def test_deepseek_reference_thinking_profile_round_trips_without_a_call(tmp_path
         'thinking':{'type':'enabled'},'reasoning_effort':'low'}
     assert configured.inference_mode()=='thinking-low'
     save_active_configuration(configured)
+    profile=(base.data_dir/'credentials/active-model-profile.json').read_bytes()
+    assert b'synthetic-valid-key' not in profile
+    assert in_memory_secret_backend[base.data_dir, 'deepseek']=='synthetic-valid-key'
     loaded=load_active_configuration(base)
     assert loaded is not None and loaded.reference_reasoning_effort=='low'
     assert public_configuration(loaded)['reasoning_effort']=='low'

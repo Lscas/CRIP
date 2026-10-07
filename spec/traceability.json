@@ -1607,7 +1607,9 @@
       ],
       "planned_product_tests": [
         "tests/test_governance.py",
-        "tests/test_devtools.py"
+        "tests/test_devtools.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_local_credentials.py"
       ],
       "contract_tests": [
         "tests/test_governance.py"
