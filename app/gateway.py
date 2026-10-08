@@ -898,13 +898,15 @@ class Gateway:
         are terminal: a caller must create an explicitly versioned task before
         another paid request is permitted.
         """
-        row=self.db.one('''SELECT id,state,response,error FROM model_calls
-                           WHERE run_id=? AND task_key=? AND actual_units IS NOT NULL
-                           ORDER BY created_at DESC LIMIT 1''',(run_id,task_key),False)
+        recent=self._family_calls(run_id,paid_task_family(task_key))
+        row=next((item for item in reversed(recent)
+                  if item['task_key']==task_key and item['actual_units'] is not None),None)
         if row is None:return None
-        if row['response'] is not None:
+        if row['has_response']:
             try:
-                data=json.loads(row['response'])
+                response=self.db.model_call_response(row['id'])
+                if response is None:raise ValueError('terminal response disappeared')
+                data=json.loads(response)
                 validator(data)
             except Exception as exc:
                 raise ProviderPaused('已结算结果的持久化内容损坏；禁止自动重复收费，需人工处理。',409) from exc
@@ -944,9 +946,7 @@ class Gateway:
         return generation
 
     def _family_calls(self, run_id: str, task_family: str) -> list[dict]:
-        rows=self.db.all('''SELECT id,task_key,state,actual_units,response FROM model_calls
-                            WHERE run_id=? ORDER BY created_at,id''',(run_id,))
-        return [row for row in rows if paid_task_family(row['task_key'])==task_family]
+        return self.db.family_calls(run_id,task_family)
 
     @staticmethod
     def _guard_family_before_request(recent: list[dict], task_key: str,
@@ -955,7 +955,7 @@ class Gateway:
             raise ProviderPaused(f'{label}请求待对账；避免自动重复收费',409)
         # Handles legacy verification :job: keys and any corrupted/mismatched
         # task state which exact-key recovery cannot see.
-        response_less=[row for row in recent if row['actual_units'] is not None and row['response'] is None]
+        response_less=[row for row in recent if row['actual_units'] is not None and not row['has_response']]
         if generation==0 and response_less and all(row['task_key']!=task_key for row in response_less):
             raise ProviderPaused(f'{label}已有对账或已结算但无可发布结果的旧调用；需显式恢复代次。',409)
         if len(recent)>=MAX_PAID_TASK_CALLS:
@@ -1186,7 +1186,7 @@ class Gateway:
         if cached is not None:
             VerificationService.apply_model(deepcopy(fields), cached, evidence, None)
             original_call=next((row for row in reversed(self._family_calls(run['id'],task_family))
-                                if row['actual_units'] is not None and row['response'] is not None),None)
+                                if row['actual_units'] is not None and row['has_response']),None)
             return ModelResult(cached, original_call['id'] if original_call else None, True, self.s.provider)
         recent=self._family_calls(run['id'],task_family)
         self._guard_family_before_request(recent,task,generation,'该核验')

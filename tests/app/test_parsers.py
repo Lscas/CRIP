@@ -1283,7 +1283,9 @@ def test_dxf_object_count_and_known_unit_geometry_are_pending_review(tmp_path):
     count=next(x for x in r['takeoffs'] if x['kind']=='BLOCK_COUNT')
     length=next(x for x in r['takeoffs'] if x['kind']=='LAYER_LENGTH' and x['label']=='PIPE')
     assert (count['label'],count['value'],count['unit'],count['review_status'])==('VALVE',2,'EA','PENDING')
-    assert count['basis']=='DESIGN_MODEL_OBJECTS' and '才能作为设计净量' in count['scope_note']
+    assert count['basis']=='DESIGN_MODEL_OBJECTS'
+    assert 'may include legends or reference objects' in count['scope_note']
+    assert count['scope_note'].endswith('Human scope review is required before treating this as a material quantity.')
     assert length['value']>=5 and length['unit']=='M' and length['calibration']['verified'] is True
 
 

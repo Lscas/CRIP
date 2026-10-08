@@ -24,6 +24,7 @@ from app.local_credentials import LocalCredentialError
 from app.model_configuration import (clear_active_configuration, configured_settings,
                                      public_configuration, save_active_configuration)
 from app.db import Database,DomainError,dumps,now,uid
+from app.publication import record_publication,require_current_publication
 from app.uploads import Uploads
 from app.gateway import Gateway,InvalidModelOutput
 from app.runner import Runner
@@ -973,14 +974,15 @@ def create_app(settings:Settings|None=None)->FastAPI:
         return db.reconcile_call(call_id,data.resolution,data.actual_cny,data.note)
     @app.get('/api/analysis-runs/{rid}/records')
     def records_get(rid:str,kind:Literal['MATERIAL','INSPECTION','CONFLICT','MISSING']|None=None):
-        runner.get(rid)
+        run=runner.get(rid)
         rows=db.all('SELECT * FROM records WHERE run_id=?'+(' AND kind=?' if kind else '')+' ORDER BY kind,id',(rid,kind) if kind else (rid,))
-        return [{'record':json.loads(r['envelope']),'review_version':r['review_version'],'verification':runner.verifier.get(r['id'])} for r in rows]
+        return [{'record':json.loads(r['envelope']),'review_version':r['review_version'],'verification':runner.verifier.get(r['id']),
+                 **record_publication(run['coverage'],r['id'],status=run['status'],stage=run['stage'])} for r in rows]
     @app.get('/api/analysis-runs/{rid}/record-summaries')
     def record_summaries_get(rid:str,kind:Literal['MATERIAL','INSPECTION']|None=None,
                              offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
         """Bounded reviewer list containing only tangible items and executable QA work."""
-        runner.get(rid)
+        run=runner.get(rid)
         rows=db.all('''SELECT r.id,r.envelope,r.review_version,
                                json_extract(vr.payload,'$.status') AS verification_status,
                                json_extract(vr.payload,'$.checked_at') AS verification_checked_at,
@@ -1005,13 +1007,15 @@ def create_app(settings:Settings|None=None)->FastAPI:
               'material_kind','location','condition')
         for row,record in selected[offset:offset+limit]:
             candidate=record['candidate']
+            publication=record_publication(run['coverage'],row['id'],status=run['status'],stage=run['stage'])
             report={'fields':[{'path':'/name','status':row['name_verification_status']}]} if row['name_verification_status'] else {}
             display=reviewer_record_display(record,report)
             items.append({'record':{'kind':record['kind'],'meta':record['meta'],'review':record['review'],
                                     'quantity_review':record.get('quantity_review','NOT_APPLICABLE'),
                                     'candidate':{key:candidate.get(key) for key in keys},'display':display},
                           'review_version':row['review_version'],
-                          'verification':{'record_id':row['id'],'status':row['verification_status'] or 'NOT_CHECKED',
+                          **publication,
+                          'verification':{'record_id':row['id'],'status':'STALE' if publication['publication_blocked'] else row['verification_status'] or 'NOT_CHECKED',
                                           'checked_at':row['verification_checked_at'],
                                           'field_count':row['verification_field_count']}})
         return {'items':items,'pagination':{'offset':offset,'limit':limit,'total':total,
@@ -1019,9 +1023,10 @@ def create_app(settings:Settings|None=None)->FastAPI:
                 'counts':counts}
     @app.get('/api/records/{record_id}')
     def record_get(record_id:str):
-        row=db.one('SELECT envelope,review_version FROM records WHERE id=?',(record_id,))
+        row=db.one('SELECT envelope,review_version,run_id FROM records WHERE id=?',(record_id,))
+        run=runner.get(row['run_id'])
         return {'record':json.loads(row['envelope']),'review_version':row['review_version'],
-                'verification':runner.verifier.get(record_id)}
+                'verification':runner.verifier.get(record_id),**record_publication(run['coverage'],record_id,status=run['status'],stage=run['stage'])}
     @app.get('/api/analysis-runs/{rid}/evidence/{eid}')
     def evidence_get(rid:str,eid:str):
         runner.get(rid)
@@ -1037,6 +1042,9 @@ def create_app(settings:Settings|None=None)->FastAPI:
         row=db.one('SELECT * FROM records WHERE id=?',(record_id,))
         if row['review_version']!=data.expected_version:raise DomainError('记录已变化，请刷新后核验',409)
         run=runner.get(row['run_id'])
+        require_current_publication(run['coverage'],record_id)
+        if run['status']=='FAILED' and run['stage']=='生成可审核记录与设计差异':
+            raise DomainError('Resolve the failed publication before verification.',409)
         if run['status'] in ('RUNNING','QUEUED'):raise DomainError('分析正在运行，核验会自动进行',409)
         if data.semantic:
             with provider_change_lock:
@@ -1111,7 +1119,11 @@ def create_app(settings:Settings|None=None)->FastAPI:
         with db.connect(True) as c:
             row=c.execute('SELECT * FROM records WHERE id=?',(record_id,)).fetchone()
             if not row:raise DomainError('结果不存在',404)
-            status=c.execute('SELECT status FROM runs WHERE id=?',(row['run_id'],)).fetchone()[0]
+            current_run=c.execute('SELECT status,stage,coverage FROM runs WHERE id=?',(row['run_id'],)).fetchone()
+            require_current_publication(current_run['coverage'],record_id)
+            status=current_run['status']
+            if status=='FAILED' and current_run['stage']=='生成可审核记录与设计差异':
+                raise DomainError('Resolve the failed publication before review.',409)
             if status in ('QUEUED','RUNNING'):raise DomainError('分析运行中不可审核；结束或暂停后再审核',409)
             if row['review_version']!=data.expected_version:raise DomainError('记录已变化，请刷新后审核',409)
             before=json.loads(row['envelope']);after=json.loads(row['envelope'])

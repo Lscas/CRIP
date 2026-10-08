@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0189",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["NFR-RELIABILITY-001", "NFR-OBS-001", "FR-PARSE-006", "FR-FIELD-EVIDENCE-001", "FR-API-006", "FR-INPUT-STATUS-001", "FR-REVIEW-001"],
+  "summary": "Close remaining audited candidate publication, verification context, resume UI, CAD completeness/counting and model task history defects while preserving existing safety policies.",
+  "decision_refs": ["User: continue processing the remaining findings from the 17-item review.", "tasks/DEV-173.json"],
+  "affected_paths": ["app/assemble.py", "app/runner.py", "app/verification.py", "app/publication.py", "app/exporter.py", "app/cad.py", "app/parsers.py", "app/db.py", "app/gateway.py", "app/main.py", "web/app.js", "web/index.html", "web/i18n.js", "migrations/**", "tests/**", "spec/traceability.json", "docs/**", "reports/**", "tasks/DEV-173.json", "changes/CR-0189.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["scripts/run_checks.py --area all", "scripts/check_spec_sync.py", "scripts/build_bundle_manifest.py --check"],
+  "product_implementation_changed": true,
+  "approval_evidence": "Explicit user request to repair remaining original audit findings; existing requirements and billing/review policies are unchanged.",
+  "known_limitations": ["No deployment, customer database maintenance, main merge, paid provider call or engineering accuracy claim.", "Progress, source identities, retained failures and final evidence are recorded separately; historic green checks are not current acceptance."]
+}

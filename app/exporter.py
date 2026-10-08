@@ -8,7 +8,8 @@ import unicodedata
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from app.db import Database
+from app.db import Database,DomainError
+from app.publication import publication_issues
 from app.settings import ROOT
 
 
@@ -1107,34 +1108,55 @@ def _readable(data: dict) -> dict:
 
 
 def collect(db: Database, run: dict, reviewed_only: bool = False, verifier=None):
+    # Keep all rows in one SQLite read snapshot. A concurrent resume may begin
+    # after this snapshot, but cannot mix new issues with old accepted records.
+    with db.connect() as connection:
+        connection.execute('BEGIN')
+        return _collect_snapshot(connection,run,reviewed_only)
+
+
+def _collect_snapshot(connection, run: dict, reviewed_only: bool):
+    # Neither export format may present historical accepted values as current.
+    # Read fresh state even for internal callers holding an earlier run object.
+    current=connection.execute('SELECT status,stage,coverage FROM runs WHERE id=?',(run['id'],)).fetchone()
+    if current is None:raise DomainError('Analysis run does not exist.',404)
+    if current['status'] in ('RUNNING','QUEUED'):
+        raise DomainError('Wait for or pause the active analysis before exporting a consistent snapshot.',409)
+    run={**run,'status':current['status'],'stage':current['stage'],'coverage':json.loads(current['coverage'])}
+    issues=publication_issues(current['coverage'])
+    blocked=[issue['issue_id'] for issue in issues if issue.get('blocked_record_id')]
+    if blocked or (current['status']=='FAILED' and current['stage']=='生成可审核记录与设计差异'):
+        raise DomainError('Publication is blocked; historical records cannot be exported as current. Issues: '+', '.join(blocked),409)
     records = []
-    record_rows = db.all('SELECT id,envelope,review_version FROM records WHERE run_id=? ORDER BY kind,id', (run['id'],))
+    record_rows = connection.execute('SELECT id,envelope,review_version FROM records WHERE run_id=? ORDER BY kind,id', (run['id'],)).fetchall()
     for row in record_rows:
         envelope = json.loads(row['envelope'])
         if reviewed_only and envelope['review']['status'] not in ('ACCEPTED', 'EDITED'):
             continue
         records.append(envelope)
     evidence = []
-    for row in db.all('''SELECT e.payload,d.name AS file_name FROM evidence e
+    for row in connection.execute('''SELECT e.payload,d.name AS file_name FROM evidence e
                          JOIN documents d ON d.id=e.document_id WHERE e.run_id=?''', (run['id'],)):
         item = json.loads(row['payload']); item['file_name'] = row['file_name']; evidence.append(item)
-    report_rows = db.all('''SELECT vr.record_id,vr.payload FROM verification_reports vr
-                            JOIN records r ON r.id=vr.record_id WHERE r.run_id=?''', (run['id'],))
+    report_rows = connection.execute('''SELECT vr.record_id,vr.payload FROM verification_reports vr
+                            JOIN records r ON r.id=vr.record_id WHERE r.run_id=?''', (run['id'],)).fetchall()
     reports_by_id = {row['record_id']: json.loads(row['payload']) for row in report_rows}
     reports = {record['meta']['record_id']: reports_by_id.get(record['meta']['record_id'],
                {'record_id': record['meta']['record_id'], 'status': 'NOT_CHECKED', 'fields': []}) for record in records}
     analysis_support = []
-    for row in db.all('''SELECT r.document_id,r.summary,d.name FROM document_results r
+    for row in connection.execute('''SELECT r.document_id,r.summary,d.name FROM document_results r
                          JOIN documents d ON d.id=r.document_id
                          WHERE r.run_id=? ORDER BY d.name''', (run['id'],)):
         summary = json.loads(row['summary'])
         analysis_support.append({'file_name': row['name'], 'takeoffs': summary.get('takeoffs', [])})
     if reviewed_only:
         analysis_support = []
-    project = db.one('SELECT name FROM projects WHERE id=?', (run['project_id'],))
+    project = connection.execute('SELECT name FROM projects WHERE id=?', (run['project_id'],)).fetchone()
     notice = ('Only accepted or edited records are included. Unapproved quantity aids are excluded.'
               if reviewed_only else
               'Engineering review candidates. Unreviewed or partial results are not procurement or construction instructions.')
+    if issues:
+        notice+=f' Incomplete publication: {len(issues)} candidate(s) were not published. Inspect run publication issues and source evidence.'
     return {'verifications': reports, 'notice': notice,
             'generated_at': datetime.now(timezone.utc).isoformat(), 'run': run,
             'project_name': project['name'] if project else None,

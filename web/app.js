@@ -170,11 +170,30 @@ async function refreshRun(forceRecords=false){
    renderReconciliation(state.unresolvedCalls);
    updateQuestionAvailability();updateReferenceAvailability();
   if(state.unresolvedCalls.length)$('start').disabled=true;
-  $('resume').disabled=!['PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED'].includes(run.status)||state.unresolvedCalls.length>0;
+  renderResumeEligibility(run);
+  renderPublicationIssues(run);
   $('export-json').disabled=active;$('export-xlsx').disabled=active;renderRecords();renderTakeoffs();renderWorkflows();
  })();
  state.refreshPromise=task;
  try{await task;}finally{if(state.refreshPromise===task)state.refreshPromise=null;}
+}
+function renderResumeEligibility(run){
+ $('resume').disabled=run.can_resume!==true||state.unresolvedCalls.length>0;
+}
+function renderPublicationIssues(run){
+ const issues=Array.isArray(run.coverage?.publication_issues)?run.coverage.publication_issues:[];
+ const section=$('publication-issues'),list=$('publication-issues-list');section.hidden=!issues.length;list.replaceChildren();
+ if(!issues.length)return;
+ I.bindText($('publication-issues-summary'),'publicationIssues.summary',{count:issues.length});
+ issues.forEach((issue,index)=>{
+  const card=el('article',null,'verification-field');
+  card.append(elT('p','publicationIssues.issue',{candidate:issue.candidate_key||issue.issue_id||String(index+1),instancePath:issue.instance_path||'—',schemaPath:issue.schema_path||'—',validator:issue.validator||'—'}));
+  (Array.isArray(issue.evidence_ids)?issue.evidence_ids:[]).forEach((evidenceId,sourceIndex)=>{
+   const button=elT('button','publicationIssues.source',{number:sourceIndex+1},'link evidence-button');
+   button.onclick=error(()=>showEvidence(evidenceId,null,run.id));card.append(button);
+  });
+  list.append(card);
+ });
 }
 function updateQuestionAvailability(){
  $('project-question-profile').disabled=state.asking||state.caseFlowBusy;
@@ -936,6 +955,7 @@ function renderRecords(){
   name.append(el('small',detail));
   const status=el('td');status.append(I.bindStatus(el('span',null,'badge'),c.requirement_status||c.resolution_status||c.reason_code));status.append(elT('small','verify.status.'+(row.verification?.status||'NOT_CHECKED'),{},'verification-summary'));
   const review=el('td');review.append(I.bindStatus(el('span',null,'badge '+(r.review.status==='PENDING'?'warn':'')),r.review.status));
+  if(row.publication_blocked===true)review.append(elT('small','publicationIssues.blockedList',{},'notice'));
   if(r.kind==='MATERIAL'&&c.quantity)review.append(elT('small','record.quantityReview',{status:I.status(r.quantity_review||'PENDING')}));
    const evidence=el('td');sourceIds(c).forEach((eid,index)=>{const b=elT('button','record.sourceNumber',{number:index+1},'link evidence-button');b.onclick=error(()=>showEvidence(eid));evidence.append(b);});
   tr.append(name,status,review,evidence);$('results-body').append(tr);
@@ -1043,12 +1063,16 @@ async function showWorkflowClassification(documentId,fileName){
 }
 async function showRecord(row){
   const listDisplay=row.record.display;
+  const listBlocked=row.publication_blocked===true,listIssues=row.publication_issues;
   if(!row.record.candidate.candidate_key){
    try{row=await api(`/records/${row.record.meta.record_id}`);}catch(e){toast(e.message);return;}
    if(listDisplay)row.record.display=listDisplay;
+   if(listBlocked)row.publication_blocked=true;
+   if(Array.isArray(listIssues)&&!Array.isArray(row.publication_issues))row.publication_issues=listIssues;
   }
-  const r=row.record,c=r.candidate,d=r.display||{};$('drawer').hidden=false;I.bindText($('drawer-title'),labels[r.kind]);const body=$('drawer-body');body.replaceChildren();
+  const r=row.record,c=r.candidate,d=r.display||{},blocked=row.publication_blocked===true;$('drawer').hidden=false;I.bindText($('drawer-title'),labels[r.kind]);const body=$('drawer-body');body.replaceChildren();
   body.append(el('h3',d.name||c.name||c.requirement||c.subject));
+  if(blocked)body.append(elT('p','publicationIssues.historicalRecord',{},'notice'));
   if(r.kind==='MATERIAL'){
    if(c.design_properties?.length)body.append(el('p',c.design_properties.map(x=>x.name+': '+x.value+(x.unit?' '+x.unit:'')).join(' · ')));
    if(d.specification_section)body.append(el('p','Specification section: '+d.specification_section));
@@ -1059,18 +1083,18 @@ async function showRecord(row){
    if(d.specification_section)body.append(el('p','Specification section: '+d.specification_section));
    if(d.performer)body.append(el('p','Performer: '+d.performer));
   }
-  body.append(elT('p','record.note',{},'muted'));body.append(verificationPanel(row));
+  body.append(elT('p','record.note',{},'muted'));body.append(verificationPanel(row,blocked));
   const editor=el('details');editor.append(elT('summary','record.structuredEditor'));
-  const area=el('textarea');area.value=JSON.stringify(c,null,2);area.setAttribute('data-i18n-aria-label','record.json');I.applyElement(area);editor.append(area);body.append(editor);
- const note=el('input');note.setAttribute('data-i18n-placeholder','record.reviewNote');note.setAttribute('data-i18n-aria-label','record.reviewNoteLabel');I.applyElement(note);body.append(note);
+  const area=el('textarea');area.value=JSON.stringify(c,null,2);area.readOnly=blocked;area.setAttribute('data-i18n-aria-label','record.json');I.applyElement(area);editor.append(area);body.append(editor);
+ const note=el('input');note.disabled=blocked;note.setAttribute('data-i18n-placeholder','record.reviewNote');note.setAttribute('data-i18n-aria-label','record.reviewNoteLabel');I.applyElement(note);body.append(note);
  const actions=el('div',null,'row');
- ['ACCEPTED','EDITED','REJECTED'].forEach((action,i)=>{const b=elT('button',['record.accept','record.edit','record.reject'][i],{},i===0?'primary':'outline');b.onclick=error(async()=>{
+ ['ACCEPTED','EDITED','REJECTED'].forEach((action,i)=>{const b=elT('button',['record.accept','record.edit','record.reject'][i],{},i===0?'primary':'outline');b.disabled=blocked;if(!blocked)b.onclick=error(async()=>{
   await api(`/records/${r.meta.record_id}/review`,'POST',{action,expected_version:row.review_version,note:note.value,...(action==='EDITED'?{candidate:JSON.parse(area.value)}:{})});
   $('drawer').hidden=true;await refreshRun(true);toast('Review saved');});actions.append(b);});body.append(actions,el('hr'));
  if(r.kind==='MATERIAL'&&c.quantity){
   const quantityActions=el('div',null,'row');
   [['VERIFIED','record.quantityVerify'],['REJECTED','record.quantityReject'],['PENDING','record.quantityPending']].forEach(([quantity_action,key])=>{
-   const button=elT('button',key,{},'outline');button.onclick=error(async()=>{
+   const button=elT('button',key,{},'outline');button.disabled=blocked;if(!blocked)button.onclick=error(async()=>{
     button.disabled=true;try{await api(`/records/${r.meta.record_id}/review`,'POST',{quantity_action,expected_version:row.review_version,note:note.value});
      $('drawer').hidden=true;await refreshRun(true);toast(I.t('record.quantitySaved'));}finally{button.disabled=false;}
    });quantityActions.append(button);
@@ -1093,15 +1117,15 @@ async function showEvidence(id,range=null,runId=state.run){
  const a=elT('a','evidence.open',{},'button outline');a.href='/api/documents/'+e.document_id+'/file';a.target='_blank';a.rel='noopener';body.append(a);
  body.append(elT('p',e.extraction_method==='VISION'?'evidence.visionNote':'evidence.note',{},'muted'));
 }
-function verificationPanel(row){
+function verificationPanel(row,blocked=false){
  const root=el('section',null,'verification-panel');root.dataset.verificationPanel='true';
  const report=row.verification||{status:'NOT_CHECKED',fields:[]};
  root.append(elT('h3','verify.title'),elT('span','verify.status.'+report.status,{},'badge warn'),elT('p','verify.disclaimer',{},'muted'));
  const toolbar=el('div',null,'row');
- const check=elT('button','verify.check',{},'outline');
- check.onclick=error(async()=>{await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:false});await refreshRun(true);const fresh=state.records.find(x=>x.record.meta.record_id===row.record.meta.record_id);if(fresh)showRecord(fresh);});
- const semantic=elT('button','verify.semantic',{},'outline');semantic.disabled=!state.settings?.live_ready;
- semantic.onclick=error(async()=>{const job=await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:true});root.append(elT('p','verify.queued',{id:job.id}));semantic.disabled=true;});
+ const check=elT('button','verify.check',{},'outline');check.disabled=blocked;
+ if(!blocked)check.onclick=error(async()=>{await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:false});await refreshRun(true);const fresh=state.records.find(x=>x.record.meta.record_id===row.record.meta.record_id);if(fresh)showRecord(fresh);});
+ const semantic=elT('button','verify.semantic',{},'outline');semantic.disabled=blocked||!state.settings?.live_ready;
+ if(!blocked)semantic.onclick=error(async()=>{const job=await api(`/records/${row.record.meta.record_id}/verification`,'POST',{expected_version:row.review_version,semantic:true});root.append(elT('p','verify.queued',{id:job.id}));semantic.disabled=true;});
  toolbar.append(check,semantic);root.append(toolbar);
  if(report.processing_basis){const detail=el('details');detail.append(elT('summary','verify.processingBasis'),el('pre',JSON.stringify(report.processing_basis,null,2)));root.append(detail);}
  const priority=f=>/^\/(name|requirement|subject|activity)$/.test(f.path)?0:(f.path.startsWith('/design_properties/')?1:2);

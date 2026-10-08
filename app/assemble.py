@@ -6,10 +6,11 @@ import re
 from collections import defaultdict
 from copy import deepcopy
 from decimal import Decimal
+from jsonschema.exceptions import ValidationError
 from app.db import dumps, now
 from app.parsers import PARSER_VERSION
 from app.settings import VERSION, ROOT
-from contracts.runtime_rules import (EvidenceScope,RevisionClaim,select_latest,wrap_candidate)
+from contracts.runtime_rules import (EvidenceScope,RevisionClaim,select_latest,wrap_candidate,evidence_references)
 
 SCHEMA_VERSION='0.2.0'
 TAG_PATTERN=r'[A-Za-z]{1,12}-\d+[A-Za-z0-9-]*'
@@ -465,7 +466,8 @@ def inspection(atom: dict,evidence: dict,sources: list[dict] | None = None):
     if extras:c['support_note']+=' 原子属性：'+ '; '.join(p['name']+'='+p['value'] for p in extras)
     return c
 
-def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict]], parser_missing: list[dict]):
+def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict]], parser_missing: list[dict],
+              publication_issues: list[dict] | None = None):
     scope=EvidenceScope('local',run['project_id'],run['snapshot_id'],evidence_records)
     candidates=[]; material_groups=defaultdict(list)
     for evidence,result in extracted:
@@ -528,4 +530,23 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
               'provider':run['provider'],'model_id':'mock-no-network' if run['provider']=='mock' else run['model'],
               'model_snapshot':None,'routing_version':'0.2.0','retrieval_version':'exact-only-v1',
               'assembly_rule_version':'disabled-v1','revision_policy_version':'0.2.0','request_id':None}
-        yield wrap_candidate(kind,candidate,meta,scope)
+        # Scope violations and application invariants must remain fatal, even
+        # when a candidate also has a schema defect. Only schema validation is
+        # isolated; source extraction remains untouched for local recovery.
+        refs=evidence_references(candidate)
+        scope.check(refs)
+        try:
+            record=wrap_candidate(kind,candidate,meta,scope)
+        except ValidationError as exc:
+            if publication_issues is None:raise
+            def pointer(parts):
+                return ''.join('/'+str(part).replace('~','~0').replace('/','~1') for part in parts)
+            publication_issues.append({
+                'issue_id':'PUB-'+key(run['id'],kind,candidate['candidate_key']),
+                'kind':kind,'candidate_key':candidate['candidate_key'],
+                'evidence_ids':sorted(refs),'instance_path':pointer(exc.absolute_path),
+                'schema_path':pointer(exc.absolute_schema_path),'validator':exc.validator,
+                # Transient matching context is removed before persistence.
+                '_candidate':candidate})
+            continue
+        yield record

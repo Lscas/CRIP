@@ -211,6 +211,7 @@
       ],
       "planned_product_tests": [
         "tests/app/test_parsers.py",
+        "tests/app/test_review_cad_integrity.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [],
@@ -747,6 +748,8 @@
         "app/review"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_publication_isolation.py",
+        "tests/web/test_publication_issues.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [
@@ -919,6 +922,8 @@
         "app/local"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_task_history.py",
+        "tests/app/test_review_resume_contract.py",
         "tests/app/test_gateway_budget.py",
         "tests/app/test_gemini_local_setup.py",
         "tests/app/test_local_entry.py",
@@ -1032,6 +1037,9 @@
         "app/reliability"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_publication_isolation.py",
+        "tests/app/test_review_resume_contract.py",
+        "tests/web/test_resume_contract.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [],
@@ -1042,7 +1050,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "原Run可在人工对账后恢复，跳过已完成文档和非PENDING片段；完整生产重试队列仍未实现。"
+      "progress_note": "DEV-173 adds schema-only candidate isolation with atomic source-linked issues, blocked historical snapshots and shared server/UI resume eligibility. Customer runtime is unchanged; current acceptance: docs/AUDIT_REMAINING_VALIDATION.md. A complete production retry queue is still not implemented."
     },
     {
       "requirement_id": "NFR-OBS-001",
@@ -1051,6 +1059,7 @@
         "app/obs"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_task_history.py",
         "tests/app/test_api.py",
         "tests/app/test_gateway_budget.py"
       ],
@@ -1063,7 +1072,7 @@
         "migrations/003_call_reconciliation.sql"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "本机原型已记录安全供应商诊断、成本状态和人工对账事件；完整可观测性仍未实现。"
+      "progress_note": "DEV-173 adds safe publication issue identifiers/contract paths and indexed task-family metadata lookup without copying whole-run response bodies. Current validation: docs/AUDIT_REMAINING_VALIDATION.md. Complete production observability remains planned."
     },
     {
       "requirement_id": "QLT-EVAL-001",
@@ -1217,7 +1226,7 @@
       "planned_product_modules": [
         "app/field"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": ["tests/app/test_review_verification_context.py"],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
@@ -1523,7 +1532,7 @@
       "planned_product_modules": [
         "app/input"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": ["tests/app/test_review_resume_contract.py", "tests/web/test_resume_contract.py"],
       "contract_tests": [],
       "test_scope": "not_implemented",
       "implemented_product_paths": [],

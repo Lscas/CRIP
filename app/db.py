@@ -124,6 +124,11 @@ class Database:
             # not make schema28 mask or reject that isolated legacy state.
             if c.execute('SELECT 1 FROM schema_migrations WHERE version=27').fetchone():
                 install_projection_human_review(c)
+            # Older isolated migration fixtures intentionally stop before 028.
+            # This non-versioned additive index must not make those fixtures
+            # appear to have the complete current schema chain.
+            if c.execute('SELECT 1 FROM schema_migrations WHERE version=28').fetchone():
+                self._ensure_model_call_task_index(c)
 
     @staticmethod
     def _preflight_reference_projection_results(connection: sqlite3.Connection) -> None:
@@ -132,6 +137,30 @@ class Database:
     @staticmethod
     def _install_reference_projection_results(connection: sqlite3.Connection) -> None:
         install_reference_projection_results(connection)
+
+    @staticmethod
+    def _ensure_model_call_task_index(connection: sqlite3.Connection) -> None:
+        """Install only the verified non-unique run/task lookup index.
+
+        It deliberately has no schema_migrations marker: schema28's strict
+        preflight owns the current chain and must still run on every startup.
+        """
+        name='ix_model_calls_run_task_key'
+        object_row=connection.execute(
+            "SELECT type,tbl_name FROM sqlite_master WHERE name=?",(name,)).fetchone()
+        if object_row is None:
+            connection.executescript((ROOT/'migrations/029_model_call_task_index.sql').read_text(encoding='utf-8'))
+            object_row=connection.execute(
+                "SELECT type,tbl_name FROM sqlite_master WHERE name=?",(name,)).fetchone()
+        index=connection.execute("PRAGMA index_list('model_calls')").fetchall()
+        match=next((row for row in index if row['name']==name),None)
+        key_columns=[(row['seqno'],row['cid'],row['name'],row['desc'],row['coll'])
+                     for row in connection.execute(f"PRAGMA index_xinfo('{name}')")
+                     if row['key']]
+        if (object_row['type']!='index' or object_row['tbl_name']!='model_calls'
+                or match is None or match['unique']!=0 or match['partial']!=0
+                or key_columns!=[(0,2,'run_id',0,'BINARY'),(1,3,'task_key',0,'BINARY')]):
+            raise RuntimeError('model-call task-history index drift')
 
     @staticmethod
     def _install_reference_evaluation_selector_version(connection:sqlite3.Connection)->None:
@@ -553,9 +582,29 @@ class Database:
 
     @staticmethod
     def _family_calls(connection: sqlite3.Connection, run_id: str, task_family: str) -> list[dict]:
-        rows=connection.execute('''SELECT id,task_key,state,actual_units,response,error,created_at
-                                   FROM model_calls WHERE run_id=? ORDER BY created_at,id''',(run_id,)).fetchall()
-        return [dict(row) for row in rows if paid_task_family(row['task_key']) == task_family]
+        manual_prefix=task_family+PAID_TASK_GENERATION_MARKER
+        predicates=[('task_key=?',(task_family,)),
+                    ('task_key>=? AND task_key<?',(manual_prefix,manual_prefix[:-1]+';'))]
+        if re.fullmatch(r'verify:[0-9a-f]{64}',task_family):
+            legacy_prefix=task_family+':job:'
+            predicates.append(('task_key>=? AND task_key<?',(legacy_prefix,legacy_prefix[:-1]+';')))
+        projection='id,task_key,state,actual_units,response IS NOT NULL AS has_response,error,created_at'
+        query=' UNION ALL '.join(
+            f'SELECT {projection} FROM model_calls WHERE run_id=? AND {predicate}'
+            for predicate,_ in predicates)+' ORDER BY created_at,id'
+        args=[value for predicate,values in predicates for value in (run_id,*values)]
+        rows=connection.execute(query,args).fetchall()
+        return [{**dict(row),'has_response':bool(row['has_response'])} for row in rows
+                if paid_task_family(row['task_key']) == task_family]
+
+    def family_calls(self, run_id: str, task_family: str) -> list[dict]:
+        """Read bounded billing-family metadata without materializing responses."""
+        with self.connect() as connection:
+            return self._family_calls(connection,run_id,task_family)
+
+    def model_call_response(self, call_id: str) -> str | None:
+        row=self.one('SELECT response FROM model_calls WHERE id=?',(call_id,),False)
+        return row['response'] if row else None
 
     @classmethod
     def _recovery_events(cls, connection: sqlite3.Connection, run_id: str,
@@ -607,7 +656,7 @@ class Database:
         used_sources={event['payload'].get('source_call_id') for event in existing}
         candidates=[]
         for call in calls:
-            if (call['id'] in used_sources or call['response'] is not None
+            if (call['id'] in used_sources or call['has_response']
                     or call['state'] not in ('RECONCILED_ZERO','RECONCILED_CHARGED')):
                 continue
             reconciliation=cls._reconciliation_for_call(connection,call['id'])

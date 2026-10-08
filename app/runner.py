@@ -23,6 +23,7 @@ from app.visual_pipeline import VISION_RENDER_VERSION,render_visual_png
 from app.assemble import envelopes,missing,key,material_group_key
 from contracts.runtime_rules import validate_schema
 from app.verification import VerificationService
+from app.publication import publication_issues
 from app.canonical import CanonicalGraph
 
 ACTIVE=('QUEUED','RUNNING')
@@ -134,6 +135,10 @@ class Runner:
         for k in ('document_ids','coverage','capabilities'):r[k]=json.loads(r[k])
         r['performance']=self.db.performance(rid)
         r['progress']=self.progress(r)
+        with self.db.connect() as connection:
+            reason=self._resume_blocked_reason(connection,r)
+        r['can_resume']=reason is None
+        r['resume_blocked_reason']=reason
         return r
 
     def progress(self,run,at_epoch=None):
@@ -184,6 +189,33 @@ class Runner:
         try:yield
         finally:self.db.record_metric(rid,metric,(time.perf_counter()-started)*1000)
 
+    def _resume_blocked_reason(self,c,r,at_epoch=None):
+        """Read-only eligibility; the Resume transaction checks again before authorizing."""
+        capabilities=r['capabilities']
+        if isinstance(capabilities,str):capabilities=json.loads(capabilities)
+        reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
+        resumable_failure=(r['status']=='FAILED' and r['stage']=='生成可审核记录与设计差异'
+            and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(r['id'],)).fetchone())
+        resumable_publication=(r['status']=='PARTIAL' and r['stage']=='本轮基线任务已结束'
+            and bool(publication_issues(r['coverage']))
+            and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(r['id'],)).fetchone())
+        if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not (resumable_failure or resumable_publication):
+            return '当前任务不可恢复；已结束任务需新建分析'
+        if not reference_mode and r['provider']!=self.s.provider:
+            return '原运行Provider与当前服务不一致，请新建分析'
+        if (time.time() if at_epoch is None else at_epoch)>=r['deadline_epoch']:
+            return '已到原运行24小时时限，需明确新建运行'
+        if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING') LIMIT 1").fetchone():
+            return '已有活跃任务'
+        if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING') LIMIT 1").fetchone():
+            return '当前有核验任务，请结束后再恢复分析'
+        if c.execute("SELECT id FROM reference_evaluation_jobs WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED') LIMIT 1").fetchone():
+            return 'A managed Reference evaluation job is active.'
+        if not reference_mode and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL LIMIT 1',
+                                           (r['project_id'],)).fetchone():
+            return '有待对账API请求，先核对账单；不会自动再次付费'
+        return None
+
     def control(self,rid,action):
         with self.db.connect(True) as c:
             r=c.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
@@ -191,27 +223,13 @@ class Runner:
             if action=='resume':
                 capabilities=json.loads(r['capabilities'])
                 reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
-                resumable_failure=(r['status']=='FAILED'
-                    and r['stage']=='生成可审核记录与设计差异'
-                    and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(rid,)).fetchone())
-                if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not resumable_failure:
-                    raise DomainError('当前任务不可恢复；已结束任务需新建分析',409)
-                if not reference_mode and r['provider'] != self.s.provider:
-                    raise DomainError('原运行Provider与当前服务不一致，请新建分析',409)
-                if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行',409)
-                if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('已有活跃任务',409)
-                if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，请结束后再恢复分析',409)
-                if c.execute("""SELECT id FROM reference_evaluation_jobs
-                                  WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
-                    raise DomainError('A managed Reference evaluation job is active.',409)
-                if (not reference_mode
-                        and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
-                                      (r['project_id'],)).fetchone()):
-                    raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
+                reason=self._resume_blocked_reason(c,r)
+                if reason is not None:raise DomainError(reason,409)
+                resumable_publication=r['status'] in ('FAILED','PARTIAL')
                 generations=([] if reference_mode else
                              self.db.authorize_run_resume_generations(c,dict(r),context_id=uid('RESUME')))
                 message=('修复本地生成错误后重新生成审核记录；已完成的模型调用不会重发'
-                         if resumable_failure else
+                         if resumable_publication else
                          ('恢复未完成任务；已为人工对账且仍待处理的任务创建'
                          f'{len(generations)}个显式付费恢复代次，每个任务族累计最多3次'
                          if generations else '恢复未完成任务；没有创建新的付费恢复代次'))
@@ -352,17 +370,20 @@ class Runner:
                 self.publish(run,seed_verifications=False)
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('逐字段核验原文支持性',rid))
             with self.timed(rid,'stage.verify'):
-                items=self.db.all('SELECT id FROM records WHERE run_id=? ORDER BY id',(rid,))
+                blocked={item.get('blocked_record_id') for item in publication_issues(self.get(rid)['coverage'])}
+                items=[item for item in self.db.all('SELECT id FROM records WHERE run_id=? ORDER BY id',(rid,))
+                       if item['id'] not in blocked]
                 if items and self.checkpoint(rid):
                     self.verifier.refresh_many([item['id'] for item in items],allow_model=run['provider']!='mock')
             self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
                 ('PARTIAL','本轮基线任务已结束',
                  '已完成可用文字、本机OCR、已启用页面视觉与可用CAD对象处理；PDF原始矢量审计不等于材料净量，原生DWG取决于本机合法转换器。复杂选项与跨专业关联仍待完善。'
-                 +('模拟模式仅验证流程，不代表真实施工分析。' if run['provider']=='mock' else '真实API结果尚需人工核验。'),rid))
+                 +('模拟模式仅验证流程，不代表真实施工分析。' if run['provider']=='mock' else '真实API结果尚需人工核验。')
+                 +f' Unpublished candidates: {len(publication_issues(self.get(rid)["coverage"]))}.',rid))
         except CallSafetyError as exc:
-            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(exc),rid));self.publish(run)
+            self._publish_before_provider_pause(run,exc)
         except ProviderPaused as exc:
-            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(exc),rid));self.publish(run)
+            self._publish_before_provider_pause(run,exc)
         except Exception as exc:
             import logging;logging.getLogger('cirp').exception('运行失败 %s',rid)
             self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('FAILED','内部处理错误：'+type(exc).__name__,rid))
@@ -371,6 +392,18 @@ class Runner:
             if r['status']=='RUNNING' and (r['stop_requested'] or self.stop_event.is_set()):
                 self.db.execute("UPDATE runs SET status='PAUSED',message='服务停止，未完成任务保留' WHERE id=?",(rid,))
             self.update_coverage(rid)
+
+    def _publish_before_provider_pause(self,run,error):
+        # Stay RUNNING until the consistent snapshot and its diagnostics commit.
+        # A failed pause-time publish must not expose stale accepted output.
+        try:
+            self.publish(run)
+        except Exception as exc:
+            import logging;logging.getLogger('cirp').exception('暂停前发布失败 %s',run['id'])
+            self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
+                            ('FAILED','生成可审核记录与设计差异','内部处理错误：'+type(exc).__name__,run['id']))
+            return
+        self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(error),run['id']))
 
     def parse_documents(self,run):
         rid=run['id']
@@ -578,7 +611,8 @@ class Runner:
             s=json.loads(row['summary'])
             if row['status']!='SUCCESS':
                 missing_items.append(missing(row['document_id'],'；'.join(s.get('warnings',[])) or '文件内容未完整解析','PARSE_FAILED',target=row['document_id']))
-        generated=list(envelopes(run,evs,extracted,missing_items));refresh_ids=[]
+        issues=[]
+        generated=list(envelopes(run,evs,extracted,missing_items,publication_issues=issues));refresh_ids=[]
         with self.db.connect(True) as c:
             def generated_baseline(row):
                 """Recover the latest system-generated candidate behind human edits."""
@@ -618,6 +652,31 @@ class Runner:
                 condition=candidate.get('condition')
                 if condition is not None and not isinstance(condition,str):return None
                 return (subject.casefold(),name.casefold(),(condition or '').casefold())
+
+            for issue in issues:
+                candidate=issue.pop('_candidate')
+                existing=c.execute('''SELECT id FROM records WHERE run_id=? AND kind=? AND logical_key=?''',
+                                   (run['id'],issue['kind'],issue['candidate_key'])).fetchall()
+                if not existing:
+                    # Legacy group identities can change as scope is recovered.
+                    # Do not silently expose an older row when its successor is
+                    # invalid. A unique same-entity/source match is conservative;
+                    # ambiguity stops publication without touching human history.
+                    for row in c.execute('SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind=?',
+                                         (run['id'],issue['kind'])):
+                        baseline=generated_baseline(row)
+                        old=baseline or json.loads(row['envelope'])['candidate']
+                        if not set(old.get('evidence_ids',[])).intersection(issue['evidence_ids']):continue
+                        if not candidate.get('entity_ids') or old.get('entity_ids')!=candidate.get('entity_ids'):continue
+                        existing.append(row)
+                if len(existing)>1:
+                    raise DomainError('Unpublished candidate matches multiple historical records; manual resolution is required.',409)
+                if existing:
+                    issue['blocked_record_id']=existing[0]['id']
+                    c.execute("UPDATE verification_jobs SET state='STALE',message=?,updated_at=? WHERE record_id=? AND state IN ('QUEUED','RUNNING')",
+                              ('Current candidate was not published.',now(),existing[0]['id']))
+
+            blocked={issue.get('blocked_record_id') for issue in issues}
 
             for record in generated:
                 record_id=record['meta']['record_id'];logical=record['candidate']['candidate_key']
@@ -661,6 +720,8 @@ class Runner:
                     c.execute('INSERT INTO records(id,run_id,project_id,kind,envelope,logical_key) VALUES(?,?,?,?,?,?)',
                               (record_id,run['id'],run['project_id'],record['kind'],dumps(record),logical))
                     refresh_ids.append(record_id);continue
+                if existing['id'] in blocked:
+                    raise DomainError('A historical record matches both valid and unpublished candidates; manual resolution is required.',409)
                 record_id=existing['id'];record['meta']['record_id']=record_id
                 before=json.loads(existing['envelope'])
                 baseline=generated_baseline(existing)
@@ -698,6 +759,9 @@ class Runner:
                 c.execute("UPDATE verification_jobs SET state='STALE',message=?,updated_at=? WHERE record_id=? AND state IN ('QUEUED','RUNNING')",
                           ('候选因新增证据变化，旧核验任务失效',now(),record_id))
                 refresh_ids.append(record_id)
+            coverage=json.loads(c.execute('SELECT coverage FROM runs WHERE id=?',(run['id'],)).fetchone()[0])
+            coverage['publication_issues']=issues
+            c.execute('UPDATE runs SET coverage=? WHERE id=?',(dumps(coverage),run['id']))
         if seed_verifications:
             for record_id in refresh_ids:self.verifier.refresh(record_id)
 
@@ -746,5 +810,6 @@ class Runner:
                  'workflow_ambiguous':workflows['ambiguous'],
                  'quoted_email_documents':workflows['quoted_email_documents'],
                  'warnings':[w for summary_item in summaries for w in summary_item.get('warnings',[])],
-                 'scope_limitations':limitations}
+                 'scope_limitations':limitations,
+                 'publication_issues':publication_issues(run['coverage'])}
         self.db.execute('UPDATE runs SET coverage=? WHERE id=?',(dumps(summary),rid))
