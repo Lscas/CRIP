@@ -119,7 +119,8 @@ def post(server, fields):
         f"http://{host}:{port}/start",
         data=urlencode(fields).encode("ascii"),
         method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": "application/x-www-form-urlencoded",
+                 "Origin": f"http://{host}:{port}"},
     )
     return urlopen(request, timeout=2)
 

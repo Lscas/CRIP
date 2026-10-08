@@ -208,7 +208,20 @@ class SetupHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _same_loopback_origin(self, *, post: bool) -> bool:
+        expected=f'127.0.0.1:{self.server.server_address[1]}'
+        hosts=self.headers.get_all('Host') or []
+        origins=self.headers.get_all('Origin') or []
+        if hosts != [expected]:
+            return False
+        if not post:
+            return not origins or origins == [f'http://{expected}']
+        return origins == [f'http://{expected}']
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._same_loopback_origin(post=False):
+            self._send(403, b'Forbidden')
+            return
         if urlsplit(self.path).path != "/":
             self._send(404, b"Not found")
             return
@@ -218,6 +231,9 @@ class SetupHandler(BaseHTTPRequestHandler):
         ))
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._same_loopback_origin(post=True):
+            self._send(403, b'Forbidden')
+            return
         if urlsplit(self.path).path != "/start":
             self._send(404, b"Not found")
             return

@@ -811,6 +811,32 @@ class Gateway:
         return (not allow_reasoning
                 and bool(message.get('reasoning_content') or details.get('reasoning_tokens', 0)))
 
+    def _terminal_response_policy(self, attempt: str, actual: Decimal, usage: dict,
+                                  provider_id: str | None, body: dict, *,
+                                  allow_reasoning: bool = False) -> bool:
+        """Validate billed response shapes before any route publishes a result.
+
+        A trustworthy usage block means the paid call is terminal even when its
+        envelope is malformed.  Missing usage is handled by the caller before
+        this helper and deliberately remains UNKNOWN for billing reconciliation.
+        """
+        try:
+            choices=body.get('choices')
+            if not isinstance(choices,list) or not choices or not isinstance(choices[0],dict):
+                raise ValueError('response choices are malformed')
+            if not isinstance(choices[0].get('message'),dict):
+                raise ValueError('response message is malformed')
+            details=usage.get('completion_tokens_details')
+            if details is not None and not isinstance(details,dict):
+                raise ValueError('completion token details are malformed')
+            return self.rejects_reasoning(body,usage,allow_reasoning=allow_reasoning)
+        except Exception as exc:
+            self.db.finalize_model_call(
+                attempt,actual,usage,provider_id,
+                diagnostic=self._terminal_diagnostic('RESPONSE_ENVELOPE',exc))
+            raise InvalidModelOutput(
+                'Provider response envelope was malformed; the cost was recorded and no result was published.') from exc
+
     def validate(self, data: dict, evidence: dict | list[dict]):
         validate_schema('extraction-result',data)
         records=evidence if isinstance(evidence,list) else [evidence]
@@ -1011,7 +1037,7 @@ class Gateway:
         actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
         # DeepSeek忽略非思考请求时保留账务并停止；Gemini 3最低推理属于预期行为。
-        if self.rejects_reasoning(body, usage):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused('供应商未遵守非思考设置；本次费用已记录，需确认接口兼容性。', 409)
@@ -1103,7 +1129,7 @@ class Gateway:
             raise ProviderPaused('视觉响应缺少usage；费用保持预留并暂停，需对账。',409)
         actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
-        if self.rejects_reasoning(body,usage):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused('视觉接口未遵守非思考配置；本次费用已记录，需确认接口兼容性。',409)
@@ -1180,12 +1206,12 @@ class Gateway:
             raise ProviderPaused('核验响应缺少usage，费用保持预留', 409)
         actual = Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
-        choice = (body.get('choices') or [{}])[0]; message = choice.get('message', {})
-        if self.rejects_reasoning(body, usage):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused('核验接口未遵守非思考配置，已记账并暂停', 409)
         try:
+            choice = body['choices'][0]; message = choice['message']
             if choice.get('finish_reason') != 'stop': raise ValueError('核验输出截断')
             text = message['content']
             if not isinstance(text, str) or len(text) > 50000: raise ValueError('核验响应过长')
@@ -1258,7 +1284,7 @@ class Gateway:
             raise ProviderPaused('The question response omitted usage. The reservation remains pending for billing review.',409)
         actual=Decimal('0')
         provider_id=self._safe_provider_id(body.get('id'))
-        if self.rejects_reasoning(body,usage):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused('The provider did not honor the non-reasoning setting. The cost was recorded and no answer was published.',409)
@@ -1371,7 +1397,7 @@ class Gateway:
             raise ProviderPaused(
                 'The QA V2 response omitted usage. The request remains pending for billing review.',409)
         actual=Decimal('0');provider_id=self._safe_provider_id(body.get('id'))
-        if self.rejects_reasoning(body,usage):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'))
             raise ProviderPaused(
@@ -1447,7 +1473,7 @@ class Gateway:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused(missing_usage_message,409)
         actual=Decimal('0');provider_id=self._safe_provider_id(body.get('id'))
-        if self.rejects_reasoning(body,usage,allow_reasoning=thinking):
+        if self._terminal_response_policy(attempt,actual,usage,provider_id,body,allow_reasoning=thinking):
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'),
                 reference_input_commitment=commitment)

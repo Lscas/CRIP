@@ -582,13 +582,42 @@ class Runner:
         with self.db.connect(True) as c:
             def generated_baseline(row):
                 """Recover the latest system-generated candidate behind human edits."""
-                events=c.execute('''SELECT action,before_json,after_json FROM review_events
+                events=c.execute('''SELECT action,actor,before_json,after_json FROM review_events
                                     WHERE record_id=? ORDER BY created_at,id''',(row['id'],)).fetchall()
-                for event in reversed(events):
-                    if event['action']=='INVALIDATED_BY_NEW_EVIDENCE':
-                        return json.loads(event['after_json'])['candidate']
-                if events:return json.loads(events[0]['before_json'])['candidate']
-                return json.loads(row['envelope'])['candidate']
+                current=json.loads(row['envelope'])
+                # While no human review is active, the persisted envelope is
+                # itself the latest system candidate, including legacy
+                # pending-to-pending updates that predate provenance events.
+                if current['review']['status']=='PENDING':
+                    return current['candidate']
+                checkpoints=('INVALIDATED_BY_NEW_EVIDENCE','SYSTEM_BASELINE_UPDATED')
+                for index in range(len(events)-1,-1,-1):
+                    if events[index]['action'] not in checkpoints:
+                        continue
+                    # Older databases did not record pending-to-pending system
+                    # updates.  A later human review's `before` is the exact
+                    # candidate shown to that reviewer, and is the only safe
+                    # legacy recovery baseline.
+                    for event in events[index+1:]:
+                        if event['actor']!='cirp-system':
+                            return json.loads(event['before_json'])['candidate']
+                    return json.loads(events[index]['after_json'])['candidate']
+                for event in events:
+                    if event['actor']!='cirp-system':
+                        return json.loads(event['before_json'])['candidate']
+                # Do not mistake an unknown EDITED candidate for a system one.
+                return None
+
+            def unscoped_material_identity(candidate):
+                """Constrained identity for a pre-scope merged material row."""
+                entities=candidate.get('entity_ids') or []
+                subject=entities[0] if len(entities)==1 and isinstance(entities[0],str) else None
+                name=candidate.get('name')
+                if not subject or not isinstance(name,str) or not re.fullmatch(r'[A-Za-z]{1,12}-\d+[A-Za-z0-9-]*',subject):
+                    return None
+                condition=candidate.get('condition')
+                if condition is not None and not isinstance(condition,str):return None
+                return (subject.casefold(),name.casefold(),(condition or '').casefold())
 
             for record in generated:
                 record_id=record['meta']['record_id'];logical=record['candidate']['candidate_key']
@@ -603,17 +632,43 @@ class Runner:
                     # foreign-key history.
                     legacy=[]
                     for row in c.execute("SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind='MATERIAL'",(run['id'],)):
-                        if material_group_key(generated_baseline(row))==logical:legacy.append(row)
+                        baseline=generated_baseline(row)
+                        if baseline and material_group_key(baseline)==logical:legacy.append(row)
                     if len(legacy)>1:
                         raise DomainError('同一材料组存在多条旧记录；为避免覆盖审核历史，已停止自动恢复',409)
                     if legacy:existing=legacy[0]
+                if not existing and record['kind']=='MATERIAL' and not logical.startswith('MG-'):
+                    identity=unscoped_material_identity(record['candidate'])
+                    evidence_ids=set(record['candidate'].get('evidence_ids') or [])
+                    if identity and evidence_ids:
+                        legacy=[]
+                        for row in c.execute("SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind='MATERIAL' AND logical_key LIKE 'MG-%'",(run['id'],)):
+                            baseline=generated_baseline(row)
+                            if baseline is None:
+                                raise DomainError('旧合并材料缺少可恢复系统基线；为避免覆盖审核历史，已停止拆分恢复',409)
+                            if material_group_key(baseline) is not None:
+                                continue
+                            if unscoped_material_identity(baseline)!=identity:
+                                continue
+                            baseline_evidence=set(baseline.get('evidence_ids') or [])
+                            if not baseline_evidence or not evidence_ids.issubset(baseline_evidence):
+                                raise DomainError('旧合并材料证据范围不明确；为避免覆盖审核历史，已停止拆分恢复',409)
+                            legacy.append(row)
+                        if len(legacy)>1:
+                            raise DomainError('同一无范围旧合并材料对应多条记录；为避免覆盖审核历史，已停止拆分恢复',409)
+                        if legacy:existing=legacy[0]
                 if not existing:
                     c.execute('INSERT INTO records(id,run_id,project_id,kind,envelope,logical_key) VALUES(?,?,?,?,?,?)',
                               (record_id,run['id'],run['project_id'],record['kind'],dumps(record),logical))
                     refresh_ids.append(record_id);continue
                 record_id=existing['id'];record['meta']['record_id']=record_id
                 before=json.loads(existing['envelope'])
-                comparable=deepcopy(generated_baseline(existing));comparable['candidate_key']=logical
+                baseline=generated_baseline(existing)
+                if baseline is None:
+                    # A malformed legacy human record without any recoverable
+                    # system checkpoint must not be overwritten speculatively.
+                    continue
+                comparable=deepcopy(baseline);comparable['candidate_key']=logical
                 if comparable==record['candidate']:
                     # Identity-only legacy migration: preserve the current
                     # human decision and version while refreshing candidate-
@@ -633,6 +688,11 @@ class Runner:
                     c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
                               (event,record_id,'cirp-system','INVALIDATED_BY_NEW_EVIDENCE',
                                dumps(before),dumps(record),'恢复分析后新增证据改变候选；原人工决定保留在历史中，当前记录重置为待审核。',now()))
+                else:
+                    event=uid('REVIEW')
+                    c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
+                              (event,record_id,'cirp-system','SYSTEM_BASELINE_UPDATED',
+                               dumps(before),dumps(record),'系统候选在待审核状态更新；保留最新系统基线以保护后续人工审核。',now()))
                 c.execute('UPDATE records SET envelope=?,logical_key=?,review_version=review_version+1 WHERE id=?',
                            (dumps(record),logical,record_id))
                 c.execute("UPDATE verification_jobs SET state='STALE',message=?,updated_at=? WHERE record_id=? AND state IN ('QUEUED','RUNNING')",

@@ -1082,7 +1082,7 @@ def test_resume_rebuilds_merged_record_and_invalidates_early_human_review(client
     from app.gateway import mock_extract
 
     for name,suffix in (('one.txt',b'\nONE'),('two.txt',b'\nTWO')):
-        upload(client,project['id'],name,b'DEMO_MATERIAL|M-1|Concrete|-|strength=placeholder'+suffix)
+        upload(client,project['id'],name,b'DEMO_MATERIAL|M-1|Concrete|-|strength=placeholder|location=Level 1'+suffix)
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id'];db=client.app.state.db
     runner=client.app.state.runner;db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
     run=runner.get(rid);run['model']='mock'
@@ -1093,7 +1093,7 @@ def test_resume_rebuilds_merged_record_and_invalidates_early_human_review(client
     # sorts before it, covering the former record-id instability directly.
     early_row,new_row=rows[1],rows[0]
     for row,value,date in ((early_row,'4000 psi','2026-01-01'),(new_row,'5000 psi','2026-02-01')):
-        ev=json.loads(row['payload']);ev['raw_text']=f'DEMO_MATERIAL|M-1|Concrete|-|strength={value}'
+        ev=json.loads(row['payload']);ev['raw_text']=f'DEMO_MATERIAL|M-1|Concrete|-|strength={value}|location=Level 1'
         ev['internal_revision_date']=date;db.execute('UPDATE evidence SET payload=? WHERE id=?',(dumps(ev),row['id']))
     first_ev=json.loads(db.one('SELECT payload FROM evidence WHERE id=?',(early_row['id'],))['payload'])
     db.execute("UPDATE evidence SET status='EXTRACTED',extraction=? WHERE id=?",
@@ -1139,7 +1139,7 @@ def test_legacy_material_identity_migration_preserves_human_edits(client,project
     from app.db import dumps
     from app.gateway import mock_extract
 
-    upload(client,project['id'],'legacy.txt',b'DEMO_MATERIAL|M-1|Concrete|-|strength=4000 psi')
+    upload(client,project['id'],'legacy.txt',b'DEMO_MATERIAL|M-1|Concrete|-|strength=4000 psi|location=Level 1')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id'];db=client.app.state.db
     runner=client.app.state.runner;db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
     run=runner.get(rid);run['model']='mock';runner.parse_one(run,run['document_ids'][0])

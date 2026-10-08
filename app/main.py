@@ -126,7 +126,7 @@ class ReconcileCallInput(Input):
     note:str=Field(default='',max_length=1000)
 
 class ReviewInput(Input):
-    action:Literal['ACCEPTED','EDITED','REJECTED']
+    action:Literal['ACCEPTED','EDITED','REJECTED']|None=None
     expected_version:int=Field(ge=0)
     note:str=Field(default='',max_length=4000)
     candidate:dict|None=None
@@ -1008,6 +1008,7 @@ def create_app(settings:Settings|None=None)->FastAPI:
             report={'fields':[{'path':'/name','status':row['name_verification_status']}]} if row['name_verification_status'] else {}
             display=reviewer_record_display(record,report)
             items.append({'record':{'kind':record['kind'],'meta':record['meta'],'review':record['review'],
+                                    'quantity_review':record.get('quantity_review','NOT_APPLICABLE'),
                                     'candidate':{key:candidate.get(key) for key in keys},'display':display},
                           'review_version':row['review_version'],
                           'verification':{'record_id':row['id'],'status':row['verification_status'] or 'NOT_CHECKED',
@@ -1105,6 +1106,8 @@ def create_app(settings:Settings|None=None)->FastAPI:
         return db.all('SELECT * FROM review_events WHERE record_id=? ORDER BY created_at',(record_id,))
     @app.post('/api/records/{record_id}/review')
     def review(record_id:str,data:ReviewInput):
+        if data.action is None and data.quantity_action is None:
+            raise DomainError('请选择材料或数量审核操作')
         with db.connect(True) as c:
             row=c.execute('SELECT * FROM records WHERE id=?',(record_id,)).fetchone()
             if not row:raise DomainError('结果不存在',404)
@@ -1124,13 +1127,21 @@ def create_app(settings:Settings|None=None)->FastAPI:
                 except Exception as exc:raise DomainError('修改不符合数据/来源契约：'+type(exc).__name__)
                 after['candidate']=data.candidate
             elif data.candidate is not None:raise DomainError('只有EDITED允许修改内容')
-            event=uid('REVIEW');after['review']={'status':data.action,'event_id':event,'actor_id':'local-engineer'}
+            event=uid('REVIEW')
+            if data.action is not None:
+                after['review']={'status':data.action,'event_id':event,'actor_id':'local-engineer'}
             if row['kind']=='MATERIAL' and after['candidate']['quantity'] is not None:
-                after['quantity_review']=data.quantity_action or 'PENDING'
+                quantity_context=('quantity','name','entity_ids','location','condition','material_kind',
+                                  'parent_entity_id','included_in_parent','design_properties')
+                unchanged=all(before['candidate'].get(key)==after['candidate'].get(key) for key in quantity_context)
+                prior=before.get('quantity_review','PENDING') if unchanged else 'PENDING'
+                after['quantity_review']=data.quantity_action or (prior if prior!='NOT_APPLICABLE' else 'PENDING')
             elif data.quantity_action:raise DomainError('该条没有可审核的数量')
+            else:after['quantity_review']='NOT_APPLICABLE'
             validate_schema('record-envelope',after)
             c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
-                      (event,record_id,'local-engineer',data.action,dumps(before),dumps(after),data.note,now()))
+                      (event,record_id,'local-engineer',data.action or 'QUANTITY_'+data.quantity_action,
+                       dumps(before),dumps(after),data.note,now()))
             c.execute('UPDATE records SET envelope=?,review_version=review_version+1 WHERE id=?',(dumps(after),record_id))
         if data.action=='EDITED':runner.verifier.refresh(record_id)
         return {'record':after,'review_version':data.expected_version+1,'verification':runner.verifier.get(record_id)}

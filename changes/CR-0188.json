@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0188",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-REVISION-001", "FR-REVISION-002", "FR-MATERIAL-001", "FR-MATERIAL-002", "FR-REVIEW-001", "FR-REVIEW-002", "FR-EXPORT-001", "FR-EXPORT-002", "FR-FIELD-EVIDENCE-001", "FR-API-006", "NFR-SECURITY-001"],
+  "summary": "Repair deterministic fact preservation, independent quantity/human review, pending system baselines, malformed provider settlement and exact setup Host/Origin boundaries.",
+  "decision_refs": ["2026-10-07 user approved the first audit-repair batch and parallel provider/setup boundary fixes.", "Independent Sol max design review approved existing-table system provenance, unresolved quantity retention, explicit quantity-only review, terminal trusted-usage settlement and fail-closed setup headers.", "docs/AUDIT_REPAIR_VALIDATION.md"],
+  "affected_paths": ["app/assemble.py", "app/exporter.py", "app/runner.py", "app/main.py", "app/gateway.py", "web/app.js", "web/i18n.js", "scripts/gemini_local_setup.py", "scripts/validate_readable_export.py", "tests/**", "examples/demo/*.txt", "spec/traceability.json", "docs/**", "tasks/DEV-172.json", "changes/CR-0188.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["tests/app/test_review_fact_assembly.py", "tests/app/test_review_system_baseline.py", "tests/app/test_review_export_integrity.py", "tests/app/test_review_provider_boundaries.py", "tests/app/test_review_setup_boundary.py", "tests/web/test_quantity_review.py", "tests/app/test_api.py", "tests/app/test_export_readability.py", "tests/app/test_gateway_budget.py", "tests/app/test_gemini_local_setup.py", "scripts/run_checks.py --area all", "scripts/check_spec_sync.py"],
+  "product_implementation_changed": true,
+  "approval_evidence": "User: start processing, following the explicit repair proposal. Preserve features and data; synchronize only the existing feature branch after validation.",
+  "known_limitations": ["No real-provider call, customer-data maintenance, deployment or main merge; synthetic regressions do not establish construction accuracy.", "Findings 9, 11, 14, 15 and 17 and general candidate-level publication isolation remain pending. Complex options, parent clauses and broader context mapping remain limited.", "Current full-gate and final review status are recorded separately in docs/AUDIT_REPAIR_VALIDATION.md; historical CI is not reused as proof."]
+}

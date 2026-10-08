@@ -5,6 +5,7 @@ import json
 import re
 from collections import defaultdict
 from copy import deepcopy
+from decimal import Decimal
 from app.db import dumps, now
 from app.parsers import PARSER_VERSION
 from app.settings import VERSION, ROOT
@@ -29,10 +30,11 @@ _MATERIAL_DESCRIPTOR = re.compile(
     r'ul system no\.?|ansi\s+[a-z0-9.-]+)$',
     re.I,
 )
-_NON_MATERIAL = re.compile(
-    r'\b(?:shop drawings?|submittals?|table of contents|schedule of values|record documents?|'
-    r'operation and maintenance|o\s*&\s*m\b|manuals?|warrant(?:y|ies)|schematic|diagrams?|'
-    r'transmittals?|calculations?|reports?|certificates?|instructions?|spare parts?|extra materials?)\b',
+_NON_MATERIAL_PRIMARY = re.compile(
+    r'(?:shop drawings?(?:\s+for\b.*)?|submittals?(?:\s+for\b.*)?|table of contents|schedule of values|record documents?|'
+    r'operation and maintenance(?: manuals?(?:\s+for\b.*)?)?|o\s*&\s*m(?: manuals?(?:\s+for\b.*)?)?|'
+    r'manuals?(?:\s+for\b.*)?|warrant(?:y|ies)|schematic|diagrams?|'
+    r'transmittals?|calculations?|reports?|certificates?|instructions?)',
     re.I,
 )
 _QA_ACTION = re.compile(
@@ -113,10 +115,14 @@ def _material_name(atom: dict) -> str:
         name=re.sub(r'^seismic restraint and equipment\b.*$','Seismic Restraints',name,flags=re.I)
     return name
 
+
+def _material_primary_object(value: str) -> str:
+    return re.sub(r'^\s*(?:provide|submit|prepare)\s+(?:(?:a|an|the)\s+)?','',value,flags=re.I).strip()
+
 def _material_atom_allowed(atom: dict) -> bool:
     name=_material_name(atom)
-    if not name or _is_actor(name):return False
-    if _NON_MATERIAL.search(name):return False
+    if not name or _ACTOR.fullmatch(name):return False
+    if _NON_MATERIAL_PRIMARY.fullmatch(_material_primary_object(name)):return False
     if re.search(r'\bsoftware\b',name,re.I):return False
     if name.casefold() in {'equipment','material','materials','product','products','item','items'}:return False
     if re.fullmatch(r'(?:astm|ansi|nfpa|ul|ashrae|iecc|scaqmd)\b.*',name,re.I):return False
@@ -126,7 +132,9 @@ def _material_atom_allowed(atom: dict) -> bool:
 def _inspection_atom_allowed(atom: dict) -> bool:
     text=' '.join(str(atom.get(name) or '') for name in ('action','object','subject'))
     if not _QA_ACTION.search(text):return False
-    if _NON_QA_DOCUMENT.search(text) or _ADMINISTRATIVE_VERIFY.search(text):return False
+    primary=re.sub(r'^\s*(?:provide|submit|prepare)\s+(?:(?:a|an|the)\s+)?','',
+                   str(atom.get('object') or ''),flags=re.I)
+    if _NON_QA_DOCUMENT.match(primary) or _ADMINISTRATIVE_VERIFY.search(text):return False
     if _NON_QA_REQUIREMENT.search(text):return False
     if _GENERIC_QA_OBJECT.fullmatch(str(atom.get('object') or '').strip()):return False
     category=atom.get('category');action=str(atom.get('action') or '')
@@ -265,7 +273,78 @@ def material_group_key(candidate: dict) -> str | None:
     subject=entities[0] if len(entities)==1 and isinstance(entities[0],str) else None
     name=candidate.get('name')
     if not subject or not isinstance(name,str) or not re.fullmatch(TAG_PATTERN,subject):return None
-    return 'MG-'+key('TAG',subject.casefold(),name.casefold(),candidate.get('condition'))
+    scope=_material_scope_from_properties(candidate.get('design_properties') or [])
+    if scope is None:return None
+    return 'MG-'+key('TAG',subject.casefold(),name.casefold(),candidate.get('condition'),scope)
+
+
+_MATERIAL_SCOPE_PROPERTIES={'location','building','floor','level','system'}
+_QUANTITY_PROPERTIES={'quantity','item_quantity','total_quantity','count','item_count','total_count'}
+
+
+def _normalized_property_name(value) -> str:
+    return re.sub(r'[^a-z0-9]+','_',str(value or '').casefold()).strip('_')
+
+
+def _material_scope_from_properties(properties: list[dict]) -> tuple[tuple[str,str],...] | None:
+    values=defaultdict(set)
+    for prop in properties:
+        name=_normalized_property_name(prop.get('name'))
+        value=str(prop.get('value') or '').strip()
+        if name in _MATERIAL_SCOPE_PROPERTIES and value and prop.get('evidence_ids'):
+            if value.casefold() in {'unknown','not specified','not stated','n/a','tbd'}:return None
+            values[name].add(value.casefold())
+    if not {'building','location'}.intersection(values) or any(len(group)>1 for group in values.values()):
+        return None
+    return tuple(sorted((name,next(iter(group))) for name,group in values.items()))
+
+
+def _quantity_property(quantity: dict) -> dict:
+    return {'name':'quantity','value':str(quantity['value']),'unit':quantity.get('unit'),
+            'evidence_ids':list(quantity.get('evidence_ids') or [])}
+
+
+def _merge_quantity(merged: dict, items: list[tuple[dict,dict]], group: tuple) -> None:
+    values=[(mat['quantity'],evidence) for mat,evidence in items if isinstance(mat.get('quantity'),dict)]
+    if not values:return
+    def unresolved():
+        merged.update(quantity=None,requirement_status='NOT_SPECIFIED')
+        merged['design_properties'].extend(_quantity_property(value) for value,_ in values)
+        merged['support_note']+=' Current quantity is not established across cited evidence.'
+    if len(items)>1:
+        dates=[evidence.get('internal_revision_date') for _,evidence in items]
+        if any(not value for value in dates):
+            unresolved();return
+        try:
+            latest=max(dates)
+        except TypeError:
+            unresolved();return
+        if any(evidence.get('internal_revision_date')==latest and not isinstance(mat.get('quantity'),dict)
+               for mat,evidence in items):
+            unresolved();return
+    distinct={(value['value'],value.get('unit')) for value,_ in values}
+    if len(distinct)==1:
+        quantity=deepcopy(values[0][0])
+        quantity['evidence_ids']=list(dict.fromkeys(eid for value,_ in values for eid in value['evidence_ids']))
+        quantity['scope_key']='|'.join(map(str,group))
+        merged['quantity']=quantity
+        return
+    compare='|'.join(map(str,group))+'|quantity'
+    decision=select_latest([
+        RevisionClaim(evidence['evidence_id'],compare,f"{value['value']}|{value.get('unit') or ''}",
+                      evidence.get('internal_revision_date'))
+        for value,evidence in values
+    ])
+    selected=decision.selected_evidence_ids[0] if decision.selected_evidence_ids else None
+    if selected:
+        quantity=deepcopy(next(value for value,evidence in values if evidence['evidence_id']==selected))
+        quantity['evidence_ids']=sorted({eid for value,evidence in values
+                                         if evidence['evidence_id'] in decision.selected_evidence_ids
+                                         for eid in value['evidence_ids']})
+        quantity['scope_key']='|'.join(map(str,group))
+        merged['quantity']=quantity
+        return
+    unresolved()
 
 def missing(subject: str, reason: str, code: str, evidence_ids=None, target=None):
     return {'candidate_key':'MI-'+key(subject,reason),'subject':subject,
@@ -321,21 +400,33 @@ def material(atom: dict,evidence: dict,sources: list[dict] | None = None):
     if explicit_kind not in ('PERMANENT','TEMPORARY'):
         c['support_note']+=' 材料永久/临时类别暂由词规则建议。'
     sections=list(c['csi_sections'])
-    design_properties=[];quantity=None
+    design_properties=[];quantity=None;quantity_properties=[]
     for prop in properties:
         normalized=re.sub(r'[^a-z0-9]+','_',str(prop.get('name','')).casefold()).strip('_')
         if normalized=='material_kind':continue
         if normalized in {'specification_section','spec_section','csi_section'}:
             sections.extend(re.findall(r'\b\d{2} \d{2} \d{2}\b',str(prop.get('value',''))));continue
-        if (quantity is None and re.search(r'(?:^|_)(?:quantity|count|number|total)(?:_|$)',normalized)
-                and re.fullmatch(r'\d+(?:\.\d+)?',str(prop.get('value','')).strip())):
-            raw=str(prop['value']).strip();value=float(raw) if '.' in raw else int(raw)
-            quantity={'value':value,'unit':prop.get('unit') or 'EA','basis':'DESIGN_NET',
-                      'method':'EXPLICIT_DOCUMENT','scope_key':atom['candidate_key'],
-                      'entity_ids':[atom['subject']],'evidence_ids':prop['evidence_ids'],
-                      'formula':None,'operands':[],'calibration':None}
+        if normalized in _QUANTITY_PROPERTIES:
+            quantity_properties.append(prop)
             continue
         design_properties.append(prop)
+    if quantity_properties:
+        numeric=all(re.fullmatch(r'\d+(?:\.\d+)?',str(prop.get('value','')).strip()) for prop in quantity_properties)
+        distinct=({(Decimal(str(prop['value'])),str(prop.get('unit') or 'EA').strip().casefold())
+                   for prop in quantity_properties} if numeric else set())
+        if temporary or len(distinct)!=1:
+            design_properties.extend(quantity_properties)
+            if not temporary:
+                c['requirement_status']='NOT_SPECIFIED'
+                c['support_note']+=' Explicit quantity fields disagree; current quantity requires review.'
+        else:
+            prop=quantity_properties[0];raw=str(prop['value']).strip()
+            quantity={'value':float(raw) if '.' in raw else int(raw),
+                      'unit':prop.get('unit') or 'EA','basis':'DESIGN_NET',
+                      'method':'EXPLICIT_DOCUMENT','scope_key':atom['candidate_key'],
+                      'entity_ids':[atom['subject']],
+                      'evidence_ids':sorted({eid for p in quantity_properties for eid in p['evidence_ids']}),
+                      'formula':None,'operands':[],'calibration':None}
     c.update(name=_material_name(atom),material_kind='TEMPORARY' if temporary else 'PERMANENT',
              csi_sections=list(dict.fromkeys(sections)),design_properties=design_properties,
              option_relation='NONE',options=[],selected_option_ids=[],quantity=quantity,
@@ -388,11 +479,14 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
                 mat=material(atom,source,sources)
                 # 只有显式设备Tag式主体可以尝试跨文档合并；普通名称不代表同一安装实例。
                 tag=bool(re.fullmatch(TAG_PATTERN,atom['subject']))
-                group=('TAG',atom['subject'].casefold(),atom['object'].casefold(),mat['condition']) if tag else ('EVIDENCE',source['evidence_id'],atom['candidate_key'])
+                material_scope=_material_scope_from_properties(mat['design_properties'])
+                group=(('TAG',atom['subject'].casefold(),mat['name'].casefold(),mat['condition'],material_scope)
+                       if tag and material_scope is not None else ('EVIDENCE',source['evidence_id'],atom['candidate_key']))
                 material_groups[group].append((mat,source))
             elif atom['category'] in ('INSPECTION','TEST','REPORT') and _inspection_atom_allowed(atom):
                 candidates.append(('INSPECTION',inspection(atom,source,sources)))
     for group,items in material_groups.items():
+        items=sorted(items,key=lambda item:(item[1]['evidence_id'],item[0]['candidate_key']))
         merged=deepcopy(items[0][0]); by_property=defaultdict(list)
         # A tagged cross-evidence material is one logical record.  Derive its
         # identity from the stable group, not whichever evidence happens to
@@ -422,6 +516,7 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
                     identity=(prop['value'],prop.get('unit'))
                     if identity not in seen_values:
                         merged['design_properties'].append(deepcopy(prop));seen_values.add(identity)
+        _merge_quantity(merged,items,group)
         candidates.append(('MATERIAL',merged))
     for kind,candidate in candidates:
         if isinstance(candidate.get('support_note'),str):

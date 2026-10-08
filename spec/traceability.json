@@ -368,7 +368,8 @@
       "planned_product_tests": [],
       "contract_tests": [
         "tests/test_policies.py",
-        "tests/app/test_assemble.py"
+        "tests/app/test_assemble.py",
+        "tests/app/test_review_fact_assembly.py"
       ],
       "test_scope": "local_offline_partial",
       "implemented_product_paths": [
@@ -387,7 +388,8 @@
       "planned_product_tests": [],
       "contract_tests": [
         "tests/test_policies.py",
-        "tests/app/test_assemble.py"
+        "tests/app/test_assemble.py",
+        "tests/app/test_review_fact_assembly.py"
       ],
       "test_scope": "local_offline_partial",
       "implemented_product_paths": [
@@ -755,7 +757,7 @@
         "app/main.py"
       ],
       "verification_report": null,
-      "progress_note": "D-26 removes Conflict from the current reviewer UI and exports; legacy stored data is preserved."
+      "progress_note": "D-26 removes Conflict from current reviewer UI and exports; legacy stored data is preserved. DEV-172 repairs independent quantity decisions and pending system baselines; synthetic regressions: tests/app/test_review_system_baseline.py, tests/app/test_review_export_integrity.py and tests/web/test_quantity_review.py. Current acceptance is recorded in docs/AUDIT_REPAIR_VALIDATION.md, not historical CI."
     },
     {
       "requirement_id": "FR-REVIEW-002",
@@ -815,6 +817,7 @@
       ],
       "planned_product_tests": [
         "tests/app/test_gateway_budget.py",
+        "tests/app/test_review_provider_boundaries.py",
         "tests/app/test_api.py",
         "tests/app/test_parsers.py"
       ],
@@ -977,6 +980,7 @@
       "planned_product_tests": [
         "tests/app/test_local_credentials.py",
         "tests/app/test_gemini_local_setup.py",
+        "tests/app/test_review_setup_boundary.py",
         "tests/app/test_local_entry.py"
       ],
       "contract_tests": [
@@ -1836,7 +1840,9 @@
       ],
       "planned_product_tests": [
         "tests/app/test_api.py",
-        "tests/app/test_verification.py"
+        "tests/app/test_verification.py",
+        "tests/app/test_review_export_integrity.py",
+        "tests/web/test_quantity_review.py"
       ],
       "contract_tests": [
         "tests/app/test_api.py",

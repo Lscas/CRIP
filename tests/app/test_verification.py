@@ -266,8 +266,9 @@ def test_export_places_readable_evidence_with_each_item(client,demo):
     wb=load_workbook(io.BytesIO(client.get(f'/api/analysis-runs/{rid}/exports/xlsx').content))
     assert {'Evidence','Field Verification','Citations','PDF Geometry Audit'}.isdisjoint(wb.sheetnames)
     material=wb['Materials & Equipment']
-    assert material.cell(4,14).value=='Evidence Source' and material.cell(4,15).value=='Evidence Text'
-    assert material.cell(5,14).value and material.cell(5,15).value
+    assert material.cell(4,14).value=='Quantity Review'
+    assert material.cell(4,15).value=='Evidence Source' and material.cell(4,16).value=='Evidence Text (Excerpt)'
+    assert material.cell(5,14).value and material.cell(5,15).value and material.cell(5,16).value
     for ws in wb:
         for row in ws:
             assert all(c.data_type!='f' for c in row)

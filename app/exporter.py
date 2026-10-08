@@ -173,8 +173,8 @@ _MATERIAL_DESCRIPTOR = re.compile(
 )
 _NON_MATERIAL_NAME = re.compile(
     r'\b(?:shop drawings?|submittals?|table of contents|schedule of values|record documents?|'
-    r'operation and maintenance|o\s*&\s*m\b|manuals?|warrant(?:y|ies)|schematic|diagrams?|'
-    r'transmittals?|calculations?|reports?|certificates?|instructions?|spare parts?|extra materials?)\b',
+    r'operation and maintenance|o\s*&\s*m\b|manuals\b|manual$|manual for\b|warrant(?:y|ies)|schematic|diagrams?|'
+    r'transmittals?|calculations?|reports?|certificates?|instructions?)\b',
     re.I,
 )
 _QA_ACTION = re.compile(
@@ -319,32 +319,8 @@ def _sanitize_visible_text(value: str, humanize_codes: bool = False) -> str:
 
 
 def _evidence_text(source_type: str, value) -> str:
-    text = _sanitize_visible_text(_plain(value), humanize_codes=True)
-    text = text.translate(_ENGLISH_PUNCTUATION)
-    text = _CJK.sub(' ', text)
-    text = re.sub(r'\bsheet id\b\s*:?(?=\s*[,.;]|\s*$)', ' ', text, flags=re.I)
-    text = re.sub(r'\bsheet id\b\s*:?', 'Sheet ', text, flags=re.I)
-    text = re.sub(r'\bscale text\s+(?:null|none|not stated)\b', ' ', text, flags=re.I)
-    text = re.sub(r'\bnull\b', 'not stated', text, flags=re.I)
-
-    def tidy(fragment: str) -> str:
-        fragment = re.sub(r'\s+([,.;:!?])', r'\1', fragment)
-        fragment = re.sub(r'([,.;:!?])(?:\s*[,.;:!?])+', r'\1', fragment)
-        fragment = re.sub(r'(^|\s)[,.;:/\\-]+(?=\s|$)', ' ', fragment)
-        fragment = re.sub(r',(?=\S)', ', ', fragment)
-        cleaned = re.sub(r'\s+', ' ', fragment).strip()
-        return cleaned if re.search(r'[A-Za-z0-9]', cleaned) else ''
-
-    parts = _VISUAL_SEGMENT.split(text)
-    if len(parts) == 1:
-        return tidy(text)
-    result = [tidy(parts[0])]
-    for index in range(1, len(parts), 2):
-        marker = parts[index]
-        payload = tidy(parts[index + 1] if index + 1 < len(parts) else '')
-        if re.search(r'[A-Za-z0-9]', payload):
-            result.append(f'{marker}: {payload}')
-    return re.sub(r'\s+', ' ', ' '.join(part for part in result if part)).strip()
+    """Source text is data, not an application label or an English summary."""
+    return value if isinstance(value, str) else ''
 
 
 def _plain(value) -> str:
@@ -479,8 +455,9 @@ def _reviewer_material_name(candidate: dict, report: dict) -> tuple[str,str]:
 
 
 def _reviewer_material_allowed(name: str) -> bool:
-    if not name or len(name)>180 or _is_actor_text(name):return False
-    if _NON_MATERIAL_NAME.search(name) or _MATERIAL_DESCRIPTOR.fullmatch(name):return False
+    if not name or len(name)>180 or _ACTOR_TEXT.fullmatch(name):return False
+    primary=re.sub(r'^\s*(?:provide|submit|prepare)\s+(?:(?:a|an|the)\s+)?','',name,flags=re.I)
+    if _NON_MATERIAL_NAME.match(primary) or _MATERIAL_DESCRIPTOR.fullmatch(name):return False
     if name.casefold() in {
         'equipment','material','materials','product','products','item','items','piping system','all piping',
         'pipe','piping','fitting','fittings','valve','valves','conductor','conductors','coil','coils',
@@ -519,6 +496,7 @@ def _inspection_name(candidate: dict) -> str:
     requirement=_mapped_plain(candidate.get('requirement'))
     activity=_mapped_plain(candidate.get('activity'))
     if (activity and not _is_actor_text(activity) and _QA_ACTION.search(activity)
+            and not _GENERIC_QA_NAME.fullmatch(activity.strip())
             and len(activity)+20<len(requirement)):
         source=activity
     elif (qa_type in {'FIELD_TEST','LAB_TEST'} and activity and not _is_actor_text(activity)
@@ -574,7 +552,10 @@ def _reviewer_inspection_allowed(candidate: dict, name: str, activity: str) -> b
     if qa_type not in allowed or not name or len(name)>180:return False
     if _GENERIC_QA_NAME.fullmatch(name.strip()):return False
     if not _QA_ACTION.search(text):return False
-    if _NON_QA_DOCUMENT.search(text) or _ADMINISTRATIVE_VERIFY.search(text):return False
+    # Reject a document as the primary object, not a test which references it.
+    primary=re.sub(r'^\s*(?:provide|submit|prepare)\s+(?:(?:a|an|the)\s+)?','',
+                   _mapped_plain(candidate.get('requirement')),flags=re.I)
+    if _NON_QA_DOCUMENT.match(primary) or _ADMINISTRATIVE_VERIFY.search(text):return False
     if _NON_QA_REQUIREMENT.search(text):return False
     if re.fullmatch(r'\d{2}\s+\d{2}\s+\d{2}\s+(?:testing|inspection|test)',name,re.I):return False
     if qa_type in {'TEST_REPORT','DAILY_FIELD_REPORT'} and not _REPORT_DELIVERABLE.search(
@@ -588,6 +569,8 @@ def _reviewer_inspection_allowed(candidate: dict, name: str, activity: str) -> b
 def reviewer_record_is_visible(record: dict, report: dict | None = None) -> bool:
     """Apply the same conservative reviewer scope to the UI and exports."""
     candidate=record.get('candidate') or {};report=report or {}
+    if record.get('kind') in {'MATERIAL','INSPECTION'} and record.get('review',{}).get('status') in {'ACCEPTED','EDITED'}:
+        return True
     if record.get('kind')=='MATERIAL':
         name,_=_reviewer_material_name(candidate,report)
         return _reviewer_material_allowed(name)
@@ -649,7 +632,9 @@ def _translate_display(value, path=()):
             )
         if is_evidence_text:
             return _evidence_text('', translated)
-        return _sanitize_visible_text(translated, humanize_codes=True)
+        # Field labels are humanized at their construction sites. Never treat a
+        # business identifier (PANEL_A1, AB_123) as an application enum here.
+        return _sanitize_visible_text(translated, humanize_codes=False)
     return value
 
 
@@ -836,13 +821,10 @@ def _evidence_from_ids(ids: list[str], evidence_index: dict) -> list[dict]:
 
 def _properties(candidate: dict) -> str:
     rows = []
-    quantity_prop = _explicit_quantity_property(candidate) if not isinstance(candidate.get('quantity'), dict) else None
-    for index, prop in enumerate(candidate.get('design_properties') or []):
-        if quantity_prop and index == quantity_prop[0]:
-            continue
+    for prop in candidate.get('design_properties') or []:
         name = _human_key(_mapped_plain(prop.get('name'))) if prop.get('name') else 'Property'
         value = _mapped_plain(prop.get('value'))
-        if value.isupper() and len(re.sub(r'[^A-Z]', '', value)) >= 6:
+        if re.fullmatch(r'[A-Z ]+',value) and len(re.sub(r'[^A-Z]', '', value)) >= 6:
             value=value.title()
         unit = _mapped_plain(prop.get('unit'))
         rows.append(f"{name}: {value}{(' ' + unit) if unit and unit not in value else ''}")
@@ -878,38 +860,9 @@ def _options(candidate: dict) -> str:
 def _quantity(candidate: dict) -> tuple[object | None, str, str]:
     quantity = candidate.get('quantity')
     if not isinstance(quantity, dict):
-        derived = _explicit_quantity_property(candidate)
-        if derived:
-            _, value, unit = derived
-            return value, unit, 'Stated in document'
-        leading=re.match(
-            r'^\s*(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+'
-            r'(?:additional\s+)?(?P<unit>sets?|each|pieces?|units?)\s+of\b',
-            _mapped_plain(candidate.get('name')),re.I,
-        )
-        if leading:
-            count=leading.group('count').casefold()
-            value=int(_WORD_NUMBERS.get(count,count))
-            return value, leading.group('unit').rstrip('s').title(), 'Stated in document'
         return None, '', ''
     value = quantity.get('value')
     return value, _plain(quantity.get('unit')), _label(quantity.get('basis'), '')
-
-
-def _explicit_quantity_property(candidate: dict) -> tuple[int, object, str] | None:
-    for index, prop in enumerate(candidate.get('design_properties') or []):
-        raw_name = _plain(prop.get('name')).casefold()
-        name = _mapped_plain(prop.get('name')).casefold()
-        raw_value = prop.get('value')
-        value_text = _plain(raw_value)
-        is_quantity = (bool(re.search(r'\b(?:quantity|count|number|total)\b', name)) or
-                       bool(re.search(r'(?:数量|个数|总数)$', raw_name)))
-        if (not is_quantity or
-                not re.fullmatch(r'-?\d+(?:\.\d+)?', value_text)):
-            continue
-        value = float(value_text) if '.' in value_text else int(value_text)
-        return index, value, _mapped_plain(prop.get('unit'))
-    return None
 
 
 def _summary(data: dict, material_count: int, inspection_count: int) -> dict:
@@ -924,16 +877,19 @@ def _summary(data: dict, material_count: int, inspection_count: int) -> dict:
         'material_and_equipment_items': material_count,
         'inspection_and_test_items': inspection_count,
         'notice': _plain(data.get('notice')),
-        'evidence_display_note': 'Whitespace and isolated non-English OCR artifacts are normalized for readability; source wording is otherwise unchanged. Visual model observations are labeled and are not source-document quotations.',
+        'evidence_display_note': 'Source passages preserve their original wording, language and identifiers. Excel shows labeled, length-limited excerpts; JSON retains the selected passages. Visual model observations are labeled and are not source-document quotations.',
         'quantity_note': 'A blank quantity means the source did not state a usable quantity or no reviewed design quantity was calculated. It does not mean zero.',
     }
 
 
 def _material_item(data: dict, record: dict, evidence_index: dict) -> dict:
     candidate = record['candidate']; quantity, unit, basis = _quantity(candidate)
+    quantity_review = record.get('quantity_review') or ('PENDING' if quantity is not None else 'NOT_APPLICABLE')
+    if data.get('reviewed_only') and quantity_review != 'VERIFIED':
+        quantity, unit, basis = None, '', ''
     report = data.get('verifications', {}).get(record.get('meta', {}).get('record_id'), {})
     name,location = _reviewer_material_name(candidate,report)
-    if not _reviewer_material_allowed(name):return None
+    if not reviewer_record_is_visible(record,report):return None
     if quantity is not None:
         name, minimum = _separate_name_quantity(
             name, quantity, unit, allow_bare=not isinstance(candidate.get('quantity'), dict)
@@ -948,6 +904,7 @@ def _material_item(data: dict, record: dict, evidence_index: dict) -> dict:
         'quantity': quantity,
         'unit': unit,
         'quantity_basis': basis,
+        'quantity_review': _label(quantity_review),
         'design_properties': _properties(candidate),
         'manufacturer_product_model_options': _options(candidate),
         'specification_section': ', '.join(_plain(value) for value in (candidate.get('csi_sections') or []) if _plain(value)),
@@ -999,7 +956,7 @@ def _inspection_item(data: dict, record: dict, evidence_index: dict) -> dict:
     report = data.get('verifications', {}).get(record.get('meta', {}).get('record_id'), {})
     activity=_inspection_activity(candidate)
     name=_inspection_name(candidate)
-    if not _reviewer_inspection_allowed(candidate,name,activity):return None
+    if not reviewer_record_is_visible(record,report):return None
     acceptance=_plain(candidate.get('acceptance_criteria'))
     requirement=_mapped_plain(candidate.get('requirement'))
     raw_activity=_mapped_plain(candidate.get('activity'))
@@ -1194,7 +1151,7 @@ def _evidence_cells(items: list[dict], *, max_entries: int = 3, max_excerpt_char
     visible_items = []
     seen = set()
     for item in items:
-        identity = (_plain(item.get('source')), _plain(item.get('location')), _plain(item.get('text')))
+        identity = (_plain(item.get('source')), _plain(item.get('location')), _evidence_text('',item.get('text')))
         if identity in seen:
             continue
         seen.add(identity)
@@ -1206,7 +1163,7 @@ def _evidence_cells(items: list[dict], *, max_entries: int = 3, max_excerpt_char
             ('Revision date ' + _plain(item.get('revision_date'))) if item.get('revision_date') else '',
             source_type if source_type == 'Visual model observation' else '',
         ) if value)
-        evidence_text = _plain(item.get('text'))
+        evidence_text = _evidence_text('',item.get('text'))
         if len(evidence_text) > max_excerpt_chars:
             evidence_text = evidence_text[:max_excerpt_chars].rstrip(' ,;:.') + '...'
         sources.append(f'{index}. {source}')
@@ -1304,15 +1261,15 @@ def as_xlsx(data: dict) -> bytes:
             item['material_or_equipment_name'], item['design_properties'], item['specification_section'],
             item['quantity'], item['unit'], item['quantity_basis'], item['material_type'],
             item['manufacturer_product_model_options'], item['location'], item['condition'], item['requirement_status'],
-            item['verification'], item['human_review'], sources, texts,
+            item['verification'], item['human_review'], item['quantity_review'], sources, texts,
         ])
     add_sheet('Materials & Equipment',
               'Each row names a tangible item. Dimensions, ratings, material, and other stated values remain in Design Properties. A blank quantity is unknown, not zero.',
               ['Material or Equipment Name', 'Design Properties', 'Specification Section', 'Quantity', 'Unit',
                'Quantity Basis', 'Type', 'Manufacturer / Product / Model Options', 'Location', 'Condition',
-               'Requirement Status', 'Verification', 'Human Review',
-               'Evidence Source', 'Evidence Text'], material_rows,
-              [34, 42, 18, 12, 10, 18, 14, 34, 20, 26, 20, 20, 20, 52, 80])
+               'Requirement Status', 'Verification', 'Human Review', 'Quantity Review',
+               'Evidence Source', 'Evidence Text (Excerpt)'], material_rows,
+              [34, 42, 18, 12, 10, 18, 14, 34, 20, 26, 20, 20, 20, 22, 52, 80])
 
     inspection_rows = []
     for item in readable['inspections_and_tests']:
@@ -1328,7 +1285,7 @@ def as_xlsx(data: dict) -> bytes:
               ['Test or Inspection Name', 'Activity / Requirement', 'Type', 'Specification Section',
                'Performer', 'Witness', 'Timing', 'Frequency', 'Acceptance Criteria', 'Standard',
                'Requirement Status', 'Verification', 'Human Review',
-               'Evidence Source', 'Evidence Text'], inspection_rows,
+               'Evidence Source', 'Evidence Text (Excerpt)'], inspection_rows,
               [36, 38, 20, 18, 22, 20, 20, 22, 36, 24, 20, 20, 20, 52, 80])
 
     if readable['quantity_takeoffs']:
@@ -1340,6 +1297,6 @@ def as_xlsx(data: dict) -> bytes:
         add_sheet('Quantity Takeoffs',
                   'Only saved CAD quantity candidates are shown. PDF paper-space geometry is intentionally omitted.',
                   ['Item', 'Quantity', 'Unit', 'Quantity Type', 'Basis', 'Source File', 'Scope', 'Human Review',
-                   'Evidence Source', 'Evidence Text'], takeoff_rows, [30, 12, 10, 18, 22, 34, 44, 20, 52, 80])
+                   'Evidence Source', 'Evidence Text (Excerpt)'], takeoff_rows, [30, 12, 10, 18, 22, 34, 44, 20, 52, 80])
 
     out = io.BytesIO(); wb.save(out); return out.getvalue()

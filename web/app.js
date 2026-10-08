@@ -936,6 +936,7 @@ function renderRecords(){
   name.append(el('small',detail));
   const status=el('td');status.append(I.bindStatus(el('span',null,'badge'),c.requirement_status||c.resolution_status||c.reason_code));status.append(elT('small','verify.status.'+(row.verification?.status||'NOT_CHECKED'),{},'verification-summary'));
   const review=el('td');review.append(I.bindStatus(el('span',null,'badge '+(r.review.status==='PENDING'?'warn':'')),r.review.status));
+  if(r.kind==='MATERIAL'&&c.quantity)review.append(elT('small','record.quantityReview',{status:I.status(r.quantity_review||'PENDING')}));
    const evidence=el('td');sourceIds(c).forEach((eid,index)=>{const b=elT('button','record.sourceNumber',{number:index+1},'link evidence-button');b.onclick=error(()=>showEvidence(eid));evidence.append(b);});
   tr.append(name,status,review,evidence);$('results-body').append(tr);
  });
@@ -1051,7 +1052,8 @@ async function showRecord(row){
   if(r.kind==='MATERIAL'){
    if(c.design_properties?.length)body.append(el('p',c.design_properties.map(x=>x.name+': '+x.value+(x.unit?' '+x.unit:'')).join(' · ')));
    if(d.specification_section)body.append(el('p','Specification section: '+d.specification_section));
-   if(c.quantity)body.append(el('p','Quantity: '+c.quantity.value+' '+c.quantity.unit));
+   if(c.quantity){body.append(el('p','Quantity: '+c.quantity.value+' '+c.quantity.unit));
+    body.append(elT('p','record.quantityReview',{status:I.status(r.quantity_review||'PENDING')}));}
   }else{
    if(d.activity)body.append(el('p','Activity / requirement: '+d.activity));
    if(d.specification_section)body.append(el('p','Specification section: '+d.specification_section));
@@ -1065,6 +1067,15 @@ async function showRecord(row){
  ['ACCEPTED','EDITED','REJECTED'].forEach((action,i)=>{const b=elT('button',['record.accept','record.edit','record.reject'][i],{},i===0?'primary':'outline');b.onclick=error(async()=>{
   await api(`/records/${r.meta.record_id}/review`,'POST',{action,expected_version:row.review_version,note:note.value,...(action==='EDITED'?{candidate:JSON.parse(area.value)}:{})});
   $('drawer').hidden=true;await refreshRun(true);toast('Review saved');});actions.append(b);});body.append(actions,el('hr'));
+ if(r.kind==='MATERIAL'&&c.quantity){
+  const quantityActions=el('div',null,'row');
+  [['VERIFIED','record.quantityVerify'],['REJECTED','record.quantityReject'],['PENDING','record.quantityPending']].forEach(([quantity_action,key])=>{
+   const button=elT('button',key,{},'outline');button.onclick=error(async()=>{
+    button.disabled=true;try{await api(`/records/${r.meta.record_id}/review`,'POST',{quantity_action,expected_version:row.review_version,note:note.value});
+     $('drawer').hidden=true;await refreshRun(true);toast(I.t('record.quantitySaved'));}finally{button.disabled=false;}
+   });quantityActions.append(button);
+  });body.append(quantityActions);
+ }
   sourceIds(c).forEach((id,index)=>{const b=elT('button','record.sourceNumber',{number:index+1},'link evidence-button');b.onclick=error(()=>showEvidence(id));body.append(b);});
  const history=elT('button','record.history',{},'outline');history.onclick=error(async()=>{const data=await api(`/records/${r.meta.record_id}/history`);body.append(el('pre',JSON.stringify(data,null,2)));});body.append(history);
 }
