@@ -50,10 +50,9 @@ def check(root: Path = ROOT) -> list[str]:
         elif len((root/p['path']).read_text(encoding='utf-8').strip())<50:errors.append('Prompt是空占位: '+p['id'])
     generated=(root/'docs/REQUIREMENTS.md').read_text(encoding='utf-8')
     if generated!=render(req):errors.append('自动需求表未同步')
-    routing=load('config/model_routing.json');budget=load('config/budget_policy.json')
+    routing=load('config/model_routing.json')
     if routing['roles']['cheap']['thinking']!='disabled':errors.append('简单任务未关闭思考')
     if routing['roles']['high']['enabled']:errors.append('本基线高价模型不得默认启用')
-    if budget['per_project_limit']!='300.00' or budget['currency']!='CNY':errors.append('本基线预算发生未批准变化')
     if root == ROOT:
         for path in (root/'changes').glob('*.json'):
             try:validate_schema('change-record',json.loads(path.read_text(encoding='utf-8')))

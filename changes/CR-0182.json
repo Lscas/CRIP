@@ -1,0 +1,45 @@
+{
+  "change_id": "CR-0182",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-READINESS-001",
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-DEEPSEEK-MODEL-SELECTION-001"
+  ],
+  "summary": "Complete and adjudicate the same frozen selector-v7 fixed-15 task with DeepSeek Flash and V4 Pro, and align the readiness schema with selector-v7 reason output.",
+  "decision_refs": [
+    "Both profiles used run RUN-6322ca9598a74c768c91117a7fa05834, snapshot SN-051a40d964a10ccf640a9710233de205, question hash 2d29ad029e36e7fb8af97ae6917774811c06094f4b4b4b2ab80915543cdec755 and literal-page-selector-7.",
+    "Flash produced 9 contract-valid and 7 fully usable items; Pro produced 12 contract-valid and 9 fully usable items. Both failed the fixed release gate.",
+    "A readiness 500 was caused by QUESTION_ENTITY_MATCH being absent from the public enum even though selector v7 emitted it; the schema and zero-call regression were corrected.",
+    "Historical verification note: readiness reason-code regression and selector tests",
+    "Historical verification note: same-identity Flash/Pro managed evaluation jobs with explicit confirmation",
+    "Historical verification note: manual adjudication and zero-call scorecards for all 30 terminal items",
+    "Historical verification note: full Python, localization, spec, change and bundle gates"
+  ],
+  "affected_paths": [
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "tests/app/test_reference_readiness.py",
+    "reports/kapolei_reference_v7_flash_pro_2026-10-03.json",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-167.json", "changes/CR-0182.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_readiness.py",
+    "tests/app/test_page_selector.py",
+    "tests/app/test_reference_evaluation_jobs.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "known_limitations": [
+    "The full evaluations use the prompt contract that preceded DEV-168 calculation guidance; they are the v7 baseline, not a post-DEV-168 final comparison.",
+    "Pro improved over Flash but remained below both the 15 contract-valid and 12 fully-usable thresholds.",
+    "Neither model is approved for unattended release and the comparison endpoint does not infer a winner."
+  ]
+}

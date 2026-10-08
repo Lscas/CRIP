@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the complete workflow index to select one exact Submittal primary source.",
+    "Recognize only bounded English Spec Section, Description and Review Comments requests.",
+    "Require an explicit supported field label inside exact Submittal-scoped evidence.",
+    "Allow multiline values in one immutable passage and current Email-body scopes.",
+    "Exclude unlabeled text, quoted Email history and vision narration.",
+    "Fail closed for conflicting values, multiple primary sources or more than 32 candidate passages.",
+    "Use synthetic evidence and make no provider or mailbox request."
+  ],
+  "task_id": "DEV-106",
+  "title": "Answer explicit Submittal fields locally",
+  "requirement_ids": ["FR-QA-SUBMITTAL-FIELD-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-106.json", "changes/CR-0121.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-106",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return unambiguous explicit Submittal fields from existing local evidence without model cost."
+}

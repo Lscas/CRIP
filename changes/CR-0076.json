@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0076",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006",
+    "FR-CLASS-001"
+  ],
+  "summary": "Preserve explicit Email attachment provenance when a run-scoped workflow-classification overlay changes the parent's effective document type.",
+  "decision_refs": [
+    "The active goal requires accurate combined RFI/Submittal/Email support",
+    "CR-0075 changes only the effective workflow view and must not erase immutable Email parsing provenance",
+    "FR-INGEST-006 requires selected attachment relationships to remain visible for parsed Email parents"
+  ],
+  "affected_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "web/i18n.js",
+    "spec/**",
+    "tasks/DEV-061.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0076.json"
+  ],
+  "tests": [
+    "tests/app/test_workflows.py",
+    "tests/web/i18n.test.mjs",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requests continued accuracy and adaptability across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "The fix preserves only explicit selected-attachment provenance; it does not recursively analyze attachments or infer workflow authority.",
+    "Validation is synthetic and offline; no mailbox, customer file, provider or paid model is used."
+  ]
+}

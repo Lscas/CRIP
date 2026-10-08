@@ -1,0 +1,59 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 24000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked CIRP development, testing and iteration to continue after the Flash/Pro benchmark.",
+  "notes": [
+    "Fix the demonstrated table row/column association loss without adding a parser, model or dependency.",
+    "Reuse saved text_map word offsets and native bounding boxes only for selector v5.",
+    "Keep exact source text and citation identity primary; layout_lines is an optional deterministic second view.",
+    "Preserve the original 18000-byte source budget and add no more than 6000 serialized bytes of layout context.",
+    "Verify D1 and C2 relationship markers plus the fixed-15 page and source-atom no-regression gates without a provider call."
+  ],
+  "task_id": "DEV-163",
+  "title": "Preserve drawing table row and column context in Reference QA",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/page_selector.py",
+    "app/evidence_loop.py",
+    "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "spec/schemas/reference-model-input-receipt.schema.json",
+    "tests/app/test_page_selector.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py",
+    "reports/kapolei_reference_layout_context_v5_2026-10-03.json",
+    "docs/REFERENCE_QA.md",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-163.json",
+    "changes/CR-0178.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Synthetic v5 evidence reconstructs exact D1-style substrate rows and C2-style subtotal rows while v4 remains unchanged",
+    "QA V3 sends optional bounded layout_lines, includes them in request identity and stores only their hash and byte count in safe receipts",
+    "The real frozen D1 input contains all five target relationship markers and C2 contains all three without source-text loss",
+    "All 15 expected pages remain within four pages and locked source-atom coverage remains 44 with no question regression",
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_page_selector.py tests/app/test_evidence_loop.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "implementation",
+  "objective": "Expose exact native row and column relationships to Reference QA without semantic reconstruction, historical-input drift or loss of the existing source context."
+}

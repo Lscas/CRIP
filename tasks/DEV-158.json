@@ -1,0 +1,56 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked CIRP development, testing and iteration to continue and separately authorized API calls after offline validation.",
+  "notes": [
+    "Keep the public QA V2 result, source-scope validation and immutable Reference result behavior unchanged.",
+    "Replace provider-copied text quotes and duplicated image geometry with bounded evidence and region references that CIRP expands from the exact supplied context.",
+    "Use one stable empty answer object for non-answer decisions and fill only a generic missing-fact message when a terminal non-answer omits it.",
+    "Add locally executed PERCENT_OF arithmetic for explicitly requested percentage calculations; operands must still occur in cited source text.",
+    "Use synthetic offline tests only. Any later fixed-15 rerun requires its own explicit operational confirmation and must not retry failed items automatically."
+  ],
+  "task_id": "DEV-158",
+  "title": "Compile QA citation references locally",
+  "requirement_ids": [
+    "FR-QA-V2-ANSWER-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/evidence_loop.py",
+    "app/project_qa_v2.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "spec/schemas/project-answer-v2.schema.json",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py",
+    "tests/app/test_reference_evaluations.py",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/PROJECT_QA_V2.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-158.json",
+    "changes/CR-0173.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py tests/app/test_project_qa_v2.py tests/app/test_reference_evaluations.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-158",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Remove avoidable small-model formatting failures by resolving provider evidence references into exact canonical citations locally and support exact percentage arithmetic without weakening grounding."
+}

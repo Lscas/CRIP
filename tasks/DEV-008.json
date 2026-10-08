@@ -1,0 +1,47 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user authorized Autodesk and Procore API access to reduce manual imports and invoked /ponytail to reuse existing open-source components.",
+  "notes": [
+    "Reuse installed httpx, Windows DPAPI and the existing Uploads chunk/hash path; add no SDK or runtime dependency.",
+    "Remote operations are read-only and selected-file only; all automated HTTP validation uses MockTransport."
+  ],
+  "task_id": "DEV-008",
+  "title": "Workflow relationships and read-only Autodesk/Procore import",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-005"
+  ],
+  "allowed_paths": [
+    "app/**",
+    "prompts/**",
+    "scripts/browser_i18n_smoke.py",
+    "tests/**",
+    "spec/**",
+    "docs/**",
+    "web/**",
+    "tasks/DEV-008.json",
+    "changes/CR-0023.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/ARCHITECTURE.md",
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area ui",
+    "python scripts/browser_i18n_smoke.py --offline-dom",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Separate current and quoted email evidence, expose deterministic workflow relationships, and selectively import read-only Autodesk/Procore documents through existing safety controls."
+}

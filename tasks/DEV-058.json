@@ -1,0 +1,45 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1800,
+  "max_context_chars": 15000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency and adaptability improvements for RFI, Submittal and Email content, and the user previously requested reducing manual imports.",
+  "notes": [
+    "An email with several supported attachments currently requires one full inspection and one reviewer click per attachment.",
+    "Add a bounded explicit batch selection that parses the email once, prevalidates every index/hash, then reuses the existing immutable upload path for each selected attachment.",
+    "Keep individual import compatibility, parent provenance, capacity/chunk/hash/dedupe controls, inert nested content and no automatic analysis.",
+    "Completed with 653 Python, 24 UI, 11 deployment and 13 browser regression checks; the browser run made zero model calls and zero external requests."
+  ],
+  "task_id": "DEV-058",
+  "title": "Batch selected email attachment imports",
+  "requirement_ids": [
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/email_attachments.py",
+    "app/main.py",
+    "web/**",
+    "tests/app/test_email_attachments.py",
+    "tests/web/**",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-058.json",
+    "changes/CR-0073.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_email_attachments.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area ui",
+    "python scripts/browser_i18n_smoke.py --offline-dom",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Let a reviewer explicitly import a bounded batch of selected EML/MSG attachments after one inspection while preserving all existing safety, provenance and no-auto-analysis boundaries."
+}

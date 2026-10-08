@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0096",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground every explicit full date in its own answer citations without interpreting ambiguous slash order.",
+  "decision_refs": [
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "TrunkText publicly emphasizes answers sourced to project documents and exact source locations",
+    "An offline reproduction proved that component-wise numeric grounding accepted 2024-01-10 when the citation stated only 2024-01-05 and 2024-02-10"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-081.json", "changes/CR-0096.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The project-question request authorizes this deterministic answer-accuracy improvement.",
+  "known_limitations": [
+    "The guard covers explicit full dates, not incomplete month/year or relative-date phrases.",
+    "ISO and English month-name formats are equivalent, but slash dates retain written order and never cross-convert because locale is ambiguous.",
+    "The guard does not validate calendar legality, calculate deadlines, infer chronology or choose a controlling source.",
+    "The guard does not prove that every relevant project document was uploaded or parsed."
+  ]
+}

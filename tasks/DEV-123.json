@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Return one stable answer basis for deterministic, model, Mock-retrieval and no-evidence question paths.",
+    "Use the existing cached flag to distinguish a fresh model answer from a recovered settled response.",
+    "Show the answer path beside each browser result without adding retrieval, model dispatch, retry or budget work.",
+    "Keep all new product and developer text in English."
+  ],
+  "task_id": "DEV-123",
+  "title": "Expose project-answer provenance",
+  "requirement_ids": ["FR-QA-ANSWER-PROVENANCE-001"],
+  "allowed_paths": [
+    "app/questions.py", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_questions.py", "tests/web/test_display_contract.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-123.json", "changes/CR-0138.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-123",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make the cost and evidence route of every project-question response visible without changing question execution."
+}

@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0118",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-HEADER-LOCAL-001"],
+  "summary": "Answer strict current Email header questions locally when the selected run contains exactly one analyzed Email.",
+  "decision_refs": [
+    "The active objective requires efficiency and accuracy improvements across Email as well as RFI and Submittal content",
+    "The local Email parser already separates current headers from body, quoted history and signatures",
+    "The complete cached workflow index can establish whether an otherwise-unspecified Email question has one unambiguous target"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-103.json", "changes/CR-0118.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-103",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency and accuracy improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only strict English Subject, sender, recipient and Date forms use the local shortcut.",
+    "The shortcut applies only when the complete selected run contains exactly one analyzed Email; multi-Email questions must name a file or exact workflow context and use ordinary grounded retrieval.",
+    "Only explicit current EMAIL > HEADERS evidence qualifies; body, quoted history, signatures, mailbox state and transport metadata do not.",
+    "More than 32 current-header passages fails closed, and the shortcut does not infer delivery time, thread position, identity, authority or semantic equivalence."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0017",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "DEV-CHECK-001"
+  ],
+  "summary": "Make the existing offline validation runner the single local and CI entry point, include the source-bundle manifest check, and fail explicitly when Node.js is unavailable instead of silently omitting JavaScript checks.",
+  "decision_refs": [
+    "User request on 2026-09-14 to inspect the files and optimize the workflow using the ponytail rules"
+  ],
+  "affected_paths": [
+    ".github/workflows/spec-governance.yml",
+    "scripts/run_checks.py",
+    "tests/test_devtools.py",
+    "spec/traceability.json",
+    "docs/DEV_STATE.md",
+    "README.md",
+    "changes/CR-0017.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/test_devtools.py",
+    "tests/web/i18n.test.mjs",
+    "tests/deploy/worker.test.mjs"
+  ],
+  "product_implementation_changed": false,
+  "approval_evidence": "The user explicitly requested file inspection and workflow optimization under the ponytail skill.",
+  "known_limitations": [
+    "The all, ui, and remote areas require Node.js; Python-only areas remain usable without Node.js.",
+    "The validation workflow is offline and does not assess live provider availability or extraction quality."
+  ]
+}

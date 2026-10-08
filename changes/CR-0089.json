@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0089",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Render deterministic workflow conflict statuses, source files and classification origin inline with project-question results.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The user requires evidence to appear with the corresponding result rather than in a separate tab",
+    "A synthetic fixture proved that the full-run conflict preflight named neither the actual statuses nor their source files"
+  ],
+  "affected_paths": [
+    "app/questions.py", "web/app.js", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md",
+    "docs/DEV_STATE.md", "tasks/DEV-003.json", "tasks/DEV-074.json", "changes/CR-0089.json", "README.md",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective and earlier inline-evidence requirement authorize this accuracy and usability correction.",
+  "known_limitations": [
+    "Workflow-index provenance identifies the original file and explicit indexed status but is not an exact quotation or page locator.",
+    "The feature requires an exact RFI or Submittal identifier and a status-oriented question; generic Email-thread status remains retrieval-bounded.",
+    "The answer prose lists at most three files per status, while the structured inline source list retains every file.",
+    "The guard preserves ambiguity and does not determine chronology, revision precedence, authority or contractual correctness."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9500,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce a run-wide workflow inventory count that Mock cannot answer and Live would send through incomplete evidence retrieval.",
+    "Reuse the existing cached terminal-run workflow index before evidence retrieval; do not add another index or dependency.",
+    "Accept only exact unfiltered plural count forms and leave status, identifier, source, date and content filters on the ordinary evidence path.",
+    "Count RFI/Submittal identifier groups and unique analyzed Email files without a model call or budget action."
+  ],
+  "task_id": "DEV-076",
+  "title": "Answer workflow inventory counts without a model call",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/main.py", "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-003.json", "tasks/DEV-076.json", "changes/CR-0091.json", "README.md",
+    "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer safe run-wide RFI, Submittal and Email inventory counts completely and locally instead of paying a model to reason over a truncated evidence window."
+}

@@ -1,11 +1,13 @@
 """DEV-LOWCOST-001 / DEV-CHECK-001：真实脚本，不验证账户价格。"""
-import json,tomllib
+import json,subprocess,sys,tomllib
 from pathlib import Path
 import pytest
 from scripts.context_pack import build,ROOT
 from scripts.build_bundle_manifest import source_files
+from scripts.check_changes import declared_test_exists
+from scripts.run_checks import build_commands
 
-def test_context_pack_is_bounded_and_contains_only_selected_requirements():
+def test_context_pack_contains_only_selected_requirements():
     out=build('DEV-002')
     assert len(out)<=14000 and 'FR-OPTIONS-001' in out
     assert '全量读取所有文件' not in out
@@ -18,7 +20,30 @@ def test_task_references_have_real_context_files():
     for p in (ROOT/'tasks').glob('*.json'):
         data=json.loads(p.read_text(encoding="utf-8"));assert not data['paid_calls_allowed']
         for name in data['context_files']:assert (ROOT/name).is_file()
-        assert len(build(data['task_id']))<=data['max_context_chars']
+        output=build(data['task_id'])
+        for name in data['context_files']:
+            assert (ROOT/name).read_text(encoding='utf-8') in output
+
+
+def test_context_preserves_complete_documents_over_historical_character_limit(tmp_path):
+    (tmp_path/'tasks').mkdir();(tmp_path/'spec').mkdir();(tmp_path/'docs').mkdir()
+    source='Complete source paragraph.\n'*1000+'END OF THE REQUIRED DOCUMENT'
+    (tmp_path/'docs/large.md').write_text(source,encoding='utf-8')
+    (tmp_path/'tasks/DEV-001.json').write_text(json.dumps({
+        'task_id':'DEV-001','title':'Complete context','requirement_ids':[],
+        'context_files':['docs/large.md'],'max_context_chars':10}),encoding='utf-8')
+    (tmp_path/'spec/requirements.json').write_text('{"requirements":[]}',encoding='utf-8')
+    assert source in build('DEV-001',tmp_path)
+
+def test_field_qa_task_has_no_artificial_input_cap_and_keeps_full_context():
+    task=json.loads((ROOT/'tasks/DEV-171.json').read_text(encoding='utf-8'))
+    assert 'max_context_chars' not in task and 'max_input_tokens' not in task
+    assert task['paid_calls_allowed'] is False
+    assert task['max_output_tokens']==12000
+    output=build(task['task_id'])
+    for name in task['context_files']:
+        assert (ROOT/name).read_text(encoding='utf-8') in output
+
 
 def test_codex_config_is_small_and_does_not_weaken_security():
     data=tomllib.loads((ROOT/'.codex/config.toml').read_text(encoding="utf-8"))
@@ -29,3 +54,44 @@ def test_source_bundle_manifest_excludes_runtime_outputs():
     included = [path.relative_to(ROOT).parts for path in source_files()]
     assert all('outputs' not in parts for parts in included)
     assert all('.git' not in parts for parts in included)
+
+
+def test_source_bundle_manifest_excludes_linked_worktree_pointer(tmp_path):
+    (tmp_path / '.git').write_text('gitdir: synthetic-private-worktree-path\n', encoding='utf-8')
+    (tmp_path / 'module.py').write_text('VALUE = 1\n', encoding='utf-8')
+    assert [path.name for path in source_files(tmp_path)] == ['module.py']
+
+
+def test_change_check_accepts_test_nodes_commands_and_named_public_fixtures():
+    assert declared_test_exists('tests/app/test_api.py::test_parser_timeout_keeps_completed_page_progress')
+    assert declared_test_exists('python scripts/run_checks.py --area all')
+    assert declared_test_exists('node --test tests/web/i18n.test.mjs')
+    assert declared_test_exists('public upstream python-oxmsg MSG fixtures')
+    assert not declared_test_exists('tests/app/not-a-real-test.py::test_missing')
+
+def test_all_checks_include_every_runtime_and_fail_closed_without_node():
+    with pytest.raises(RuntimeError, match='Node.js is required'):
+        build_commands('all',None)
+    commands=build_commands('all','node')
+    assert [sys.executable,'scripts/check_spec_sync.py'] in commands
+    assert [sys.executable,'scripts/build_bundle_manifest.py','--check'] in commands
+    assert ['node','--test','tests/web/i18n.test.mjs'] in commands
+    assert ['node','--test','tests/deploy/worker.test.mjs'] in commands
+
+
+def test_local_parse_benchmark_is_measured_offline(tmp_path):
+    output=tmp_path/'benchmark.json'
+    subprocess.run([sys.executable,'scripts/benchmark_local_parse.py','--fixture-pages','4',
+                    '--workers','1','2','--output',str(output)],check=True)
+    report=json.loads(output.read_text(encoding='utf-8'))
+    assert report['paid_api_calls']==0 and report['files'][0]['outputs_match']
+    assert [run['workers'] for run in report['files'][0]['runs']]==[1,2]
+    assert all(run['pages_processed']==4 for run in report['files'][0]['runs'])
+
+
+def test_workflow_read_benchmark_is_bounded_and_offline():
+    completed=subprocess.run([sys.executable,'scripts/benchmark_workflow_read.py','--pages','100',
+                              '--iterations','5'],check=True,capture_output=True,text=True)
+    report=json.loads(completed.stdout)
+    assert report['paid_api_calls']==0 and report['projected_bytes']<report['full_bytes']
+    assert report['byte_reduction_percent']>90

@@ -5,14 +5,29 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 AREAS={'evidence':['tests/app/test_verification.py'],'ui':['tests/web/test_display_contract.py'],'local':['tests/app/test_local_entry.py'],'render':['tests/app/test_render_preview.py'],'remote':['tests/app/test_remote_access.py'],'api':['tests/app/test_api.py'],'gateway':['tests/app/test_gateway_budget.py'],
        'parsers':['tests/app/test_parsers.py'],'governance':['tests/test_governance.py','tests/test_devtools.py'],'all':['tests']}
+
+def build_commands(area: str, node: str | None) -> list[list[str]]:
+    commands=[[sys.executable,'-m','pytest',*AREAS[area],'-q','--tb=short']]
+    if area in ('governance','all'):
+        commands.extend([
+            [sys.executable,'scripts/check_spec_sync.py'],
+            [sys.executable,'scripts/build_bundle_manifest.py','--check'],
+        ])
+    if area in ('ui','remote','all') and not node:
+        raise RuntimeError(f'Node.js is required for the {area} checks; no JavaScript check was run.')
+    if area in ('ui','all'):
+        commands.extend([[node,'--check','web/i18n.js'],[node,'--check','web/app.js'],[node,'--test','tests/web/i18n.test.mjs']])
+    if area in ('remote','all'):
+        commands.append([node,'--test','tests/deploy/worker.test.mjs'])
+    return commands
+
 def main()->int:
     if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8',errors='replace')
     p=argparse.ArgumentParser();p.add_argument('--area',choices=AREAS,default='all');args=p.parse_args()
-    commands=[[sys.executable,'-m','pytest',*AREAS[args.area],'-q','--tb=short']]
-    if args.area in ('governance','all'):commands.append([sys.executable,'scripts/check_spec_sync.py'])
-    if args.area in ('ui','all') and shutil.which('node'):
-        commands.extend([['node','--check','web/i18n.js'],['node','--check','web/app.js'],['node','--test','tests/web/i18n.test.mjs']])
-    if args.area in ('remote','all') and shutil.which('node'):commands.append(['node','--test','tests/deploy/worker.test.mjs'])
+    try:commands=build_commands(args.area,shutil.which('node'))
+    except RuntimeError as exc:
+        print(f'FAIL {exc}')
+        return 1
     out=ROOT/'reports/local';out.mkdir(parents=True,exist_ok=True);failed=False
     child_env={**os.environ,'PYTHONUTF8':'1'}
     for index,command in enumerate(commands):

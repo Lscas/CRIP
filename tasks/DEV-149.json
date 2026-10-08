@@ -1,0 +1,68 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal directs continued construction of an advanced-model Reference feature while retaining every existing analysis path.",
+  "notes": [
+    "Add an official OpenAI Responses API provider as a new optional feature; do not remove or redirect existing Mock, DeepSeek, Gemini, custom Chat Completions, local-model, legacy analysis or Reference paths.",
+    "Use the fixed official API base, a user-entered exact model ID, write-only credential handling and explicit transfer/possible-charge confirmation; saving settings must not call a provider.",
+    "Use stateless Responses requests with store=false, bounded existing evidence and explicit selected-page images only; do not enable tools or provider-side conversation state.",
+    "Normalize typed output and usage into the existing validation and durable-call boundary. Refusal, incomplete or unexpected output must fail closed, settle when usage is trustworthy, retain no rejected text and never retry or downgrade automatically.",
+    "Freeze api_protocol in new evaluation profiles and mark only new Responses task identities so historical Chat Completions identities remain stable.",
+    "No live provider request, paid call, model-quality claim or fixed-question benchmark is authorized by this implementation task.",
+    "All 116 focused Python tests and 24 localization tests passed. The focused set includes exact /responses request-shape inspection, store=false, strict text.format, bounded input_image conversion, typed output and usage normalization, safe refusal settlement, no rejected-text persistence and no automatic retry.",
+    "The complete local suite passed all 1,509 collected Python tests. Specification sync reports 149 requirements and 21 schemas; the DEV-149 context pack and change-list validation passed.",
+    "The local service restarted without a model call and retained the saved DeepSeek V4 Flash text-only profile with structured_output_mode=json_object and api_protocol=chat_completions. The new service instance has zero active runs, zero active verification jobs and zero unresolved model calls.",
+    "Official OpenAI Responses, Structured Outputs and image-input documentation informed the transport shape; provider acceptance, pricing and answer quality remain intentionally untested."
+  ],
+  "task_id": "DEV-149",
+  "title": "Add official OpenAI Responses provider for Reference analysis",
+  "requirement_ids": [
+    "FR-REFERENCE-OPENAI-RESPONSES-001",
+    "FR-REFERENCE-NATIVE-STRUCTURED-OUTPUT-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/settings.py",
+    "app/model_configuration.py",
+    "app/gateway.py",
+    "app/reference_evaluations.py",
+    "app/main.py",
+    "spec/schemas/reference-evaluation.schema.json",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-149.json",
+    "changes/CR-0164.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/EVIDENCE_LOOP_V3.md"
+  ],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_gateway_budget.py tests/app/test_model_configuration.py tests/app/test_reference_evaluations.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-149",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let an explicitly selected official OpenAI model use the stateless Responses API inside the existing bounded Reference and call-safety framework without deleting or changing the behavior of established providers and product paths."
+}

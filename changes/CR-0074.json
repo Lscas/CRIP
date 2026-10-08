@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0074",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-003",
+    "FR-WORKFLOW-001",
+    "FR-CLASS-001"
+  ],
+  "summary": "Split multi-section DOCX table evidence at exact RFI/Submittal role and status boundaries.",
+  "decision_refs": [
+    "The active goal requires better RFI and Submittal adaptability",
+    "Synthetic styled-run DOCX headings already retain workflow routing and do not justify a parser change",
+    "A synthetic table containing RFI Question followed by an approved Submittal currently labels both as the final Submittal section"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-059.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0074.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued adaptability and accuracy improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Complete DOCX heading/list/table/image relationship preservation remains planned.",
+    "Headers, footers, comments, footnotes and endnotes remain excluded and explicitly warned.",
+    "The change does not infer approval authority, precedence or semantic relationships.",
+    "Validation is synthetic and offline; no customer document, external provider or paid model is used."
+  ]
+}

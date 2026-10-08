@@ -1,0 +1,43 @@
+{
+  "change_id": "CR-0173",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-V2-ANSWER-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Resolve QA V3 citation references and percentage arithmetic locally instead of requiring the provider to duplicate exact source text and metadata.",
+  "decision_refs": [
+    "The first lean-contract DeepSeek Flash rerun produced five citation-scope failures, one answer-union failure and two calculation failures on the frozen 15-question evidence set",
+    "Every source atom in the frozen run is within the existing canonical citation quote bound, so CIRP can safely copy the exact prompt-visible atom after validating its evidence ID",
+    "The approved ponytail direction favors deleting redundant model-authored fields instead of adding another orchestration layer"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/project_qa_v2.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "spec/schemas/project-answer-v2.schema.json",
+    "tests/app/test_evidence_loop.py", "tests/app/test_project_qa_v2.py",
+    "tests/app/test_reference_evaluations.py",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REFERENCE_QA.md", "docs/PROJECT_QA_V2.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-158.json", "changes/CR-0173.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_project_qa_v2.py",
+    "tests/app/test_reference_evaluations.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested continued implementation, testing and iteration after approving the minimal development plan.",
+  "known_limitations": [
+    "Evidence-reference compilation removes copying errors but does not prove that the selected evidence is relevant or that every requested field was answered.",
+    "Percentage arithmetic is limited to one cited base and one cited percentage; unit conversion, rounding, date arithmetic, image arithmetic and geometry remain unsupported.",
+    "Rejected provider output remains intentionally unavailable, so historical contract failures can be classified but not repaired in place.",
+    "No live provider call is part of this implementation change; a later frozen evaluation is a separate operational validation."
+  ]
+}

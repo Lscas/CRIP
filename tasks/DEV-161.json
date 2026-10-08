@@ -1,0 +1,45 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 16000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly authorized API calls and requested DeepSeek V4.1 Flash followed by V4 Pro comparison while continuing development, testing and iteration.",
+  "notes": [
+    "Use RUN-6322ca9598a74c768c91117a7fa05834, SN-051a40d964a10ccf640a9710233de205, question hash 2d29ad029e36e7fb8af97ae6917774811c06094f4b4b4b2ab80915543cdec755 and literal-page-selector-4 for both models.",
+    "Run the compact E/V alias contract first with deepseek-flash, then clone the exact frozen evaluation under deepseek-v4-pro.",
+    "Keep vision disabled, thinking disabled, JSON-object output, serial execution and no automatic retry.",
+    "Do not rerun a settled failure automatically; stop on unresolved provider state or profile mismatch.",
+    "Compare contract outcomes, human correctness, model decisions, usage and elapsed time; contract validity alone is not correctness."
+  ],
+  "task_id": "DEV-161",
+  "title": "Run compact-reference Flash and Pro benchmark",
+  "requirement_ids": [
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "reports/kapolei_reference_qa_compact_flash_pro_2026-10-03.json",
+    "reports/kapolei_reference_qa_compact_flash_pro_2026-10-03.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-161.json",
+    "changes/CR-0176.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Both evaluations retain identical run, snapshot, ordered question hash and selector version",
+    "Both evaluations reach a local terminal state with zero unresolved model calls and no automatic retry",
+    "The saved comparison contains all 15 questions without inferring correctness",
+    "Every terminal answer is separately adjudicated against the frozen direct-PDF answer key",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "operational_benchmark",
+  "objective": "Measure the compact-reference CIRP path with DeepSeek V4.1 Flash and independent text-only V4 Pro on one immutable 15-question evidence scope, then report contract and correctness differences without retries."
+}

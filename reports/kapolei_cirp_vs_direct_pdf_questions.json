@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "selection_method": "Deterministic random sample fixed before CIRP answers were requested",
+  "seed": "KHS-Q82227-21-20260927",
+  "project_id": "P-d3e2e33a21ff49859c633553008dd233",
+  "live_analysis_run_id": "RUN-ae67a407392f40bbaa61593f08e0d28e",
+  "questions": [
+    {
+      "id": "S1",
+      "category": "project_scope",
+      "question": "What are the project name, DOE job number, project address, and stated scope of work?"
+    },
+    {
+      "id": "S2",
+      "category": "project_scope",
+      "question": "Which three work areas are listed in the required construction sequence, and how much construction time is assigned to each?"
+    },
+    {
+      "id": "S3",
+      "category": "project_scope",
+      "question": "For Building G, what construction type, occupancy groups, story count, and sprinkler status are listed?"
+    },
+    {
+      "id": "S4",
+      "category": "project_scope",
+      "question": "For Building I, what construction type, occupancy groups, story count, and sprinkler status are listed?"
+    },
+    {
+      "id": "S5",
+      "category": "project_scope",
+      "question": "How many Volume I drawing sheets are listed for each discipline: General, Architectural, Structural, Mechanical, Fire Protection, and Plumbing?"
+    },
+    {
+      "id": "D1",
+      "category": "detail",
+      "question": "On sheet A3.00, what materials are identified by wall substrate codes 1, 2, 21, and 22, and what is the default spacing for interior stud framing and furring?"
+    },
+    {
+      "id": "D2",
+      "category": "detail",
+      "question": "On sheet A5.01, what are the general requirements for door thickness, door-handle type, and the side of the frame where relite glazing and stops occur?"
+    },
+    {
+      "id": "D3",
+      "category": "detail",
+      "question": "On sheet A3.40, what do the general finish notes require for flooring transitions, door and relite frame paint, and gypsum-board ceiling paint?"
+    },
+    {
+      "id": "D4",
+      "category": "detail",
+      "question": "In ASK 001.2 / RFI 016, how is the top of the full-height metal stud wall attached at the existing wide-flange beam, and what gypsum-board repair and acoustic-sealant requirements are shown?"
+    },
+    {
+      "id": "D5",
+      "category": "detail",
+      "question": "On sheet M5.01, what support spacing is required for rectangular duct, and what hanger components or allowed substitute are shown for round duct?"
+    },
+    {
+      "id": "C1",
+      "category": "calculation",
+      "question": "Using the discipline sheet counts on the Volume I cover sheet, what is the total number of base drawing sheets? Show the arithmetic."
+    },
+    {
+      "id": "C2",
+      "category": "calculation",
+      "question": "On sheet G2.10, add the printed Building G L1 and L2 occupant-load subtotals. What sum do they produce, and does it match the printed total?"
+    },
+    {
+      "id": "C3",
+      "category": "calculation",
+      "question": "Using Section 01100 paragraph 1.04, what is the total scheduled construction time for the three sequential work areas? Show the arithmetic and state the one-floor-at-a-time constraint."
+    },
+    {
+      "id": "C4",
+      "category": "calculation",
+      "question": "Using Section 01100 paragraph 1.03, how many calendar days of the 589-day contract duration are outside the stated 367-day on-site duration? Show the arithmetic."
+    },
+    {
+      "id": "C5",
+      "category": "calculation",
+      "question": "Section 00800 states liquidated damages of $2,000 per calendar day. What are the per-day amounts for punch-list delay at 10 percent and closing-document delay at 5 percent? Show the arithmetic."
+    }
+  ]
+}

@@ -13,9 +13,10 @@ import re
 import time
 from typing import Any
 
-from app.db import Database, DomainError, BudgetError, dumps, now, uid
+from app.db import CallSafetyError, Database, DomainError, dumps, now, uid
 from app.gateway import InvalidModelOutput, ProviderPaused
 from app.settings import ROOT
+from app.publication import record_publication,require_current_publication
 from contracts.runtime_rules import EvidenceScope, evidence_references, validate_schema
 
 POLICY = 'evidence-check-2'
@@ -115,6 +116,11 @@ def fields_for(record: dict) -> list[dict]:
     ids = sorted(evidence_references(c))
     root_basis = 'INFERRED' if c.get('requirement_status') == 'INFERRED_TO_VERIFY' else 'DIRECT'
     context = {k: c.get(k) for k in ('name', 'subject', 'activity', 'entity_ids', 'location', 'condition', 'selected_option_ids')}
+    if kind == 'INSPECTION':
+        # Inspection timing, frequency, and standards are conclusions about the
+        # stated requirement.  Keep that semantic subject in every inspection
+        # field key so a changed requirement cannot reuse an old model verdict.
+        context['requirement'] = c.get('requirement')
 
     def add(path, value, refs=None, basis=None, label=None):
         if value is None or value == '' or value == []:
@@ -234,16 +240,18 @@ class VerificationService:
 
     def get(self, record_id: str) -> dict:
         row, record, evs = self.load(record_id)
+        run=self.db.one('SELECT coverage,status,stage FROM runs WHERE id=?',(row['run_id'],))
+        blocked=record_publication(run['coverage'],record_id,status=run['status'],stage=run['stage'])['publication_blocked']
         saved = self.db.one('SELECT payload FROM verification_reports WHERE record_id=?', (record_id,), False)
         if not saved:
-            return {'status': 'NOT_CHECKED', 'record_id': record_id, 'fields': [], 'counts': {}}
+            return {'status': 'STALE' if blocked else 'NOT_CHECKED', 'record_id': record_id, 'fields': [], 'counts': {}}
         report = json.loads(saved['payload'])
         if report['candidate_hash'] != digest(record['candidate']) or report['evidence_fingerprint'] != fingerprint(evs):
             report['status'] = 'STALE'
             for f in report['fields']:
                 f['status'] = 'STALE'
         verifier_identity = self.identity()
-        if report.get('verifier_identity') != verifier_identity:
+        if report.get('verifier_identity') != verifier_identity or blocked:
             report['status'] = 'STALE'
             for f in report['fields']: f['status'] = 'STALE'
         return report
@@ -256,9 +264,10 @@ class VerificationService:
     def save(self, report: dict) -> bool:
         validate_schema('citation-report', report)
         with self.db.connect(True) as c:
-            row = c.execute('SELECT envelope FROM records WHERE id=?', (report['record_id'],)).fetchone()
+            row = c.execute('SELECT r.envelope,runs.coverage,runs.status,runs.stage FROM records r JOIN runs ON runs.id=r.run_id WHERE r.id=?', (report['record_id'],)).fetchone()
             if not row or digest(json.loads(row['envelope'])['candidate']) != report['candidate_hash']:
                 return False
+            if record_publication(row['coverage'],report['record_id'],status=row['status'],stage=row['stage'])['publication_blocked']:return False
             # Source payloads are append-only in normal app use; protect against changed snapshots as well.
             record = json.loads(row['envelope']); refs = evidence_references(record['candidate'])
             evs = self._evidence_bundle(record['meta']['analysis_run_id'], record['meta']['project_id'], refs, c)
@@ -270,6 +279,7 @@ class VerificationService:
 
     def refresh(self, record_id: str, allow_model=False, job_id=None) -> dict:
         row, record, evs = self.load(record_id)
+        self.require_current_publication(row['run_id'],record_id)
         old_row = self.db.one('SELECT payload FROM verification_reports WHERE record_id=?', (record_id,), False)
         old = json.loads(old_row['payload']) if old_row else {}
         bykey = {f['check_key']: f for f in old.get('fields', [])}
@@ -326,6 +336,7 @@ class VerificationService:
         run = self.db.one('SELECT * FROM runs WHERE id=?', (row['run_id'],))
         pending = [f for f in report['fields'] if f['status'] == 'NEEDS_SEMANTIC']
         for offset in range(0, len(pending), MAX_BATCH_FIELDS):
+            self.require_current_publication(row['run_id'],record_id)
             if job_id and self.db.one("SELECT id FROM verification_jobs WHERE id=? AND state='RUNNING'",(job_id,),False) is None:
                 raise ProviderPaused('核验任务已停止；不发送新请求',409)
             current = self.db.one('SELECT envelope FROM records WHERE id=?', (record_id,))
@@ -341,13 +352,62 @@ class VerificationService:
                 for f in batch:
                     f.update(status='NEEDS_CONTEXT', method='MODEL_OUTPUT_REJECTED')
                     f['issues'].append('模型核验响应不完整、过长或引用不精确；不标记通过。')
-            except (BudgetError, ProviderPaused):
+            except (CallSafetyError, ProviderPaused):
                 report['checked_at'] = now(); summarize(report); self.save(report)
                 raise
             report['checked_at'] = now(); summarize(report)
             if not self.save(report):
                 return self.get(record_id)
         return report
+
+    def refresh_many(self, record_ids: list[str], allow_model=False) -> dict[str,dict]:
+        """Verify fresh run output in evidence-scoped batches without changing paid recovery keys."""
+        record_ids=sorted(dict.fromkeys(record_ids))
+        if not record_ids:return {}
+        first=self.db.one('SELECT run_id FROM records WHERE id=?',(record_ids[0],))
+        prior=self.db.one("SELECT id FROM model_calls WHERE run_id=? AND task_key LIKE 'verify:%' LIMIT 1",
+                          (first['run_id'],),False)
+        if allow_model and prior:
+            # A resumed run may have committed an older per-record response just before interruption.
+            # Preserve that exact recovery key instead of regrouping and risking a second paid call.
+            return {record_id:self.refresh(record_id,allow_model=True) for record_id in record_ids}
+
+        reports={record_id:self.refresh(record_id,allow_model=False) for record_id in record_ids}
+        if not allow_model or self.s.provider=='mock':return reports
+        contexts={};run_ids=set();groups={}
+        for record_id in record_ids:
+            row,record,evs=self.load(record_id);run_ids.add(row['run_id']);contexts[record_id]=(row,record,evs)
+            for item in reports[record_id]['fields']:
+                if item['status']=='NEEDS_SEMANTIC':
+                    groups.setdefault(tuple(sorted(item['evidence_ids'])),[]).append((record_id,item))
+        if len(run_ids)!=1:raise DomainError('批量核验必须属于同一运行')
+        run=self.db.one('SELECT * FROM runs WHERE id=?',(run_ids.pop(),))
+        for evidence_ids,entries in sorted(groups.items()):
+            entries.sort(key=lambda pair:(pair[1]['path'],pair[0]))
+            for offset in range(0,len(entries),MAX_BATCH_FIELDS):
+                chunk=entries[offset:offset+MAX_BATCH_FIELDS]
+                for record_id,_ in chunk:self.require_current_publication(run['id'],record_id)
+                if any(digest(json.loads(self.db.one('SELECT envelope FROM records WHERE id=?',(record_id,))['envelope'])['candidate'])
+                       != reports[record_id]['candidate_hash'] for record_id,_ in chunk):
+                    raise ProviderPaused('核验候选已变化；停止发送新请求',409)
+                wire=[];bundle={}
+                for number,(record_id,item) in enumerate(chunk):
+                    sent=deepcopy(item);sent['path']=f'/batch/{number}';wire.append(sent)
+                    bundle.update({eid:contexts[record_id][2][eid] for eid in evidence_ids})
+                try:
+                    result=self.gateway.verify_claims(run,wire,bundle)
+                    self.apply_model(wire,result.data,bundle,result.request_id)
+                    for sent,(record_id,item) in zip(wire,chunk):
+                        original_path=item['path'];item.clear();item.update(sent);item['path']=original_path
+                except InvalidModelOutput:
+                    for record_id,item in chunk:
+                        item.update(status='NEEDS_CONTEXT',method='MODEL_OUTPUT_REJECTED')
+                        item['issues'].append('模型核验响应不完整、过长或引用不精确；不标记通过。')
+                touched={record_id for record_id,_ in chunk}
+                for record_id in touched:
+                    report=reports[record_id];report['checked_at']=now();summarize(report)
+                    if not self.save(report):reports[record_id]=self.get(record_id)
+        return reports
 
     @staticmethod
     def apply_model(fields: list[dict], data: dict, evs: dict, request_id):
@@ -393,10 +453,15 @@ class VerificationService:
         if run['provider'] != self.s.provider:
             raise DomainError('原运行Provider不一致，请新建分析', 409)
         if time.time() >= run['deadline_epoch']:
-            raise DomainError('原运行已过24小时目标；重新分析不会重置项目预算', 409)
+            raise DomainError('原运行已过24小时目标；请创建新的分析', 409)
         with self.db.connect(True) as c:
+            current=c.execute('SELECT coverage,status,stage FROM runs WHERE id=?',(row['run_id'],)).fetchone()
+            require_current_publication(current['coverage'],record_id,status=current['status'],stage=current['stage'])
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():
                 raise DomainError('已有活跃分析，请结束后核验', 409)
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
+                raise DomainError('A managed Reference evaluation job is active.',409)
             existing = c.execute("SELECT * FROM verification_jobs WHERE record_id=? AND state IN ('QUEUED','RUNNING')", (record_id,)).fetchone()
             if existing:
                 return dict(existing)
@@ -407,12 +472,18 @@ class VerificationService:
                       (jid, record_id, row['run_id'], digest(record['candidate']), 'QUEUED', '', now(), now(), expected_version))
         return self.db.one('SELECT * FROM verification_jobs WHERE id=?', (jid,))
 
+    def require_current_publication(self,run_id,record_id):
+        run=self.db.one('SELECT coverage,status,stage FROM runs WHERE id=?',(run_id,))
+        require_current_publication(run['coverage'],record_id,status=run['status'],stage=run['stage'])
+
     def process_job(self, job_id: str):
         with self.db.connect(True) as c:
             job = c.execute('SELECT * FROM verification_jobs WHERE id=?', (job_id,)).fetchone()
             if not job or job['state'] != 'QUEUED': return
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone(): return
             if c.execute("SELECT id FROM verification_jobs WHERE state='RUNNING'").fetchone(): return
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():return
             c.execute("UPDATE verification_jobs SET state='RUNNING',updated_at=? WHERE id=?", (now(), job_id))
         job = self.db.one('SELECT * FROM verification_jobs WHERE id=?', (job_id,))
         row, record, _ = self.load(job['record_id'])
@@ -425,8 +496,8 @@ class VerificationService:
                 current = self.db.one('SELECT * FROM records WHERE id=?', (job['record_id'],))
                 if digest(json.loads(current['envelope'])['candidate']) != job['candidate_hash']:
                     state = 'STALE'
-        except BudgetError:
-            state = 'PAUSED_BUDGET'; message = '预算不足，核验未完成。'
+        except CallSafetyError as exc:
+            state = 'PAUSED_PROVIDER'; message = str(exc)
         except ProviderPaused as exc:
             state = 'PAUSED_PROVIDER'; message = str(exc)
         except Exception:

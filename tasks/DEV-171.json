@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-171",
+  "title": "Deliver complete-evidence field QA and a human resolution workflow",
+  "status": "IN_PROGRESS",
+  "objective": "Implement and verify all six approved field-QA development items, excluding local-model work; do not redefine completion around one passing slice.",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "FR-REFERENCE-EXECUTION-RECEIPT-001", "FR-REFERENCE-THINKING-001", "FR-REFERENCE-COMPLETE-CONTEXT-001", "FR-REFERENCE-HUMAN-CASES-001", "DEV-FIELD-BENCHMARK-001"],
+  "max_output_tokens": 12000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user approved continuous implementation of the six-item plan, removed input-character priorities, excluded local models, and on 2026-10-07 explicitly permitted API calls and Git synchronization. Calls still require a healthy configured loopback service, resolved prior calls and a separate scoped live runner; authorization does not require dispatch or open the projection question entry. Object/condition and validation repairs remain ahead of conditional escalation.",
+  "notes": ["Default tests are offline; only a separate explicit live runner may use the user's previously authorized provider.", "Preserve complete selected development documents and relevant v9 source input without artificial character or input-token caps. Provider hard limits, output allowances, acquisition-round limits and paid-call safeguards remain unchanged.", "Preserve dirty-worktree changes, historical evidence identities and manual reviews.", "Track full completion and remaining work in docs/FIELD_QA_DEVELOPMENT.md."],
+  "allowed_paths": ["app/**", "web/**", "tests/**", "scripts/**", "migrations/**", "prompts/**", "spec/**", "docs/**", "reports/**", "contracts/runtime_rules.py", "tasks/DEV-171.json", "changes/*.json", ".gitignore", ".gitattributes", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/FIELD_QA_DEVELOPMENT.md", "docs/REFERENCE_PROJECTION_NEXT_STAGE.md"],
+  "acceptance_tests": [".venv\\Scripts\\python.exe -m pytest tests/app/test_page_selector.py tests/app/test_evidence_loop.py tests/app/test_reference_cases.py tests/test_devtools.py -q", "node --test tests/web/i18n.test.mjs", ".venv\\Scripts\\python.exe scripts/check_spec_sync.py", ".venv\\Scripts\\python.exe scripts/run_checks.py --area all", ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"],
+  "model_level": "medium_execution_sol_max_architecture_and_final_review"
+}

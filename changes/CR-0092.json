@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0092",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Answer strict run-wide workflow inventory list questions from the complete cached index without retrieval or a model call.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email efficiency, accuracy and adaptability",
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "Current source inspection proved that list-form inventory questions still fell through to an eight-passage evidence window and model path"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-077.json", "changes/CR-0092.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective and project-question request authorize this deterministic completeness and cost improvement.",
+  "known_limitations": [
+    "Only exact English plural count and list forms for RFIs, Submittals and Emails use the deterministic shortcut.",
+    "Each list exposes at most 50 ordered values per category while retaining the complete total; the paginated reviewer remains the full large-inventory view.",
+    "RFI and Submittal inventory includes reference-only identifiers whose primary source may be missing.",
+    "Filtered lists remain evidence/model questions and are not claimed complete by the workflow-index shortcut."
+  ]
+}

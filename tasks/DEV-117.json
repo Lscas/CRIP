@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the complete terminal-run workflow index to bound one exact RFI or Submittal's primary sources.",
+    "Accept only explicit Assigned To, Responsible Party, Submitted By or Reviewed By field labels under the same exact workflow scope.",
+    "Apply the same identity, role and complete-value contract to ordinary answers and comparison source findings.",
+    "Fail closed on conflicts, cross-workflow borrowing, quoted history, signatures, vision narration and oversized source sets.",
+    "Do not reinterpret Email From/To, Ball in Court, company mentions or general responsibility prose as a workflow party field."
+  ],
+  "task_id": "DEV-117",
+  "title": "Answer and ground exact workflow party fields",
+  "requirement_ids": ["FR-QA-WORKFLOW-PARTY-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-117.json",
+    "changes/CR-0132.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-117",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return bounded exact workflow party fields without provider cost and reject unsupported identity, role or value borrowing in every answer scope."
+}

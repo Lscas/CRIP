@@ -1,0 +1,41 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "Enterprise mail gateways commonly prepend bounded bracketed labels such as [EXTERNAL] or [External Email] before or between reply/forward prefixes.",
+    "Keep explicit RFI/Submittal words and digit-bearing identifiers mandatory, reuse Python regular expressions, add no dependency, and advance the parser version."
+  ],
+  "task_id": "DEV-024",
+  "title": "Enterprise email Subject prefix support",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-024.json",
+    "changes/CR-0039.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Recognize explicit RFI and Submittal email Subjects behind a bounded sequence of reply, forward and bracketed enterprise security labels without weakening identifier or routing rules."
+}

@@ -18,7 +18,17 @@ INTERNAL_ID = re.compile(r'\b(?:REC|EV|DOC|CALL|RUN)-[0-9a-fA-F]{16,64}\b')
 CJK = re.compile(r'[\u3400-\u9fff]')
 EXTRACTION_CODE = re.compile(r'\(cid:\d+\)|\ufffd', re.I)
 PRIVATE_USE = re.compile(r'[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010fffd]')
-MACHINE_CODE = re.compile(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b', re.I)
+DISPLAY_ENUM_CODES = frozenset({
+    'DESIGN_NET', 'EXPLICIT_DOCUMENT', 'SCHEDULE_EXTRACTION', 'CAD_OBJECT_COUNT',
+    'CAD_GEOMETRY', 'FIELD_TEST', 'INITIAL_INSPECTION', 'TEST_REPORT',
+    'NEEDS_SEMANTIC', 'NEEDS_CONTEXT', 'NOT_CHECKED', 'PARTIAL_SUPPORT',
+    'INFERRED_TO_VERIFY', 'PENDING_REVIEW', 'NOT_APPLICABLE', 'MODEL_VISION_OUTPUT',
+    'SOURCE_PARSED_TEXT', 'SOURCE_TEXT', 'TEXT_LAYER', 'PARSER_TEXT',
+})
+ENUM_FIELDS = frozenset({'quantity_basis', 'quantity_review', 'human_review', 'verification',
+                         'material_type', 'requirement_status', 'source_type', 'qa_type'})
+ENUM_HEADERS = frozenset({'Quantity Basis', 'Quantity Review', 'Human Review', 'Verification',
+                          'Type', 'Requirement Status', 'Quantity Type', 'Basis'})
 RAW_NULL = re.compile(r'\bnull\b', re.I)
 NON_ENGLISH_PUNCTUATION = re.compile(r'[，。；：、！？（）【】《》]')
 GENERIC_VISUAL_NOTE = 'Visual model observation recorded for this page. Review the cited source page before use.'
@@ -50,6 +60,10 @@ def walk(value, path=()):
             yield from walk(item, path + (index,))
     else:
         yield path, value
+
+
+def _json_source_evidence_path(path) -> bool:
+    return bool(path and path[-1] in {'text', 'evidence_text'} and 'evidence' in path)
 
 
 def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
@@ -84,22 +98,23 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
             continue
         if value and not value.strip():
             whitespace_values.append(path)
-        if INTERNAL_ID.search(value):
+        source_evidence=_json_source_evidence_path(path)
+        if INTERNAL_ID.search(value) and not source_evidence:
             internal_values.append(path)
-        private_use_glyphs += len(PRIVATE_USE.findall(value))
-        if key not in {'text', 'evidence_text'} and CJK.search(value):
+        private_use_glyphs += len(PRIVATE_USE.findall(value)) if not source_evidence else 0
+        if key in ENUM_FIELDS and value in DISPLAY_ENUM_CODES:
+            machine_code_values.append(path)
+        if not source_evidence and CJK.search(value):
             non_evidence_cjk.append((path, value[:160]))
-        if MACHINE_CODE.search(value):
-            machine_code_values.append((path, value[:160]))
-        if RAW_NULL.search(value):
+        if RAW_NULL.search(value) and not source_evidence:
             raw_null_values.append((path, value[:160]))
-        if NON_ENGLISH_PUNCTUATION.search(value):
+        if NON_ENGLISH_PUNCTUATION.search(value) and not source_evidence:
             punctuation_artifacts.append((path, value[:160]))
         if value == GENERIC_VISUAL_NOTE:
             generic_visual_notes.append(path)
         if GENERIC_TRANSLATION_DISCLAIMER.search(value):
             generic_translation_disclaimers.append(path)
-        if key in {'text', 'evidence_text'} and CJK.search(value):
+        if source_evidence and CJK.search(value):
             parent = data
             try:
                 for part in path[:-1]:
@@ -110,7 +125,7 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
                 visual_evidence_cjk.append((path, value[:160]))
             else:
                 source_evidence_cjk.append((path, value[:160]))
-        if ('```' in value or EXTRACTION_CODE.search(value) or
+        if (('```' in value or EXTRACTION_CODE.search(value)) and not source_evidence or
                 (key not in {'text', 'evidence_text'} and value.startswith('{') and value.endswith('}'))):
             code_artifacts.append(path)
     if internal_keys:
@@ -121,16 +136,12 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
         errors.append(f'JSON contains {len(whitespace_values)} whitespace-only strings.')
     if non_evidence_cjk:
         errors.append(f'JSON contains {len(non_evidence_cjk)} non-evidence Chinese strings.')
-    if visual_evidence_cjk:
-        errors.append(f'JSON contains {len(visual_evidence_cjk)} Chinese visual-model observation strings.')
-    if source_evidence_cjk:
-        errors.append(f'JSON contains {len(source_evidence_cjk)} Chinese source-evidence strings.')
     if code_artifacts:
         errors.append(f'JSON contains {len(code_artifacts)} display-code artifacts.')
     if private_use_glyphs:
         errors.append(f'JSON contains {private_use_glyphs} private-use glyphs.')
     if machine_code_values:
-        errors.append(f'JSON contains {len(machine_code_values)} machine-style underscore values.')
+        errors.append(f'JSON contains {len(machine_code_values)} untranslated application enum values.')
     if raw_null_values:
         errors.append(f'JSON contains {len(raw_null_values)} visible raw null values.')
     if punctuation_artifacts:
@@ -150,8 +161,8 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
     invalid_qa_items = [
         (index, str(item.get('test_or_inspection_name', '')))
         for index, item in enumerate(data.get('inspections_and_tests', []))
-        if NON_QA_ITEM.search(' '.join(str(item.get(key, '')) for key in
-                                   ('test_or_inspection_name', 'activity')))
+        if NON_QA_ITEM.match(re.sub(r'^(?:provide|submit|prepare)\s+(?:the\s+|an?\s+)?', '',
+                                   str(item.get('test_or_inspection_name', '')).strip(), flags=re.I))
     ]
     if invalid_qa_items:
         errors.append(f'JSON contains {len(invalid_qa_items)} administrative or drawing submittals as QA items.')
@@ -176,19 +187,22 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
     machine_code_cells = raw_null_cells = punctuation_cells = private_use_cells = 0
     non_english_labels = 0
     for sheet in wb.worksheets:
+        headers={cell.column:cell.value for cell in sheet[4]} if sheet.max_row >= 4 else {}
         for row in sheet.iter_rows():
             for cell in row:
                 value = cell.value
+                source_evidence=(cell.row > 4 and str(headers.get(cell.column) or '').startswith('Evidence Text'))
                 formulas += int(cell.data_type == 'f')
                 hyperlinks += int(bool(cell.hyperlink))
                 if isinstance(value, str):
                     whitespace_cells += int(bool(value) and not value.strip())
-                    internal_id_cells += int(bool(INTERNAL_ID.search(value)))
-                    extraction_code_cells += int(bool(EXTRACTION_CODE.search(value)))
-                    private_use_cells += len(PRIVATE_USE.findall(value))
-                    machine_code_cells += int(bool(MACHINE_CODE.search(value)))
-                    raw_null_cells += int(bool(RAW_NULL.search(value)))
-                    punctuation_cells += int(bool(NON_ENGLISH_PUNCTUATION.search(value)))
+                    internal_id_cells += int(bool(INTERNAL_ID.search(value)) and not source_evidence)
+                    extraction_code_cells += int(bool(EXTRACTION_CODE.search(value)) and not source_evidence)
+                    private_use_cells += len(PRIVATE_USE.findall(value)) if not source_evidence else 0
+                    machine_code_cells += int(cell.row > 4 and headers.get(cell.column) in ENUM_HEADERS
+                                              and value in DISPLAY_ENUM_CODES)
+                    raw_null_cells += int(bool(RAW_NULL.search(value)) and not source_evidence)
+                    punctuation_cells += int(bool(NON_ENGLISH_PUNCTUATION.search(value)) and not source_evidence)
                     if cell.row <= 4:
                         non_english_labels += int(bool(CJK.search(value)))
     if formulas:
@@ -206,7 +220,7 @@ def validate(json_path: Path, xlsx_path: Path) -> tuple[dict, list[str]]:
     if non_english_labels:
         errors.append(f'Workbook contains {non_english_labels} non-English labels.')
     if machine_code_cells:
-        errors.append(f'Workbook contains {machine_code_cells} machine-style underscore cells.')
+        errors.append(f'Workbook contains {machine_code_cells} untranslated application enum cells.')
     if raw_null_cells:
         errors.append(f'Workbook contains {raw_null_cells} visible raw null cells.')
     if punctuation_cells:

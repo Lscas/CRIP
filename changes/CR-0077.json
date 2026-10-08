@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0077",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-WORKFLOW-001",
+    "FR-CLASS-001"
+  ],
+  "summary": "Reuse a bounded process-local workflow index for repeated pages of terminal runs and invalidate it after classification corrections.",
+  "decision_refs": [
+    "The active goal requires continued workflow efficiency",
+    "The existing pagination endpoint projects and rebuilds every workflow group for each requested page",
+    "Reviewer corrections must be immediately visible and therefore invalidate terminal-run cache entries"
+  ],
+  "affected_paths": [
+    "app/main.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-062.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0077.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requests continued efficiency for RFI, Submittal and Email support.",
+  "known_limitations": [
+    "The cache is process-local and bounded to eight terminal runs; multi-process shared caching remains unimplemented.",
+    "Active runs remain uncached so partial parser progress stays visible.",
+    "Validation is synthetic and offline; no customer file, provider or paid model is used."
+  ]
+}

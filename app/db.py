@@ -1,6 +1,7 @@
-"""单进程原型的 SQLite 事务存储；金额使用人民币百万分之一整数。"""
+"""Single-process SQLite storage and model-call safety records."""
 from __future__ import annotations
 import json
+import math
 import re
 import sqlite3
 import time
@@ -10,6 +11,14 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 from typing import Iterator
+from app.reference_result_migration import (
+    install_reference_projection_results,
+    preflight_reference_projection_results,
+)
+from app.reference_case_migration import (
+    install_projection_human_review,
+    preflight_projection_human_review,
+)
 from app.settings import ROOT
 
 PAID_TASK_GENERATION_MARKER = ':manual-requeue:'
@@ -48,7 +57,7 @@ class DomainError(Exception):
     def __init__(self, message: str, code: int = 400):
         super().__init__(message); self.code = code
 
-class BudgetError(DomainError):
+class CallSafetyError(DomainError):
     pass
 
 def uid(prefix: str) -> str:
@@ -76,6 +85,243 @@ class Database:
             c.executescript((ROOT / 'migrations/001_initial.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/002_verification.sql').read_text(encoding="utf-8"))
             c.executescript((ROOT / 'migrations/003_call_reconciliation.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/004_performance_budget.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/005_upload_sources.sql').read_text(encoding="utf-8"))
+            c.executescript((ROOT / 'migrations/006_workflow_classification_overrides.sql').read_text(encoding="utf-8"))
+            self.evidence_search_available=self._install_evidence_search(c)
+            c.executescript((ROOT / 'migrations/008_canonical_document_graph.sql').read_text(encoding='utf-8'))
+            self.canonical_search_available=self._install_optional_virtual_table(
+                c,9,'migrations/009_canonical_search.sql','fts5','content_search')
+            self.canonical_bounds_available=self._install_optional_virtual_table(
+                c,10,'migrations/010_canonical_bounds.sql','rtree','content_bounds')
+            # Validate old or current reference-results state before migration
+            # 011's CREATE INDEX IF NOT EXISTS can otherwise silently repair a
+            # malformed marked database and hide an interrupted deployment.
+            self._preflight_reference_projection_results(c)
+            c.executescript((ROOT/'migrations/011_reference_results.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/012_reference_evaluations.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/013_reference_evaluation_failures.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/014_reference_evaluation_jobs.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/015_reference_evaluation_adjudications.sql').read_text(encoding='utf-8'))
+            self._install_reference_evaluation_selector_version(c)
+            self._install_reference_failure_execution_receipt(c)
+            self._install_reference_selector_v5(c)
+            self._install_reference_selector_v6(c)
+            self._install_reference_selector_v7(c)
+            self._install_reference_selector_v8(c)
+            self._install_reference_input_commitment(c)
+            # Must run before 022/023 CREATE IF NOT EXISTS can hide an
+            # interrupted or name-shadowed human-case migration state.
+            preflight_projection_human_review(c)
+            c.executescript((ROOT/'migrations/022_reference_cases.sql').read_text(encoding='utf-8'))
+            c.executescript((ROOT/'migrations/023_reference_case_followups.sql').read_text(encoding='utf-8'))
+            self._install_reference_selector_v9(c)
+            self._install_reference_failure_execution(c)
+            # The preceding legacy chain uses independent migration commits;
+            # schema27 must begin only after schema26 is durable.
+            self._install_reference_projection_results(c)
+            # Historical migration fixtures deliberately stop before 027; do
+            # not make schema28 mask or reject that isolated legacy state.
+            if c.execute('SELECT 1 FROM schema_migrations WHERE version=27').fetchone():
+                install_projection_human_review(c)
+            # Older isolated migration fixtures intentionally stop before 028.
+            # This non-versioned additive index must not make those fixtures
+            # appear to have the complete current schema chain.
+            if c.execute('SELECT 1 FROM schema_migrations WHERE version=28').fetchone():
+                self._ensure_model_call_task_index(c)
+
+    @staticmethod
+    def _preflight_reference_projection_results(connection: sqlite3.Connection) -> None:
+        preflight_reference_projection_results(connection)
+
+    @staticmethod
+    def _install_reference_projection_results(connection: sqlite3.Connection) -> None:
+        install_reference_projection_results(connection)
+
+    @staticmethod
+    def _ensure_model_call_task_index(connection: sqlite3.Connection) -> None:
+        """Install only the verified non-unique run/task lookup index.
+
+        It deliberately has no schema_migrations marker: schema28's strict
+        preflight owns the current chain and must still run on every startup.
+        """
+        name='ix_model_calls_run_task_key'
+        object_row=connection.execute(
+            "SELECT type,tbl_name FROM sqlite_master WHERE name=?",(name,)).fetchone()
+        if object_row is None:
+            connection.executescript((ROOT/'migrations/029_model_call_task_index.sql').read_text(encoding='utf-8'))
+            object_row=connection.execute(
+                "SELECT type,tbl_name FROM sqlite_master WHERE name=?",(name,)).fetchone()
+        index=connection.execute("PRAGMA index_list('model_calls')").fetchall()
+        match=next((row for row in index if row['name']==name),None)
+        key_columns=[(row['seqno'],row['cid'],row['name'],row['desc'],row['coll'])
+                     for row in connection.execute(f"PRAGMA index_xinfo('{name}')")
+                     if row['key']]
+        if (object_row['type']!='index' or object_row['tbl_name']!='model_calls'
+                or match is None or match['unique']!=0 or match['partial']!=0
+                or key_columns!=[(0,2,'run_id',0,'BINARY'),(1,3,'task_key',0,'BINARY')]):
+            raise RuntimeError('model-call task-history index drift')
+
+    @staticmethod
+    def _install_reference_evaluation_selector_version(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=16').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluations')").fetchall()}
+        if 'selector_version' not in columns:
+            connection.executescript((
+                ROOT/'migrations/016_reference_evaluation_selector_version.sql'
+            ).read_text(encoding='utf-8'))
+            return
+        # Recover a database interrupted after ALTER TABLE but before the
+        # migration marker was persisted.  Never attempt the ALTER twice.
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(16,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_failure_execution_receipt(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=17').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluation_failures')").fetchall()}
+        if 'execution_receipt_json' not in columns:
+            connection.executescript((
+                ROOT/'migrations/017_reference_failure_execution_receipt.sql'
+            ).read_text(encoding='utf-8'))
+            return
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(17,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_failure_execution(connection:sqlite3.Connection)->None:
+        if connection.execute('SELECT 1 FROM schema_migrations WHERE version=26').fetchone():
+            return
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('reference_evaluation_failures')").fetchall()}
+        if 'failure_execution_json' not in columns:
+            try:
+                connection.executescript((ROOT/'migrations/026_reference_failure_execution.sql').read_text(encoding='utf-8'))
+            except sqlite3.DatabaseError:
+                if connection.in_transaction:
+                    connection.rollback()
+                raise
+            return
+        connection.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_reference_selector_v5(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=18').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/018_reference_selector_v5.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v5 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v6(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=19').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/019_reference_selector_v6.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v6 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v7(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=20').fetchone():
+            return
+        connection.executescript((
+            ROOT/'migrations/020_reference_selector_v7.sql'
+        ).read_text(encoding='utf-8'))
+        violations=connection.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            raise RuntimeError('Reference selector v7 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v8(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=21').fetchone():return
+        connection.executescript((ROOT/'migrations/021_reference_selector_v8.sql').read_text(encoding='utf-8'))
+        if connection.execute('PRAGMA foreign_key_check').fetchall():
+            raise RuntimeError('Reference selector v8 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_selector_v9(connection:sqlite3.Connection)->None:
+        if connection.execute(
+                'SELECT 1 FROM schema_migrations WHERE version=25').fetchone():return
+        connection.executescript((ROOT/'migrations/025_reference_selector_v9.sql').read_text(encoding='utf-8'))
+        if connection.execute('PRAGMA foreign_key_check').fetchall():
+            raise RuntimeError('Reference selector v9 migration violated foreign keys')
+
+    @staticmethod
+    def _install_reference_input_commitment(connection:sqlite3.Connection)->None:
+        """Install migration 24 safely after an interrupted ALTER TABLE.
+
+        The new columns deliberately remain nullable: only named reference
+        profiles require them, and historical calls must retain their original
+        authentication semantics.
+        """
+        columns={row['name'] for row in connection.execute(
+            "PRAGMA table_info('model_calls')").fetchall()}
+        for name in ('reference_input_commitment_version',
+                     'reference_input_commitment_sha256'):
+            if name not in columns:
+                connection.execute(f'ALTER TABLE model_calls ADD COLUMN {name} TEXT')
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations VALUES(24,datetime('now'))")
+        connection.commit()
+
+    @staticmethod
+    def _install_evidence_search(connection: sqlite3.Connection) -> bool:
+        installed=connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_search'"
+        ).fetchone()
+        migrated=connection.execute(
+            'SELECT 1 FROM schema_migrations WHERE version=7'
+        ).fetchone()
+        if installed and migrated:
+            return True
+        try:
+            connection.executescript(
+                (ROOT / 'migrations/007_evidence_search.sql').read_text(encoding='utf-8')
+            )
+        except sqlite3.OperationalError as exc:
+            if 'no such module: fts5' in str(exc).casefold():
+                return False
+            raise
+        return connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_search'"
+        ).fetchone() is not None
+
+    @staticmethod
+    def _install_optional_virtual_table(connection: sqlite3.Connection,version: int,
+                                        relative_path: str,module: str,table: str) -> bool:
+        installed=connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)
+        ).fetchone()
+        migrated=connection.execute(
+            'SELECT 1 FROM schema_migrations WHERE version=?',(version,)
+        ).fetchone()
+        if installed and migrated:return True
+        try:connection.executescript((ROOT/relative_path).read_text(encoding='utf-8'))
+        except sqlite3.OperationalError as exc:
+            if f'no such module: {module}' in str(exc).casefold():return False
+            raise
+        return connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)
+        ).fetchone() is not None
 
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:
@@ -106,59 +352,82 @@ class Database:
         pid = uid('P')
         with self.connect(True) as c:
             c.execute('INSERT INTO projects VALUES(?,?,?)', (pid, name, now()))
-            c.execute('INSERT INTO budget_accounts(project_id) VALUES(?)', (pid,))
         return self.one('SELECT * FROM projects WHERE id=?', (pid,))
 
-    def cost(self, project_id: str) -> dict:
-        account = self.one('SELECT * FROM budget_accounts WHERE project_id=?', (project_id,))
-        calls = self.all('SELECT state,reserved_units,actual_units,usage FROM model_calls WHERE project_id=?', (project_id,))
-        reserved = sum(c['reserved_units'] for c in calls if c['actual_units'] is None)
-        input_tokens = output_tokens = 0
-        for c in calls:
-            usage = json.loads(c['usage'] or '{}')
-            input_tokens += usage.get('prompt_tokens', 0)
-            output_tokens += usage.get('completion_tokens', 0)
-        return {'limit_cny': yuan(account['limit_units']), 'spent_cny': yuan(account['spent_units']),
-                'reserved_cny': yuan(reserved),
-                'available_cny': yuan(max(0, account['limit_units']-account['spent_units']-reserved)),
-                'frozen': bool(account['frozen']), 'calls': len(calls),
-                'unknown_calls': sum(c['state'] in ('UNKNOWN','RESERVED') for c in calls),
-                'input_tokens': input_tokens, 'output_tokens': output_tokens,
-                'other_external_services': 'Not connected; no paid OCR or CAD task was created',
-                'local_compute_cost': 'Local computer cost is not measured; this is not a zero-cost guarantee'}
+    def record_metric(self, run_id: str, metric: str, elapsed_ms: float) -> None:
+        if not isinstance(metric,str) or not re.fullmatch(r'[a-z][a-z0-9_.-]{0,63}',metric):
+            raise DomainError('运行指标名称无效')
+        if not isinstance(elapsed_ms,(int,float)) or not math.isfinite(elapsed_ms) or elapsed_ms<0:
+            raise DomainError('运行指标耗时无效')
+        milliseconds=max(0,round(elapsed_ms))
+        with self.connect(True) as c:
+            c.execute('''INSERT INTO run_metrics(run_id,metric,samples,total_ms,max_ms) VALUES(?,?,?,?,?)
+                         ON CONFLICT(run_id,metric) DO UPDATE SET
+                           samples=samples+1,
+                           total_ms=total_ms+excluded.total_ms,
+                           max_ms=MAX(max_ms,excluded.max_ms)''',
+                      (run_id,metric,1,milliseconds,milliseconds))
+
+    def performance(self, run_id: str) -> dict:
+        rows=self.all('SELECT metric,samples,total_ms,max_ms FROM run_metrics WHERE run_id=? ORDER BY metric',(run_id,))
+        return {row['metric']:{'samples':row['samples'],'total_ms':row['total_ms'],
+                               'average_ms':round(row['total_ms']/row['samples']),
+                               'max_ms':row['max_ms']} for row in rows}
+
+    def model_call_stats(self, project_id: str) -> dict:
+        """Operational call counts and provider-reported tokens; no money or limit state."""
+        self.one('SELECT id FROM projects WHERE id=?',(project_id,))
+        calls=self.all('SELECT state,usage FROM model_calls WHERE project_id=?',(project_id,))
+        input_tokens=output_tokens=0
+        for call in calls:
+            usage=json.loads(call['usage'] or '{}')
+            input_tokens+=usage.get('prompt_tokens',0)
+            output_tokens+=usage.get('completion_tokens',0)
+        return {'calls':len(calls),
+                'unknown_calls':sum(call['state'] in ('UNKNOWN','RESERVED') for call in calls),
+                'input_tokens':input_tokens,'output_tokens':output_tokens}
 
     def reserve(self, project_id: str, run_id: str, task_key: str, amount: Decimal,
-                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal, verification_job_id: str | None = None) -> str:
+                model: str, request_hash: str, input_rate: Decimal, output_rate: Decimal,
+                verification_job_id: str | None = None, *, allow_zero: bool = False,
+                interactive_question: bool = False) -> str:
         n = units(amount)
-        if n <= 0: raise DomainError('预留金额必须为正')
+        if n == 0:
+            n = 1  # Legacy schema sentinel; no spending limit is enforced.
         aid = uid('CALL')
         with self.connect(True) as c:
             run = c.execute('SELECT * FROM runs WHERE id=? AND project_id=?', (run_id,project_id)).fetchone()
-            if verification_job_id:
+            if verification_job_id and interactive_question:
+                raise CallSafetyError('A model call cannot be both verification and project Q&A.',409)
+            if interactive_question:
+                if (not run or run['status'] not in ('PARTIAL','COMPLETED')
+                        or not re.fullmatch(
+                            r'answer(?:-v2(?:-vision)?|-v3-r[0-2])?:[0-9a-f]{64}',task_key)):
+                    raise CallSafetyError('The project question is not bound to a completed analysis snapshot.',409)
+                if c.execute("SELECT id FROM runs WHERE status IN ('RUNNING','QUEUED')").fetchone():
+                    raise CallSafetyError('Wait for the active analysis to finish before asking a model question.',409)
+            elif verification_job_id:
                 job = c.execute('SELECT * FROM verification_jobs WHERE id=? AND run_id=?', (verification_job_id, run_id)).fetchone()
                 record = c.execute('SELECT envelope,review_version FROM records WHERE id=?', (job['record_id'],)).fetchone() if job else None
                 import hashlib
                 candidate_hash = hashlib.sha256(dumps(json.loads(record['envelope'])['candidate']).encode()).hexdigest() if record else None
                 if not run or not job or job['state'] != 'RUNNING' or job['candidate_hash'] != candidate_hash or job['review_version'] != record['review_version'] or time.time() >= run['deadline_epoch']:
-                    raise BudgetError('核验任务已失效或到达时限，禁止新增收费请求', 409)
+                    raise CallSafetyError('核验任务已失效或到达时限，禁止新增模型请求', 409)
                 if c.execute("SELECT id FROM runs WHERE status IN ('RUNNING','QUEUED')").fetchone():
-                    raise BudgetError('已有活跃分析，禁止并发核验收费', 409)
+                    raise CallSafetyError('已有活跃分析，禁止并发模型核验', 409)
             elif not run or run['status'] != 'RUNNING' or run['stop_requested'] or time.time() >= run['deadline_epoch']:
-                raise BudgetError('任务已停止或到达时限，禁止新增收费请求', 409)
+                raise CallSafetyError('任务已停止或到达时限，禁止新增模型请求', 409)
             # The exact task key is an idempotency boundary.  Explicit retries
             # must use a new audited generation key; a second process or thread
             # cannot race recovery and reserve the same paid task again.
             if c.execute('SELECT id FROM model_calls WHERE run_id=? AND task_key=?',
                          (run_id,task_key)).fetchone():
-                raise BudgetError('该付费任务已有调用记录；禁止自动重复收费，需显式创建新任务代次',409)
+                raise CallSafetyError('该模型任务已有调用记录；禁止自动重复发送，需显式创建新任务代次',409)
             if verification_job_id and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone():
-                raise BudgetError('项目存在未对账请求，禁止新增付费调用', 409)
-            a = c.execute('SELECT * FROM budget_accounts WHERE project_id=?', (project_id,)).fetchone()
-            outstanding = c.execute('SELECT COALESCE(SUM(reserved_units),0) FROM model_calls WHERE project_id=? AND actual_units IS NULL', (project_id,)).fetchone()[0]
-            if outstanding:
-                raise BudgetError('项目存在未对账请求，禁止新增付费调用',409)
-            if a['frozen'] or a['spent_units']+outstanding+n>a['limit_units']:
-                raise BudgetError('项目累计预算不足，停止新增付费调用', 409)
+                raise CallSafetyError('项目存在未确认请求，禁止新增模型调用', 409)
+            pending = c.execute('SELECT 1 FROM model_calls WHERE project_id=? AND actual_units IS NULL LIMIT 1', (project_id,)).fetchone()
+            if pending:
+                raise CallSafetyError('项目存在未确认请求，禁止新增模型调用',409)
             c.execute('''INSERT INTO model_calls(id,project_id,run_id,task_key,model,state,reserved_units,
                 input_rate,output_rate,request_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (aid,project_id,run_id,task_key,model,'RESERVED',n,str(input_rate),str(output_rate),request_hash,now(),now()))
@@ -177,7 +446,8 @@ class Database:
     def finalize_model_call(self, aid: str, amount: Decimal, usage: dict,
                             provider_id: str | None, *, response: dict | None = None,
                             cache_key: str | None = None, diagnostic: dict | None = None,
-                            cache_ttl_seconds: int = 86400) -> None:
+                            cache_ttl_seconds: int = 86400,
+                            reference_input_commitment:tuple[str,str]|None=None) -> None:
         """Atomically persist one billed provider response and its terminal result.
 
         Exactly one of ``response`` or ``diagnostic`` is required for gateway
@@ -195,7 +465,8 @@ class Database:
         if response is not None and not isinstance(response,dict):
             raise DomainError('模型有效响应必须是JSON对象')
         if diagnostic is not None:
-            allowed={'kind','class','exception','path','validator'}
+            from app.answer_diagnostics import valid_numeric_diagnostic
+            allowed={'kind','class','exception','path','validator','semantic_detail'}
             safe_code=re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
             safe_path=re.compile(r'^[A-Za-z0-9_.-]{0,160}$')
             if (not isinstance(diagnostic,dict) or set(diagnostic)-allowed
@@ -205,6 +476,8 @@ class Database:
                     or any(not isinstance(diagnostic.get(key),str)
                            or not (safe_path if key=='path' else safe_code).fullmatch(diagnostic[key])
                            for key in ('exception','path','validator') if key in diagnostic)):
+                raise DomainError('模型失败诊断不符合安全终态格式')
+            if 'semantic_detail' in diagnostic and not valid_numeric_diagnostic(diagnostic):
                 raise DomainError('模型失败诊断不符合安全终态格式')
         if cache_key is not None and response is None:
             raise DomainError('没有有效响应时禁止写入缓存')
@@ -221,6 +494,10 @@ class Database:
         usage_json = dumps(usage)
         response_json = dumps(response) if response is not None else None
         diagnostic_json = dumps(diagnostic) if diagnostic is not None else None
+        if reference_input_commitment is not None:
+            version,digest=reference_input_commitment
+            if version!='reference-input-commitment-1' or not re.fullmatch(r'[0-9a-f]{64}',digest):
+                raise DomainError('Reference input commitment is invalid.')
         state = 'SETTLED_ERROR' if diagnostic is not None else 'SETTLED'
         updated_at = now()
         expires_epoch = time.time() + cache_ttl_seconds
@@ -237,21 +514,18 @@ class Database:
                     raise DomainError('已存在的模型调用终态损坏') from exc
                 if (row['state'] != state or stored_usage != usage
                         or row['provider_request_id'] != provider_id
-                        or stored_response != response or stored_diagnostic != diagnostic):
+                        or stored_response != response or stored_diagnostic != diagnostic
+                        or row['reference_input_commitment_version'] != (reference_input_commitment[0] if reference_input_commitment else None)
+                        or row['reference_input_commitment_sha256'] != (reference_input_commitment[1] if reference_input_commitment else None)):
                     raise DomainError('不一致的重复终态持久化')
                 return
             c.execute('''UPDATE model_calls SET actual_units=?,state=?,usage=?,provider_request_id=?,
-                         response=?,error=?,updated_at=? WHERE id=?''',
-                      (n,state,usage_json,provider_id,response_json,diagnostic_json,updated_at,aid))
+                         response=?,error=?,reference_input_commitment_version=?,reference_input_commitment_sha256=?,updated_at=? WHERE id=?''',
+                      (n,state,usage_json,provider_id,response_json,diagnostic_json,
+                       *(reference_input_commitment or (None,None)),updated_at,aid))
             if cache_key is not None:
                 c.execute('INSERT OR REPLACE INTO cache VALUES(?,?,?,?)',
                           (cache_key,row['project_id'],response_json,expires_epoch))
-            c.execute('UPDATE budget_accounts SET spent_units=spent_units+?,frozen=MAX(frozen,?) WHERE project_id=?',
-                      (n,int(n>row['reserved_units']),row['project_id']))
-            account = c.execute('SELECT * FROM budget_accounts WHERE project_id=?',(row['project_id'],)).fetchone()
-            remaining = c.execute('SELECT COALESCE(SUM(reserved_units),0) FROM model_calls WHERE project_id=? AND actual_units IS NULL',(row['project_id'],)).fetchone()[0]
-            if account['spent_units'] + remaining > account['limit_units']:
-                c.execute('UPDATE budget_accounts SET frozen=1 WHERE project_id=?',(row['project_id'],))
 
     def unknown(self, aid: str, error: str, provider_id: str | None = None):
         self.execute('''UPDATE model_calls SET state=?,error=?,
@@ -288,7 +562,6 @@ class Database:
         if not isinstance(provider_request_id,str) or not safe_request_id.fullmatch(provider_request_id):
             provider_request_id=None
         return {'id':row['id'],'run_id':row['run_id'],'model':row['model'],'state':row['state'],
-                'reserved_cny':yuan(row['reserved_units']),
                 'provider_request_id':provider_request_id,
                 'diagnostic':diagnostic,'created_at':row['created_at'],'updated_at':row['updated_at']}
 
@@ -309,9 +582,29 @@ class Database:
 
     @staticmethod
     def _family_calls(connection: sqlite3.Connection, run_id: str, task_family: str) -> list[dict]:
-        rows=connection.execute('''SELECT id,task_key,state,actual_units,response,error,created_at
-                                   FROM model_calls WHERE run_id=? ORDER BY created_at,id''',(run_id,)).fetchall()
-        return [dict(row) for row in rows if paid_task_family(row['task_key']) == task_family]
+        manual_prefix=task_family+PAID_TASK_GENERATION_MARKER
+        predicates=[('task_key=?',(task_family,)),
+                    ('task_key>=? AND task_key<?',(manual_prefix,manual_prefix[:-1]+';'))]
+        if re.fullmatch(r'verify:[0-9a-f]{64}',task_family):
+            legacy_prefix=task_family+':job:'
+            predicates.append(('task_key>=? AND task_key<?',(legacy_prefix,legacy_prefix[:-1]+';')))
+        projection='id,task_key,state,actual_units,response IS NOT NULL AS has_response,error,created_at'
+        query=' UNION ALL '.join(
+            f'SELECT {projection} FROM model_calls WHERE run_id=? AND {predicate}'
+            for predicate,_ in predicates)+' ORDER BY created_at,id'
+        args=[value for predicate,values in predicates for value in (run_id,*values)]
+        rows=connection.execute(query,args).fetchall()
+        return [{**dict(row),'has_response':bool(row['has_response'])} for row in rows
+                if paid_task_family(row['task_key']) == task_family]
+
+    def family_calls(self, run_id: str, task_family: str) -> list[dict]:
+        """Read bounded billing-family metadata without materializing responses."""
+        with self.connect() as connection:
+            return self._family_calls(connection,run_id,task_family)
+
+    def model_call_response(self, call_id: str) -> str | None:
+        row=self.one('SELECT response FROM model_calls WHERE id=?',(call_id,),False)
+        return row['response'] if row else None
 
     @classmethod
     def _recovery_events(cls, connection: sqlite3.Connection, run_id: str,
@@ -363,7 +656,7 @@ class Database:
         used_sources={event['payload'].get('source_call_id') for event in existing}
         candidates=[]
         for call in calls:
-            if (call['id'] in used_sources or call['response'] is not None
+            if (call['id'] in used_sources or call['has_response']
                     or call['state'] not in ('RECONCILED_ZERO','RECONCILED_CHARGED')):
                 continue
             reconciliation=cls._reconciliation_for_call(connection,call['id'])
@@ -448,6 +741,19 @@ class Database:
                                            (run['id']+':'+family,run['id'])).fetchone()
                 if not pending:
                     raise DomainError('已对账提取调用不对应真实待处理证据；不能安全创建恢复代次',409)
+            elif family.startswith('extract-batch:'):
+                try:
+                    prefix,digest=family.rsplit(':',1)
+                    primary=prefix[len('extract-batch:'):]
+                except ValueError:
+                    primary=digest=''
+                if not primary.startswith('EV-') or not re.fullmatch(r'[0-9a-f]{16}',digest):
+                    raise DomainError('已对账批量提取任务键无效；不能安全创建恢复代次',409)
+                pending=connection.execute('''SELECT id FROM evidence
+                                              WHERE id=? AND run_id=? AND status='PENDING' ''',
+                                           (run['id']+':'+primary,run['id'])).fetchone()
+                if not pending:
+                    raise DomainError('已对账批量提取调用不对应真实待处理证据；不能安全创建恢复代次',409)
             elif family.startswith('vision:'):
                 try:
                     document_id,page_text=family[len('vision:'):].rsplit(':',1)
@@ -504,13 +810,6 @@ class Database:
             usage={'manual_reconciliation':resolution,'actual_cny':yuan(n)}
             c.execute('UPDATE model_calls SET actual_units=?,state=?,usage=?,updated_at=? WHERE id=?',
                       (n,state,dumps(usage),now(),call_id))
-            c.execute('UPDATE budget_accounts SET spent_units=spent_units+?,frozen=MAX(frozen,?) WHERE project_id=?',
-                      (n,int(n>row['reserved_units']),row['project_id']))
-            outstanding=c.execute('''SELECT COALESCE(SUM(reserved_units),0) FROM model_calls
-                                     WHERE project_id=? AND actual_units IS NULL''',(row['project_id'],)).fetchone()[0]
-            account=c.execute('SELECT * FROM budget_accounts WHERE project_id=?',(row['project_id'],)).fetchone()
-            if account['spent_units']+outstanding>account['limit_units']:
-                c.execute('UPDATE budget_accounts SET frozen=1 WHERE project_id=?',(row['project_id'],))
             payload={'event_type':'CALL_RECONCILED','resolution':resolution,'actual_cny':yuan(n),
                      'previous_state':row['state'],'note':note,
                      'task_family':paid_task_family(row['task_key']),
@@ -520,7 +819,7 @@ class Database:
                       (event_id,call_id,row['project_id'],row['run_id'],actor,dumps(payload),now()))
         result=self.one('''SELECT id,run_id,model,state,reserved_units,provider_request_id,error,created_at,updated_at
                            FROM model_calls WHERE id=?''',(call_id,))
-        return {'call':self._public_call(result),'event_id':event_id,'cost':self.cost(row['project_id'])}
+        return {'call':self._public_call(result),'event_id':event_id}
 
     def reconciliation_events(self, project_id: str) -> list[dict]:
         self.one('SELECT id FROM projects WHERE id=?',(project_id,))

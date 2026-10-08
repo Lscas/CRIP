@@ -1,0 +1,43 @@
+{
+  "change_id": "CR-0055",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Preserve exact digit-bearing RFI and Submittal identifiers with alphabetic project or discipline prefixes across body text, filenames and workflow indexing without fuzzy matching.",
+  "decision_refs": [
+    "Active user goal to improve accuracy and adaptability for RFI, Submittal and Email content",
+    "Direct reproduction where ARC-0042, MEP-023 and SUB-001 all normalized to null",
+    "Existing exact identifier and distinct-group workflow policy"
+  ],
+  "affected_paths": [
+    "app/workflows.py",
+    "app/parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-040.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0055.json"
+  ],
+  "tests": [
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Compact prefixed identifiers allow bounded alphanumeric segments separated by period, underscore, slash or hyphen; arbitrary prose and fuzzy variants are not linked.",
+    "Spaced identifiers remain limited to the existing CSI-style Submittal grammar.",
+    "Validation is synthetic and offline; no customer document, mailbox or paid provider was used."
+  ]
+}

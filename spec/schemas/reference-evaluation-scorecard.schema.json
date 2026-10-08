@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation-scorecard.schema.json",
+  "title": "Human-adjudicated Reference evaluation benchmark scorecard",
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "text_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "vision_enabled": {
+          "type": "boolean"
+        },
+        "vision_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "inference_mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "structured_output_mode": {
+          "enum": [
+            "json_object",
+            "json_schema"
+          ]
+        },
+        "api_protocol": {
+          "enum": [
+            "chat_completions",
+            "responses"
+          ]
+        },
+        "profile_version": {"const":"reference-text-profile-1"},
+        "profile_id": {"enum":["FLASH_NONE","FLASH_LOW","PRO"]},
+        "max_output_tokens": {"enum":[2600,8000]}
+      },
+      "required": [
+        "provider",
+        "text_model",
+        "vision_enabled",
+        "vision_model",
+        "inference_mode",
+        "structured_output_mode",
+        "api_protocol"
+      ],
+      "additionalProperties": false,
+      "allOf":[{"if":{"required":["profile_version"]},"then":{"required":["profile_version","profile_id","max_output_tokens"]},"else":{"not":{"anyOf":[{"required":["profile_id"]},{"required":["max_output_tokens"]}]}}}]
+    },
+    "adjudication": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "UNREVIEWED",
+            "FULLY_USABLE",
+            "PARTIAL",
+            "UNUSABLE"
+          ]
+        },
+        "unsupported_claim": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^QAADJ-[0-9a-f]{32}$"
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "verdict",
+        "unsupported_claim",
+        "note",
+        "version",
+        "event_id",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "scorecard_version": {
+      "const": "reference-evaluation-scorecard-1"
+    },
+    "scorecard_id": {
+      "type": "string",
+      "pattern": "^QASCORE-[0-9a-f]{32}$"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^QAE-[0-9a-f]{32}$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "question_set_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selector_version": {
+      "enum": [
+        "literal-page-selector-3",
+        "literal-page-selector-4",
+        "literal-page-selector-5",
+        "literal-page-selector-6",
+        "literal-page-selector-7",
+        "literal-page-selector-8", "literal-page-selector-9"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 150
+    },
+    "profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "policy": {
+      "const": "FIXED_15_HUMAN_ADJUDICATED_REFERENCE_GATE_1"
+    },
+    "model_called": {
+      "const": false
+    },
+    "correctness_inferred": {
+      "const": false
+    },
+    "gate_applicable": {
+      "type": "boolean"
+    },
+    "profile_eligible": {
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "NOT_APPLICABLE",
+        "MODEL_DISABLED_PROFILE",
+        "INCOMPLETE_EXECUTION",
+        "INCOMPLETE_ADJUDICATION",
+        "THRESHOLDS_MET",
+        "THRESHOLDS_NOT_MET"
+      ]
+    },
+    "thresholds_met": {
+      "type": "boolean"
+    },
+    "criteria": {
+      "type": "object",
+      "properties": {
+        "question_count_required": {
+          "const": 15
+        },
+        "contract_valid_percent_required": {
+          "const": 98
+        },
+        "contract_valid_count_required": {
+          "const": 15
+        },
+        "fully_usable_count_required": {
+          "const": 12
+        },
+        "unsupported_claim_count_allowed": {
+          "const": 0
+        },
+        "complete_human_adjudication_required": {
+          "const": true
+        }
+      },
+      "required": [
+        "question_count_required",
+        "contract_valid_percent_required",
+        "contract_valid_count_required",
+        "fully_usable_count_required",
+        "unsupported_claim_count_allowed",
+        "complete_human_adjudication_required"
+      ],
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "PENDING": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "TERMINAL": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CONTRACT_VALID": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "CONTRACT_INVALID": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ANSWERED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "MODEL_DISABLED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "ADJUDICATED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "UNREVIEWED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "FULLY_USABLE": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "PARTIAL": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "UNUSABLE": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "UNSUPPORTED_CLAIM": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "TOTAL": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "PENDING",
+        "TERMINAL",
+        "CONTRACT_VALID",
+        "CONTRACT_INVALID",
+        "ANSWERED",
+        "MODEL_DISABLED",
+        "ADJUDICATED",
+        "UNREVIEWED",
+        "FULLY_USABLE",
+        "PARTIAL",
+        "UNUSABLE",
+        "UNSUPPORTED_CLAIM",
+        "TOTAL"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "pattern": "^QAEITEM-[0-9a-f]{32}$"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 49
+          },
+          "question_key": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1000
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ]
+          },
+          "result_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^QAR-[0-9a-f]{32}$"
+          },
+          "result_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "ANSWERED",
+              "CANNOT_ANSWER",
+              "NEED_USER_INPUT",
+              "MODEL_DISABLED",
+              null
+            ]
+          },
+          "result_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "result_review_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "REJECTED",
+              "NOT_APPLICABLE",
+              null
+            ]
+          },
+          "failure_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^QAEFAIL-[0-9a-f]{32}$"
+          },
+          "failure_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "MODEL_OUTPUT_REJECTED",
+              null
+            ]
+          },
+          "adjudication": {
+            "$ref": "#/$defs/adjudication"
+          }
+        },
+        "required": [
+          "item_id",
+          "ordinal",
+          "question_key",
+          "question",
+          "state",
+          "result_id",
+          "result_status",
+          "result_hash",
+          "result_review_status",
+          "failure_id",
+          "failure_code",
+          "adjudication"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "scorecard_version",
+    "scorecard_id",
+    "evaluation_id",
+    "project_id",
+    "run_id",
+    "snapshot_id",
+    "question_set_hash",
+    "selector_version",
+    "name",
+    "profile",
+    "policy",
+    "model_called",
+    "correctness_inferred",
+    "gate_applicable",
+    "profile_eligible",
+    "status",
+    "thresholds_met",
+    "criteria",
+    "summary",
+    "items"
+  ],
+  "additionalProperties": false
+}

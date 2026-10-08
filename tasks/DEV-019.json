@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1700,
+  "max_context_chars": 18500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "Email workflow members must follow exact local Message-ID parent/reference edges instead of filename order.",
+    "Cycles are malformed exact relationships and must remain visible as ambiguous; do not infer chronology from body text or dates."
+  ],
+  "task_id": "DEV-019",
+  "title": "Deterministic email thread order",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-019.json",
+    "changes/CR-0034.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py tests/app/test_parsers.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Order local email-thread members parent-before-child from exact hashed headers, keep deterministic sibling ordering, and mark cyclic exact relationships ambiguous without semantic inference."
+}

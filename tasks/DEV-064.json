@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user requested a Trunk Tools-style ability to ask questions and answer from existing project files.",
+  "notes": [
+    "Reuse immutable evidence, the existing model gateway, budget ledger and evidence viewer instead of adding a second knowledge store.",
+    "Use bounded local lexical retrieval for the first slice; add no vector database or runtime dependency without measured need.",
+    "Mock mode must not fabricate an answer, and validation must not call a live or paid provider.",
+    "Completed offline: run-scoped retrieval, Mock/no-call behavior, cross-project isolation, active-run pre-dispatch budget blocking, exact-quote validation, idempotent recovery and MockTransport accounting pass; the full Python, UI, deployment, governance and 390-file manifest gates pass.",
+    "Completed browser validation on a temporary synthetic Mock project: terminal-run enablement, inline source, readable line location and the existing evidence drawer worked with no console error."
+  ],
+  "task_id": "DEV-064",
+  "title": "Add evidence-grounded project questions",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/gateway.py", "app/db.py", "app/main.py",
+    "web/**", "tests/app/test_questions.py", "tests/web/test_display_contract.py",
+    "prompts/**", "spec/**", "docs/**", "tasks/DEV-064.json",
+    "changes/CR-0079.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let a user ask one independent question about a selected terminal analysis run and receive a concise evidence-grounded answer with exact source links."
+}

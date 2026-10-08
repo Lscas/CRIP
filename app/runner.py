@@ -3,74 +3,233 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from app.db import Database,DomainError,BudgetError,dumps,now,uid
-from app.settings import LIVE_PROVIDERS,Settings,ROOT
+from app.db import CallSafetyError,Database,DomainError,dumps,now,uid,paid_task_family
+from app.settings import Settings,ROOT,live_provider
 from app.security import environment_without_secrets
 from app.uploads import Uploads
 from app.gateway import Gateway,ProviderPaused,InvalidModelOutput
 from app.parsers import PARSER_VERSION
+from app.workflows import build_workflow_index
 from app.visual_pipeline import VISION_RENDER_VERSION,render_visual_png
 from app.assemble import envelopes,missing,key,material_group_key
 from contracts.runtime_rules import validate_schema
 from app.verification import VerificationService
+from app.publication import publication_issues
+from app.canonical import CanonicalGraph
 
 ACTIVE=('QUEUED','RUNNING')
+EXTRACTION_BATCH_SIZE=4
+EXTRACTION_BATCH_BYTES=8800
+
+def _isolated_parse_retry_needed(row: dict | None) -> bool:
+    if not row:return False
+    try:
+        if row['status']!='FAILED':return False
+        summary=json.loads(row['summary'] or '{}')
+    except (KeyError,TypeError,ValueError,json.JSONDecodeError):return False
+    return any('PermissionError' in str(value) for value in summary.get('warnings',[]))
+
+def deterministic_extraction_skip_reason(evidence: dict) -> str | None:
+    section=str((evidence.get('locator') or {}).get('section') or '').upper()
+    if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY')):
+        return 'ROUTING_ONLY_EMAIL_EVIDENCE'
+    if section.startswith('EMAIL > SIGNATURE'):
+        return 'EMAIL_SIGNATURE_EVIDENCE'
+    return None
+
+def _workflow_batch_scope(evidence: dict) -> str | None:
+    parts=[' '.join(part.upper().split()) for part in
+           str((evidence.get('locator') or {}).get('section') or '').split(' > ')]
+    for index,part in enumerate(parts):
+        workflow=next((name for name in ('RFI','SUBMITTAL')
+                       if part.startswith(name+' ') and any(char.isdigit() for char in part)),None)
+        if not workflow:continue
+        scope=[part];following=parts[index+1:]
+        if workflow=='RFI' and following and following[0] in {'QUESTION','RESPONSE','UNKNOWN','MIXED'}:
+            scope.append(following.pop(0))
+        if following and following[0].startswith('STATUS: '):scope.append(following[0])
+        return ' > '.join(scope)
+    return None
+
+def _adjacent_evidence(left: dict, right: dict) -> bool:
+    if left.get('document_id')!=right.get('document_id'):return False
+    left_scope=_workflow_batch_scope(left);right_scope=_workflow_batch_scope(right)
+    if (left_scope or right_scope) and left_scope!=right_scope:return False
+    a=left.get('locator') or {};b=right.get('locator') or {}
+    ap=a.get('page_number');bp=b.get('page_number')
+    if type(ap) is int and type(bp) is int:return 0<=bp-ap<=1
+    ae=a.get('text_line_end');bs=b.get('text_line_start')
+    if type(ae) is int and type(bs) is int:return 0<=bs-ae<=1
+    am=re.search(r'(\d+)$',str(a.get('native_element_id') or ''))
+    bm=re.search(r'(\d+)$',str(b.get('native_element_id') or ''))
+    return bool(am and bm and 0<=int(bm.group(1))-int(am.group(1))<=1)
+
+def adjacent_extraction_batches(items: list[tuple[dict | None,dict]],
+                                forced_single: set[str] | None = None) -> list[list[tuple[dict | None,dict]]]:
+    """Group only physically adjacent evidence under a small deterministic byte ceiling."""
+    forced_single=forced_single or set();batches=[];current=[];size=0
+    for item in items:
+        evidence=item[1];item_size=len(evidence.get('raw_text','').encode('utf-8'))
+        if evidence.get('evidence_id') in forced_single:
+            if current:batches.append(current);current=[];size=0
+            batches.append([item]);continue
+        fits=(current and current[-1][1].get('evidence_id') not in forced_single
+              and len(current)<EXTRACTION_BATCH_SIZE and size+item_size<=EXTRACTION_BATCH_BYTES
+              and _adjacent_evidence(current[-1][1],evidence))
+        if current and not fits:
+            batches.append(current);current=[];size=0
+        current.append(item);size+=item_size
+    if current:batches.append(current)
+    return batches
 
 class Runner:
     def __init__(self,db:Database,settings:Settings,uploads:Uploads,gateway:Gateway):
         self.db=db;self.s=settings;self.uploads=uploads;self.gateway=gateway
         self.stop_event=threading.Event();self.thread=None
+        self.reference_evaluation_jobs=None
         self.verifier=VerificationService(db,settings,gateway)
         self.parse_dir=settings.data_dir/'parsed';self.parse_dir.mkdir(exist_ok=True)
 
-    def create(self,project_id):
+    def create(self,project_id,local_workers=2,analysis_mode='LEGACY_ANALYSIS'):
+        if local_workers not in (1,2,4):raise DomainError('本地工作进程数必须为1、2或4')
+        if analysis_mode not in ('LEGACY_ANALYSIS','REFERENCE_QA'):
+            raise DomainError('Unknown analysis mode.',400)
         self.db.one('SELECT * FROM projects WHERE id=?',(project_id,))
-        if self.s.provider not in ('mock',*LIVE_PROVIDERS):raise DomainError('Provider未支持',409)
-        if self.s.provider!='mock' and self.s.live_errors():raise DomainError('；'.join(self.s.live_errors()),409)
+        if (analysis_mode=='LEGACY_ANALYSIS' and self.s.provider!='mock'
+                and not live_provider(self.s.provider)):raise DomainError('Provider未支持',409)
+        if analysis_mode=='LEGACY_ANALYSIS' and self.s.provider!='mock' and self.s.live_errors():
+            raise DomainError('；'.join(self.s.live_errors()),409)
         with self.db.connect(True) as c:
             if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前仅允许一个活跃项目分析',409)
             if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，结束后再分析',409)
-            if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(project_id,)).fetchone():
+            if c.execute("""SELECT id FROM reference_evaluation_jobs
+                              WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED')""").fetchone():
+                raise DomainError('A managed Reference evaluation job is active.',409)
+            if (analysis_mode=='LEGACY_ANALYSIS'
+                    and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
+                                  (project_id,)).fetchone()):
                 raise DomainError('项目有待对账API请求，核对账单前不能新建或恢复付费分析',409)
             docs=[dict(d) for d in c.execute('SELECT id,sha256 FROM documents WHERE project_id=? ORDER BY id',(project_id,))]
             if not docs:raise DomainError('没有已完成上传的文件',409)
             rid=uid('RUN'); snapshot='SN-'+hashlib.sha256(dumps(docs).encode()).hexdigest()[:32]
             timestamp=time.time()
+            capabilities=self.s.public()['capabilities'];capabilities['local_workers']=local_workers
+            capabilities['analysis_mode']=analysis_mode
             c.execute('''INSERT INTO runs(id,project_id,provider,snapshot_id,document_ids,status,stage,created_at,
                          started_epoch,deadline_epoch,capabilities) VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
                       (rid,project_id,self.s.provider,snapshot,dumps([d['id'] for d in docs]),'QUEUED','等待处理',now(),timestamp,
-                       timestamp+self.s.deadline_seconds,dumps(self.s.public()['capabilities'])))
+                       timestamp+self.s.deadline_seconds,dumps(capabilities)))
         return self.get(rid)
 
     def get(self,rid):
         r=self.db.one('SELECT * FROM runs WHERE id=?',(rid,))
         for k in ('document_ids','coverage','capabilities'):r[k]=json.loads(r[k])
+        r['performance']=self.db.performance(rid)
+        r['progress']=self.progress(r)
+        with self.db.connect() as connection:
+            reason=self._resume_blocked_reason(connection,r)
+        r['can_resume']=reason is None
+        r['resume_blocked_reason']=reason
         return r
+
+    def progress(self,run,at_epoch=None):
+        """Return a conservative UI estimate; it is not a completion guarantee."""
+        current=time.time() if at_epoch is None else at_epoch
+        coverage=run.get('coverage') or {};status=run['status'];stage=run['stage']
+        if status in ('PARTIAL','COMPLETED'):
+            percent=100
+        elif stage=='解析文件':
+            total=max(1,len(run['document_ids']))
+            completed_ids={row['document_id'] for row in self.db.all('SELECT document_id FROM document_results WHERE run_id=?',(run['id'],))}
+            completed=len(completed_ids);partial=0.0
+            for did in run['document_ids']:
+                if did in completed_ids:continue
+                path=self.parse_dir/(run['id']+'-'+did+'.json')
+                try:
+                    payload=json.loads(path.read_text(encoding='utf-8'))
+                    count=payload.get('page_count');pages=payload.get('pages',[])
+                    if type(count) is int and count>0:
+                        partial+=min(1,sum(p.get('status')!='NOT_PROCESSED' for p in pages if isinstance(p,dict))/count)
+                    elif payload.get('status')=='SUCCESS':partial+=1
+                except (OSError,ValueError,TypeError):
+                    pass
+            percent=round(20*min(1,(completed+partial)/total))
+        elif stage=='本机OCR完成，处理图纸视觉页':
+            total=coverage.get('visual_pages_total',0);done=coverage.get('visual_pages_completed',0)
+            percent=20+round(15*(done/total if total else 1))
+        elif stage=='一次读取，联合提取材料与检查要求':
+            total=coverage.get('fragments_total',0)
+            done=coverage.get('fragments_extracted',0)+coverage.get('fragments_need_review',0)
+            percent=35+round(45*(done/total if total else 0))
+        elif stage=='生成可审核记录与设计差异':percent=85
+        elif stage=='逐字段核验原文支持性':percent=92
+        else:percent=0
+        percent=max(0,min(100,percent))
+        remaining=None;finish=None
+        if status in ACTIVE and 0<percent<100:
+            elapsed=max(0,current-run['started_epoch'])
+            remaining=min(max(0,run['deadline_epoch']-current),elapsed*(100-percent)/percent)
+            if elapsed<2:remaining=None
+            elif remaining is not None:finish=current+remaining
+        return {'percent':percent,'estimated_finish_epoch':finish,
+                'remaining_seconds':remaining,'estimate':bool(finish),'method':'stage_weighted_elapsed'}
+
+    @contextmanager
+    def timed(self,rid,metric):
+        started=time.perf_counter()
+        try:yield
+        finally:self.db.record_metric(rid,metric,(time.perf_counter()-started)*1000)
+
+    def _resume_blocked_reason(self,c,r,at_epoch=None):
+        """Read-only eligibility; the Resume transaction checks again before authorizing."""
+        capabilities=r['capabilities']
+        if isinstance(capabilities,str):capabilities=json.loads(capabilities)
+        reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
+        resumable_failure=(r['status']=='FAILED' and r['stage']=='生成可审核记录与设计差异'
+            and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(r['id'],)).fetchone())
+        resumable_publication=(r['status']=='PARTIAL' and r['stage']=='本轮基线任务已结束'
+            and bool(publication_issues(r['coverage']))
+            and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(r['id'],)).fetchone())
+        if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not (resumable_failure or resumable_publication):
+            return '当前任务不可恢复；已结束任务需新建分析'
+        if not reference_mode and r['provider']!=self.s.provider:
+            return '原运行Provider与当前服务不一致，请新建分析'
+        if (time.time() if at_epoch is None else at_epoch)>=r['deadline_epoch']:
+            return '已到原运行24小时时限，需明确新建运行'
+        if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING') LIMIT 1").fetchone():
+            return '已有活跃任务'
+        if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING') LIMIT 1").fetchone():
+            return '当前有核验任务，请结束后再恢复分析'
+        if c.execute("SELECT id FROM reference_evaluation_jobs WHERE state IN ('QUEUED','RUNNING','STOP_REQUESTED') LIMIT 1").fetchone():
+            return 'A managed Reference evaluation job is active.'
+        if not reference_mode and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL LIMIT 1',
+                                           (r['project_id'],)).fetchone():
+            return '有待对账API请求，先核对账单；不会自动再次付费'
+        return None
 
     def control(self,rid,action):
         with self.db.connect(True) as c:
             r=c.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
             if not r:raise DomainError('任务不存在',404)
             if action=='resume':
-                resumable_failure=(r['status']=='FAILED'
-                    and r['stage']=='生成可审核记录与设计差异'
-                    and not c.execute("SELECT id FROM evidence WHERE run_id=? AND status='PENDING' LIMIT 1",(rid,)).fetchone())
-                if r['status'] not in ('PAUSED','PAUSED_PROVIDER','PAUSED_BUDGET','INTERRUPTED') and not resumable_failure:
-                    raise DomainError('当前任务不可恢复；已结束任务需新建分析',409)
-                if r['provider'] != self.s.provider:raise DomainError('原运行Provider与当前服务不一致，请新建分析',409)
-                if time.time()>=r['deadline_epoch']:raise DomainError('已到原运行24小时时限，需明确新建运行；项目预算不重置',409)
-                if c.execute("SELECT id FROM runs WHERE status IN ('QUEUED','RUNNING')").fetchone():raise DomainError('已有活跃任务',409)
-                if c.execute("SELECT id FROM verification_jobs WHERE state IN ('QUEUED','RUNNING')").fetchone():raise DomainError('当前有核验任务，请结束后再恢复分析',409)
-                if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(r['project_id'],)).fetchone():raise DomainError('有待对账API请求，先核对账单；不会自动再次付费',409)
-                generations=self.db.authorize_run_resume_generations(c,dict(r),context_id=uid('RESUME'))
+                capabilities=json.loads(r['capabilities'])
+                reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
+                reason=self._resume_blocked_reason(c,r)
+                if reason is not None:raise DomainError(reason,409)
+                resumable_publication=r['status'] in ('FAILED','PARTIAL')
+                generations=([] if reference_mode else
+                             self.db.authorize_run_resume_generations(c,dict(r),context_id=uid('RESUME')))
                 message=('修复本地生成错误后重新生成审核记录；已完成的模型调用不会重发'
-                         if resumable_failure else
+                         if resumable_publication else
                          ('恢复未完成任务；已为人工对账且仍待处理的任务创建'
                          f'{len(generations)}个显式付费恢复代次，每个任务族累计最多3次'
                          if generations else '恢复未完成任务；没有创建新的付费恢复代次'))
@@ -90,15 +249,18 @@ class Runner:
                         (dumps({'kind':'CLIENT_ERROR','class':'PROCESS_INTERRUPTED'}),now()))
         self.db.execute("UPDATE runs SET status='INTERRUPTED',message='服务曾中断；已完成片段保留，付费请求需对账' WHERE status='RUNNING'")
         self.db.execute("UPDATE verification_jobs SET state='INTERRUPTED',message='服务中断；不自动重复付费' WHERE state='RUNNING'")
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.interrupt_active()
         self.thread=threading.Thread(target=self.loop,name='cirp-worker',daemon=True);self.thread.start()
 
     def close(self):
         self.stop_event.set()
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.request_shutdown()
         self.db.execute("UPDATE runs SET stop_requested=1 WHERE status='RUNNING'")
         self.db.execute("""UPDATE verification_jobs SET state='INTERRUPTED',message=?,updated_at=?
                          WHERE state IN ('QUEUED','RUNNING')""",
                         ('服务已停止；未发送的新请求保持未执行',now()))
         if self.thread:self.thread.join(timeout=self.s.parser_timeout+15)
+        if self.reference_evaluation_jobs:self.reference_evaluation_jobs.finish_shutdown()
 
     def loop(self):
         while not self.stop_event.wait(.25):
@@ -107,9 +269,13 @@ class Runner:
             else:
                 job=self.db.one("SELECT id FROM verification_jobs WHERE state='QUEUED' ORDER BY created_at LIMIT 1",required=False)
                 if job:self.verifier.process_job(job['id'])
+                elif self.reference_evaluation_jobs:
+                    evaluation_job=self.db.one("""SELECT id FROM reference_evaluation_jobs
+                        WHERE state='QUEUED' ORDER BY created_at LIMIT 1""",required=False)
+                    if evaluation_job:self.reference_evaluation_jobs.process(evaluation_job['id'])
 
     def checkpoint(self,rid):
-        r=self.get(rid)
+        r=self.db.one('SELECT stop_requested,status,deadline_epoch FROM runs WHERE id=?',(rid,))
         if self.stop_event.is_set() or r['stop_requested'] or r['status']!='RUNNING':return False
         if time.time()>=r['deadline_epoch']:
             self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_DEADLINE','到达24小时目标，停止新增任务；未完成范围保留',rid));return False
@@ -119,53 +285,105 @@ class Runner:
         with self.db.connect(True) as c:
             row=c.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
             if not row or row['status']!='QUEUED':return
-            if row['provider'] != self.s.provider:
+            capabilities=json.loads(row['capabilities'])
+            reference_mode=capabilities.get('analysis_mode')=='REFERENCE_QA'
+            if not reference_mode and row['provider'] != self.s.provider:
                 c.execute('UPDATE runs SET status=?,message=? WHERE id=?',
                           ('PAUSED_PROVIDER','原运行Provider与当前服务不一致；未调用API，请新建分析',rid))
                 return
-            if c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',(row['project_id'],)).fetchone():
+            if (not reference_mode
+                    and c.execute('SELECT id FROM model_calls WHERE project_id=? AND actual_units IS NULL',
+                                  (row['project_id'],)).fetchone()):
                 c.execute('UPDATE runs SET status=?,message=? WHERE id=?',
                           ('PAUSED_PROVIDER','项目有待对账API请求；未调用API，请先核对账单',rid))
                 return
             c.execute("UPDATE runs SET status='RUNNING',stage='解析文件' WHERE id=?",(rid,))
         run=self.get(rid);run['model']=self.s.cheap_model
         try:
-            for did in run['document_ids']:
-                if not self.checkpoint(rid):break
-                if self.db.one('SELECT 1 FROM document_results WHERE run_id=? AND document_id=?',(rid,did),False):continue
-                self.parse_one(run,did);self.update_coverage(rid)
+            with self.timed(rid,'stage.parse'):
+                self.parse_documents(run)
             if not self.checkpoint(rid):return
+            if run.get('capabilities',{}).get('analysis_mode')=='REFERENCE_QA':
+                self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',(
+                    'PARTIAL','Local page catalog ready',
+                    'Local parsing and OCR are complete. Canonical graph construction, full-corpus model extraction, '
+                    'record assembly and semantic verification were intentionally skipped. Questions use transparent '
+                    'literal page selection over immutable parser evidence.',rid))
+                return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('本机OCR完成，处理图纸视觉页',rid))
-            self.process_visual_tasks(run)
+            with self.timed(rid,'stage.vision'):
+                self.process_visual_tasks(run)
             if not self.checkpoint(rid):return
+            with self.timed(rid,'stage.canonical'):
+                canonical=CanonicalGraph(self.db).rebuild_run(run)
+                if not canonical['validation']['ok']:
+                    raise RuntimeError('canonical graph validation failed')
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('一次读取，联合提取材料与检查要求',rid))
-            todo=self.db.all("SELECT * FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY id",(rid,))
-            for e in todo:
-                if not self.checkpoint(rid):break
-                ev=json.loads(e['payload'])
-                try:
-                    result=self.gateway.extract(run,ev)
-                    self.db.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
-                        (dumps({'data':result.data,'request_id':result.request_id,'cached':result.cached}),
-                         'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',e['id']))
-                except InvalidModelOutput as exc:
-                    self.db.execute('UPDATE evidence SET status=?,error=? WHERE id=?',('NEEDS_REVIEW',str(exc),e['id']))
-                self.update_coverage(rid)
+            with self.timed(rid,'stage.extract'):
+                todo=self.db.all("SELECT rowid AS sequence,* FROM evidence WHERE run_id=? AND status='PENDING' ORDER BY document_id,sequence",(rid,))
+                pending=[(row,json.loads(row['payload'])) for row in todo]
+                eligible=[];skipped=[]
+                for item in pending:
+                    reason=deterministic_extraction_skip_reason(item[1])
+                    (skipped if reason else eligible).append((*item,reason))
+                if skipped:
+                    with self.db.connect(True) as connection:
+                        for row,evidence,reason in skipped:
+                            explanation=('Email signature evidence was retained locally and excluded from current requirement extraction.'
+                                         if reason=='EMAIL_SIGNATURE_EVIDENCE' else
+                                         'Email routing or quoted-history evidence was retained locally and excluded from current requirement extraction.')
+                            data={'disposition':'NO_REQUIREMENTS','requirements':[],'reason':explanation}
+                            extraction={'data':data,'request_id':None,'cached':False,
+                                        'batch_primary_evidence_id':evidence['evidence_id'],
+                                        'deterministic_skip_reason':reason}
+                            connection.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
+                                               (dumps(extraction),'EXTRACTED','',row['id']))
+                    self.update_coverage(rid)
+                pending=[(row,evidence) for row,evidence,_ in eligible]
+                families={paid_task_family(row['task_key']) for row in self.db.all(
+                    'SELECT task_key FROM model_calls WHERE run_id=?',(rid,))}
+                forced_single={family for family in families if family.startswith('EV-')}
+                for batch in adjacent_extraction_batches(pending,forced_single):
+                    if not self.checkpoint(rid):break
+                    evidences=[item[1] for item in batch]
+                    try:
+                        result=(self.gateway.extract(run,evidences[0]) if len(evidences)==1 else
+                                self.gateway.extract_many(run,evidences))
+                        with self.db.connect(True) as connection:
+                            for index,(row,evidence) in enumerate(batch):
+                                data=result.data if index==0 else {
+                                    'disposition':'NO_REQUIREMENTS','requirements':[],
+                                    'reason':'Processed with adjacent evidence batch '+evidences[0]['evidence_id']+'.'}
+                                extraction={'data':data,'request_id':result.request_id,'cached':result.cached,
+                                            'batch_primary_evidence_id':evidences[0]['evidence_id']}
+                                connection.execute('UPDATE evidence SET extraction=?,status=?,error=? WHERE id=?',
+                                    (dumps(extraction),'EXTRACTED' if result.data['disposition']=='CANDIDATES' else 'NEEDS_REVIEW','',row['id']))
+                    except InvalidModelOutput as exc:
+                        with self.db.connect(True) as connection:
+                            for row,_ in batch:
+                                connection.execute('UPDATE evidence SET status=?,error=? WHERE id=?',
+                                                   ('NEEDS_REVIEW',str(exc),row['id']))
+                    self.update_coverage(rid)
             if not self.checkpoint(rid):return
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('生成可审核记录与设计差异',rid))
-            self.publish(run,seed_verifications=False)
+            with self.timed(rid,'stage.assemble'):
+                self.publish(run,seed_verifications=False)
             self.db.execute('UPDATE runs SET stage=? WHERE id=?',('逐字段核验原文支持性',rid))
-            for item in self.db.all('SELECT id FROM records WHERE run_id=?',(rid,)):
-                if not self.checkpoint(rid):return
-                self.verifier.refresh(item['id'],allow_model=run['provider']!='mock')
+            with self.timed(rid,'stage.verify'):
+                blocked={item.get('blocked_record_id') for item in publication_issues(self.get(rid)['coverage'])}
+                items=[item for item in self.db.all('SELECT id FROM records WHERE run_id=? ORDER BY id',(rid,))
+                       if item['id'] not in blocked]
+                if items and self.checkpoint(rid):
+                    self.verifier.refresh_many([item['id'] for item in items],allow_model=run['provider']!='mock')
             self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
                 ('PARTIAL','本轮基线任务已结束',
                  '已完成可用文字、本机OCR、已启用页面视觉与可用CAD对象处理；PDF原始矢量审计不等于材料净量，原生DWG取决于本机合法转换器。复杂选项与跨专业关联仍待完善。'
-                 +('模拟模式仅验证流程，不代表真实施工分析。' if run['provider']=='mock' else '真实API结果尚需人工核验。'),rid))
-        except BudgetError as exc:
-            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_BUDGET',str(exc),rid));self.publish(run)
+                 +('模拟模式仅验证流程，不代表真实施工分析。' if run['provider']=='mock' else '真实API结果尚需人工核验。')
+                 +f' Unpublished candidates: {len(publication_issues(self.get(rid)["coverage"]))}.',rid))
+        except CallSafetyError as exc:
+            self._publish_before_provider_pause(run,exc)
         except ProviderPaused as exc:
-            self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(exc),rid));self.publish(run)
+            self._publish_before_provider_pause(run,exc)
         except Exception as exc:
             import logging;logging.getLogger('cirp').exception('运行失败 %s',rid)
             self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('FAILED','内部处理错误：'+type(exc).__name__,rid))
@@ -175,13 +393,51 @@ class Runner:
                 self.db.execute("UPDATE runs SET status='PAUSED',message='服务停止，未完成任务保留' WHERE id=?",(rid,))
             self.update_coverage(rid)
 
-    def parse_one(self,run,did):
+    def _publish_before_provider_pause(self,run,error):
+        # Stay RUNNING until the consistent snapshot and its diagnostics commit.
+        # A failed pause-time publish must not expose stale accepted output.
+        try:
+            self.publish(run)
+        except Exception as exc:
+            import logging;logging.getLogger('cirp').exception('暂停前发布失败 %s',run['id'])
+            self.db.execute('UPDATE runs SET status=?,stage=?,message=? WHERE id=?',
+                            ('FAILED','生成可审核记录与设计差异','内部处理错误：'+type(exc).__name__,run['id']))
+            return
+        self.db.execute('UPDATE runs SET status=?,message=? WHERE id=?',('PAUSED_PROVIDER',str(error),run['id']))
+
+    def parse_documents(self,run):
+        rid=run['id']
+        pending=[did for did in run['document_ids']
+                 if not self.db.one('SELECT 1 FROM document_results WHERE run_id=? AND document_id=?',(rid,did),False)]
+        workers=run.get('capabilities',{}).get('local_workers',2)
+        for offset in range(0,len(pending),workers):
+            if not self.checkpoint(rid):return
+            batch=pending[offset:offset+workers]
+            if len(batch)==1:
+                self.parse_one(run,batch[0],workers);self.update_coverage(rid);continue
+            # ponytail: one small batch bounds memory; add a persistent local queue only after measured demand.
+            with ThreadPoolExecutor(max_workers=len(batch),thread_name_prefix='cirp-parser') as pool:
+                futures=[pool.submit(self.parse_one,run,did) for did in batch]
+                for future in futures:
+                    future.result();self.update_coverage(rid)
+            # A Windows renderer/OCR process can transiently lose access while several
+            # large documents start together. Retry only that proven transient class,
+            # once, after the competing document processes have finished.
+            for did in batch:
+                row=self.db.one('SELECT status,summary FROM document_results WHERE run_id=? AND document_id=?',
+                                (rid,did),False)
+                if not _isolated_parse_retry_needed(row):continue
+                self.db.execute('DELETE FROM document_results WHERE run_id=? AND document_id=?',(rid,did))
+                self.parse_one(run,did,workers);self.update_coverage(rid)
+
+    def parse_one(self,run,did,page_workers=1):
         doc=self.db.one('SELECT * FROM documents WHERE id=?',(did,))
         output=self.parse_dir/(run['id']+'-'+did+'.json')
         # 解析进程不继承任何常见凭证环境变量；任何文字不会被执行。
         env=environment_without_secrets()
         try:
-            subprocess.run([sys.executable,'-m','app.parser_worker',str(self.uploads.object_path(doc)),doc['name'],str(output)],
+            subprocess.run([sys.executable,'-m','app.parser_worker',str(self.uploads.object_path(doc)),doc['name'],
+                            str(page_workers),str(output)],
                            cwd=ROOT,env=env,timeout=self.s.parser_timeout,check=True,
                            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             result=json.loads(output.read_text(encoding='utf-8'))
@@ -246,6 +502,28 @@ class Runner:
         parts.extend('Visual limitation: '+value for value in data.get('limitations',[]))
         return '\n'.join(parts)
 
+    @staticmethod
+    def _sync_visual_page_statuses(summary: dict) -> None:
+        tasks=summary.get('visual_tasks',[]);by_page={}
+        for task in tasks:
+            page=task.get('page')
+            if type(page) is int:by_page.setdefault(page,[]).append(task.get('status'))
+        for page in summary.get('pages',[]):
+            statuses=by_page.get(page.get('page'))
+            if not statuses:continue
+            if any(status in {'FAILED_CONTRACT','FAILED_RENDER'} for status in statuses):
+                visual_status='FAILED'
+            elif any(status=='PAUSED_PROVIDER' for status in statuses):
+                visual_status='PAUSED_PROVIDER'
+            elif any(status=='PENDING' for status in statuses):
+                visual_status='PENDING'
+            elif all(status=='VISION_EXTRACTED' for status in statuses):
+                visual_status='COMPLETED'
+            elif all(status=='BLOCKED_NOT_ENABLED' for status in statuses):
+                visual_status='BLOCKED_NOT_ENABLED'
+            else:visual_status='PARTIAL'
+            page['visual_status']=visual_status
+
     def process_visual_tasks(self,run):
         rows=self.db.all('''SELECT r.document_id,r.status,r.summary,d.name,d.sha256,d.size,d.object_key
                             FROM document_results r JOIN documents d ON d.id=r.document_id
@@ -256,6 +534,7 @@ class Runner:
             if run['provider']=='mock' or not self.s.vision_enabled:
                 for task in tasks:
                     if task.get('status')=='PENDING':task['status']='BLOCKED_NOT_ENABLED'
+                self._sync_visual_page_statuses(summary)
                 if '页面视觉任务未启用；本机OCR结果仍保留。' not in summary['warnings']:
                     summary['warnings'].append('页面视觉任务未启用；本机OCR结果仍保留。')
                 self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
@@ -264,33 +543,41 @@ class Runner:
             for task in tasks:
                 if task.get('status') not in ('PENDING','PAUSED_PROVIDER'):continue
                 if not self.checkpoint(run['id']):return
-                page=int(task['page']);eid='EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page)
+                page=int(task['page']);region_id=task.get('region_id')
+                eid=('EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page,region_id)
+                     if region_id else 'EV-'+key(run['snapshot_id'],row['document_id'],'VISION',page))
                 storage_id=run['id']+':'+eid
                 if self.db.one('SELECT id FROM evidence WHERE id=?',(storage_id,),False):
                     task['status']='VISION_EXTRACTED'
+                    self._sync_visual_page_statuses(summary)
                     self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                     (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                     self.update_coverage(run['id'])
                     continue
                 try:
+                    crop=task.get('bbox')
                     image,width,height,coordinate_system=render_visual_png(
-                        self.uploads.object_path({'object_key':row['object_key']}),row['name'],page)
-                    result=self.gateway.vision(run,f'{row["document_id"]}:{page}',image,{
+                        self.uploads.object_path({'object_key':row['object_key']}),row['name'],page,crop)
+                    task_key=f'{row["document_id"]}:{page}'+(f':{region_id}' if region_id else '')
+                    result=self.gateway.vision(run,task_key,image,{
                         'document_id':row['document_id'],'page':page,'coordinate_system':coordinate_system,
-                        'width':width,'height':height},
+                        'width':width,'height':height,'page_type_hint':task.get('page_type'),
+                        'region_id':region_id,'region_type':task.get('region_type'),'crop_bbox':crop},
                         billing_generation=task.get('billing_generation',0))
                     data=result.data
+                    locator_bbox=crop or [0,0,width,height]
+                    crop_query=('?x0={0:g}&y0={1:g}&x1={2:g}&y1={3:g}'.format(*crop) if crop else '')
                     ev={'evidence_id':eid,'tenant_id':'local','project_id':run['project_id'],
                         'input_snapshot_id':run['snapshot_id'],'document_id':row['document_id'],
-                        'component_id':f'{row["document_id"]}:page:{page}:vision','file_sha256':row['sha256'],
+                        'component_id':f'{row["document_id"]}:page:{page}:vision:{region_id or "overview"}','file_sha256':row['sha256'],
                         'internal_revision_date':None,'revision_label':None,
                         'locator':{'page_number':page,'sheet':data.get('sheet_id'),'section':None,'paragraph':None,
-                                   'bbox':[0,0,width,height],'coordinate_system':coordinate_system,
-                                   'text_line_start':None,'text_line_end':None,'native_element_id':None},
+                                   'bbox':locator_bbox,'coordinate_system':coordinate_system,
+                                   'text_line_start':None,'text_line_end':None,'native_element_id':region_id},
                         'raw_text':self._vision_text(data),
                         # Retained model observation, never parser-extracted source prose.
                         'content_basis':'MODEL_VISION_OUTPUT',
-                        'image_crop_uri':f'/api/analysis-runs/{run["id"]}/documents/{row["document_id"]}/pages/{page}/image',
+                        'image_crop_uri':f'/api/analysis-runs/{run["id"]}/documents/{row["document_id"]}/pages/{page}/image{crop_query}',
                         'extraction_method':'VISION','confidence':None,'text_map':[],
                         'parser_version':VISION_RENDER_VERSION}
                     validate_schema('evidence',ev)
@@ -305,9 +592,11 @@ class Runner:
                     summary['warnings'].append(f'PDF/图片第{page}页无法生成有界视觉派生图；其余页面继续处理。')
                 except ProviderPaused:
                     task['status']='PAUSED_PROVIDER'
+                    self._sync_visual_page_statuses(summary)
                     self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                     (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                     raise
+                self._sync_visual_page_statuses(summary)
                 self.db.execute('UPDATE document_results SET summary=?,status=? WHERE run_id=? AND document_id=?',
                                 (dumps(summary),'PARTIAL',run['id'],row['document_id']))
                 self.update_coverage(run['id'])
@@ -322,17 +611,72 @@ class Runner:
             s=json.loads(row['summary'])
             if row['status']!='SUCCESS':
                 missing_items.append(missing(row['document_id'],'；'.join(s.get('warnings',[])) or '文件内容未完整解析','PARSE_FAILED',target=row['document_id']))
-        generated=list(envelopes(run,evs,extracted,missing_items));refresh_ids=[]
+        issues=[]
+        generated=list(envelopes(run,evs,extracted,missing_items,publication_issues=issues));refresh_ids=[]
         with self.db.connect(True) as c:
             def generated_baseline(row):
                 """Recover the latest system-generated candidate behind human edits."""
-                events=c.execute('''SELECT action,before_json,after_json FROM review_events
+                events=c.execute('''SELECT action,actor,before_json,after_json FROM review_events
                                     WHERE record_id=? ORDER BY created_at,id''',(row['id'],)).fetchall()
-                for event in reversed(events):
-                    if event['action']=='INVALIDATED_BY_NEW_EVIDENCE':
-                        return json.loads(event['after_json'])['candidate']
-                if events:return json.loads(events[0]['before_json'])['candidate']
-                return json.loads(row['envelope'])['candidate']
+                current=json.loads(row['envelope'])
+                # While no human review is active, the persisted envelope is
+                # itself the latest system candidate, including legacy
+                # pending-to-pending updates that predate provenance events.
+                if current['review']['status']=='PENDING':
+                    return current['candidate']
+                checkpoints=('INVALIDATED_BY_NEW_EVIDENCE','SYSTEM_BASELINE_UPDATED')
+                for index in range(len(events)-1,-1,-1):
+                    if events[index]['action'] not in checkpoints:
+                        continue
+                    # Older databases did not record pending-to-pending system
+                    # updates.  A later human review's `before` is the exact
+                    # candidate shown to that reviewer, and is the only safe
+                    # legacy recovery baseline.
+                    for event in events[index+1:]:
+                        if event['actor']!='cirp-system':
+                            return json.loads(event['before_json'])['candidate']
+                    return json.loads(events[index]['after_json'])['candidate']
+                for event in events:
+                    if event['actor']!='cirp-system':
+                        return json.loads(event['before_json'])['candidate']
+                # Do not mistake an unknown EDITED candidate for a system one.
+                return None
+
+            def unscoped_material_identity(candidate):
+                """Constrained identity for a pre-scope merged material row."""
+                entities=candidate.get('entity_ids') or []
+                subject=entities[0] if len(entities)==1 and isinstance(entities[0],str) else None
+                name=candidate.get('name')
+                if not subject or not isinstance(name,str) or not re.fullmatch(r'[A-Za-z]{1,12}-\d+[A-Za-z0-9-]*',subject):
+                    return None
+                condition=candidate.get('condition')
+                if condition is not None and not isinstance(condition,str):return None
+                return (subject.casefold(),name.casefold(),(condition or '').casefold())
+
+            for issue in issues:
+                candidate=issue.pop('_candidate')
+                existing=c.execute('''SELECT id FROM records WHERE run_id=? AND kind=? AND logical_key=?''',
+                                   (run['id'],issue['kind'],issue['candidate_key'])).fetchall()
+                if not existing:
+                    # Legacy group identities can change as scope is recovered.
+                    # Do not silently expose an older row when its successor is
+                    # invalid. A unique same-entity/source match is conservative;
+                    # ambiguity stops publication without touching human history.
+                    for row in c.execute('SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind=?',
+                                         (run['id'],issue['kind'])):
+                        baseline=generated_baseline(row)
+                        old=baseline or json.loads(row['envelope'])['candidate']
+                        if not set(old.get('evidence_ids',[])).intersection(issue['evidence_ids']):continue
+                        if not candidate.get('entity_ids') or old.get('entity_ids')!=candidate.get('entity_ids'):continue
+                        existing.append(row)
+                if len(existing)>1:
+                    raise DomainError('Unpublished candidate matches multiple historical records; manual resolution is required.',409)
+                if existing:
+                    issue['blocked_record_id']=existing[0]['id']
+                    c.execute("UPDATE verification_jobs SET state='STALE',message=?,updated_at=? WHERE record_id=? AND state IN ('QUEUED','RUNNING')",
+                              ('Current candidate was not published.',now(),existing[0]['id']))
+
+            blocked={issue.get('blocked_record_id') for issue in issues}
 
             for record in generated:
                 record_id=record['meta']['record_id'];logical=record['candidate']['candidate_key']
@@ -347,17 +691,45 @@ class Runner:
                     # foreign-key history.
                     legacy=[]
                     for row in c.execute("SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind='MATERIAL'",(run['id'],)):
-                        if material_group_key(generated_baseline(row))==logical:legacy.append(row)
+                        baseline=generated_baseline(row)
+                        if baseline and material_group_key(baseline)==logical:legacy.append(row)
                     if len(legacy)>1:
                         raise DomainError('同一材料组存在多条旧记录；为避免覆盖审核历史，已停止自动恢复',409)
                     if legacy:existing=legacy[0]
+                if not existing and record['kind']=='MATERIAL' and not logical.startswith('MG-'):
+                    identity=unscoped_material_identity(record['candidate'])
+                    evidence_ids=set(record['candidate'].get('evidence_ids') or [])
+                    if identity and evidence_ids:
+                        legacy=[]
+                        for row in c.execute("SELECT id,envelope,review_version,logical_key FROM records WHERE run_id=? AND kind='MATERIAL' AND logical_key LIKE 'MG-%'",(run['id'],)):
+                            baseline=generated_baseline(row)
+                            if baseline is None:
+                                raise DomainError('旧合并材料缺少可恢复系统基线；为避免覆盖审核历史，已停止拆分恢复',409)
+                            if material_group_key(baseline) is not None:
+                                continue
+                            if unscoped_material_identity(baseline)!=identity:
+                                continue
+                            baseline_evidence=set(baseline.get('evidence_ids') or [])
+                            if not baseline_evidence or not evidence_ids.issubset(baseline_evidence):
+                                raise DomainError('旧合并材料证据范围不明确；为避免覆盖审核历史，已停止拆分恢复',409)
+                            legacy.append(row)
+                        if len(legacy)>1:
+                            raise DomainError('同一无范围旧合并材料对应多条记录；为避免覆盖审核历史，已停止拆分恢复',409)
+                        if legacy:existing=legacy[0]
                 if not existing:
                     c.execute('INSERT INTO records(id,run_id,project_id,kind,envelope,logical_key) VALUES(?,?,?,?,?,?)',
                               (record_id,run['id'],run['project_id'],record['kind'],dumps(record),logical))
                     refresh_ids.append(record_id);continue
+                if existing['id'] in blocked:
+                    raise DomainError('A historical record matches both valid and unpublished candidates; manual resolution is required.',409)
                 record_id=existing['id'];record['meta']['record_id']=record_id
                 before=json.loads(existing['envelope'])
-                comparable=deepcopy(generated_baseline(existing));comparable['candidate_key']=logical
+                baseline=generated_baseline(existing)
+                if baseline is None:
+                    # A malformed legacy human record without any recoverable
+                    # system checkpoint must not be overwritten speculatively.
+                    continue
+                comparable=deepcopy(baseline);comparable['candidate_key']=logical
                 if comparable==record['candidate']:
                     # Identity-only legacy migration: preserve the current
                     # human decision and version while refreshing candidate-
@@ -377,23 +749,34 @@ class Runner:
                     c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
                               (event,record_id,'cirp-system','INVALIDATED_BY_NEW_EVIDENCE',
                                dumps(before),dumps(record),'恢复分析后新增证据改变候选；原人工决定保留在历史中，当前记录重置为待审核。',now()))
+                else:
+                    event=uid('REVIEW')
+                    c.execute('INSERT INTO review_events VALUES(?,?,?,?,?,?,?,?)',
+                              (event,record_id,'cirp-system','SYSTEM_BASELINE_UPDATED',
+                               dumps(before),dumps(record),'系统候选在待审核状态更新；保留最新系统基线以保护后续人工审核。',now()))
                 c.execute('UPDATE records SET envelope=?,logical_key=?,review_version=review_version+1 WHERE id=?',
                            (dumps(record),logical,record_id))
                 c.execute("UPDATE verification_jobs SET state='STALE',message=?,updated_at=? WHERE record_id=? AND state IN ('QUEUED','RUNNING')",
                           ('候选因新增证据变化，旧核验任务失效',now(),record_id))
                 refresh_ids.append(record_id)
+            coverage=json.loads(c.execute('SELECT coverage FROM runs WHERE id=?',(run['id'],)).fetchone()[0])
+            coverage['publication_issues']=issues
+            c.execute('UPDATE runs SET coverage=? WHERE id=?',(dumps(coverage),run['id']))
         if seed_verifications:
             for record_id in refresh_ids:self.verifier.refresh(record_id)
 
     def update_coverage(self,rid):
         run=self.get(rid)
-        docs=self.db.all('SELECT status,summary FROM document_results WHERE run_id=?',(rid,))
-        evidence=self.db.all('SELECT status,payload FROM evidence WHERE run_id=?',(rid,))
+        docs=self.db.all('''SELECT r.status,r.summary,r.document_id,d.name FROM document_results r
+                            JOIN documents d ON d.id=r.document_id WHERE r.run_id=?''',(rid,))
+        evidence=self.db.all('SELECT status,payload,extraction FROM evidence WHERE run_id=?',(rid,))
         summaries=[json.loads(d['summary']) for d in docs]
+        pages=[page for summary in summaries for page in summary.get('pages',[])]
         methods=[json.loads(e['payload']).get('extraction_method') for e in evidence]
         visual_tasks=[task for summary in summaries for task in summary.get('visual_tasks',[])]
         geometry=[item for summary in summaries for item in summary.get('geometry_summaries',[])]
         takeoffs=[item for summary in summaries for item in summary.get('takeoffs',[])]
+        workflows=build_workflow_index(docs)['summary']
         limitations=['复杂选项/父条款/跨专业关联仍待完善','没有做施工准确率评测；完成调用不代表完整理解']
         if any(task.get('status')!='VISION_EXTRACTED' for task in visual_tasks):
             limitations.append('仍有页面视觉任务未完成或未启用')
@@ -407,14 +790,26 @@ class Runner:
                  'fragments_total':len(evidence),'fragments_extracted':sum(e['status']=='EXTRACTED' for e in evidence),
                  'fragments_need_review':sum(e['status']=='NEEDS_REVIEW' for e in evidence),
                  'fragments_pending':sum(e['status']=='PENDING' for e in evidence),
+                 'fragments_model_skipped':sum(bool(e['extraction'] and json.loads(e['extraction']).get(
+                     'deterministic_skip_reason')) for e in evidence),
                  'ocr_fragments':sum(method=='OCR' for method in methods),
                  'vision_fragments':sum(method=='VISION' for method in methods),
-                 'cad_fragments':sum(method=='CAD_OBJECT' for method in methods),
+                  'cad_fragments':sum(method=='CAD_OBJECT' for method in methods),
+                  'pages_total':len(pages),
+                  'pages_processed':sum(page.get('status')!='NOT_PROCESSED' for page in pages),
                  'visual_pages_total':len(visual_tasks),
                  'visual_pages_completed':sum(task.get('status')=='VISION_EXTRACTED' for task in visual_tasks),
                  'geometry_pages':len(geometry),
                  'geometry_pages_calibrated':sum(item.get('status')=='CALIBRATED_RAW_GEOMETRY' for item in geometry),
                  'takeoff_candidates':len(takeoffs),
+                 'workflow_documents':workflows['documents'],
+                 'workflow_groups':workflows['groups'],
+                 'rfi_groups':workflows['rfi_groups'],
+                 'submittal_groups':workflows['submittal_groups'],
+                 'email_threads':workflows['email_threads'],
+                 'workflow_ambiguous':workflows['ambiguous'],
+                 'quoted_email_documents':workflows['quoted_email_documents'],
                  'warnings':[w for summary_item in summaries for w in summary_item.get('warnings',[])],
-                 'scope_limitations':limitations}
+                 'scope_limitations':limitations,
+                 'publication_issues':publication_issues(run['coverage'])}
         self.db.execute('UPDATE runs SET coverage=? WHERE id=?',(dumps(summary),rid))

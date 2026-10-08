@@ -1,0 +1,51 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 10000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 15000,
+  "paid_calls_allowed": false,
+  "approval_ref": "FR-CLASS-001 explicitly requires users to view and correct classification, and the active goal requires continued RFI/Submittal/Email adaptability and accuracy.",
+  "notes": [
+    "The workflow relationship API and page are currently read-only, so a deterministic misclassification cannot be corrected by the reviewer.",
+    "Add a current-run workflow-classification overlay with optimistic versioning and append-only events; never overwrite parser summaries, evidence, extracted candidates or source files.",
+    "Allow DETECTED reset, OTHER, exact RFI and exact Submittal values. Validate type-specific identifier, role and canonical status fields before storage.",
+    "Display detected and effective values clearly in English; corrections do not infer authority and do not trigger parsing, extraction, model calls or a new run.",
+    "Completed offline with 659 Python tests, 24 UI tests, 11 deployment tests and 14 browser regression checks; browser validation made zero model calls and zero external requests. Full checks, specification sync, dependency validation and the 377-file source manifest passed."
+  ],
+  "task_id": "DEV-060",
+  "title": "Add auditable workflow classification corrections",
+  "requirement_ids": [
+    "FR-CLASS-001",
+    "FR-WORKFLOW-001",
+    "NFR-SECURITY-003"
+  ],
+  "allowed_paths": [
+    "migrations/006_workflow_classification_overrides.sql",
+    "app/db.py",
+    "app/main.py",
+    "app/workflows.py",
+    "web/**",
+    "tests/app/test_api.py",
+    "tests/app/test_verification.py",
+    "tests/web/**",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-060.json",
+    "changes/CR-0075.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py tests/app/test_verification.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area ui",
+    "python scripts/browser_i18n_smoke.py --offline-dom",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let a reviewer correct the effective RFI/Submittal workflow classification for one document in one completed run through a versioned, auditable overlay without mutating detected evidence or starting model work."
+}

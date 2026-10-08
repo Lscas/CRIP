@@ -1,0 +1,4 @@
+# Reproducible source-manifest bytes across Windows and public CI checkouts.
+* text=auto eol=lf
+# This synthetic fixture also has its own byte/hash commitment.
+tests/fixtures/synthetic_holdout_note.txt text eol=lf

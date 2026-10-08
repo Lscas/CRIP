@@ -1,0 +1,49 @@
+{
+  "change_id": "CR-0018",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-API-001",
+    "FR-API-006",
+    "FR-BUDGET-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add a loopback setup page and launcher for a customer-selected OpenAI-compatible text API or loopback local model. Remote endpoints require HTTPS, a key, and positive confirmed rates; loopback models may omit the key and use zero rates. Bind custom run identity to the endpoint and model, preserve the existing JSON contract and usage ledger, and keep generic vision disabled.",
+  "decision_refs": [
+    "User request on 2026-09-14 to let customers configure their own API or choose a local model and publish the update to GitHub"
+  ],
+  "affected_paths": [
+    "app/db.py",
+    "app/gateway.py",
+    "app/runner.py",
+    "app/settings.py",
+    "config/model_routing.json",
+    "scripts/gemini_local_setup.py",
+    "start-custom-model.ps1",
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_local_entry.py",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "docs/REQUIREMENTS.md",
+    "docs/LOCAL_VALIDATION.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/DEV_STATE.md",
+    "README.md",
+    "changes/CR-0018.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_gateway_budget.py",
+    "tests/app/test_gemini_local_setup.py",
+    "tests/app/test_local_entry.py",
+    "tests/app/test_api.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested customer-configurable APIs, a local-model choice, and GitHub publication.",
+  "known_limitations": [
+    "The generic adapter supports OpenAI-compatible chat/completions text responses with JSON mode and usage data; vendor-specific SDKs and request fields are not added.",
+    "Generic page-image vision, automatic model discovery, non-loopback LAN endpoints, and local-model quality testing are not included.",
+    "The endpoint, model, and rates are entered on each custom launch; an API key may be saved with Windows DPAPI only when explicitly selected and is scoped to the endpoint/model fingerprint."
+  ]
+}

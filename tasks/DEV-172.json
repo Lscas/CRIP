@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-172",
+  "title": "Repair audited fact preservation, human review and provider/setup boundaries",
+  "status": "DONE",
+  "objective": "Repair review findings 1, 2, 3, 5, 6, 7, 8, 12 and 13 against the current feature branch. Preserve existing features and human history. The existing temporary-material quantity contract from finding 4 may be repaired in the same conversion, without claiming candidate-level failure isolation is complete.",
+  "requirement_ids": ["FR-REVISION-001", "FR-REVISION-002", "FR-MATERIAL-001", "FR-MATERIAL-002", "FR-REVIEW-001", "FR-REVIEW-002", "FR-EXPORT-001", "FR-EXPORT-002", "FR-FIELD-EVIDENCE-001", "FR-API-006", "NFR-SECURITY-001"],
+  "max_output_tokens": 12000,
+  "paid_calls_allowed": false,
+  "approval_ref": "2026-10-07 user said start processing after the first-batch and parallel provider/setup repair proposal. Prior Git synchronization authorization remains feature-branch only; no main merge, customer database maintenance, deployment or real provider call is included.",
+  "notes": ["Use synthetic red/green regressions, preserve baseline failure evidence, and do not equate passing CI with construction accuracy.", "Routine execution uses Terra medium; state, security and final delivery decisions receive independent Sol max review.", "Do not read credentials or customer files; use the existing clean isolated worktree and preserve the primary worktree's private manifest."],
+  "allowed_paths": ["app/assemble.py", "app/exporter.py", "app/runner.py", "app/main.py", "app/gateway.py", "web/app.js", "web/i18n.js", "scripts/gemini_local_setup.py", "scripts/validate_readable_export.py", "tests/**", "examples/demo/*.txt", "spec/traceability.json", "docs/**", "reports/**", "tasks/DEV-172.json", "changes/CR-0188.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/DATA_CONTRACTS.md", "docs/EVIDENCE_VERIFICATION.md"],
+  "acceptance_tests": ["python -m pytest tests/app/test_review_fact_assembly.py tests/app/test_review_system_baseline.py tests/app/test_review_export_integrity.py tests/app/test_review_export_validator.py tests/app/test_review_provider_boundaries.py tests/app/test_review_setup_boundary.py tests/web/test_quantity_review.py -q", "python scripts/run_checks.py --area all", "python scripts/check_spec_sync.py", "python scripts/build_bundle_manifest.py --check"],
+  "model_level": "medium_execution_sol_max_architecture_and_final_review"
+}

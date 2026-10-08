@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Repository task automation remains offline. The user separately authorized the manually monitored live DeepSeek product-path validation on 2026-09-27.",
+  "notes": [
+    "Do not read, log or return the saved API key.",
+    "Do not delete or reset .local data, the database, human reviews or model-call history.",
+    "Use the existing Kapolei project and the fixed questions selected before CIRP answers.",
+    "Do not retry an uncertain provider call automatically.",
+    "Compare CIRP parsing, retrieval and DeepSeek-backed answers as one product path against independent direct-PDF answers."
+  ],
+  "task_id": "DEV-128",
+  "title": "Remove CIRP budgets and validate Kapolei project answers",
+  "requirement_ids": ["FR-MODEL-BUDGET-REMOVAL-001", "FR-QA-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app", "config", "contracts", "web", "scripts", "tests", "docs", "spec", "reports",
+    ".env.example", ".gitignore", "README.md", "CHANGELOG.md",
+    "start-deepseek-live.ps1", "start-gemini-live.ps1",
+    "tasks/DEV-128.json", "changes/CR-0143.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py tests/app/test_gateway_budget.py tests/app/test_model_configuration.py tests/app/test_verification.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Remove active CIRP monetary budget controls and produce a reproducible 15-question Kapolei CIRP-versus-direct-PDF quality comparison."
+}

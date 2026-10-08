@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "Parse every exact RFC Message-ID token in In-Reply-To without persisting raw identifiers or inferring semantic relationships.",
+    "Reuse the existing local hash and deterministic email-thread index; add no dependency, model call or mailbox access."
+  ],
+  "task_id": "DEV-012",
+  "title": "Multi-parent email thread identifiers",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-012.json",
+    "changes/CR-0027.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_workflows.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Preserve every exact hashed Message-ID token from multi-value In-Reply-To headers so deterministic email thread review does not split related messages."
+}

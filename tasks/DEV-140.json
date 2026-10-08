@@ -1,0 +1,39 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires CRIP to save labor while managing explicit, auditable advanced-model task execution locally.",
+  "notes": [
+    "Require one explicit checked confirmation before sequentially dispatching pending questions.",
+    "Use the existing single-item execution endpoint and wait for each saved result; do not add server background dispatch, parallel calls or automatic retry.",
+    "Refresh unresolved provider-call state before every next item and stop on any error or unresolved call.",
+    "Stop means after the current request; closing or refreshing the page must not auto-resume.",
+    "Do not read .local customer data, saved credentials or call a live provider during offline validation."
+  ],
+  "task_id": "DEV-140",
+  "title": "Run pending Reference evaluation questions sequentially",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-RUNNER-001", "FR-REFERENCE-EVALUATION-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-140.json",
+    "changes/CR-0155.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_evaluations.py tests/web/test_display_contract.py -q",
+    "node --check web/app.js",
+    "node --check web/i18n.js",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-140",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let one explicit user confirmation sequentially execute the remaining questions in a frozen Reference evaluation, with visible progress, stop-after-current, unresolved-call preflight, no parallelism, no automatic retry and resume from saved result links."
+}

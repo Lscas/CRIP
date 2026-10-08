@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0054",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-API-005"
+  ],
+  "summary": "Separate strict plain-text and Gmail HTML email signatures into reviewable non-current evidence so company names and workflow-like signature text cannot route work or enter model extraction.",
+  "decision_refs": [
+    "Active user goal to improve efficiency, accuracy and adaptability for RFI, Submittal and Email content",
+    "Synthetic regression showing signature text entered current-body model input and produced a false material candidate",
+    "Existing deterministic path that retains non-current email evidence while completing it locally before extraction"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/runner.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-039.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0054.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requires continued efficiency, accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only an exact plain-text -- delimiter with its trailing space, optionally behind quote prefixes, and the exact Gmail gmail_signature class are recognized; arbitrary closings, titles or visual styles are not guessed as signatures.",
+    "Unknown client signatures remain current evidence and require reviewer attention.",
+    "Validation is synthetic and offline; no customer email, mailbox or paid provider was used."
+  ]
+}

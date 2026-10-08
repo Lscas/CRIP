@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 3000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User requested repair of replacement API-key/restart behavior and project questions without manual Analysis Run selection on 2026-09-27.",
+  "notes": [
+    "Do not read, log or return a real API key and do not call a provider during validation.",
+    "Retain immutable run scope internally for evidence, citations, budgets and history.",
+    "Use the newest saved terminal project analysis by default and disclose when newer files are excluded."
+  ],
+  "task_id": "DEV-127",
+  "title": "Use restart-aware settings and saved project knowledge",
+  "requirement_ids": ["FR-API-006", "FR-QA-PROJECT-KNOWLEDGE-001", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/main.py", "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_model_configuration.py", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "docs/LOCAL_VALIDATION.md",
+    "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-127.json", "changes/CR-0142.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_model_configuration.py tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-127",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make replacement model credentials recover cleanly across open tabs and let project questions automatically use maintained saved analysis results."
+}

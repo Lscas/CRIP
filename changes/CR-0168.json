@@ -1,0 +1,43 @@
+{
+  "change_id": "CR-0168",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-RESULT-LIFECYCLE-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add versioned human Reference benchmark adjudication and a zero-call fixed-15 mechanical release scorecard.",
+  "decision_refs": [
+    "The approved gate requires contract-valid response rate, fully usable answers and no unsupported factual claim",
+    "Ordinary accepted/rejected result review is not a substitute for independent benchmark adjudication",
+    "CIRP should preserve and calculate human judgments without asking another model to score the answers"
+  ],
+  "affected_paths": [
+    "migrations/015_reference_evaluation_adjudications.sql", "app/db.py",
+    "app/reference_scorecards.py", "app/main.py",
+    "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-adjudication-history.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_scorecards.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-153.json",
+    "changes/CR-0168.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_scorecards.py", "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_results.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active goal requires a reproducible and independently reviewable advanced-model reference implementation, and the approved release gate is already part of the product requirements.",
+  "known_limitations": [
+    "A passing scorecard is only as reliable as the engineer's independent source comparison; CIRP does not infer correctness.",
+    "The fixed mechanical gate applies only to exactly 15 questions and does not define thresholds for arbitrary task sizes.",
+    "Benchmark adjudication is separate from ordinary ACCEPTED/REJECTED result review and does not edit an answer.",
+    "Offline acceptance does not run or score a stronger model."
+  ]
+}

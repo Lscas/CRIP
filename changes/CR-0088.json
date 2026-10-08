@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0088",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Preflight exact workflow status questions against the complete cached run index.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "Question retrieval intentionally sends at most eight evidence passages to the model",
+    "A synthetic fixture proved that a conflicting explicit status could exist only in the complete workflow index"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-003.json", "tasks/DEV-073.json", "changes/CR-0088.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective explicitly authorizes continued accuracy and multi-content adaptability improvements.",
+  "known_limitations": [
+    "The full-run preflight requires an explicit exact RFI or Submittal identifier and a status-oriented question.",
+    "A generic Email-thread status question remains limited to the bounded retrieved evidence because the workflow index does not infer semantic Email status.",
+    "The guard preserves ambiguity and does not determine chronology, revision precedence, authority or contractual correctness.",
+    "Synthetic offline validation does not establish construction accuracy or live-provider behavior."
+  ]
+}

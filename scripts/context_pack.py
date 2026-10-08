@@ -1,4 +1,4 @@
-"""无LLM调用的有限任务上下文；输出到stdout，不遍历源代码或客户数据。"""
+"""无LLM调用的任务上下文；保留完整所选文档，不遍历源代码或客户数据。"""
 from __future__ import annotations
 import argparse,json,re
 from pathlib import Path
@@ -18,7 +18,6 @@ def build(task_id:str,root:Path=ROOT)->str:
         text=path.read_text(encoding='utf-8')
         chunks.append('## '+relative+'\n'+text)
     output='\n\n'.join(chunks)+'\n'
-    if len(output)>min(task['max_context_chars'],20000):raise ValueError('上下文超过字符预算；先缩小任务，禁止截掉关键需求')
     return output
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('task_id');args=parser.parse_args()

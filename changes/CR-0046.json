@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0046",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Require an explicit heading boundary before assigning an RFI question or response role.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy across RFI, Submittal and Email content",
+    "Confirmed synthetic reproduction where Request for Information became QUESTION and Response time plus Questionnaire became MIXED"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-031.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0046.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued RFI, Submittal and Email accuracy improvements.",
+  "known_limitations": [
+    "Only standalone role headings or headings with the existing colon, hash or dash separator are recognized.",
+    "Semantic question/response inference remains a human review task.",
+    "Validation is synthetic and offline; no mailbox, model, external provider or customer file was used."
+  ]
+}

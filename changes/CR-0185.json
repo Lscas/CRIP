@@ -1,0 +1,50 @@
+{
+  "change_id": "CR-0185",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-THINKING-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001"
+  ],
+  "summary": "Add an explicit DeepSeek Reference QA thinking control and compare disabled versus low on a frozen 20-question project and field-worker benchmark.",
+  "decision_refs": [
+    "Thinking remains off by default and is sent only by QA V3 evidence decisions; extraction, vision, verification and legacy question routes are unchanged.",
+    "Provider reasoning text is neither placed in validated answer data nor persisted; ordinary provider usage, including reasoning token counters when returned, remains auditable.",
+    "Five out-of-project field questions intentionally have no supporting project evidence, so a safe non-answer or request for project-specific evidence/human review is the desired outcome.",
+    "Historical verification note: offline settings persistence and provider-scope rejection",
+    "Historical verification note: synthetic DeepSeek low-thinking request, usage accounting and private-reasoning exclusion",
+    "Historical verification note: legacy non-thinking policy regression",
+    "Historical verification note: frozen live 20-question disabled-versus-low comparison",
+    "Historical verification note: full Python, localization, spec, change and bundle gates"
+  ],
+  "affected_paths": [
+    "app/settings.py", "app/model_configuration.py", "app/main.py", "app/gateway.py",
+    "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_model_configuration.py", "tests/app/test_evidence_loop.py",
+    "tests/web/test_display_contract.py",
+    "spec/schemas/reference-model-input-receipt.schema.json",
+    "reports/kapolei_field_worker_cot_questions_v1_2026-10-03.json",
+    "reports/kapolei_field_worker_cot_flash_ab_2026-10-03.json",
+    "reports/kapolei_field_worker_cot_flash_ab_2026-10-03.md",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/PROVIDER_INTEGRATION.md",
+    "docs/REQUIREMENTS.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json", "spec/traceability.json", "README.md", "CHANGELOG.md",
+    "tasks/DEV-170.json", "changes/CR-0185.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/web/test_display_contract.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested testing of CoT on 20 questions and has already authorized the required API calls.",
+  "known_limitations": [
+    "Provider-side thinking is not equivalent to exposing chain of thought and no reasoning text is retained for inspection.",
+    "One 20-question run measures this frozen Kapolei corpus and five synthetic out-of-project field scenarios; it does not establish construction-domain accuracy in general.",
+    "Assistant comparison against the answer key is not written as human adjudication and does not satisfy the fixed release gate by itself."
+  ]
+}

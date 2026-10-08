@@ -1,0 +1,31 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency and accuracy across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce ordinary and cross-source answers whose explicit numbers disagree with their exact quotations.",
+    "Fail closed on unsupported numeric literals without inferring arithmetic, conversions or semantic authority.",
+    "Reuse a settled question across repeated-whitespace variants without changing the submitted prompt or collapsing case-sensitive identifiers.",
+    "Preserve exact recovery for settled tasks created before cache normalization and validate with synthetic offline evidence only."
+  ],
+  "task_id": "DEV-069",
+  "title": "Ground numeric answers and reuse equivalent question tasks",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/gateway.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "tasks/DEV-069.json",
+    "changes/CR-0084.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reject explicit numbers absent from their own project-file evidence and avoid duplicate paid questions caused only by repeated whitespace."
+}

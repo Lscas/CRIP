@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0063",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Preserve every distinct exact RFI and Submittal reference when multiple workflow markers occur on one line.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "FR-WORKFLOW-001 requires exact references to remain reviewable without guessed matches",
+    "Offline reproduction showed the first greedy marker suppressing later exact identifiers on the same line"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-048.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0063.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Reference extraction remains exact and deterministic; relationships and contractual effects are not inferred from conjunctions or prose.",
+    "Each marker retains the existing bounded same-line candidate and digit-bearing identifier rules.",
+    "Repeated canonical identifiers still collapse to one reference.",
+    "Validation is synthetic and offline; no customer email, mailbox or provider API is used."
+  ]
+}

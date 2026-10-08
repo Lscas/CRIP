@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0070",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-001",
+    "FR-CLASS-001",
+    "FR-WORKFLOW-001",
+    "FR-API-005"
+  ],
+  "summary": "Preserve the latest exact RFI or Submittal scope across continuation pages of a PDF while retaining bounded parallel page parsing.",
+  "decision_refs": [
+    "The active goal requires better RFI and Submittal accuracy, adaptability and efficiency",
+    "An offline two-page reproduction left a page-2 RFI response requirement without workflow scope",
+    "TXT and DOCX already retain active exact workflow scope until another exact heading replaces it"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-055.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0070.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy, adaptability and efficiency improvements for RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only exact digit-bearing RFI/Submittal headings start or replace carried scope; ambiguous prose does not.",
+    "Scope follows sequential pages until another exact workflow heading or the document ends, matching existing sequential text behavior.",
+    "The change does not infer authority, approval precedence or semantic membership across separate files.",
+    "Validation is synthetic and offline; no customer document, OCR, external provider or paid model is used."
+  ]
+}

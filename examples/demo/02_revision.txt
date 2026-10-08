@@ -4,4 +4,4 @@ Sheet: S-501
 Revision: 2
 Revision Date: 2026-08-01
 Section: 03 30 00
-DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=5000 psi
+DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=5000 psi|location=Synthetic Building A

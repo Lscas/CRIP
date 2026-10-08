@@ -1,0 +1,35 @@
+{
+  "change_id": "CR-0152",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-WORKSPACE-001", "FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "summary": "Add a separate managed Reference QA browser workflow and local immutable result, citation and human-review persistence while retaining the legacy analysis and question workspace.",
+  "decision_refs": [
+    "Active user goal: CRIP manages local files, projects, tasks, versions, results, citations and review",
+    "Reference analysis remains separate from existing default behavior",
+    "Page preview, result reads and human review must not call a model"
+  ],
+  "affected_paths": [
+    "app/reference_results.py", "app/main.py", "app/db.py",
+    "migrations/011_reference_results.sql", "spec/schemas/reference-result.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_results.py", "tests/app/test_evidence_loop.py",
+    "tests/web/test_display_contract.py", "docs/REFERENCE_QA.md",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-137.json",
+    "changes/CR-0152.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_results.py", "tests/app/test_evidence_loop.py",
+    "tests/web/test_display_contract.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested the management-first CRIP framework, retained existing behavior and approved continued implementation of the bounded advanced-model reference workflow.",
+  "known_limitations": [
+    "Reference results currently support accept or reject review but not reviewer-edited answer text.",
+    "The fixed 15-question live quality benchmark has not been rerun.",
+    "Reference result export and cross-run result comparison remain future work."
+  ]
+}

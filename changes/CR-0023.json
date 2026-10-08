@@ -1,0 +1,65 @@
+{
+  "change_id": "CR-0023",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-005"
+  ],
+  "summary": "Separate email quoted history, add exact deterministic workflow relationships, and add customer-configured read-only Autodesk APS and Procore selected-file imports through existing chunk, hash and deduplication controls.",
+  "decision_refs": [
+    "User request to improve efficiency, accuracy and adaptability for RFI, Submittal and email content",
+    "User authorization to access Autodesk and Procore APIs to reduce manual imports",
+    "User /ponytail instruction to prefer existing open-source components over new code"
+  ],
+  "affected_paths": [
+    "app/assemble.py",
+    "app/connectors.py",
+    "app/main.py",
+    "app/parsers.py",
+    "app/runner.py",
+    "app/workflows.py",
+    "prompts/joint-extraction/system.md",
+    "scripts/browser_i18n_smoke.py",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_connectors.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "web/app.js",
+    "web/i18n.js",
+    "web/index.html",
+    "web/style.css",
+    "docs/ARCHITECTURE.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/PRODUCT_SPEC.md",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/REQUIREMENTS.md",
+    "tasks/DEV-008.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0023.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_connectors.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/web/i18n.test.mjs",
+    "scripts/browser_i18n_smoke.py --offline-dom"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly authorized Autodesk and Procore access and instructed CIRP to minimize custom code with /ponytail.",
+  "known_limitations": [
+    "The connector accepts a customer-generated bearer token; interactive OAuth, refresh and provider-side revocation are not implemented yet.",
+    "Imports are selected-file only; recursive bulk import, change polling and continuous synchronization are not implemented.",
+    "Only exact identifiers create workflow relationships; semantic relationship inference and authority adjudication remain human review tasks.",
+    "Validation uses synthetic MockTransport responses only; no live Autodesk/Procore tenant or customer file was used."
+  ]
+}

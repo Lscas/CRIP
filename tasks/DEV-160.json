@@ -1,0 +1,55 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked to run DeepSeek V4.1 Flash and then compare it with Pro; current official DeepSeek documentation now lists deepseek-v4-pro as an independently available model.",
+  "notes": [
+    "Replace only the obsolete false-Pro guard; preserve historical profiles, calls, evaluations and results.",
+    "Allow exactly deepseek-flash and deepseek-v4-pro at the fixed official DeepSeek endpoint; continue rejecting unknown IDs before HTTP.",
+    "Keep Pro text-only and reject image input locally because the official model capability lists text input only.",
+    "Configuration and acceptance tests make no provider call; the separately authorized benchmark remains an operational step.",
+    "Do not add model discovery, fallback, automatic retry, a second transport or a database migration."
+  ],
+  "task_id": "DEV-160",
+  "title": "Enable verified DeepSeek V4 Pro selection",
+  "requirement_ids": [
+    "FR-DEEPSEEK-MODEL-SELECTION-001",
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/settings.py",
+    "app/model_configuration.py",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py",
+    "docs/PROVIDER_INTEGRATION.md",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-160.json",
+    "changes/CR-0175.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_model_configuration.py tests/app/test_gateway_budget.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-160",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Update CIRP's exact DeepSeek model gate to the provider's current official availability so Flash and text-only V4 Pro can be selected and compared honestly."
+}

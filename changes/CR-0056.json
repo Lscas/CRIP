@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0056",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Recognize Furnish as Submitted, Furnish as Corrected and Amend and Resubmit through the existing explicit Submittal status parser and canonical groups.",
+  "decision_refs": [
+    "The user requested a ponytail optimization that prefers existing open-source code over custom infrastructure",
+    "Synthetic reproduction where all three explicit status lines produced a null workflow status",
+    "Public construction specifications using these exact Submittal return stamp phrases"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-041.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0056.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested repository inspection and optimization under ponytail, preferring open-source reuse over newly produced infrastructure.",
+  "known_limitations": [
+    "Only exact Status labels are recognized; arbitrary stamp layouts and OCR variants remain review work.",
+    "Canonical status groups support reviewer organization and do not decide contractual authority.",
+    "Validation is synthetic and offline; no customer document, credential or paid provider was used."
+  ]
+}

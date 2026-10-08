@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8000,
+  "max_output_tokens": 2000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User requested model API entry on the Settings page instead of a separate popup on 2026-09-27.",
+  "notes": [
+    "Keep the existing model gateway, credential protection, budget approval and restart boundary unchanged.",
+    "Load only non-secret configuration status; the API key field remains write-only and blank.",
+    "Do not call a provider during validation."
+  ],
+  "task_id": "DEV-126",
+  "title": "Move model configuration into the main Settings section",
+  "requirement_ids": ["FR-API-006", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/LOCAL_VALIDATION.md", "docs/PROVIDER_INTEGRATION.md",
+    "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-126.json", "changes/CR-0141.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-126",
+    "python scripts/run_checks.py --area ui"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Place customer model configuration in a dedicated section of the normal CIRP page, with no modal or separate setup server."
+}

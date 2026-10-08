@@ -1,16 +1,15 @@
-"""FR-BUDGET-001/002, FR-ROUTE-003, FR-TOKEN-001/002。全部使用MockTransport。"""
+"""Model-call safety, routing, token, and durable-settlement tests."""
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import hashlib,json,sqlite3,time
 import httpx,pytest
-from app.db import BudgetError,DomainError,dumps,units
+from app.db import CallSafetyError,DomainError,dumps
 from app.gateway import (Gateway,ProviderPaused,InvalidModelOutput,
                          normalize_verification_contract)
 from app.parsers import MAX_FRAGMENT_BYTES,parse_file
 from app.settings import Settings
-from contracts.runtime_rules import quote_tokens
 from .conftest import upload
 
 @pytest.fixture
@@ -24,14 +23,20 @@ def context(client,project):
     return client.app.state.db,run,ev
 
 def settings(tmp_path,**kw):
-    s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,api_key='test-not-real',
-               input_rate=Decimal('1'),output_rate=Decimal('2'),start_worker=False)
+    s=Settings(tmp_path,provider='deepseek',live_enabled=True,api_key='test-not-real',start_worker=False)
     return replace(s,**kw)
 
 def gemini_settings(tmp_path,**kw):
     values={'provider':'gemini',
             'api_base_url':'https://generativelanguage.googleapis.com/v1beta/openai',
             'cheap_model':'gemini-3.6-flash'}
+    values.update(kw)
+    return settings(tmp_path, **values)
+
+def openai_settings(tmp_path,**kw):
+    values={'provider':'openai','api_base_url':'https://api.openai.com/v1',
+            'cheap_model':'gpt-test-model','vision_model':'gpt-test-model',
+            'structured_output_mode':'json_schema','api_protocol':'responses'}
     values.update(kw)
     return settings(tmp_path, **values)
 
@@ -71,12 +76,195 @@ def test_cheap_payload_and_cache(context,tmp_path):
     assert len(requests)==1 and requests[0]['thinking']=={'type':'disabled'}
     assert 'reasoning_effort' not in requests[0]
     assert requests[0]['response_format']=={'type':'json_object'} and requests[0]['max_tokens']==8000
-    assert db.cost(run['project_id'])['spent_cny']=='0.000180'
+    assert db.model_call_stats(run['project_id'])['calls']==1
     call=db.one('SELECT provider_request_id,reserved_units,request_hash FROM model_calls WHERE run_id=?',(run['id'],))
-    upper=sum(len(message['content'].encode('utf-8')) for message in requests[0]['messages'])+256
     assert call['provider_request_id']=='upstream-test'
-    assert call['reserved_units']==units(quote_tokens(upper,8000,Decimal('1'),Decimal('2')))
+    assert call['reserved_units']==1
     assert call['request_hash']==hashlib.sha256(dumps(requests[0]).encode()).hexdigest()
+
+
+def test_reference_native_schema_payload_is_explicit_strict_and_has_no_fallback(context,tmp_path):
+    db,_,_=context
+    selected=settings(
+        tmp_path,provider='custom-0123456789abcdef',
+        api_base_url='https://models.example/v1',cheap_model='advanced-model',
+        vision_model='advanced-model',structured_output_mode='json_schema')
+    gateway=Gateway(selected,db)
+
+    payload=gateway.payload(
+        [{'role':'system','content':'Return JSON.'}],1200,
+        response_schema=gateway.evidence_decision_schema,
+        schema_name='cirp_evidence_decision_v3')
+    response_format=payload['response_format']
+    assert response_format['type']=='json_schema'
+    assert response_format['json_schema']['name']=='cirp_evidence_decision_v3'
+    assert response_format['json_schema']['strict'] is True
+    serialized=dumps(response_format['json_schema']['schema'])
+    assert '"oneOf"' not in serialized and '"const"' not in serialized
+    assert '"anyOf"' in serialized and '"enum"' in serialized
+    assert gateway.payload([{'role':'system','content':'Return JSON.'}],1200)[
+        'response_format']=={'type':'json_object'}
+    with pytest.raises(InvalidModelOutput,match='incompatible'):
+        gateway.payload(
+            [{'role':'system','content':'Return JSON.'}],1200,
+            response_schema=gateway.schema,schema_name='incompatible_extraction')
+    with pytest.raises(InvalidModelOutput,match='name is invalid'):
+        gateway.payload(
+            [{'role':'system','content':'Return JSON.'}],1200,
+            response_schema=gateway.evidence_decision_schema,schema_name='bad schema name')
+    assert db.all('SELECT * FROM model_calls')==[]
+    gateway.close()
+
+
+def test_openai_responses_payload_converts_selected_image_and_uses_text_format(context,tmp_path):
+    db,_,_=context
+    gateway=Gateway(openai_settings(tmp_path,vision_enabled=True),db)
+    payload=gateway.payload([
+        {'role':'system','content':'Return JSON.'},
+        {'role':'user','content':[
+            {'type':'text','text':'Use this selected page.'},
+            {'type':'image_url','image_url':{'url':'data:image/png;base64,c3ludGhldGlj'}},
+        ]},
+    ],1200,response_schema=gateway.answer_v2_schema,
+       schema_name='cirp_project_answer_v2')
+
+    assert payload['store'] is False and payload['max_output_tokens']==1200
+    assert 'messages' not in payload and 'response_format' not in payload
+    assert payload['text']['format']['type']=='json_schema'
+    assert payload['text']['format']['name']=='cirp_project_answer_v2'
+    assert payload['text']['format']['strict'] is True
+    parts=payload['input'][1]['content']
+    assert parts[0]=={'type':'input_text','text':'Use this selected page.'}
+    assert parts[1]=={'type':'input_image','image_url':'data:image/png;base64,c3ludGhldGlj',
+                     'detail':'auto'}
+    gateway.close()
+
+
+def test_openai_responses_answer_normalizes_typed_output_and_usage(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    answer={
+        'status':'INSUFFICIENT','answer':'The selected source does not state the answer.',
+        'claims':[],'missing':['The requested value is not stated.'],'calculations':[],
+    }
+    def handler(request):
+        requests.append((str(request.url),json.loads(request.content)))
+        return httpx.Response(200,json={
+            'id':'resp_offline_test','object':'response','status':'completed',
+            'output':[
+                {'type':'reasoning','id':'rs_test','content':[],'summary':[]},
+                {'type':'message','status':'completed','role':'assistant','content':[
+                    {'type':'output_text','text':json.dumps(answer),'annotations':[]},
+                ]},
+            ],
+            'usage':{'input_tokens':80,'output_tokens':30,'total_tokens':110,
+                     'output_tokens_details':{'reasoning_tokens':10}},
+        })
+    gateway=Gateway(openai_settings(tmp_path),db,
+                    httpx.Client(transport=httpx.MockTransport(handler)))
+
+    value=gateway.answer_v2(run,'What value is stated?',[evidence],[])
+
+    assert value.data==answer and not value.cached
+    assert len(requests)==1 and requests[0][0]=='https://api.openai.com/v1/responses'
+    request=requests[0][1]
+    assert request['store'] is False and request['model']=='gpt-test-model'
+    assert request['text']['format']['type']=='json_schema'
+    assert request['max_output_tokens']>0 and 'messages' not in request
+    call=db.one('SELECT state,provider_request_id,usage FROM model_calls WHERE run_id=?',
+                (run['id'],))
+    usage=json.loads(call['usage'])
+    assert call['state']=='SETTLED' and call['provider_request_id']=='resp_offline_test'
+    assert usage['prompt_tokens']==80 and usage['completion_tokens']==30
+    assert usage['completion_tokens_details']['reasoning_tokens']==10
+    gateway.close()
+
+
+def test_openai_responses_refusal_is_settled_without_text_or_retry(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    refusal={
+        'id':'resp_refusal_test','object':'response','status':'completed',
+        'output':[{'type':'message','status':'completed','role':'assistant','content':[
+            {'type':'refusal','refusal':'synthetic refusal text that must not persist'},
+        ]}],
+        'usage':{'input_tokens':70,'output_tokens':8,'total_tokens':78},
+    }
+    gateway=Gateway(openai_settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json=refusal))[1])))
+
+    with pytest.raises(InvalidModelOutput,match='cost was recorded'):
+        gateway.answer_v2(run,'What value is stated?',[evidence],[])
+    with pytest.raises(InvalidModelOutput,match='自动再次收费'):
+        gateway.answer_v2(run,'What value is stated?',[evidence],[])
+
+    call=db.one('SELECT state,response,error,usage FROM model_calls WHERE run_id=?',(run['id'],))
+    assert len(requests)==1 and call['state']=='SETTLED_ERROR' and call['response'] is None
+    assert 'synthetic refusal text' not in dumps(call)
+    assert json.loads(call['usage'])['completion_tokens']==8
+    gateway.close()
+
+
+def test_reference_output_mode_changes_durable_call_identity(context,tmp_path):
+    db,run,evidence=context;run={**run,'status':'PARTIAL'};requests=[]
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(run['id'],))
+    answer={
+        'status':'INSUFFICIENT','answer':'The selected source does not state the answer.',
+        'claims':[],'missing':['The requested value is not stated.'],'calculations':[],
+    }
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200,json={
+            'id':f'output-mode-{len(requests)}',
+            'choices':[{'finish_reason':'stop','message':{'content':json.dumps(answer)}}],
+            'usage':{'prompt_tokens':80,'completion_tokens':30},
+        })
+    common={
+        'provider':'custom-0123456789abcdef',
+        'api_base_url':'http://127.0.0.1:11434/v1','api_key':'',
+        'cheap_model':'reference-model','vision_model':'reference-model',
+    }
+    compatible=Gateway(
+        settings(tmp_path,**common,structured_output_mode='json_object'),db,
+        httpx.Client(transport=httpx.MockTransport(handler)))
+    strict=Gateway(
+        settings(tmp_path,**common,structured_output_mode='json_schema'),db,
+        httpx.Client(transport=httpx.MockTransport(handler)))
+
+    first=compatible.answer_v2(run,'What value is stated?',[evidence],[])
+    second=strict.answer_v2(run,'What value is stated?',[evidence],[])
+    replay=strict.answer_v2(run,'What value is stated?',[evidence],[])
+
+    assert not first.cached and not second.cached and replay.cached
+    assert len(requests)==2
+    assert requests[0]['response_format']=={'type':'json_object'}
+    assert requests[1]['response_format']['type']=='json_schema'
+    calls=db.all('SELECT task_key,state FROM model_calls ORDER BY rowid')
+    assert len(calls)==2 and len({item['task_key'] for item in calls})==2
+    assert {item['state'] for item in calls}=={'SETTLED'}
+    compatible.close();strict.close()
+
+
+def test_adjacent_evidence_uses_one_paid_request_and_one_recovery_family(context,tmp_path):
+    db,run,first=context;second={**first,'evidence_id':'EV-second','raw_text':'Use 2 inch diameter.'}
+    expected=result(first);requirement=expected['requirements'][0]
+    requirement['evidence_ids']=[first['evidence_id'],second['evidence_id']]
+    requirement['properties']=[{'name':'diameter','value':'2','unit':'inches',
+                                'evidence_ids':[second['evidence_id']]}]
+    response={'id':'batch-call','choices':[{'finish_reason':'stop','message':{'content':json.dumps(expected)}}],
+              'usage':{'prompt_tokens':150,'completion_tokens':50}}
+    requests=[]
+    gateway=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(json.loads(request.content)),httpx.Response(200,json=response))[1])))
+
+    value=gateway.extract_many(run,[first,second])
+    recovered=gateway.extract_many(run,[first,second])
+
+    assert value.data==expected and recovered.cached and len(requests)==1
+    user=json.loads(requests[0]['messages'][1]['content'])
+    assert [item['evidence_id'] for item in user['evidence_items']]==[first['evidence_id'],second['evidence_id']]
+    call=db.one('SELECT task_key,state FROM model_calls WHERE run_id=?',(run['id'],))
+    assert call['task_key'].startswith('extract-batch:'+first['evidence_id']+':') and call['state']=='SETTLED'
 
 
 def test_extract_stop_response_above_old_4000_limit_is_accepted(context,tmp_path):
@@ -98,10 +286,9 @@ def test_extract_honors_lower_settings_output_limit_in_payload_hash_and_reservat
                     httpx.Client(transport=httpx.MockTransport(handler)))
     gateway.extract(run,ev)
     payload=requests[0]
-    upper=sum(len(message['content'].encode('utf-8')) for message in payload['messages'])+256
     call=db.one('SELECT reserved_units,request_hash FROM model_calls WHERE run_id=?',(run['id'],))
     assert payload['max_tokens']==2300
-    assert call['reserved_units']==units(quote_tokens(upper,2300,Decimal('1'),Decimal('2')))
+    assert call['reserved_units']==1
     assert call['request_hash']==hashlib.sha256(dumps(payload).encode()).hexdigest()
 
 
@@ -251,7 +438,7 @@ def test_deepseek_vision_uses_image_model_same_budget_and_cache(context,tmp_path
     assert payload['messages'][1]['content'][1]['image_url']['url'].startswith('data:image/png;base64,')
     call=db.one("SELECT model,task_key FROM model_calls WHERE run_id=? AND task_key LIKE 'vision:%'",(run['id'],))
     assert call['model']=='deepseek-v4-flash-vision-exp' and call['task_key']=='vision:D-1:1'
-    assert db.cost(run['project_id'])['spent_cny']=='0.000700'
+    assert db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_vision_stop_response_above_old_1200_limit_is_accepted(context,tmp_path):
@@ -341,7 +528,7 @@ def test_atomic_finalize_rolls_back_accounting_response_and_cache_together(conte
                (attempt,))
     assert row=={'state':'RESERVED','actual_units':None,'usage':None,'provider_request_id':None,
                  'response':None,'error':None}
-    assert db.one('SELECT spent_units FROM budget_accounts WHERE project_id=?',(run['project_id'],))['spent_units']==0
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(run['project_id'],),False) is None
     assert db.one('SELECT key FROM cache WHERE key=?',('atomic-key',),False) is None
 
 
@@ -372,7 +559,7 @@ def test_extract_crash_after_atomic_commit_recovers_without_second_http(context,
 
     recovered=gateway.extract(run,ev)
     assert recovered.cached and recovered.request_id and recovered.data==result(ev)
-    assert len(requests)==1 and db.cost(run['project_id'])['calls']==1
+    assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_vision_crash_after_atomic_commit_recovers_without_second_http(context,tmp_path,monkeypatch):
@@ -396,7 +583,7 @@ def test_vision_crash_after_atomic_commit_recovers_without_second_http(context,t
 
     recovered=gateway.vision(run,'D-1:4',b'fake-png',metadata)
     assert recovered.cached and recovered.data==data
-    assert len(requests)==1 and db.cost(run['project_id'])['calls']==1
+    assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_explicit_vision_generation_is_a_new_call_and_keeps_failed_history(context,tmp_path):
@@ -438,8 +625,25 @@ def test_gemini_payload_uses_minimal_reasoning_and_bills_hidden_output(context,t
     assert result_value.mode=='gemini' and not result_value.cached
     assert len(requests)==1 and requests[0]['reasoning_effort']=='minimal'
     assert 'thinking' not in requests[0]
-    cost=db.cost(run['project_id'])
-    assert cost['output_tokens']==50 and cost['spent_cny']=='0.000200'
+    cost=db.model_call_stats(run['project_id'])
+    assert cost['output_tokens']==50 and cost['calls']==1
+
+
+def test_loopback_openai_compatible_model_uses_no_key_or_provider_specific_payload(context,tmp_path):
+    db,run,ev=context;provider='custom-0123456789abcdef';run={**run,'provider':provider};requests=[]
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200,json=body(ev))
+    local=Settings(tmp_path,provider=provider,live_enabled=True,
+                   api_base_url='http://127.0.0.1:11434/v1',cheap_model='qwen3:8b',
+                   start_worker=False)
+    value=Gateway(local,db,httpx.Client(transport=httpx.MockTransport(handler))).extract(run,ev)
+    payload=json.loads(requests[0].content)
+    assert value.mode==provider and 'authorization' not in requests[0].headers
+    assert 'thinking' not in payload and 'reasoning_effort' not in payload
+    assert db.model_call_stats(run['project_id'])['calls']==1
+    assert db.one('SELECT state,actual_units FROM model_calls WHERE run_id=?',(run['id'],))=={
+        'state':'SETTLED','actual_units':0}
 
 
 def test_live_calls_observe_configured_minimum_start_interval(context,tmp_path):
@@ -481,7 +685,7 @@ def test_extraction_input_byte_envelope_remains_bounded_before_http(context,tmp_
         lambda request:(calls.append(request),httpx.Response(200,json=body(oversized)))[1])))
     with pytest.raises(InvalidModelOutput,match='输入预算'):
         gateway.extract(run,oversized)
-    assert calls==[] and db.cost(run['project_id'])['calls']==0
+    assert calls==[] and db.model_call_stats(run['project_id'])['calls']==0
 
 @pytest.mark.parametrize('change',[
     {'api_base_url':'https://example.invalid/v1beta/openai'},
@@ -492,18 +696,27 @@ def test_gemini_identity_gate_blocks_before_http(context,tmp_path,change):
     g=Gateway(gemini_settings(tmp_path,**change),db,
               httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError()))))
     with pytest.raises(ProviderPaused):g.extract(run,ev)
-    assert db.cost(run['project_id'])['calls']==0
+    assert db.model_call_stats(run['project_id'])['calls']==0
 
 @pytest.mark.parametrize('change',[
     {'api_base_url':'https://example.invalid'},
-    {'cheap_model':'deepseek-v4-pro'},
+    {'cheap_model':'deepseek-v4.1-pro'},
 ])
 def test_deepseek_identity_gate_blocks_before_http(context,tmp_path,change):
     db,run,ev=context
     g=Gateway(settings(tmp_path,**change),db,
               httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError()))))
     with pytest.raises(ProviderPaused):g.extract(run,ev)
-    assert db.cost(run['project_id'])['calls']==0
+    assert db.model_call_stats(run['project_id'])['calls']==0
+
+def test_deepseek_pro_uses_the_independent_exact_model_id(context,tmp_path):
+    db,run,ev=context;requests=[]
+    g=Gateway(settings(tmp_path,cheap_model='deepseek-v4-pro'),db,
+              httpx.Client(transport=httpx.MockTransport(
+                  lambda request:(requests.append(request),httpx.Response(200,json=body(ev)))[1])))
+    assert g.extract(run,ev).data==result(ev)
+    assert len(requests)==1
+    assert json.loads(requests[0].content)['model']=='deepseek-v4-pro'
 
 def test_provider_mismatch_blocks_before_http(context,tmp_path):
     db,run,ev=context
@@ -511,7 +724,7 @@ def test_provider_mismatch_blocks_before_http(context,tmp_path):
               httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError()))))
     with pytest.raises(ProviderPaused,match='Provider'):
         g.extract(run,ev)
-    assert db.cost(run['project_id'])['calls']==0
+    assert db.model_call_stats(run['project_id'])['calls']==0
 
 def test_gemini_missing_total_tokens_keeps_reservation_unknown(context,tmp_path):
     db,run,ev=context;run={**run,'provider':'gemini'}
@@ -519,25 +732,29 @@ def test_gemini_missing_total_tokens_keeps_reservation_unknown(context,tmp_path)
               httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=body(ev)))))
     with pytest.raises(ProviderPaused,match='usage'):
         g.extract(run,ev)
-    assert db.cost(run['project_id'])['unknown_calls']==1
+    assert db.model_call_stats(run['project_id'])['unknown_calls']==1
     assert json.loads(db.one('SELECT error FROM model_calls WHERE run_id=?',(run['id'],))['error'])=={
         'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}
 
-@pytest.mark.parametrize('change',[{'api_key':''},{'live_enabled':False},{'prices_confirmed':False},
- {'api_base_url':'http://unsafe.test'},{'input_rate':Decimal('NaN')},{'output_rate':Decimal('-1')},
- {'input_limit':32001},{'output_limit':8001}])
+@pytest.mark.parametrize('change',[{'api_key':''},{'live_enabled':False},
+ {'api_base_url':'http://unsafe.test'},
+ {'input_limit':64001},{'output_limit':8001}])
 def test_live_gate_no_http(context,tmp_path,change):
     db,run,ev=context
     def handler(r):raise AssertionError('不应发出HTTP')
     g=Gateway(settings(tmp_path,**change),db,httpx.Client(transport=httpx.MockTransport(handler)))
     with pytest.raises(ProviderPaused):g.extract(run,ev)
-    assert db.cost(run['project_id'])['calls']==0
+    assert db.model_call_stats(run['project_id'])['calls']==0
 
-def test_budget_blocks_before_http(context,tmp_path):
-    db,run,ev=context;db.execute('UPDATE budget_accounts SET spent_units=300000000 WHERE project_id=?',(run['project_id'],))
-    g=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError()))))
-    with pytest.raises(BudgetError):g.extract(run,ev)
-    assert db.cost(run['project_id'])['calls']==0
+def test_legacy_budget_row_does_not_block_http(context,tmp_path):
+    db,run,ev=context
+    db.execute('INSERT INTO budget_accounts(project_id,limit_units,spent_units,frozen) VALUES(?,?,?,?)',
+               (run['project_id'],1,999999999,1))
+    requests=[]
+    g=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
+        lambda request:(requests.append(request),httpx.Response(200,json=body(ev)))[1])))
+    assert g.extract(run,ev).data==result(ev)
+    assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
 
 def test_timeout_no_retry_retains_reservation(context,tmp_path):
     db,run,ev=context;calls=[]
@@ -545,8 +762,7 @@ def test_timeout_no_retry_retains_reservation(context,tmp_path):
     g=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(handler)))
     with pytest.raises(ProviderPaused):g.extract(run,ev)
     with pytest.raises(ProviderPaused):g.extract(run,ev)
-    assert len(calls)==1 and db.cost(run['project_id'])['unknown_calls']==1
-    assert Decimal(db.cost(run['project_id'])['reserved_cny'])>0
+    assert len(calls)==1 and db.model_call_stats(run['project_id'])['unknown_calls']==1
     row=db.one('SELECT error,provider_request_id FROM model_calls WHERE run_id=?',(run['id'],))
     assert json.loads(row['error'])=={'kind':'NETWORK_ERROR','class':'TIMEOUT','exception':'ReadTimeout'}
     assert row['provider_request_id'] is None
@@ -636,6 +852,17 @@ def test_contract_diagnostic_never_persists_key_shaped_validation_path(context,t
     g.close()
 
 
+def test_project_answer_contract_diagnostic_has_a_stable_safe_reason(context,tmp_path):
+    db,run,ev=context;g=Gateway(settings(tmp_path,api_key='test-not-real'),db)
+
+    diagnostic=g._terminal_diagnostic(
+        'PROJECT_ANSWER',ValueError('answer contains a numeric claim absent from its citations'))
+
+    assert diagnostic=={'kind':'CONTRACT_ERROR','class':'PROJECT_ANSWER',
+                        'exception':'ValueError','validator':'numeric_support'}
+    g.close()
+
+
 @pytest.mark.parametrize('upstream_id',[
     'test-not-real',
     'prefix-test-not-real-suffix',
@@ -665,7 +892,7 @@ def test_invalid_response_not_published(context,tmp_path,kind):
     g=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(
         lambda request:(requests.append(request),httpx.Response(200,json=b))[1])))
     with pytest.raises((ProviderPaused,InvalidModelOutput)):g.extract(run,ev)
-    cost=db.cost(run['project_id'])
+    cost=db.model_call_stats(run['project_id'])
     assert cost['calls']==1
     if kind=='no_usage':
         assert cost['unknown_calls']==1
@@ -673,31 +900,31 @@ def test_invalid_response_not_published(context,tmp_path,kind):
         with pytest.raises(InvalidModelOutput,match='不会自动再次收费'):
             g.extract(run,ev)
         row=db.one('SELECT state,error,response FROM model_calls WHERE run_id=?',(run['id'],))
-        assert Decimal(cost['spent_cny'])>0 and len(requests)==1
+        assert cost['calls']==1 and len(requests)==1
         assert row['state']=='SETTLED_ERROR' and row['response'] is None
         diagnostic=json.loads(row['error'])
         assert diagnostic['kind']=='CONTRACT_ERROR' and diagnostic['class']=='EXTRACTION_RESULT'
         assert '{bad' not in row['error'] and 'EV-not-provided' not in row['error']
 
-def test_persistent_budget_and_settlement_idempotency(context):
+def test_persistent_call_settlement_and_idempotency(context):
     db,run,ev=context
     aid=db.reserve(run['project_id'],run['id'],'x',Decimal('2'),'model','hash',Decimal('1'),Decimal('2'))
     db.settle(aid,Decimal('1'),{'prompt_tokens':1,'completion_tokens':2},None)
     db.settle(aid,Decimal('1'),{'completion_tokens':2,'prompt_tokens':1},None)
     with pytest.raises(DomainError):db.settle(aid,Decimal('2'),{},None)
-    with pytest.raises(BudgetError,match='禁止自动重复收费'):
+    with pytest.raises(CallSafetyError,match='禁止自动重复发送'):
         db.reserve(run['project_id'],run['id'],'x',Decimal('1'),'model','new-hash',Decimal('1'),Decimal('2'))
     from app.db import Database
-    assert Database(db.path).cost(run['project_id'])['spent_cny']=='1.000000'
+    assert Database(db.path).model_call_stats(run['project_id'])['calls']==1
 
-def test_budget_race_only_one_large_reservation(context):
+def test_unresolved_call_blocks_concurrent_reservation(context):
     db,run,ev=context
     def reserve(i):
         try:return db.reserve(run['project_id'],run['id'],str(i),Decimal('200'),'m','h',Decimal('1'),Decimal('2'))
-        except BudgetError:return None
+        except CallSafetyError:return None
     with ThreadPoolExecutor(max_workers=2) as pool:values=list(pool.map(reserve,[1,2]))
     assert sum(v is not None for v in values)==1
-    assert db.cost(run['project_id'])['reserved_cny']=='200.000000'
+    assert db.model_call_stats(run['project_id'])['unknown_calls']==1
 
 
 def test_same_task_reservation_is_idempotent_across_concurrent_writers(context):
@@ -706,23 +933,23 @@ def test_same_task_reservation_is_idempotent_across_concurrent_writers(context):
         try:
             return db.reserve(run['project_id'],run['id'],'same-paid-task',Decimal('1'),
                               'm','h',Decimal('1'),Decimal('2'))
-        except BudgetError:
+        except CallSafetyError:
             return None
     with ThreadPoolExecutor(max_workers=2) as pool:
         values=list(pool.map(reserve,[1,2]))
     assert sum(value is not None for value in values)==1
     assert db.one("SELECT COUNT(*) AS n FROM model_calls WHERE task_key='same-paid-task'")['n']==1
 
-def test_overage_freezes_account(context):
+def test_settlement_size_does_not_freeze_or_block_new_call(context):
     db,run,ev=context
     aid=db.reserve(run['project_id'],run['id'],'x',Decimal('1'),'m','h',Decimal('1'),Decimal('2'))
     db.settle(aid,Decimal('2'),{},None)
-    assert db.cost(run['project_id'])['frozen']
-    with pytest.raises(BudgetError):db.reserve(run['project_id'],run['id'],'y',Decimal('1'),'m','h',Decimal('1'),Decimal('2'))
+    assert db.model_call_stats(run['project_id'])['calls']==1
+    assert db.reserve(run['project_id'],run['id'],'y',Decimal('1'),'m','h',Decimal('1'),Decimal('2'))
 
 def test_deadline_stops_new_billable_work(context):
     db,run,ev=context;db.execute('UPDATE runs SET deadline_epoch=? WHERE id=?',(time.time()-1,run['id']))
-    with pytest.raises(BudgetError):db.reserve(run['project_id'],run['id'],'x',Decimal('1'),'m','h',Decimal('1'),Decimal('2'))
+    with pytest.raises(CallSafetyError):db.reserve(run['project_id'],run['id'],'x',Decimal('1'),'m','h',Decimal('1'),Decimal('2'))
 
 
 def test_property_without_evidence_is_rejected(context,tmp_path):
@@ -731,7 +958,7 @@ def test_property_without_evidence_is_rejected(context,tmp_path):
     b['choices'][0]['message']['content']=json.dumps(data)
     g=Gateway(settings(tmp_path),db,httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=b))))
     with pytest.raises(InvalidModelOutput):g.extract(run,ev)
-    assert Decimal(db.cost(run['project_id'])['spent_cny'])>0
+    assert db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_unexpected_reasoning_pauses_after_accounting(context,tmp_path):
@@ -741,6 +968,6 @@ def test_unexpected_reasoning_pauses_after_accounting(context,tmp_path):
     with pytest.raises(ProviderPaused):g.extract(run,ev)
     with pytest.raises(ProviderPaused,match='禁止自动重复收费'):g.extract(run,ev)
     row=db.one('SELECT state,error,response FROM model_calls WHERE run_id=?',(run['id'],))
-    assert len(requests)==1 and Decimal(db.cost(run['project_id'])['spent_cny'])>0
+    assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
     assert row['state']=='SETTLED_ERROR' and row['response'] is None
     assert json.loads(row['error'])=={'kind':'POLICY_ERROR','class':'REASONING_NOT_DISABLED'}

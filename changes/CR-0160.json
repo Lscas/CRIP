@@ -1,0 +1,30 @@
+{
+  "change_id": "CR-0160",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "summary": "Bound QA V3 by complete serialized evidence rows so dense parser fragments cannot exceed the request envelope even when raw source text meets its old cap.",
+  "decision_refs": [
+    "S3 selected six pages and 44,425 source bytes across 312 immutable evidence rows",
+    "The execution failed local request-size preflight and created no provider call",
+    "The previous 24 KB source-text cap omitted IDs, file names, locators and JSON escaping"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "tests/app/test_evidence_loop.py",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-145.json",
+    "changes/CR-0160.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user approved continued implementation of the lightweight, local, bounded Reference framework and the controlled fixed-question rerun.",
+  "known_limitations": [
+    "The 18 KB bound may omit lower-ranked fragments from a selected page; the bounded evidence loop may request another literal search when a specific fact is missing.",
+    "The separate local selection audit can include more source text than one model decision receives.",
+    "This transport fix does not establish answer correctness or general-project accuracy."
+  ]
+}

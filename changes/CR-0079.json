@@ -1,0 +1,26 @@
+{
+  "change_id": "CR-0079",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001", "FR-BUDGET-002", "FR-CITATION-001"],
+  "summary": "Add explicit, budgeted project-file questions with bounded local retrieval and exact source quotations.",
+  "decision_refs": [
+    "The user requested a Trunk Tools-style ability to ask questions and answer from existing project files",
+    "Public Trunk Tools materials describe responses to user questions from project information; CIRP reuses only that public functional boundary",
+    "Ponytail requires reuse of the existing evidence, gateway, budget and viewer paths"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/gateway.py", "app/db.py", "app/main.py", "web/**",
+    "tests/app/test_questions.py", "tests/web/test_display_contract.py", "prompts/**",
+    "spec/**", "docs/**", "tasks/DEV-064.json", "changes/CR-0079.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": ["tests/app/test_questions.py", "tests/web/test_display_contract.py", "scripts/run_checks.py", "scripts/check_spec_sync.py"],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested question answering over existing project files.",
+  "known_limitations": [
+    "This slice supports independent questions, not persistent multi-turn conversation history.",
+    "Retrieval is bounded lexical ranking rather than a vector index and has not been evaluated on customer construction questions.",
+    "Validation is synthetic and offline; no customer file, secret, live provider or paid model was used."
+  ]
+}

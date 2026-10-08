@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0069",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006"
+  ],
+  "summary": "Use one deterministic MIME-derived name for an unnamed Outlook MSG attachment from parsing through selected import.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "The user requested ponytail optimization with open-source reuse instead of unnecessary custom code",
+    "An offline reproduction showed parser and selection names disagreeing for the same unnamed MSG PDF"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "spec/**",
+    "tasks/DEV-054.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0069.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "The change only normalizes unnamed MSG attachment display/import names; supplied names remain unchanged.",
+    "Attachments remain inert until explicitly selected and are never analyzed automatically.",
+    "Mailbox synchronization and automatic recursive attachment import remain unsupported.",
+    "Validation is synthetic and offline; no customer email, mailbox, provider API or paid model is used."
+  ]
+}

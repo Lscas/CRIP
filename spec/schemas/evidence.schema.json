@@ -157,7 +157,8 @@
         "CAD_OBJECT",
         "VISION",
         "DOCX",
-        "TXT"
+        "TXT",
+        "EMAIL"
       ]
     },
     "confidence": {

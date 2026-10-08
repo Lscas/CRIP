@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0156",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-PAGE-ROUTING-002", "NFR-SECURITY-001"],
+  "summary": "Correct literal Reference page routing so explicit engineering identifiers outrank ordinary mentions and fragmented pages cannot multiply one generic term's score.",
+  "decision_refs": [
+    "Fixed 15-question Reference preview selected the independent answer source page for 10 of 15 questions with zero provider calls",
+    "Sheet A3.40 and M5.01 were retained as labelled phrases instead of matching bare parser locators",
+    "Ordinary terms accumulated once per fragment rather than once per page, favoring dense unrelated pages",
+    "Historical correction: FR-REFERENCE-PREPARATION-001 was an undefined requirement reference; this routing-only change remains bound to FR-REFERENCE-PAGE-ROUTING-002 without inventing a replacement ID."
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "tests/app/test_page_selector.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-141.json",
+    "changes/CR-0156.json", "reports/kapolei_reference_page_selection_2026-09-30.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user requires lightweight local page selection to reduce irrelevant advanced-model input instead of rebuilding engineering semantics before the model.",
+  "known_limitations": [
+    "Literal routing cannot recover a source page when neither parser locators nor parser text retain the explicit identifier.",
+    "Multiple matching document versions remain visible; this change does not infer which version controls.",
+    "Expected-source-page presence measures routing, not answer correctness or engineering completeness."
+  ]
+}

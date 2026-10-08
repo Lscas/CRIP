@@ -45,15 +45,20 @@
         "app/ingest"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
       ],
       "contract_tests": [],
       "test_scope": "not_implemented",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/parsers.py",
+        "app/parser_worker.py",
+        "app/runner.py",
+        "app/visual_pipeline.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/PERFORMANCE_BASELINE.md",
+      "progress_note": "PDF text/OCR parsing now supports bounded 1/2/4-worker page chunks with deterministic page-order merge; full format and 10GB coverage remain planned."
     },
     {
       "requirement_id": "FR-INGEST-002",
@@ -85,11 +90,18 @@
       "planned_product_modules": [
         "app/ingest"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "partial_product_test_transient_permission_retry",
+      "implemented_product_paths": [
+        "app/parser_worker.py",
+        "app/runner.py"
+      ],
+      "verification_report": null,
+      "progress_note": "Concurrent documents remain isolated. A FAILED PermissionError now receives exactly one post-batch isolated retry; all other failure classes remain explicit and are not retried automatically. Broader ingest-format completion remains planned."
     },
     {
       "requirement_id": "FR-PARSE-001",
@@ -99,18 +111,26 @@
       ],
       "planned_product_tests": [
         "tests/app/test_api.py",
-        "tests/app/test_parsers.py"
+        "tests/app/test_parsers.py",
+        "tests/app/test_canonical.py",
+        "tests/app/test_questions.py"
       ],
-      "contract_tests": [],
-      "test_scope": "not_implemented",
+      "contract_tests": [
+        "tests/app/test_parsers.py",
+        "tests/app/test_canonical.py",
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "partial_offline_pdf_structure_title_block_sheet_identity_vector_table_cells_legacy_sections_and_structural_retrieval",
       "implemented_product_paths": [
         "app/main.py",
         "app/parsers.py",
         "app/parser_worker.py",
-        "app/runner.py"
+        "app/runner.py",
+        "app/canonical.py",
+        "app/questions.py"
       ],
       "verification_report": null,
-      "progress_note": "已有本地文字层切片、词坐标、RapidOCR本机回退和有界超时进度保留；复杂表格/结构、阅读顺序及完整无漏项仍未满足；见docs/IMPLEMENTATION_STATUS.md"
+      "progress_note": "Native PDF pages retain a deterministic page type, specification section/Part/clause locators, and bounded table rows with bboxes. Drawing pages now accept only one explicit native-text Sheet value in a bounded title-block region; callouts, unlabeled codes, vision narration and conflicts fail closed. Detectable vector drawing tables retain exact per-cell offsets and bboxes, and explicit legacy five-digit Sections are preserved without accepting arbitrary five-digit values. Canonical retrieval keeps same-table sibling rows bounded to one run/document/page/table and intersects different exact identifier types along one structural path. A generic-name multi-page PDF carries the latest exact digit-bearing RFI/Submittal identifier, role and status through ordered continuation pages until another exact heading replaces it; 1/2/4-worker output remains equivalent without another PDF scan. Text-layer slicing, word coordinates, local OCR fallback and bounded timeout checkpoints remain. Borderless/cross-page tables, multi-column reading order and complete semantic coverage remain planned; see docs/IMPLEMENTATION_STATUS.md."
     },
     {
       "requirement_id": "FR-PARSE-002",
@@ -137,11 +157,16 @@
       "planned_product_modules": [
         "app/parse"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "partial_offline_synthetic_docx",
+      "implemented_product_paths": [
+        "app/parsers.py"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "DOCX body paragraphs and table text retain native element and line locators. Exact RFI/Submittal identifier, role and status changes now split one table into separate evidence fragments while workflow state continues across body elements. Complete heading, list, merged-table, image, header/footer, revision and comment structure remains planned."
     },
     {
       "requirement_id": "FR-PARSE-004",
@@ -167,14 +192,16 @@
         "tests/app/test_gateway_budget.py"
       ],
       "contract_tests": [],
-      "test_scope": "local_offline_with_pending_live",
+      "test_scope": "local_offline_stage_progress_eta_and_persisted_page_visual_status_with_pending_live",
       "implemented_product_paths": [
         "app/visual_pipeline.py",
         "app/gateway.py",
+        "app/main.py",
+        "app/parsers.py",
         "app/runner.py"
       ],
       "verification_report": null,
-      "progress_note": "本机OCR、EXIF方向规范化、PDF CropBox可见区坐标变换、整页视觉路由、证据Schema和预览已实现；局部高分辨率裁剪及真实59页视觉完整验收尚待完成。"
+      "progress_note": "Local OCR, EXIF normalization, PDF CropBox coordinate transforms, selective overview routing, one bounded high-resolution schedule-table crop, evidence schema and matching previews are implemented. General drawing-region crops and live crop-quality validation remain planned."
     },
     {
       "requirement_id": "FR-PARSE-006",
@@ -184,6 +211,7 @@
       ],
       "planned_product_tests": [
         "tests/app/test_parsers.py",
+        "tests/app/test_review_cad_integrity.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [],
@@ -194,6 +222,110 @@
         "scripts/install_libredwg.ps1"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-PARSE-007",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/parse",
+        "app/class"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py",
+        "tests/app/test_assemble.py",
+        "tests/app/test_email_attachments.py",
+        "tests/app/test_api.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_synthetic_email_and_upstream_msg_fixture",
+      "implemented_product_paths": [
+        "app/email_mime.py",
+        "app/parsers.py",
+        "app/email_attachments.py",
+        "app/runner.py",
+        "app/assemble.py",
+        "app/workflows.py",
+        "prompts/joint-extraction/system.md",
+        "spec/schemas/classification.schema.json",
+        "web/index.html"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "RFC-style EML and bounded local Outlook MSG share one safe evidence path. Each MIME alternative group selects one non-empty body, preferring plain text then safe HTML; conflicting same-type choices warn instead of merging. A multipart/related start selects its matching Content-ID, with the first child as the standards fallback; non-root resources stay inert. EML and MSG parser inventory plus selected import use one MIME-derived name for unnamed parts so supported resources stay analyzable. Only a Subject with a normalized digit-bearing workflow ID can outrank an exact body heading. Allowlisted same-line metadata is separated from its exact ID; status values must be complete apart from terminal punctuation, so keyword-prefixed prose stays neutral. Every distinct exact marker is retained; a body-routed primary stops at any different exact RFI/Submittal section, while established valid-Subject priority remains. Exact Gmail, Yahoo, Proton and Outlook HTML boundaries keep history outside current routing and extraction. Thread headers accept bounded angle-bracketed local@domain tokens only. Every nested message MIME part stays inert. python-oxmsg handles MSG; mailbox sync, attachment recursion and semantic thread inference remain planned."
+    },
+    {
+      "requirement_id": "FR-WORKFLOW-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/workflow"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_workflows.py",
+        "tests/app/test_api.py",
+        "tests/app/test_email_attachments.py",
+        "tests/app/test_verification.py",
+        "scripts/browser_i18n_smoke.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_deterministic_synthetic_workflow_documents",
+      "implemented_product_paths": [
+        "app/workflows.py",
+        "app/email_mime.py",
+        "app/parsers.py",
+        "app/main.py",
+        "app/runner.py",
+        "migrations/005_upload_sources.sql",
+        "migrations/006_workflow_classification_overrides.sql",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Exact RFI/Submittal aliases and workflow labels normalize across selected Email body, valid Subject and filename into a bounded index. Same-line metadata stays outside IDs; complete known statuses remain neutral metadata without precedence. Cross-scope references cannot donate role/status; malformed threads and inert resources cannot manufacture roles. Hash-only threads, selected attachments and SQLite projection stay model-free. Terminal-run pages reuse one bounded process-local index; active runs stay fresh, and a versioned/audited classification correction invalidates the cache while immutable Email provenance remains visible."
+    },
+    {
+      "requirement_id": "FR-INGEST-005",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_connectors.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_httpx_mocktransport_only",
+      "implemented_product_paths": [
+        "app/connectors.py",
+        "app/local_credentials.py",
+        "app/main.py",
+        "app/uploads.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Customer-configured Autodesk APS and Procore bearer connections browse and selectively import remote documents without remote writes. Imports reuse project limits, chunks, hashes and deduplication; live tenant validation and interactive OAuth remain planned."
+    },
+    {
+      "requirement_id": "FR-INGEST-006",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/ingest"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_email_attachments.py",
+        "scripts/browser_i18n_smoke.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "local_offline_synthetic_eml_and_msg",
+      "implemented_product_paths": [
+        "app/email_mime.py",
+        "app/email_attachments.py",
+        "app/workflows.py",
+        "app/uploads.py",
+        "app/main.py",
+        "migrations/005_upload_sources.sql",
+        "web/app.js"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "A reviewer can inspect bounded attachment metadata and explicitly import one attachment or a batch of up to 100 selected EML or MSG attachments. A batch parses the parent once and prevalidates every index/SHA-256 before upload creation, then reuses capacity, chunk, hash and deduplication controls. Nested messages and non-root resources remain inert. Immutable parsed-Email metadata keeps explicit attachment provenance visible after a run-scoped RFI/Submittal/Other correction. No analysis or model call starts automatically."
     },
     {
       "requirement_id": "FR-DATA-001",
@@ -215,9 +347,18 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial_workflow_classification_correction",
+      "implemented_product_paths": [
+        "app/parsers.py",
+        "app/assemble.py",
+        "app/workflows.py",
+        "app/main.py",
+        "migrations/006_workflow_classification_overrides.sql",
+        "web/app.js",
+        "spec/schemas/classification.schema.json"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Explicit RFI roles, complete Submittal statuses and EML source roles are preserved before extraction; exact PDF scope persists across continuation pages. A reviewer can apply/reset a versioned current-run RFI/Submittal/Other overlay; it invalidates the terminal index without mutating evidence, candidates or Email provenance. Full semantic classification and other dimensions remain planned."
     },
     {
       "requirement_id": "FR-REVISION-001",
@@ -227,11 +368,17 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_policies.py"
+        "tests/test_policies.py",
+        "tests/app/test_assemble.py",
+        "tests/app/test_review_fact_assembly.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Mixed valid and ineligible workflow citations are filtered per evidence ID: RFI questions, rejected Submittals, email headers and quoted history cannot remain as direct material or QA support. Full revision-scope comparison remains planned."
     },
     {
       "requirement_id": "FR-REVISION-002",
@@ -241,11 +388,17 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_policies.py"
+        "tests/test_policies.py",
+        "tests/app/test_assemble.py",
+        "tests/app/test_review_fact_assembly.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Candidate conditions now inspect every remaining direct source, so a later RFI response, Submittal or current email body cannot be hidden by an earlier specification citation. A single Submittal source with multiple distinct explicit statuses is marked ambiguous instead of selecting one. Full cross-document latest-value selection remains planned."
     },
     {
       "requirement_id": "FR-REVISION-003",
@@ -294,17 +447,21 @@
         "app/material"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_assemble.py",
+        "tests/app/test_gateway_budget.py"
       ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/assemble.py",
+        "app/gateway.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "A deterministic pre-publication check rejects descriptor/generic material names and removes duplicate or evidence-misaligned properties. Full option/entity mapping remains planned."
     },
     {
       "requirement_id": "FR-MATERIAL-002",
@@ -314,11 +471,16 @@
       ],
       "planned_product_tests": [],
       "contract_tests": [
-        "tests/test_contracts.py"
+        "tests/test_contracts.py",
+        "tests/app/test_assemble.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/assemble.py",
+        "prompts/joint-extraction/system.md"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Mixed-source requirement and property citations are pruned per evidence ID while a field with valid direct support is preserved. Complete field-level evidence coverage across every output remains planned."
     },
     {
       "requirement_id": "FR-MATERIAL-003",
@@ -434,17 +596,20 @@
         "app/inspection"
       ],
       "planned_product_tests": [
-        "tests/app/test_api.py"
+        "tests/app/test_api.py",
+        "tests/app/test_assemble.py"
       ],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
       "test_scope": "offline_contract_only",
       "implemented_product_paths": [
-        "app/main.py"
+        "app/main.py",
+        "app/assemble.py",
+        "app/gateway.py"
       ],
-      "verification_report": null,
-      "progress_note": "已有本地第一切片，未满足完整需求；见docs/IMPLEMENTATION_STATUS.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "A deterministic QA check requires an executable inspection/test action, excludes non-QA documents and generic objects, and keeps full extraction evidence for review. Full QA type coverage remains planned."
     },
     {
       "requirement_id": "FR-INSPECTION-002",
@@ -583,6 +748,8 @@
         "app/review"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_publication_isolation.py",
+        "tests/web/test_publication_issues.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [
@@ -593,7 +760,7 @@
         "app/main.py"
       ],
       "verification_report": null,
-      "progress_note": "D-26 removes Conflict from the current reviewer UI and exports; legacy stored data is preserved."
+      "progress_note": "D-26 removes Conflict from current reviewer UI and exports; legacy stored data is preserved. DEV-172 repairs independent quantity decisions and pending system baselines; synthetic regressions: tests/app/test_review_system_baseline.py, tests/app/test_review_export_integrity.py and tests/web/test_quantity_review.py. Current acceptance is recorded in docs/AUDIT_REPAIR_VALIDATION.md, not historical CI."
     },
     {
       "requirement_id": "FR-REVIEW-002",
@@ -643,7 +810,7 @@
         "web/app.js"
       ],
       "verification_report": null,
-      "progress_note": "已有本地网页第一切片；仅有阻断项时自动显示缺失类别。运行轮询已串行化，活跃运行不重复加载完整记录集，终态只加载一次；完整生产UI与大结果分页仍未实现。"
+      "progress_note": "The local dashboard shows a stage-weighted analysis percentage, an elapsed-time estimated finish, coverage and aggregate timing. Persisted page summaries now derive a visual status from their visual-task states. Polling is serialized and active runs avoid full result loading; the complete production dashboard remains planned."
     },
     {
       "requirement_id": "FR-API-001",
@@ -653,7 +820,9 @@
       ],
       "planned_product_tests": [
         "tests/app/test_gateway_budget.py",
-        "tests/app/test_api.py"
+        "tests/app/test_review_provider_boundaries.py",
+        "tests/app/test_api.py",
+        "tests/app/test_parsers.py"
       ],
       "contract_tests": [],
       "test_scope": "local_prototype_offline",
@@ -676,8 +845,13 @@
       "planned_product_tests": [],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/runner.py",
+        "app/parsers.py",
+        "web/app.js"
+      ],
+      "verification_report": null,
+      "progress_note": "D-27 implements user-selectable 1/2/4 local document parsing workers. Paid API requests remain serial; broader queued task orchestration is still planned."
     },
     {
       "requirement_id": "FR-API-003",
@@ -706,8 +880,14 @@
       "planned_product_tests": [],
       "contract_tests": [],
       "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/gateway.py",
+        "app/runner.py",
+        "web/app.js"
+      ],
+      "verification_report": null,
+      "progress_note": "D-27 adds aggregate stage, provider-wait, and model-response metrics plus processed-page counts. Per-call export and retry summaries remain planned."
     },
     {
       "requirement_id": "FR-API-005",
@@ -715,11 +895,62 @@
       "planned_product_modules": [
         "app/api"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_parsers.py",
+        "tests/test_devtools.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "offline_mock_transport_and_measured_local_fixture",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/gateway.py",
+        "app/parser_worker.py",
+        "app/parsers.py",
+        "app/runner.py",
+        "scripts/benchmark_local_parse.py"
+      ],
+      "verification_report": "docs/PERFORMANCE_BASELINE.md",
+      "progress_note": "Adjacent eligible extraction batches are capped at four fragments/8.8 KB with a stable recovery family. Ordinary evidence and matching exact workflow scopes still batch, while different RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the batch before one prompt. Email headers, recognized history and signatures close locally. A single PDF uses bounded page chunks whose ordered merge carries exact workflow scope identically for 1/2/4 workers without another PDF scan. A concurrent document PermissionError receives one isolated local retry after its batch; paid calls remain serial and broader distributed orchestration remains planned."
+    },
+    {
+      "requirement_id": "FR-API-006",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/api",
+        "app/local"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_review_task_history.py",
+        "tests/app/test_review_resume_contract.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_gemini_local_setup.py",
+        "tests/app/test_local_entry.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [],
+      "test_scope": "offline_mock_transport_and_loopback_setup",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/main.py",
+        "app/local_entry.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/runner.py",
+        "config/model_routing.json",
+        "scripts/gemini_local_setup.py",
+        "scripts/local_deploy.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css",
+        "start-custom-model.ps1"
+      ],
+      "verification_report": "docs/LOCAL_VALIDATION.md",
+      "progress_note": "The English main application has a dedicated Model API Settings section and every open tab now detects a completed same-port restart before retaining stale provider controls. The API key field remains write-only and explicitly accepts a new or replacement key. The existing gateway, budget, active-work block and Windows current-user DPAPI boundaries remain unchanged; offline replacement-key tests make no model call."
     },
     {
       "requirement_id": "FR-PROMPT-001",
@@ -754,6 +985,7 @@
       "planned_product_tests": [
         "tests/app/test_local_credentials.py",
         "tests/app/test_gemini_local_setup.py",
+        "tests/app/test_review_setup_boundary.py",
         "tests/app/test_local_entry.py"
       ],
       "contract_tests": [
@@ -773,11 +1005,18 @@
       "planned_product_modules": [
         "app/security"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_verification.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial_workflow_classification_audit",
+      "implemented_product_paths": [
+        "app/main.py",
+        "migrations/006_workflow_classification_overrides.sql"
+      ],
+      "verification_report": "docs/IMPLEMENTATION_STATUS.md",
+      "progress_note": "Workflow-classification corrections record actor, time, run/document target, before/after values and reviewer note in append-only events. Complete upload, analysis, export and deletion audit coverage remains planned."
     },
     {
       "requirement_id": "NFR-SECURITY-003",
@@ -798,6 +1037,9 @@
         "app/reliability"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_publication_isolation.py",
+        "tests/app/test_review_resume_contract.py",
+        "tests/web/test_resume_contract.py",
         "tests/app/test_api.py"
       ],
       "contract_tests": [],
@@ -808,7 +1050,7 @@
         "web/app.js"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "原Run可在人工对账后恢复，跳过已完成文档和非PENDING片段；完整生产重试队列仍未实现。"
+      "progress_note": "DEV-173 adds schema-only candidate isolation with atomic source-linked issues, blocked historical snapshots and shared server/UI resume eligibility. Customer runtime is unchanged; current acceptance: docs/AUDIT_REMAINING_VALIDATION.md. A complete production retry queue is still not implemented."
     },
     {
       "requirement_id": "NFR-OBS-001",
@@ -817,6 +1059,7 @@
         "app/obs"
       ],
       "planned_product_tests": [
+        "tests/app/test_review_task_history.py",
         "tests/app/test_api.py",
         "tests/app/test_gateway_budget.py"
       ],
@@ -829,7 +1072,7 @@
         "migrations/003_call_reconciliation.sql"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "本机原型已记录安全供应商诊断、成本状态和人工对账事件；完整可观测性仍未实现。"
+      "progress_note": "DEV-173 adds safe publication issue identifiers/contract paths and indexed task-family metadata lookup without copying whole-run response bodies. Current validation: docs/AUDIT_REMAINING_VALIDATION.md. Complete production observability remains planned."
     },
     {
       "requirement_id": "QLT-EVAL-001",
@@ -983,7 +1226,7 @@
       "planned_product_modules": [
         "app/field"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": ["tests/app/test_review_verification_context.py"],
       "contract_tests": [
         "tests/test_contracts.py"
       ],
@@ -1023,11 +1266,19 @@
       "planned_product_modules": [
         "app/context"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_parsers.py",
+        "tests/app/test_assemble.py"
+      ],
       "contract_tests": [],
-      "test_scope": "not_implemented",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_offline_partial",
+      "implemented_product_paths": [
+        "app/parsers.py",
+        "app/assemble.py",
+        "app/gateway.py"
+      ],
+      "verification_report": null,
+      "progress_note": "Native PDF evidence now carries detected Section, Part, clause, and bordered table-row context. Deterministic property checks reject context citations from a different document or non-local evidence range. Full inherited definitions, exceptions, footnotes and cross-page tables remain planned."
     },
     {
       "requirement_id": "FR-ROUTE-002",
@@ -1141,12 +1392,14 @@
       "implemented_product_paths": [
         "app/visual_pipeline.py",
         "app/gateway.py",
+        "app/main.py",
+        "app/parsers.py",
         "app/runner.py",
         "prompts/drawing-crop/system.md",
         "spec/schemas/vision-result.schema.json"
       ],
       "verification_report": null,
-      "progress_note": "整页视觉路由、图片哈希缓存、严格证据Schema和共同预算闸门已实现；真实能力探针与局部裁剪坐标变换尚待本轮live完成。"
+      "progress_note": "Selective routing still limits vision to large-format, low-text graphic, or dense-graphic pages. Detected specification/schedule tables now use one bounded high-resolution crop with full-page coordinates, stable region identity, cache separation and crop preview; other eligible pages retain one overview call. General drawing-region detection and live crop-quality validation remain planned."
     },
     {
       "requirement_id": "FR-CAPABILITY-001",
@@ -1162,21 +1415,29 @@
     },
     {
       "requirement_id": "FR-BUDGET-001",
-      "implementation_status": "planned",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_verification.py"
+      ],
       "contract_tests": [
         "tests/test_policies.py"
       ],
-      "test_scope": "offline_contract_only",
-      "implemented_product_paths": [],
-      "verification_report": null
+      "test_scope": "local_prototype_offline",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/main.py",
+        "web/app.js",
+        "migrations/004_performance_budget.sql"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
     },
     {
       "requirement_id": "FR-BUDGET-002",
-      "implementation_status": "implemented",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1199,7 +1460,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-003",
-      "implementation_status": "planned",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1213,7 +1474,7 @@
     },
     {
       "requirement_id": "FR-BUDGET-004",
-      "implementation_status": "planned",
+      "implementation_status": "superseded",
       "planned_product_modules": [
         "app/budget"
       ],
@@ -1271,7 +1532,7 @@
       "planned_product_modules": [
         "app/input"
       ],
-      "planned_product_tests": [],
+      "planned_product_tests": ["tests/app/test_review_resume_contract.py", "tests/web/test_resume_contract.py"],
       "contract_tests": [],
       "test_scope": "not_implemented",
       "implemented_product_paths": [],
@@ -1359,7 +1620,9 @@
       ],
       "planned_product_tests": [
         "tests/test_governance.py",
-        "tests/test_devtools.py"
+        "tests/test_devtools.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_local_credentials.py"
       ],
       "contract_tests": [
         "tests/test_governance.py"
@@ -1367,7 +1630,8 @@
       "test_scope": "local_prototype_offline",
       "implemented_product_paths": [
         "scripts/check_spec_sync.py",
-        "scripts/run_checks.py"
+        "scripts/run_checks.py",
+        ".github/workflows/spec-governance.yml"
       ],
       "verification_report": "docs/VALIDATION_REPORT.md"
     },
@@ -1473,7 +1737,8 @@
         "scripts/gemini_local_setup.py",
         "scripts/deepseek_local_setup.py"
       ],
-      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "The live setup checks the target application port before loading, saving, forgetting or forwarding a credential, and reports the conflict without stopping the existing process."
     },
     {
       "requirement_id": "FR-UI-002",
@@ -1584,7 +1849,9 @@
       ],
       "planned_product_tests": [
         "tests/app/test_api.py",
-        "tests/app/test_verification.py"
+        "tests/app/test_verification.py",
+        "tests/app/test_review_export_integrity.py",
+        "tests/web/test_quantity_review.py"
       ],
       "contract_tests": [
         "tests/app/test_api.py",
@@ -1603,6 +1870,1724 @@
         "scripts/validate_readable_export.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_bounded_adjacent_page_and_visual_sheet_routing_multi_window_retrieval_exact_duplicate_context_deduplication_generic_pdf_email_rfi_submittal_source_supplements_numeric_rfi_identity_exact_structured_arithmetic_numeric_workflow_scoped_numeric_measurement_property_measurement_unit_specification_section_revision_label_drawing_identifier_clause_identifier_email_address_role_and_rfi_question_response_role_grounding_date_date_role_workflow_scoped_date_role_and_exact_workflow_identifier_grounding_safe_contract_diagnostics_per_citation_workflow_disposition_grounding_retrieved_and_full_run_disposition_conflict_deterministic_exact_item_status_inline_source_provenance_exact_status_citation_deterministic_run_inventory_count_list_and_explicit_status_filter_normalized_cache_structured_drawing_specification_rfi_submittal_email_comparison_mocktransport_not_construction_accuracy",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/workflows.py",
+        "app/gateway.py",
+        "app/db.py",
+        "migrations/007_evidence_search.sql",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/style.css",
+        "prompts/project-question/system.md",
+        "spec/schemas/project-answer.schema.json",
+        "scripts/benchmark_question_search.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "Project questions automatically use the newest saved terminal project analysis. Retrieval now keeps bounded native same-page siblings, uses a retained visual Sheet locator only as a native-page routing hint, and preserves multiple distant matches in one long fragment. Explicitly requested structured arithmetic is locally recomputed from cited non-date/non-identifier operands; conversions, date math, rounding and geometry inference remain blocked. Terminal answer failures retain only a stable safe diagnostic category."
+    },
+    {
+      "requirement_id": "FR-QA-REPAIR-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/gateway.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_gateway_budget.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_gateway_budget.py"
+      ],
+      "test_scope": "offline_bounded_adjacent_page_and_visual_sheet_routing_multi_window_retrieval_exact_structured_arithmetic_and_safe_contract_diagnostics",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/gateway.py",
+        "prompts/project-question/system.md",
+        "spec/schemas/project-answer.schema.json"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md",
+      "progress_note": "Bounded native page siblings and multi-window fragments repair split context; visual Sheet labels route only to native page evidence. Explicit arithmetic uses a structured contract and local exact recomputation. Terminal failures keep a stable safe reason code."
+    },
+    {
+      "requirement_id": "FR-QA-PROJECT-KNOWLEDGE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/main.py",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_latest_saved_project_analysis_selection_stale_snapshot_status_and_run_independent_browser_question_flow",
+      "implemented_product_paths": [
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/PROJECT_QUESTIONS.md",
+      "progress_note": "The project knowledge endpoint selects the newest saved PARTIAL or COMPLETED run, reports active/stale state without evidence text, and lets the browser ask without an Analysis Run selection."
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-SUBJECT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_email_subject_header_grounding_and_required_subject_claim",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-PARTICIPANT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_email_participant_display_name_and_role_grounding",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-DATE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_email_date_header_grounding_and_required_claim",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-SUBJECT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_subject_and_identity_grounding",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-SUBJECT-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_subject_local_answer_and_conflict_boundary",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-HEADER-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_single_email_current_header_local_answer_and_ambiguity_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-HEADER-NAMED-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_named_email_current_header_selection_and_path_wildcard_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-RFI-CONTENT-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_question_response_local_answer_and_ambiguity_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-RFI-SPEC-SECTION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_labelled_spec_section_local_answer_and_scope_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-DRAWING-REFERENCE-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_drawing_reference_local_answer_and_scope_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-CLAUSE-REFERENCE-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_typed_clause_reference_local_answer_and_scope_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-SUBMITTAL-FIELD-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_submittal_labelled_field_local_answer_and_ambiguity_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-EXTENDED-HEADERS-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_cc_bcc_reply_to_local_answer_and_role_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-DATE-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_workflow_date_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-WORKFLOW-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_bidirectional_exact_email_workflow_relationship_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-DOCUMENT-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_cross_format_workflow_document_relationship_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-THREAD-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py"
+      ],
+      "test_scope": "offline_exact_named_email_thread_membership_local_answer_and_ambiguity_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-EMAIL-ATTACHMENT-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py",
+        "tests/app/test_email_attachments.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/app/test_workflows.py",
+        "tests/app/test_email_attachments.py"
+      ],
+      "test_scope": "offline_bidirectional_exact_email_attachment_provenance_local_answer_and_fail_closed_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "app/workflows.py"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-PARTY-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_party_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-ACTION-FIELD-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_email_action_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-METADATA-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_coordination_metadata_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-IMPACT-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_rfi_submittal_impact_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-WORKFLOW-FIELD-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_company_specific_rfi_submittal_field_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-CROSS-WORKFLOW-RELATION-LOCAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py"
+      ],
+      "test_scope": "offline_exact_bidirectional_rfi_submittal_relationship_local_answer_and_shared_grounding_boundaries",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "app/main.py",
+        "prompts/project-question/system.md"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-QA-ANSWER-PROVENANCE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/questions.py",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_questions.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_project_question_answer_basis_and_browser_provenance_badges",
+      "implemented_product_paths": [
+        "app/questions.py",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-CANONICAL-GRAPH-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/canonical.py",
+        "app/db.py",
+        "app/runner.py",
+        "app/questions.py",
+        "scripts/rebuild_canonical_v2.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_canonical.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_canonical.py",
+        "tests/app/test_questions.py",
+        "tests/app/test_api.py"
+      ],
+      "test_scope": "offline_deterministic_hierarchy_exact_spans_identifiers_optional_fts_rtree_fail_closed_validation_runner_sync_and_read_only_staging_rebuild",
+      "implemented_product_paths": [
+        "app/canonical.py",
+        "app/db.py",
+        "app/runner.py",
+        "app/questions.py",
+        "migrations/008_canonical_document_graph.sql",
+        "migrations/009_canonical_search.sql",
+        "migrations/010_canonical_bounds.sql",
+        "scripts/rebuild_canonical_v2.py"
+      ],
+      "verification_report": "docs/CANONICAL_STORAGE_V2.md"
+    },
+    {
+      "requirement_id": "FR-QA-V2-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/evidence_bundle.py",
+        "app/project_qa_v2.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_project_qa_v2.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_project_qa_v2.py",
+        "tests/app/test_canonical.py"
+      ],
+      "test_scope": "offline_explicit_effective_version_selection_ambiguous_keep_all_structural_source_text_bundle_exact_citations_and_no_model_preview",
+      "implemented_product_paths": [
+        "app/evidence_bundle.py",
+        "app/project_qa_v2.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "requirement_id": "FR-QA-V2-ANSWER-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/answer_diagnostics.py",
+        "app/project_qa_v2.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/main.py",
+        "prompts/project-question-v2/system.md",
+        "spec/schemas/project-answer-v2.schema.json"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_project_qa_v2.py",
+        "tests/app/test_numeric_diagnostics.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_project_qa_v2.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_numeric_diagnostics.py"
+      ],
+      "test_scope": "offline_claim_status_exact_quote_claim_number_local_decimal_percentage_of_no_retry_and_settled_recovery_contracts_plus_source_text_free_numeric_failure_ordinals_and_literal_occurrence_diagnostics",
+      "implemented_product_paths": [
+        "app/answer_diagnostics.py",
+        "app/project_qa_v2.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/main.py",
+        "prompts/project-question-v2/system.md",
+        "spec/schemas/project-answer-v2.schema.json"
+      ],
+      "verification_report": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "requirement_id": "FR-QA-V2-VISION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/project_qa_v2.py",
+        "app/gateway.py",
+        "app/visual_pipeline.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_project_qa_v2.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_project_qa_v2.py"
+      ],
+      "test_scope": "offline_single_page_overview_local_crop_image_hash_scope_exact_region_citation_review_flag_and_no_image_calculation",
+      "implemented_product_paths": [
+        "app/project_qa_v2.py",
+        "app/gateway.py",
+        "app/visual_pipeline.py",
+        "prompts/project-question-v2/system.md",
+        "spec/schemas/project-answer-v2.schema.json"
+      ],
+      "verification_report": "docs/PROJECT_QA_V2.md"
+    },
+    {
+      "requirement_id": "FR-QA-V2-RELEASE-001",
+      "implementation_status": "planned",
+      "planned_product_modules": [
+        "scripts/benchmark_qa_v2_retrieval.py",
+        "app/main.py",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_project_qa_v2.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_project_qa_v2.py"
+      ],
+      "test_scope": "offline_benchmark_mechanism_implemented_but_authorized_fixed_snapshot_gate_and_product_cutover_not_yet_run",
+      "implemented_product_paths": [],
+      "verification_report": null,
+      "progress_note": "The no-provider legacy-versus-QA-V2 retrieval comparison script and synthetic structural-table regression are implemented. The workspace's fixed customer benchmark databases remain under .local and were not read by this task; no authorized external staging snapshot was available, so the release thresholds, browser cutover and legacy general-retrieval deletion remain unclaimed."
+    },
+    {
+      "requirement_id": "FR-QA-EVIDENCE-LOOP-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_projection_loop.py",
+        "app/reference_projection_stage.py",
+        "app/reference_projection_preview.py",
+        "app/reference_projection_decision.py",
+        "prompts/project-projection-loop/system.md",
+        "spec/schemas/project-projection-decision.schema.json",
+        "app/reference_pdf_projection.py",
+        "app/reference_projection_candidate.py",
+        "spec/schemas/reference-projection-candidate.schema.json",
+        "app/reference_source_blocks.py",
+        "app/reference_extractive.py",
+        "spec/schemas/reference-extractive-candidate.schema.json",
+        "app/answer_diagnostics.py",
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/db.py",
+        "app/main.py",
+        "prompts/project-evidence-loop/system.md",
+        "spec/schemas/project-evidence-decision.schema.json"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_projection_decision.py",
+        "tests/app/test_reference_projection_loop.py",
+        "tests/app/test_reference_projection_stage.py",
+        "tests/app/test_reference_projection_stage_integrity.py",
+        "tests/app/test_gateway_projection_loop.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_reference_pdf_projection.py",
+        "tests/app/test_reference_projection_candidate.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_decision_diagnostics.py",
+        "tests/app/test_reference_source_blocks.py",
+        "tests/app/test_reference_extractive.py",
+        "tests/app/test_reference_extractive_adversarial.py",
+        "tests/app/test_numeric_diagnostics.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_projection_decision.py",
+        "tests/app/test_reference_projection_loop.py",
+        "tests/app/test_reference_projection_stage.py",
+        "tests/app/test_reference_projection_stage_integrity.py",
+        "tests/app/test_gateway_projection_loop.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_reference_pdf_projection.py",
+        "tests/app/test_reference_projection_candidate.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_decision_diagnostics.py",
+        "tests/app/test_reference_source_blocks.py",
+        "tests/app/test_reference_extractive.py",
+        "tests/app/test_reference_extractive_adversarial.py",
+        "tests/app/test_project_qa_v2.py",
+        "tests/app/test_numeric_diagnostics.py"
+      ],
+      "test_scope": "offline_bounded_three_decision_two_round_text_supplementation_18000_byte_source_budget_plus_6000_byte_exact_token_layout_budget_exact_prefix_repeat_rejection_no_new_evidence_stop_compact_ordered_evidence_and_region_alias_resolution_deduplicated_source_group_relation_pack_original_source_order_no_text_duplication_deterministic_explicit_question_part_checklist_complete_nonempty_in_range_answer_coverage_no_unmapped_content_stable_nonanswer_shape_generic_missing_fact_local_answer_decimal_value_equivalent_source_numeric_and_multi_percentage_compilation_literal_building_entity_scope_granular_safe_contract_diagnostic_claim_contract_reuse_and_existing_route_coexistence",
+      "implemented_product_paths": [
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/answer_diagnostics.py",
+        "app/page_selector.py",
+        "app/db.py",
+        "app/main.py",
+        "app/project_qa_v2.py",
+        "prompts/project-evidence-loop/system.md",
+        "prompts/project-question-v2/system.md",
+        "spec/schemas/project-evidence-decision.schema.json",
+        "spec/schemas/project-answer-v2.schema.json"
+      ],
+      "verification_report": "docs/EVIDENCE_LOOP_V3.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-PAGE-SELECTION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/runner.py",
+        "app/main.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_project_qa_v2.py"
+      ],
+      "test_scope": "offline_reference_run_parse_only_no_model_no_canonical_literal_page_ranking_audit_bounds_exact_prefix_vision_narration_exclusion_v3_integration_and_legacy_default_retention",
+      "implemented_product_paths": [
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/runner.py",
+        "app/main.py"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-MULTIMODAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/project_qa_v2.py",
+        "app/model_configuration.py",
+        "app/settings.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_project_qa_v2.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_selected_source_page_only_three_page_48mib_bounds_stable_region_exact_image_hash_review_required_citation_explicit_deepseek_or_custom_capability_profile_text_only_choice_and_settled_recovery",
+      "implemented_product_paths": [
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/project_qa_v2.py",
+        "app/model_configuration.py",
+        "app/settings.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "prompts/project-evidence-loop/system.md"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-WORKSPACE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_results.py",
+        "app/main.py",
+        "app/db.py",
+        "migrations/011_reference_results.sql",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_results.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_results.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_mode_scoped_reference_knowledge_immutable_result_version_normalized_citations_idempotent_recovery_optimistic_review_history_zero_call_reads_and_browser_workspace",
+      "implemented_product_paths": [
+        "app/reference_results.py",
+        "app/main.py",
+        "app/db.py",
+        "migrations/011_reference_results.sql",
+        "spec/schemas/reference-result.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-RESULT-LIFECYCLE-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_results.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_results.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_results.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_bounded_complete_json_export_reference_run_validation_semantic_cross_run_question_comparison_stable_identity_review_and_processing_deltas_zero_model_calls_and_browser_controls",
+      "implemented_product_paths": [
+        "app/reference_results.py",
+        "app/main.py",
+        "spec/schemas/reference-comparison.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-EVALUATION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "app/db.py",
+        "migrations/012_reference_evaluations.sql",
+        "migrations/013_reference_evaluation_failures.sql",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/app/test_reference_results.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_frozen_reference_run_snapshot_ordered_question_set_and_model_profile_zero_call_management_preview_single_explicit_question_execution_idempotent_result_or_safe_terminal_failure_link_derived_validator_category_and_browser_progress",
+      "implemented_product_paths": [
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "app/db.py",
+        "migrations/012_reference_evaluations.sql",
+        "migrations/013_reference_evaluation_failures.sql",
+        "spec/schemas/reference-evaluation.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-EVALUATION-RUNNER-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_explicit_batch_confirmation_strict_sequential_single_item_dispatch_unresolved_call_preflight_stop_after_current_safe_terminal_contract_failure_continue_without_retry_page_load_never_autostarts_and_pending_only_resume",
+      "implemented_product_paths": [
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-PAGE-ROUTING-002",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/page_selector.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_page_selector.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py"
+      ],
+      "test_scope": "offline_explicit_identifier_value_extraction_numeric_identifier_guard_exact_locator_priority_page_level_term_cap_multi_field_drawing_cover_intent_single_field_negative_deterministic_bounds_and_fixed_question_page_identity_report_without_source_text",
+      "implemented_product_paths": [
+        "app/page_selector.py"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-NATIVE-STRUCTURED-OUTPUT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_explicit_openai_responses_or_custom_chat_json_schema_opt_in_strict_reference_contract_translation_pre_dispatch_incompatibility_rejection_frozen_profile_and_call_identity_no_fallback_or_provider_call",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-OPENAI-RESPONSES-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_official_openai_responses_fixed_endpoint_write_only_key_no_config_call_store_false_text_format_bounded_input_image_typed_output_usage_normalization_refusal_settlement_frozen_protocol_identity_no_retry",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/PROVIDER_INTEGRATION.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-MODEL-COMPARISON-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_same_run_snapshot_question_hash_profile_clone_no_call_same_profile_rejection_local_deterministic_changed_unchanged_pending_failure_comparison_mismatch_rejection_no_correctness_or_precedence_claim",
+      "implemented_product_paths": [
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation-comparison.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-MANAGED-JOB-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_evaluation_jobs.py",
+        "app/reference_evaluations.py",
+        "app/runner.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_evaluation_jobs.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_evaluation_jobs.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_explicit_confirmation_durable_single_worker_sequential_saved_progress_safe_failure_stop_after_current_service_interruption_no_auto_resume_profile_and_unresolved_call_gate_global_dispatch_exclusion_no_raw_error_or_provider_call",
+      "implemented_product_paths": [
+        "migrations/014_reference_evaluation_jobs.sql",
+        "app/db.py",
+        "app/reference_evaluation_jobs.py",
+        "app/runner.py",
+        "app/verification.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation-job.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-READINESS-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_readiness.py",
+        "app/page_selector.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_readiness.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_readiness.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_whole_evaluation_same_selector_stable_manifest_separate_operational_status_page_metadata_only_no_source_text_profile_and_active_job_blockers_no_pending_no_model_call_or_quality_claim",
+      "implemented_product_paths": [
+        "app/reference_readiness.py",
+        "app/page_selector.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation-readiness.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-BENCHMARK-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "migrations/015_reference_evaluation_adjudications.sql",
+        "app/reference_scorecards.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_scorecards.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_scorecards.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_terminal_item_human_fully_usable_partial_unusable_and_unsupported_claim_adjudication_expected_version_append_only_history_fixed_15_mechanical_gate_no_correctness_inference_no_answer_text_or_model_call",
+      "implemented_product_paths": [
+        "migrations/015_reference_evaluation_adjudications.sql",
+        "app/db.py",
+        "app/reference_scorecards.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation-scorecard.schema.json",
+        "spec/schemas/reference-evaluation-adjudication-history.schema.json",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-SELECTION-VERSION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "migrations/016_reference_evaluation_selector_version.sql",
+        "migrations/018_reference_selector_v5.sql",
+        "migrations/019_reference_selector_v6.sql",
+        "migrations/020_reference_selector_v7.sql",
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/reference_evaluations.py",
+        "app/reference_readiness.py",
+        "app/reference_scorecards.py",
+        "app/reference_evaluation_jobs.py",
+        "app/main.py",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/app/test_reference_readiness.py",
+        "tests/app/test_reference_evaluation_jobs.py",
+        "tests/app/test_reference_scorecards.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/app/test_reference_readiness.py",
+        "tests/app/test_reference_evaluation_jobs.py",
+        "tests/app/test_reference_scorecards.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_v3_v4_v5_v6_replay_v7_four_page_explicit_building_scope_text_map_page_column_layout_and_literal_word_form_row_ordering_frozen_preview_execution_supplement_readiness_job_scorecard_clone_comparison_ui_fixed_15_page_gate_plus_complete_same_input_flash_pro_adjudicated_baseline_without_retry",
+      "implemented_product_paths": [
+        "migrations/016_reference_evaluation_selector_version.sql",
+        "migrations/018_reference_selector_v5.sql",
+        "migrations/019_reference_selector_v6.sql",
+        "migrations/020_reference_selector_v7.sql",
+        "app/db.py",
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/reference_evaluations.py",
+        "app/reference_readiness.py",
+        "app/reference_scorecards.py",
+        "app/reference_evaluation_jobs.py",
+        "app/main.py",
+        "spec/schemas/reference-evaluation.schema.json",
+        "spec/schemas/reference-evaluation-readiness.schema.json",
+        "spec/schemas/reference-evaluation-comparison.schema.json",
+        "spec/schemas/reference-evaluation-scorecard.schema.json",
+        "spec/schemas/reference-evaluation-job.schema.json",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/REFERENCE_QA.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-EXECUTION-RECEIPT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_projection_loop_receipt.py",
+        "spec/schemas/reference-projection-loop-receipt.schema.json",
+        "app/reference_projection_receipt.py",
+        "spec/schemas/reference-projection-input-receipt.schema.json",
+        "migrations/017_reference_failure_execution_receipt.sql",
+        "migrations/026_reference_failure_execution.sql",
+        "app/gateway.py",
+        "app/evidence_loop.py",
+        "app/reference_results.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "web/app.js",
+        "app/reference_text_profiles.py",
+        "app/reference_input_commitment.py",
+        "migrations/024_reference_input_commitment.sql",
+        "app/reference_layout_input.py",
+        "app/prompt_schema.py",
+        "migrations/025_reference_selector_v9.sql",
+        "prompts/project-evidence-loop/layout-supplement.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_projection_receipt.py",
+        "tests/app/test_reference_projection_loop_receipt.py",
+        "tests/app/test_gateway_projection_loop.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_reference_results.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/app/test_reference_text_profiles.py",
+        "tests/app/test_reference_input_commitment.py",
+        "tests/app/test_reference_profile_comparisons.py",
+        "tests/app/test_reference_profile_binding.py",
+        "tests/app/test_reference_profile_failures.py",
+        "tests/app/test_reference_live_smoke.py",
+        "tests/app/test_reference_v8_contract.py",
+        "tests/app/test_reference_v9_gateway.py",
+        "tests/app/test_reference_v9_input_auth.py",
+        "tests/app/test_reference_v9_evaluations.py",
+        "tests/app/test_reference_v9_migration.py",
+        "tests/app/test_reference_v9_failure_execution.py",
+        "tests/app/test_reference_failure_execution_migration.py",
+        "tests/app/test_reference_live_smoke_failure_chain.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_projection_receipt.py",
+        "tests/app/test_reference_projection_loop_receipt.py",
+        "tests/app/test_gateway_projection_loop.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_reference_results.py",
+        "tests/app/test_reference_evaluations.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs",
+        "tests/app/test_reference_text_profiles.py",
+        "tests/app/test_reference_input_commitment.py",
+        "tests/app/test_reference_profile_comparisons.py",
+        "tests/app/test_reference_profile_binding.py",
+        "tests/app/test_reference_profile_failures.py",
+        "tests/app/test_reference_live_smoke.py",
+        "tests/app/test_reference_v8_contract.py",
+        "tests/app/test_reference_v9_gateway.py",
+        "tests/app/test_reference_v9_input_auth.py",
+        "tests/app/test_reference_v9_evaluations.py",
+        "tests/app/test_reference_v9_migration.py",
+        "tests/app/test_reference_v9_failure_execution.py",
+        "tests/app/test_reference_failure_execution_migration.py",
+        "tests/app/test_reference_live_smoke_failure_chain.py"
+      ],
+      "test_scope": "offline_fresh_and_recovered_qa_v3_input_receipts_exact_call_request_prompt_evidence_text_and_optional_layout_hashes_byte_counts_image_hashes_success_and_contract_failure_persistence_no_source_or_layout_text_prompt_content_reasoning_rejected_output_or_external_call_explicit_named_profile_transactional_commitment_neutral_input_and_legacy_downgrade_checks_in_progress_no_new_live_comparison_plus_named_v9_full_input_navigation_request_cache_receipt3_source_auth_success_failure_followup_frozen_evaluation_and_schema25_rehearsal_plus_schema26_named_v9_complete_failure_chain_cumulative_supplement_auth_saved_current_counts_and_requested_accepted_metrics_no_browser_cutover_or_live_quality_claim",
+      "implemented_product_paths": [
+        "migrations/017_reference_failure_execution_receipt.sql",
+        "migrations/026_reference_failure_execution.sql",
+        "app/db.py",
+        "app/gateway.py",
+        "app/evidence_loop.py",
+        "app/page_selector.py",
+        "app/reference_results.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "spec/schemas/reference-model-input-receipt.schema.json",
+        "spec/schemas/reference-evaluation.schema.json",
+        "web/app.js",
+        "web/i18n.js",
+        "web/style.css",
+        "app/reference_text_profiles.py",
+        "app/reference_input_commitment.py",
+        "migrations/024_reference_input_commitment.sql",
+        "app/reference_readiness.py",
+        "app/reference_evaluation_jobs.py",
+        "app/reference_scorecards.py",
+        "scripts/reference_live_smoke.py",
+        "app/reference_layout_input.py",
+        "app/prompt_schema.py",
+        "migrations/025_reference_selector_v9.sql",
+        "prompts/project-evidence-loop/layout-supplement.md"
+      ],
+      "verification_report": "docs/REFERENCE_TEXT_PROFILES.md"
+    },
+    {
+      "requirement_id": "FR-DEEPSEEK-MODEL-SELECTION-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs"
+      ],
+      "test_scope": "offline_official_flash_and_pro_exact_ids_legacy_flash_alias_normalization_pro_text_only_unknown_model_rejection_write_only_key_browser_disclosure_no_config_call",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js"
+      ],
+      "verification_report": "docs/PROVIDER_INTEGRATION.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-THINKING-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "app/reference_text_profiles.py",
+        "app/reference_input_commitment.py",
+        "migrations/024_reference_input_commitment.sql"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/web/test_display_contract.py",
+        "tests/app/test_reference_text_profiles.py",
+        "tests/app/test_reference_input_commitment.py",
+        "tests/app/test_reference_profile_comparisons.py",
+        "tests/app/test_reference_profile_binding.py",
+        "tests/app/test_reference_profile_failures.py",
+        "tests/app/test_reference_live_smoke.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_model_configuration.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/web/test_display_contract.py",
+        "tests/web/i18n.test.mjs",
+        "tests/app/test_reference_text_profiles.py",
+        "tests/app/test_reference_input_commitment.py",
+        "tests/app/test_reference_profile_comparisons.py",
+        "tests/app/test_reference_profile_binding.py",
+        "tests/app/test_reference_profile_failures.py",
+        "tests/app/test_reference_live_smoke.py"
+      ],
+      "test_scope": "offline_deepseek_reference_none_low_high_max_scope_exact_low_payload_usage_reasoning_exclusion_receipt_no_chain_of_thought_legacy_non_thinking_policy_plus_authorized_fixed_20_live_ab_explicit_named_profile_transactional_commitment_neutral_input_and_legacy_downgrade_checks_in_progress_no_new_live_comparison",
+      "implemented_product_paths": [
+        "app/settings.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "app/main.py",
+        "web/index.html",
+        "web/app.js",
+        "web/i18n.js",
+        "spec/schemas/reference-model-input-receipt.schema.json",
+        "app/reference_text_profiles.py",
+        "app/reference_input_commitment.py",
+        "migrations/024_reference_input_commitment.sql",
+        "app/reference_readiness.py",
+        "app/reference_evaluation_jobs.py",
+        "app/reference_scorecards.py",
+        "scripts/reference_live_smoke.py"
+      ],
+      "verification_report": "docs/REFERENCE_TEXT_PROFILES.md"
+    },
+    {
+      "requirement_id": "FR-MODEL-BUDGET-REMOVAL-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/db.py",
+        "app/main.py",
+        "app/model_configuration.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_api.py",
+        "tests/app/test_gateway_budget.py",
+        "tests/app/test_model_configuration.py",
+        "tests/web/test_display_contract.py"
+      ],
+      "test_scope": "offline_no_budget_api_ui_or_dispatch_gate_with_legacy_schema_compatibility",
+      "implemented_product_paths": [
+        "app/db.py",
+        "app/main.py",
+        "app/model_configuration.py",
+        "app/gateway.py",
+        "web/index.html",
+        "web/app.js"
+      ],
+      "verification_report": "docs/EVIDENCE_VALIDATION.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-COMPLETE-CONTEXT-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_projection_input.py",
+        "docs/REFERENCE_PROJECTION_NEXT_STAGE.md",
+        "app/reference_pdf_projection.py",
+        "app/reference_projection_candidate.py",
+        "app/local_entry.py",
+        "scripts/local_deploy.py",
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "scripts/context_pack.py",
+        "app/reference_results.py",
+        "contracts/runtime_rules.py",
+        "scripts/audit_reference_context.py",
+        "scripts/reference_live_smoke.py",
+        "migrations/021_reference_selector_v8.sql",
+        "app/reference_layout_input.py",
+        "app/prompt_schema.py",
+        "migrations/025_reference_selector_v9.sql",
+        "prompts/project-evidence-loop/layout-supplement.md"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_projection_input.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_reference_pdf_projection.py",
+        "tests/app/test_reference_projection_candidate.py",
+        "tests/app/test_complete_context.py",
+        "tests/app/test_local_entry.py",
+        "tests/app/test_reference_v9_api.py",
+        "tests/web/test_reference_v9_display.py",
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/test_devtools.py",
+        "tests/app/test_reference_context_audit.py",
+        "tests/app/test_reference_live_smoke.py",
+        "tests/app/test_reference_live_smoke_v9.py",
+        "tests/test_contracts.py",
+        "tests/app/test_reference_v8_contract.py",
+        "tests/app/test_layout_binding.py",
+        "tests/app/test_selector_binding.py",
+        "tests/app/test_reference_v9_gateway.py",
+        "tests/app/test_reference_v9_input_auth.py",
+        "tests/app/test_reference_v9_evaluations.py",
+        "tests/app/test_reference_v9_migration.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_projection_input.py",
+        "tests/app/test_gateway_projection.py",
+        "tests/app/test_reference_pdf_projection.py",
+        "tests/app/test_reference_projection_candidate.py",
+        "tests/app/test_complete_context.py",
+        "tests/app/test_local_entry.py",
+        "tests/app/test_reference_v9_api.py",
+        "tests/web/test_reference_v9_display.py",
+        "tests/app/test_page_selector.py",
+        "tests/app/test_evidence_loop.py",
+        "tests/test_devtools.py",
+        "tests/app/test_reference_context_audit.py",
+        "tests/app/test_reference_live_smoke.py",
+        "tests/app/test_reference_live_smoke_v9.py",
+        "tests/test_contracts.py",
+        "tests/app/test_reference_v8_contract.py",
+        "tests/app/test_layout_binding.py",
+        "tests/app/test_selector_binding.py",
+        "tests/app/test_reference_v9_gateway.py",
+        "tests/app/test_reference_v9_input_auth.py",
+        "tests/app/test_reference_v9_evaluations.py",
+        "tests/app/test_reference_v9_migration.py"
+      ],
+      "test_scope": "offline_complete_source_v8_and_named_v9_source_receipt_authentication_plus_default_disabled_proof_bound_api_ui_entry_and_explicit_runner_pre_dispatch_proof_replay_only_capability_and_terminal_failure_unknown_metrics_with_production_chromium_synthetic_scope_race_checks_and_archived_1978_test_771_file_gate_plus_separately_validated_local_startup_tristate_gate_no_runtime_cutover_live_quality_or_phone_claim",
+      "implemented_product_paths": [
+        "app/local_entry.py",
+        "scripts/local_deploy.py",
+        "app/settings.py",
+        "web/app.js",
+        "web/index.html",
+        "web/i18n.js",
+        "scripts/reference_v9_browser_smoke.py",
+        "app/page_selector.py",
+        "app/evidence_loop.py",
+        "app/gateway.py",
+        "app/reference_evaluations.py",
+        "app/main.py",
+        "scripts/context_pack.py",
+        "app/reference_results.py",
+        "contracts/runtime_rules.py",
+        "scripts/audit_reference_context.py",
+        "scripts/reference_live_smoke.py",
+        "migrations/021_reference_selector_v8.sql",
+        "app/reference_layout_input.py",
+        "app/prompt_schema.py",
+        "migrations/025_reference_selector_v9.sql",
+        "prompts/project-evidence-loop/layout-supplement.md"
+      ],
+      "verification_report": "docs/FIELD_QA_DEVELOPMENT.md"
+    },
+    {
+      "requirement_id": "FR-REFERENCE-HUMAN-CASES-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "app/reference_projection_followup.py",
+        "app/reference_projection_review.py",
+        "app/reference_projection_identity.py",
+        "app/reference_case_migration.py",
+        "migrations/028_projection_human_review.sql",
+        "spec/schemas/reference-projection-review-view.schema.json",
+        "app/reference_cases.py",
+        "app/main.py",
+        "migrations/022_reference_cases.sql",
+        "web/app.js",
+        "web/index.html",
+        "web/i18n.js",
+        "migrations/023_reference_case_followups.sql",
+        "app/reference_results.py",
+        "scripts/field_cases_browser_smoke.py",
+        "scripts/field_case_followup_browser_smoke.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_reference_projection_cases.py",
+        "tests/app/test_reference_projection_case_followup_flow.py",
+        "tests/app/test_reference_projection_followup.py",
+        "tests/web/test_reference_projection_cases.py",
+        "tests/app/test_reference_projection_review.py",
+        "tests/app/test_reference_projection_review_geometry.py",
+        "tests/app/test_reference_projection_identity.py",
+        "tests/app/test_reference_case_migration.py",
+        "tests/web/test_reference_projection_display.py",
+        "tests/app/test_reference_cases.py",
+        "tests/app/test_reference_case_api.py",
+        "tests/app/test_reference_case_upload_flow.py",
+        "tests/web/test_display_contract.py",
+        "tests/app/test_reference_v9_input_auth.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_reference_projection_cases.py",
+        "tests/app/test_reference_projection_case_followup_flow.py",
+        "tests/app/test_reference_projection_followup.py",
+        "tests/web/test_reference_projection_cases.py",
+        "tests/app/test_reference_projection_review.py",
+        "tests/app/test_reference_projection_review_geometry.py",
+        "tests/app/test_reference_projection_identity.py",
+        "tests/app/test_reference_case_migration.py",
+        "tests/web/test_reference_projection_display.py",
+        "tests/app/test_reference_cases.py",
+        "tests/app/test_reference_case_api.py",
+        "tests/app/test_reference_case_upload_flow.py",
+        "tests/web/test_display_contract.py",
+        "tests/app/test_reference_v9_input_auth.py"
+      ],
+      "test_scope": "offline_synthetic_upload_parse_new_snapshot_v3_mock_http_followup_proof_human_resolve_reopen_and_case_reauthentication_with_legacy_behavior_preserved_plus_prior_production_asset_chromium_legacy_followup_orchestration_with_mock_transport_zero_external_calls_plus_named_v9_receipt3_followup_source_authentication_plus_projection_fullauth_original_view_and_immutable_byte_image_routes_sourcefree_case_view2_handling_and_link_time_projection_input_proof_with_offline_DOM_case_UI; current_full_suite_real_browser_live_quality_mobile_acceptance_pre_result_failure_help_and_projection_question_creation_remain_separate",
+      "implemented_product_paths": [
+        "app/reference_projection_followup.py",
+        "app/reference_projection_review.py",
+        "app/reference_projection_identity.py",
+        "app/reference_case_migration.py",
+        "migrations/028_projection_human_review.sql",
+        "spec/schemas/reference-projection-review-view.schema.json",
+        "app/reference_cases.py",
+        "app/main.py",
+        "migrations/022_reference_cases.sql",
+        "web/app.js",
+        "web/index.html",
+        "web/i18n.js",
+        "migrations/023_reference_case_followups.sql",
+        "app/reference_results.py",
+        "scripts/field_cases_browser_smoke.py",
+        "scripts/field_case_followup_browser_smoke.py"
+      ],
+      "verification_report": "docs/REFERENCE_CASES_API.md"
+    },
+    {
+      "requirement_id": "DEV-FIELD-BENCHMARK-001",
+      "implementation_status": "implemented",
+      "planned_product_modules": [
+        "scripts/field_benchmark_metrics.py",
+        "scripts/validate_field_holdout.py"
+      ],
+      "planned_product_tests": [
+        "tests/app/test_field_benchmark_metrics.py",
+        "tests/app/test_field_benchmark_metrics_adapter.py",
+        "tests/app/test_field_holdout.py",
+        "tests/app/test_field_evidence_channel.py"
+      ],
+      "contract_tests": [
+        "tests/app/test_field_benchmark_metrics.py",
+        "tests/app/test_field_benchmark_metrics_adapter.py",
+        "tests/app/test_field_holdout.py",
+        "tests/app/test_field_evidence_channel.py"
+      ],
+      "test_scope": "versioned_offline_metrics_and_explicit_smoke3_file_adapter_with_caller_supplied_reviews_scoped_timing_saved_current_unknown_counts_plus_SYNTHETIC_CONTRACT_ONLY_public_candidate_validator_tests_and_synthetic_evidence_channels_not_live_collection_human_approval_or_model_quality; private_field_candidates_and_reports_remain_local_not_required_public_product_paths; separately archived schema24_to26 maintenance and known-five-question runtime comparison are not independent-holdout, engineering-human-approval, automatic-escalation, or field-phone acceptance evidence",
+      "implemented_product_paths": [
+        "scripts/field_benchmark_metrics.py",
+        "scripts/validate_field_holdout.py",
+        "docs/FIELD_BENCHMARK_METRICS.md",
+        "tests/fixtures/synthetic_holdout_contract.json",
+        "tests/fixtures/synthetic_holdout_note.txt"
+      ],
+      "verification_report": "docs/FIELD_QA_DEVELOPMENT.md"
     }
   ]
 }

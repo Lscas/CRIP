@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0062",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Reject malformed email thread identifiers instead of hashing arbitrary header words into false relationships.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "FR-WORKFLOW-001 permits only exact hashed Message-ID relationships",
+    "Offline reproduction linked two unrelated emails through the invalid token unavailable"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-047.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0062.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Thread linkage remains exact and header-based; message bodies, dates and subjects are not used to infer relationships.",
+    "Only RFC-style angle-bracketed identifiers containing one local/domain separator are accepted; malformed or obsolete forms remain standalone.",
+    "Raw identifiers remain absent from persisted parser summaries.",
+    "Validation is synthetic and offline; no customer email, mailbox or provider API is used."
+  ]
+}

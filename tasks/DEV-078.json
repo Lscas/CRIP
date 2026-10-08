@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 2200,
+  "max_context_chars": 19500,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce strict status-filtered inventory questions falling through to bounded retrieval and model generation.",
+    "Use only explicit primary RFI/Submittal statuses in the complete cached terminal-run index; never infer status from relationship state or missing documents.",
+    "Require the status filter to apply to every requested workflow type; incompatible combinations stay on the evidence path.",
+    "Exclude identifiers with multiple explicit statuses from confirmed results and report matching conflicts separately as ambiguous.",
+    "Reuse bounded disposition equivalence and list ceilings; make no evidence retrieval, model request or budget action."
+  ],
+  "task_id": "DEV-078",
+  "title": "Answer explicit-status workflow inventory questions locally",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-078.json", "changes/CR-0093.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer common explicit-status RFI and Submittal inventory questions completely and locally while preserving every indexed status conflict."
+}

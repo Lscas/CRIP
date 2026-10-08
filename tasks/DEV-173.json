@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-173",
+  "title": "Close the remaining findings in the 17-item engineering integrity review",
+  "status": "DONE",
+  "objective": "Repair candidate-level publication isolation (4), dependent inspection verification invalidation (9), resume eligibility/UI parity (11), prevent silent CAD text loss with traceable fragments and explicit PARTIAL limits (14), MINSERT instance counting (15), and indexed task-family history retrieval (17). Revalidate all 17 findings against the final feature-branch source without claiming deployment or engineering accuracy.",
+  "requirement_ids": ["NFR-RELIABILITY-001", "NFR-OBS-001", "FR-PARSE-006", "FR-FIELD-EVIDENCE-001", "FR-API-006", "FR-INPUT-STATUS-001", "FR-REVIEW-001"],
+  "max_output_tokens": 16000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User explicitly requested continuing all remaining findings from the 17-item audit. Preserve features, customer data and credentials; prior authorization permits synchronization of the existing feature branch, not main or deployment.",
+  "notes": ["Use Terra medium for bounded implementation and Sol max for state/database design and final release review.", "Only synthetic temporary databases/files and offline transports. No runtime maintenance, real LLM/OCR/CAD services or credential access.", "Candidate isolation must never hide provenance, weaken evidence scope, swallow database/security errors or report complete coverage."],
+  "allowed_paths": ["app/assemble.py", "app/runner.py", "app/verification.py", "app/publication.py", "app/exporter.py", "app/cad.py", "app/parsers.py", "app/db.py", "app/gateway.py", "app/main.py", "web/app.js", "web/index.html", "web/i18n.js", "migrations/**", "tests/**", "spec/traceability.json", "docs/**", "reports/**", "tasks/DEV-173.json", "changes/CR-0189.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/DATA_CONTRACTS.md", "docs/EVIDENCE_VERIFICATION.md", "docs/AUDIT_REPAIR_VALIDATION.md"],
+  "acceptance_tests": ["python scripts/run_checks.py --area all", "python scripts/check_spec_sync.py", "python scripts/build_bundle_manifest.py --check"],
+  "model_level": "medium_execution_sol_max_design_and_final_review"
+}

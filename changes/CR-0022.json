@@ -1,0 +1,56 @@
+{
+  "change_id": "CR-0022",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-CLASS-001",
+    "FR-REVISION-002",
+    "FR-REVISION-004"
+  ],
+  "summary": "Add local RFC-style EML parsing, safe visible HTML conversion, attachment inventory, deterministic RFI question/response and Submittal status locators, and output guards for RFI questions and rejected Submittals.",
+  "decision_refs": [
+    "User request to continue improving efficiency, accuracy and adaptability for RFI, Submittal and email content",
+    "Existing product rules that RFI questions are not revision directives and Submittals do not silently change contract rights"
+  ],
+  "affected_paths": [
+    "app/assemble.py",
+    "app/parsers.py",
+    "prompts/document-classification/system.md",
+    "prompts/joint-extraction/system.md",
+    "prompts/manifest.json",
+    "spec/schemas/classification.schema.json",
+    "spec/schemas/evidence.schema.json",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_parsers.py",
+    "web/index.html",
+    "web/i18n.js",
+    "docs/ARCHITECTURE.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/PRODUCT_SPEC.md",
+    "docs/REQUIREMENTS.md",
+    "tasks/DEV-007.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0022.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/app/test_assemble.py",
+    "tests/app/test_parsers.py",
+    "tests/web/i18n.test.mjs"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested continued product updates covering RFI, Submittal and email content.",
+  "known_limitations": [
+    "Only RFC-style EML files are parsed; Outlook MSG and mailbox-provider connections are not supported.",
+    "Attachments are inventoried but not recursively analyzed; users must upload them separately.",
+    "Quoted-message segmentation, email thread reconstruction, RFI/Submittal cross-file linking and authority/approval adjudication remain planned.",
+    "Validation uses synthetic offline documents only; no customer document or paid provider was used."
+  ]
+}

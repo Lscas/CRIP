@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0116",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-SUBJECT-001"],
+  "summary": "Ground explicit RFI/Submittal form Subject claims to one complete value and the same exact workflow identity.",
+  "decision_refs": [
+    "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content",
+    "An offline reproduction proved that a correct RFI form Subject answer was rejected by the former Email-only Subject guard",
+    "A separate workflow-scoped Subject check enables the valid answer while retaining fail-closed identity and source boundaries"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-101.json",
+    "changes/CR-0116.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only explicit Subject claims paired with an exact RFI/Submittal identity enter this guard; generic topic or title prose remains outside it.",
+    "Only evidence conservatively classified as RFI or Submittal can ground a workflow Subject; an Email Subject header remains Email metadata.",
+    "Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the value normalize while quoted punctuation stays exact.",
+    "A Subject-only source quotation may use one exact evidence-locator identity; a multi-identity locator remains insufficient.",
+    "The guard does not infer applicability, status, revision, authority, semantic paraphrase equivalence or a controlling source."
+  ]
+}

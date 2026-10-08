@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-evaluation-adjudication-history.schema.json",
+  "title": "Paginated Reference benchmark adjudication history",
+  "$defs": {
+    "adjudication": {
+      "type": "object",
+      "properties": {
+        "verdict": {"enum": ["UNREVIEWED", "FULLY_USABLE", "PARTIAL", "UNUSABLE"]},
+        "unsupported_claim": {"type": "boolean"},
+        "note": {"type": "string", "maxLength": 2000},
+        "version": {"type": "integer", "minimum": 0},
+        "event_id": {"type": ["string", "null"], "pattern": "^QAADJ-[0-9a-f]{32}$"},
+        "updated_at": {"type": ["string", "null"], "maxLength": 80}
+      },
+      "required": ["verdict", "unsupported_claim", "note", "version", "event_id", "updated_at"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "history_version": {"const": "reference-evaluation-adjudication-history-1"},
+    "evaluation_id": {"type": "string", "pattern": "^QAE-[0-9a-f]{32}$"},
+    "item_id": {"type": "string", "pattern": "^QAEITEM-[0-9a-f]{32}$"},
+    "model_called": {"const": false},
+    "total": {"type": "integer", "minimum": 0},
+    "offset": {"type": "integer", "minimum": 0},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+    "items": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_id": {"type": "string", "pattern": "^QAADJ-[0-9a-f]{32}$"},
+          "actor": {"const": "local-engineer"},
+          "before": {"$ref": "#/$defs/adjudication"},
+          "after": {"$ref": "#/$defs/adjudication"},
+          "created_at": {"type": "string", "minLength": 1, "maxLength": 80}
+        },
+        "required": ["event_id", "actor", "before", "after", "created_at"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["history_version", "evaluation_id", "item_id", "model_called", "total", "offset", "limit", "items"],
+  "additionalProperties": false
+}

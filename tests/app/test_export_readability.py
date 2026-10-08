@@ -67,37 +67,32 @@ def test_validator_recognizes_unmapped_private_use_glyphs():
     assert not validator.PRIVATE_USE.search('90°F and 8.3/3 μm')
 
 
-def test_mixed_visual_evidence_keeps_english_source_passage():
+def test_mixed_visual_evidence_keeps_all_source_passage_languages():
     text = 'Important visible text: Concrete Anchors: ACI 318-05 and ACI-355.2. 视觉说明需要人工复核。'
 
     result = exporter._evidence_text('Visual model observation', text)
 
     assert 'Concrete Anchors: ACI 318-05 and ACI-355.2.' in result
-    assert not exporter._CJK.search(result)
+    assert result == text
 
 
-def test_visual_evidence_removes_non_english_punctuation_empty_fragments_and_raw_codes():
+def test_visual_evidence_is_not_lossily_cleaned_as_application_text():
     text = ('Important visible text: Sheet E104. Visual observation:, 、 、 / 。 '
             'Visual limitation:,,scale_text null。 Visual observation: panel A、panel B。')
 
     result = exporter._evidence_text('Visual model observation', text)
 
-    assert '，' not in result and '。' not in result and '、' not in result
-    assert 'scale_text' not in result and 'scale text' not in result and 'null' not in result
-    assert 'Visual observation: panel A, panel B' in result
-    assert 'Visual observation: ,' not in result
+    assert result == text
 
 
-def test_visible_sheet_identifier_is_not_damaged_and_uppercase_codes_are_humanized():
+def test_evidence_sheet_identifier_and_uppercase_source_codes_are_preserved():
     text = ('Visual page type: SPEC_PAGE. Visible Sheet identifier: E104. '
             'Status NEEDS_CONTEXT; rule ONE_OF; position FRAGMENT_START; Sheet_id E104.')
 
     result = exporter._evidence_text('Visual model observation', text)
 
     assert 'Visible Sheet identifier: E104' in result
-    assert 'Specification page' in result
-    assert 'Needs context' in result and 'One of' in result and 'Fragment start' in result
-    assert not validator.MACHINE_CODE.search(result)
+    assert result == text
 
 
 def test_visual_conflict_has_distinct_recorded_values_and_source_passage():
@@ -169,15 +164,16 @@ def test_machine_property_names_are_humanized():
     ]})
 
     assert result == 'Temperature Range Min: 75 °F'
-    assert not validator.MACHINE_CODE.search(result)
+    assert 'temperature_range_min' not in result
 
 
-def test_known_quantity_unit_overrides_legacy_translation_cache():
+def test_unmapped_quantity_property_is_retained_without_export_inference():
     candidate = {'design_properties': [
         {'name': '贯穿孔数量', 'value': '6', 'unit': '个'},
     ]}
 
-    assert exporter._quantity(candidate) == (6, 'EA', 'Stated in document')
+    assert exporter._quantity(candidate) == (None, '', '')
+    assert '6' in exporter._properties(candidate)
     assert exporter._translate_display({'unit': 'EA'})['unit'] == 'EA'
 
 

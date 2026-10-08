@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0140",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-API-006", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "summary": "Expose customer model configuration in the local application, reuse the existing provider gateway and budget controls, optionally persist remote keys with Windows current-user DPAPI, and safely restart the single service on the same port.",
+  "decision_refs": [
+    "User request on 2026-09-27 to allow customers to configure different APIs in settings",
+    "Existing v0.2.6 custom-model launcher already validated the OpenAI-compatible text contract and endpoint/model identity"
+  ],
+  "affected_paths": [
+    "app/model_configuration.py", "app/main.py", "app/local_entry.py",
+    "scripts/local_deploy.py", "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_model_configuration.py", "tests/app/test_local_entry.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/LOCAL_VALIDATION.md", "docs/PROVIDER_INTEGRATION.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-125.json", "changes/CR-0140.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py", "tests/app/test_local_entry.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested customer-configurable APIs from settings.",
+  "known_limitations": [
+    "Custom providers must implement OpenAI-compatible chat/completions JSON mode and return usage data; vendor-specific SDKs are not added.",
+    "Generic custom providers remain text-only, and non-loopback LAN model endpoints are not accepted.",
+    "Only one model profile is active at a time; previously provider-scoped DPAPI credentials may remain available until explicitly replaced or forgotten."
+  ]
+}

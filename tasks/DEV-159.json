@@ -1,0 +1,52 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user requested continued development, testing and iteration; the second authorized Flash run isolated remaining citation-reference and percentage-shape failures.",
+  "notes": [
+    "Keep real evidence and region IDs in local receipts, canonical citations and immutable results.",
+    "Expose only deterministic compact E1..En and V1..Vn references to the provider and resolve them by bounded input order.",
+    "Permit one PERCENT_OF item to express one cited base with one or more cited percentages; compile each percentage to a separate canonical calculation.",
+    "Do not add a retry, verifier model, semantic index or database migration.",
+    "Use synthetic offline tests only; a later full paid benchmark remains a separate operational decision."
+  ],
+  "task_id": "DEV-159",
+  "title": "Use compact QA evidence references",
+  "requirement_ids": [
+    "FR-QA-V2-ANSWER-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/evidence_loop.py",
+    "app/gateway.py",
+    "prompts/project-evidence-loop/system.md",
+    "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py",
+    "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-159.json",
+    "changes/CR-0174.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-159",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reduce remaining small-model citation and percentage-shape failures by replacing opaque provider-facing IDs with compact local aliases while preserving exact canonical provenance."
+}

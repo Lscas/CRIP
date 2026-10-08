@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "A message/rfc822 attachment must remain inert; MIME traversal must not add its body or nested attachments to the parent email analysis.",
+    "Reuse Python standard-library MIME parts and the existing attachment-boundary rule, add no dependency, and advance the parser version."
+  ],
+  "task_id": "DEV-022",
+  "title": "Nested email attachment isolation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-022.json",
+    "changes/CR-0037.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_api.py tests/app/test_email_attachments.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Stop parent-email MIME parsing at every attachment boundary so an attached email body or its nested files cannot become parent evidence, workflow role or attachment inventory until explicitly imported."
+}

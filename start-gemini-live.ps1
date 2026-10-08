@@ -12,7 +12,7 @@ if ($Port -eq $SetupPort) {
 
 Write-Host 'CIRP Gemini 3.6 Flash local live launcher'
 Write-Host 'Saved keys use Windows DPAPI current-user encryption; no plaintext .env, key command-line argument, or key log is created.'
-Write-Host 'Conservative ledger rates: input CNY 7.50/M tokens; output CNY 37.50/M tokens.'
+Write-Host 'Provider charges, if any, are billed by the configured Gemini account.'
 Remove-Item Env:CIRP_API_KEY -ErrorAction SilentlyContinue
 Write-Host '[CHECK] Checking project dependencies without an API key.'
 & "$PSScriptRoot\start-local.cmd" --install-only

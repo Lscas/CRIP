@@ -1,0 +1,37 @@
+{
+  "change_id": "CR-0078",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Keep Yahoo and Proton HTML quoted history from changing the current RFI/Submittal Email workflow context.",
+  "decision_refs": [
+    "The active goal requires accurate and adaptable RFI/Submittal/Email handling",
+    "A synthetic Yahoo-wrapped historical RFI Question currently changes a current Response to MIXED",
+    "Open-source Odoo and UnquoteMail recognize yahoo_quoted and protonmail_quote boundaries"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-063.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0078.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requests continued accuracy and adaptability across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only exact wrapper classes are added; no language-dependent quote heuristic or automatic mailbox access is introduced.",
+    "Validation is synthetic and offline; no customer Email, mailbox, provider or paid model is used."
+  ]
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -11,14 +12,30 @@ sys.path.insert(0,str(ROOT))
 from contracts.runtime_rules import validate_schema
 
 WATCHED=('app/','web/','contracts/','prompts/','config/','spec/','.github/','.codex/','migrations/','tasks/','scripts/','requirements-','AGENTS.md')
+
+
+def declared_test_exists(declaration: str, root: Path = ROOT) -> bool:
+    """Accept a local test path, pytest node ID, command, or named public fixture."""
+    if declaration.startswith('public upstream ') and len(declaration)<=160:
+        return True
+    candidates=[declaration.split('::',1)[0]]
+    try:tokens=shlex.split(declaration,posix=False)
+    except ValueError:tokens=[]
+    candidates.extend(token.strip('"\'').split('::',1)[0] for token in tokens)
+    return any((root/candidate).is_file() for candidate in candidates
+               if candidate and not Path(candidate).is_absolute())
+
+
 def check_diff(paths: list[str], records: list[dict], known_ids: set[str]) -> list[str]:
     errors=[]
     relevant=[p for p in paths if p.startswith(WATCHED)]
     if not relevant:return []
     if not records:return ['受控文件变化缺少新增/修改的changes记录']
     for record in records:
+        covered=[p for p in relevant if any(fnmatch.fnmatchcase(p,pattern)
+                                             for pattern in record['affected_paths'])]
         if not set(record['requirement_ids']).issubset(known_ids):errors.append('变更引用未知需求ID')
-        if record['change_type']=='spec_only' and any(p.startswith(('app/','web/')) for p in relevant):
+        if record['change_type']=='spec_only' and any(p.startswith(('app/','web/')) for p in covered):
             errors.append('产品代码改动不能伪报spec_only')
         if record['change_type'] in ('implementation','bugfix'):
             if not any(p.startswith('tests/') for p in paths):errors.append('实现改动缺少实际测试diff')
@@ -44,7 +61,7 @@ if __name__=='__main__':
     errors=check_diff(paths,records,ids)
     for r in records:
         for p in r['tests']:
-            if not (ROOT/p).is_file():errors.append('变更声明的测试不存在: '+p)
+            if not declared_test_exists(p):errors.append('变更声明的测试不存在: '+p)
     for e in errors:print('[FAIL]',e)
     if errors:raise SystemExit(1)
     print('[PASS] Git差异与变更清单；人类审批状态需在Git平台确认。')

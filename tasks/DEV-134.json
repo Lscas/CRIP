@@ -1,0 +1,37 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user approved the management-first CRIP direction and explicitly asked to start a new bounded evidence-loop feature without deleting existing behavior.",
+  "notes": [
+    "Keep the legacy question endpoint and QA V2 unchanged; add QA V3 beside them.",
+    "Do not request, expose or persist hidden chain-of-thought. Persist only structured decisions, evidence requests and final cited answers.",
+    "Limit one question to three model decisions and two evidence-acquisition rounds; never retry a failed provider call automatically.",
+    "The first slice supports only project-scoped exact-identifier and text-search supplementation. Visual supplementation remains on QA V2.",
+    "Tests use MockTransport or Mock mode and make no external or paid provider call."
+  ],
+  "task_id": "DEV-134",
+  "title": "Add bounded evidence-loop QA V3",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "FR-QA-V2-ANSWER-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/evidence_loop.py", "app/main.py", "app/gateway.py", "app/db.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-134.json", "changes/CR-0149.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/PROJECT_QA_V2.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_evidence_loop.py tests/app/test_project_qa_v2.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-134",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Introduce an independent QA V3 state machine that lets one model either return a claim-bound QA V2 answer, request narrowly scoped local evidence, ask the user for a missing project file, or stop, while retaining all existing product paths."
+}

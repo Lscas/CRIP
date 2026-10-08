@@ -5,14 +5,14 @@
 **机器可读需求：** `spec/requirements.json`；完整需求表见 `docs/REQUIREMENTS.md`
 
 ## 1. 产品目标与用户体验
-工程师一次上传尽可能完整的商业新建项目资料，不需要提前按专业整理或逐一问答。系统逐文件、逐页面／视图审查，以全部专业为分析目标，生成材料、检查／测试／报告、设计冲突和独立缺失信息四类结果。核心价值是减少阅读与整理，而不是替代工程判断。
+工程师一次上传尽可能完整的商业新建项目资料，不需要提前按专业整理。系统逐文件、逐页面／视图审查，并把保存的项目知识用于后续提问。当前审阅输出聚焦材料／设备与真实检查／测试要求；Conflict 与 Missing 已按 D-26 取消。核心价值是减少阅读与整理，而不是替代工程判断。
 
-原型必须有网页：项目创建、批量上传、分析进度、四类清单、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控并行任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB在300元内全部完成。
+原型必须有网页：项目创建、批量上传、分析进度、项目提问、可点击来源、逐项接受／修改／拒绝、XLSX与JSON导出。并行处理1个项目；可以有多个受控本地任务。约10GB为原始上传容量目标，24小时为一次分析的目标；不得承诺任意10GB都能在目标时间内完成。
 
 不能将“全部专业能上传”写成“全部专业已正确分析”。每专业、文件、页面和任务均显示未处理、完成、部分、失败或能力缺失。内部原型可以逐模块交付，但不能擅自把总目标缩为混凝土专项。
 
 ## 2. 范围
-首版输入PDF、DOCX、TXT、PNG/JPEG/TIFF/BMP/WEBP等常见图片、DWG。非支持图像或格式保留清单并说明，不以“所有图片”宣称无限格式支持。Excel、邮件连接、BIM原生和持续同步不自动加入本轮范围。
+The current input slice accepts PDF, DOCX, TXT, RFC-style EML, bounded local Outlook MSG, common PNG/JPEG/TIFF/BMP/WEBP images, DWG, and DXF. EML and MSG expose safe headers and visible body text through the same evidence and workflow path; attachments remain inert until a reviewer explicitly imports one attachment or all supported attachments in a bounded batch through the ordinary upload controls. A batch parses the parent email once and prevalidates every selected index and SHA-256 before creating uploads. Active HTML is not executed, remote resources are not fetched, and nested attachments do not recurse automatically. Autodesk APS and Procore remain read-only selected-file imports. Excel, mailbox connection or synchronization, native BIM, and continuous synchronization are outside this slice.
 
 永久材料列设计要求、类别、厂家、产品、型号、等级、尺寸、安装范围、来源及设计净量；临时材料只要求名称与依据。无指定字段为null。无价格、无采购订单、无供货责任裁定。多个厂家／产品若为互斥选项，全部列在ONE_OF组，不替用户选一个，不合计多倍数量。
 
@@ -23,14 +23,37 @@
 
 首读不依赖用户问题检索。每个内容片段必须被处理或有明确未处理状态。检索用于后续跨文件证据连接，不能用前K条相关结果代替阅读其余文件。
 
-供应商限流、预算、时限或文件错误出现时，其余可用结果可查看，但Run显示PARTIAL／PAUSED，不把缺失的专业或页面隐藏。
+供应商限流、时限、输入容量或文件错误出现时，其余可用结果可查看，但Run显示PARTIAL／PAUSED，不把缺失的专业或页面隐藏。
 
 ## 4. 原始文件及解析
-原始二进制与SHA-256不可变，派生文本、表格、图像和CAD对象均链接源文件与解析器版本。重名不同哈希是不同内容；相同哈希可以复用解析，但仍保留每次来源关系。
+原始二进制与SHA-256不可变，派生文本、表格、图像和CAD对象均链接源文件与解析器版本。重名不同哈希是不同内容；相同哈希可以复用解析，但仍保留每次来源关系。远程选定文件导入复用本地上传的项目容量门禁、4MiB分片、SHA-256与去重；连接器只访问固定官方API和经允许的HTTPS下载主机，跨主机签名下载不得携带供应商Bearer令牌。
 
-数字PDF先提取文字、词坐标、表格、旋转和批注；不能因为存在文字层就忽略图形。扫描PDF仅对需要区域做OCR／视觉。没有可信OCR分数时confidence=null，不能让LLM编造0.99。完整产品目标是保存Sheet、View、Detail、Legend、Callout、局部裁剪与整页坐标变换；当前实现仅保存页面级任务、OCR bbox/confidence和整页图像定位，尚未实现局部裁剪与变换链。
+数字PDF先提取文字、词坐标、表格、旋转和批注；不能因为存在文字层就忽略图形。扫描PDF仅对需要区域做OCR／视觉。没有可信OCR分数时confidence=null，不能让LLM编造0.99。通用文件名的多页PDF按页序保留最近一个含数字的精确RFI/Submittal编号、角色和状态，直到另一精确标题替换；有序合并保证1/2/4 worker一致且不二次扫描PDF。完整产品目标是保存Sheet、View、Detail、Legend、Callout、局部裁剪与整页坐标变换；当前实现仅保存页面级任务、OCR bbox/confidence和整页图像定位，尚未实现局部裁剪与变换链。
 
-DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可解析的修订和批注要区分正文，不确定采用状态则标记。TXT保留编码与行号。完整产品中的图片保留原尺寸、旋转、裁剪变换和OCR文字；当前已提供本机OCR和页面级视觉任务，但未实现局部裁剪变换。DWG用合法可配置转换服务，缺Xref、字体、自定义对象、单位或Layout明确报出；当前转换和对象解析均成功时才标记`OBJECT_METADATA`，转换器缺失、转换失败或对象不可解析均标记`UNAVAILABLE`；不将部分对象解析冒充为完整CAD语义。
+DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。当前同一表格中的精确RFI/Submittal编号、角色或状态变化会拆成不同证据片段，并保留原生元素和行号，避免前一RFI问句继承后一Submittal状态。可解析的修订和批注要区分正文，不确定采用状态则标记。TXT保留编码与行号。EML把Subject/From/To/Cc/Date、当前正文、显式引用历史和识别出的签名分开定位；优先纯文本正文，只有HTML时仅保留安全可见文字。HTML blockquote、精确Gmail `gmail_quote`/`gmail_quote_container`、Yahoo `yahoo_quoted`、Proton `protonmail_quote` class和Outlook `divRplyFwdMsg` id使用成对历史边界；精确纯文本`-- `行和Gmail `gmail_signature` class形成签名边界。关闭HTML边界后的可见文字恢复为当前正文；历史和签名不得路由工作流、产生当前要求或设计属性。显式Outlook风格`From:`后同时存在`Sent:`、`Date:`、`To:`或`Subject:`时，无论这些可见标签在同一行还是相邻行，均从该处开始引用历史。明确RFI问句／答复和Submittal状态进入locator；只有含数字的工作流编号形成关系，紧凑编号可完整保留由点、下划线、斜线或连字符连接的字母项目／专业前缀，各前缀保持不同关系；正文、Subject或文件名中的带空格CSI式Submittal编号使用同一严格规范化器完整保留，常见明确状态规范化，无角色RFI保持未知。邮件主工作流按明确Subject、正文明确标题、文件名依次选择；较弱来源中的另一类精确编号只作为引用关系，不替换较强路由，也不能把其Question/Response角色或Submittal状态挂到主编号。遇到不同的同类精确编号即开始新的证据区段，该区段的locator显示自己的编号、角色或状态。明确Subject前可有最多6个交错的Re/Fw/Fwd或方括号企业安全标签，每个方括号标签最多40字符；超出边界不跳过，也不降低工作流词和含数字编号要求。文件名只作路由元数据，不产生审批、权威或设计要求。同一Submittal来源对同一编号含多个不同显式状态时保留全部显示值并标歧义，不能自动选择其中之一。哈希化Message-ID可形成待审核关系；同一邮件出现多个不同Message-ID时只保存冲突布尔标记并在Workflow中标歧义，不持久化原始标识；没有Message-ID的邮件仍可作为独立项。多值In-Reply-To中的每个精确标识分别哈希并参与同一确定性线程，不能把整段头部误作一个父标识。重复或冲突来源必须标歧义，语义推断不冒充确定关系。RFI问句不得成为材料、测试或修订指令；同一候选混合有效来源与RFI问句、被拒Submittal、邮件头、引用历史或签名时，无效来源逐条退出直接依据，不能污染或连带删除仍有有效依据的候选。全部剩余Submittal、RFI答复和Email正文来源共同决定条件性与人工审核，不只读取第一条证据。完整产品中的图片保留原尺寸、旋转、裁剪变换和OCR文字；当前已提供本机OCR和页面级视觉任务，但未实现通用局部裁剪变换。DWG用合法可配置转换服务，缺Xref、字体、自定义对象、单位或Layout明确报出；当前转换和对象解析均成功时才标记`OBJECT_METADATA`，转换器缺失、转换失败或对象不可解析均标记`UNAVAILABLE`；不将部分对象解析冒充为完整CAD语义。
+
+Email-address suffixes anywhere in supported content cannot create RFI or Submittal workflow groups. From, To, Cc and Date remain visible email-header evidence; non-address Subject, current-body and explicit quoted-history text remains eligible for exact relationship extraction.
+
+EML正文选择先过滤空白MIME候选：任一非空`text/plain`仍优先；全部纯文本为空时才使用非空安全HTML，不合并可能矛盾的alternative正文。
+
+Outlook MSG uses the pinned MIT-licensed `python-oxmsg` package only to decode the OLE container. CIRP then applies the existing Email, RFI, Submittal, quoted-history, hash-only thread, active-content, and attachment boundaries, including the same MIME-derived name in parser inventory and selected import. MSG files over 8 MB fail locally before model work.
+
+Email routing headers, quoted history and recognized signatures remain stored and reviewable, but they complete as no-current-requirement before extraction batching. Different exact RFI identifiers or roles, Submittal identifiers or statuses, and RFI/Submittal families close the adjacent batch so they cannot share one extraction prompt. Only eligible current evidence reaches the model; Coverage reports locally skipped fragments.
+
+没有明确工作流Subject时，最早出现的受支持正文标题确定主RFI/Submittal；后续精确编号只作引用。紧邻精确编号的白名单角色/状态从编号中分离；Submittal状态须占满整个值（可有行末标点），关键词开头的描述和未知标签保持中性。
+
+`Request for Information`完整名称与`RFI`缩写采用同一含数字编号规则并形成相同精确引用关系。
+
+`Submission`与`Submittal`采用同一含数字编号规则并形成相同精确引用关系。
+
+扫描件或无可用正文的文件名回退同样接受`Request for Information`/`RFI`与`Submission`/`Submittal`，但文件名不产生角色、状态或审批权威。
+
+RFI角色词必须独立成标题，或紧跟`:`、`#`、`-`分隔符；`Request for Information`、`Response time`和`Questionnaire`等普通前缀不得制造Question/Response角色。
+
+RFI角色按同一来源的明确页面语义聚合：只有明确Question和Response同时存在（或解析器已明确给出MIXED）才显示MIXED；UNKNOWN页面保持中性，不能补成缺失的一方。
+Submittal正文与其他文档中的精确编号引用形成LINKED关系；邮件若用自己的精确Message-ID作为父级或引用则标为AMBIGUOUS；附件来源关系只有在父文档确实解析为Email时才显示。
+本地邮件线程按精确哈希父级／引用关系让祖先先于回复；同级使用文件名和文档ID稳定排序。头信息形成循环时保留全部成员并标为AMBIGUOUS，不用正文或日期猜顺序。
+工作流读取只从持久化解析摘要投影关系所需字段，不把页面、视觉、CAD或几何数组加载到Python；这不改变关系语义或分页结果。浏览器必须显示已加载数和实际总数，只在审核者要求时继续加载下一批最多500组，并按关系组ID去重追加，不能把首批500组冒充为完整结果。完成或部分完成的Run可在有界进程内缓存中复用一次完整索引；活动Run保持实时读取。
 
 解析能力需真实样本集成验证；本规格不保证具体解析器自动满足全部字段。
 
@@ -67,7 +90,7 @@ DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可�
 ## 9. 最新版本与冲突
 采用用户明确策略：同一内容适用范围可比较时，以内部Revision／修订日期最新的要求作为当前展示值，不按上传时间。日期来自文件中的修订栏或正式签发内容，不用文件系统mtime或扫描日期。
 
-需要先确定对象、位置、属性、工况及选项范围相同。RFI问句、广告示例、未选选项不是正式断言。较新Submittal的实际提出值可按用户规则成为当前展示候选，但必须保留其“送审／未批准”等状态和与设计的偏差；不声称这种排序自动改变合同权利。
+需要先确定对象、位置、属性、工况及选项范围相同。RFI问句、广告示例、未选选项不是正式断言。较新Submittal的实际提出值可按用户规则成为当前展示候选，但必须保留其“送审／未批准”等状态和与设计的偏差；候选同时有规格依据时也不能因证据排序而隐藏该条件；不声称这种排序自动改变合同权利。
 
 修订以Sheet／条款／属性为单位，一页更新不废掉未更新的整本图纸。日期相同而值冲突、内部日期缺失或修订次序明显反向，保留双方待核验，不用文件名或上传时间猜测。
 
@@ -79,7 +102,7 @@ DOCX保留标题、列表、表格、嵌入图片以及稳定段落定位。可�
 区分NOT_UPLOADED、PARSE_FAILED、NOT_LOCATED、REVISION_UNCLEAR。搜索没找到不能证明原文件没有。缺附件、缺比例、未读页面应链接影响项，失败解析也进入Coverage，不能由模型补造内容。
 
 ## 11. 证据与Coverage
-模型候选只提供获准的Evidence IDs，服务端校验ID存在且属于本项目与输入快照。字段级来源覆盖型号、数值、频率与判定；一条相关引用不等于支持整行所有字段。
+模型候选只提供获准的Evidence IDs，服务端校验ID存在且属于本项目与输入快照。字段级来源覆盖型号、数值、频率与判定；一条相关引用不等于支持整行所有字段。字段混合有效与无效工作流引用时，只剔除无效直接引用，仍有有效依据的字段继续保留。
 
 Coverage分别显示上传、解析、首读、实体关联、各专业分析、数量、验证状态。成功调用且返回空结果不直接算“无要求”，记录原因并对异常页面或条款复查。视觉未处理区域、超限任务和被排除历史版本明确列出。
 
@@ -92,27 +115,29 @@ Coverage分别显示上传、解析、首读、实体关联、各专业分析、
 
 低价模型降低每token成本；减少实际token靠零调用、短输入、缓存复用、最低推理、短JSON及有限重试。没有可用更小模型时可以多个任务共享Flash，不能把不同Prompt伪装成多个不同尺寸模型。
 
-## 13. 预算、时间和状态
-每项目300CNY是累计直接处理上限，包括重试及后续运行；基于已结算+未结算预留（其中包含计费未决请求，不重复计算），下一次调用发送前检查。模型/OCR/CAD/直接计算分别核算。共享基础设施费用单独记录分摊，不伪称免费。
+## 13. 时间、调用安全和状态
+项目没有 CIRP 预算、单价或累计费用门禁。模型供应商账户产生的费用由用户直接在供应商侧管理；CIRP 不用价格配置决定是否发送请求。
 
-24小时从Analyze启动计时，上传时长另列；初期单活跃项目。预算或目标时限到达，停止新增收费任务并显示剩余范围；在途任务仍计费且对账，不能回滚已经产生的供应商费用。暂停不代表所有远端请求立即停止。
+24小时从 Analyze 启动计时，上传时长另列；初期单活跃项目。目标时限到达后停止新增任务并显示剩余范围。网络结果不确定或 usage 缺失时保持调用记录为未决，阻止新调用并要求用户核对供应商状态；软件不自动重试，从而避免重复请求。暂停不代表所有远端请求立即停止。
 
-费用未知或实际API价格未确认前，付费路径默认关闭。API响应usage及供应商账单核对，推理token如果已在输出总数中不重复计算。预估按高峰缓存未命中与保守输出上限，缓存收益完成后再核销。
+模型调用仍记录 provider、model、token usage、延迟、请求状态和安全请求号，用于可复现性与故障恢复。这些运行记录不是项目预算模块，不形成额度、费率或费用总计。
 
 ## 14. 用户审核与导出
 全部结果初始PENDING；模型不得填写已批准状态。用户接受／编辑／拒绝由服务端记录身份、时间、原值、新值和说明。本轮不设计跨运行编辑继承；重新分析保留旧快照，开始新的审核。
 
+工作流分类修正采用当前Run覆盖层：人工可查看检测值和生效值，选择精确RFI、Submittal、Other或恢复检测值。保存使用版本校验并追加审计事件，并立即使终态工作流索引缓存失效；解析摘要、邮件附件来源、证据、候选和原文件保持不变，不重新解析、不调用模型、不产生API费用。此能力不代表审批权限、合同优先级或完整语义分类；专业、CSI、系统、设备、区域和Revision修正仍在完整目标中。
+
 未审核结果可以预览及导出，但每行和文件总说明显示状态，未完成Run有PARTIAL说明。正式已审核导出只包含对应审核项；在量算/几何/视觉尚无独立接受流程时，不将这些`PENDING`分析辅助混入`reviewed_only`导出。来源始终可定位。导出读取保存数据，不重新生成自然语言材料。JSON/XLSX固定使用英文工程审核视图，名称、数量和单位分列，证据随项目显示，冲突双方原文与来源并排；不显示内部ID、原始结构代码或PDF纸面几何审计。
 
 ## 15. 开发治理和测试
-需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由、Assembly和价格配置进入Git；密钥不进入Git。用户明确要求避免重复输入时，本机live入口可把供应商密钥保存为Windows DPAPI当前用户加密文件；不得保存明文`.env`，也不得进入网址、命令行或日志。更换Windows账户或电脑不能直接复用该密文。
+需求源为JSON，需求表自动生成；产品说明提供语义边界。所有历史ID保留，被用户新决策替代的ID标superseded而不复用。Prompt、Schema、路由和Assembly配置进入Git；密钥不进入Git。用户明确要求避免重复输入时，本机live入口可把供应商密钥保存为Windows DPAPI当前用户加密文件；不得保存明文`.env`，也不得进入网址、命令行或日志。更换Windows账户或电脑不能直接复用该密文。
 
-开发LLM可提议和实现已批准内容，不能自行更改范围、规则、预算、外传边界或验收标准。变更清单区分spec_only、implementation、bugfix；规格先行时产品状态仍planned，不能因为Schema通过就标业务功能implemented。
+开发LLM可提议和实现已批准内容，不能自行更改范围、规则、外传边界或验收标准。变更清单区分spec_only、implementation、bugfix；规格先行时产品状态仍planned，不能因为Schema通过就标业务功能implemented。
 
-正式历史项目准确率评测暂缓。基础Schema正负例、预算、日期、选项、证据、审核权限和失败状态测试不可省略。CI检查存在性和结构并执行离线测试；语义一致性及真实负责人审批仍由受保护分支审查保证，工具不能自动证明全部产品语义等价。
+正式历史项目准确率评测暂缓。基础Schema正负例、模型调用安全、日期、选项、证据、审核权限和失败状态测试不可省略。CI检查存在性和结构并执行离线测试；语义一致性及真实负责人审批仍由受保护分支审查保证，工具不能自动证明全部产品语义等价。
 
 ## 16. 当前包与后续交付
-本轮用户已授权开始搭建。交付可运行的本地上传网页、SQLite持久化、基础文字解析、单运行任务、模拟Provider、文本DeepSeek适配器、预算、候选审核和JSON/XLSX导出，以及原规格/契约/测试。
+本轮用户已授权开始搭建。交付可运行的本地上传网页、SQLite持久化、基础文字解析、单运行任务、模拟Provider、可配置模型适配器、项目提问、候选审核和JSON/XLSX导出，以及原规格/契约/测试。
 真实API除MockTransport回归外，已完成Gemini合成连通/局部PDF测试及DeepSeek 144/144文字片段全量运行。本轮又实现本机OCR、DeepSeek页面视觉路由、DXF/DWG对象元数据和几何审计：指定PDF离线已补齐53至58页OCR并建立59页视觉任务；合成DWG转换及对象量算通过。视觉live、真实用户DWG兼容性、图形到材料的完整净量归并、复杂跨专业分析和施工准确率仍需逐项验收。原型明确PARTIAL/待审核，不因接口或局部能力成功宣称全专业工程能力。详见IMPLEMENTATION_STATUS和EVIDENCE_VALIDATION。
 开发token策略落为短AGENTS、分目录指令、有限任务包和定向测试。项目级Codex配置只提供low推理建议，不强制账户模型和token硬上限，不代替安全审查。
 后续仍保留完整全项目目标，不把当前切片当作缩减后的产品验收。跨运行编辑继承、采购定价、正式Gold评测继续按用户决定暂缓。
@@ -127,13 +152,13 @@ Cloudflare账户资源实际创建与公网验证是独立待完成需求，不�
 所有页面和业务API保留鉴权；仅Render profile的精确`/_health` GET/HEAD返回无业务信息的存活结果供平台检查。实际公网发布、模型效果与免费额度受账户验证，配置和离线测试不能代替部署。用户云账户没有接入前保持FR-RENDER-LIVE-001 planned。本轮不关闭本机运行、不修改既有Cloudflare资源、不使用付费实例或保活绕过休眠。详见docs/RENDER_FREE_DEPLOY.md。
 
 ## 本轮部署交付：D-20
-用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；不修改300CNY预算、Revision规则、业务范围或工程精度承诺。Windows入口提供但无实机验证；首次依赖安装与实际HTTP验证分别报告。见docs/LOCAL_DEPLOY.md。
+用户批准所有应用服务运行在本机。网页、API、SQLite和后台任务无需GitHub/Render即可启动。新增默认不读.env的模拟入口、显式live入口、依赖/端口检查与浏览器就绪提示。旧远程模拟入口保留；Revision规则、业务范围或工程精度承诺不变。D-30 后不再存在 CIRP 项目预算。见docs/LOCAL_DEPLOY.md。
 
 ## English-only presentation (FR-UI-002)
-Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, cost descriptions, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. This presentation change does not add a network or model call and does not change project data, review history, API paths, canonical status codes, algorithms, provider configuration, or the ¥300 budget. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
+Assume all users and developers work in English. English is the only selectable application language; a legacy saved zh-CN preference is ignored. The web interface, credential setup page, local launcher, dependency checks, public settings, and fixed reviewer exports use English CIRP-owned text. Original source-document quotations remain faithful to their source, while legacy non-evidence business text must pass the fixed-English compatibility checks. The earlier bilingual behavior is retained only as historical documentation in `docs/UI_LANGUAGE.md` and is superseded by D-25.
 
 ## 24. 本轮增量：原文引用与独立核验
 采用成本优先方案A。新增逐字段citation、独立verification报告与付费重验任务，保留原始业务候选和人工审核状态。材料/检查/冲突字段关联原句；推导、计算、缺失报告仅标示其真实依据，不制造设计原句。
 自动分析结束阶段执行免费引用构建，并在已配置真实API时用原有低价模型的最低可用推理模式作分批语义核验；默认模拟模式不调用API、不显示虚假核验通过。GET、语言切换、导出和人工编辑不会自动发送付费请求。编辑会免费重建引用，变化字段失效，后续语义重验须显式请求。
-所有费用进入原项目账本，24小时原运行时限不自动延长；预算不足保留部分结果。核验只覆盖关联片段及其上下文，不等于全项目反证搜索或完整性评测。详见docs/EVIDENCE_VERIFICATION.md。
-JSON与XLSX增加核验和原句表，不翻译设计原文、不默认打包原始文档。新增SQLite表幂等升级，旧项目和预算不重置。
+所有模型调用保留原项目运行记录，24小时原运行时限不自动延长。核验只覆盖关联片段及其上下文，不等于全项目反证搜索或完整性评测。详见docs/EVIDENCE_VERIFICATION.md。
+JSON与XLSX增加核验和原句表，不翻译设计原文、不默认打包原始文档。SQLite幂等升级保留旧项目；历史预算表仅作兼容数据，不再参与运行。

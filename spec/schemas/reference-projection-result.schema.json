@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-projection-result.schema.json",
+  "title": "Persisted source-free Projection Loop outcome",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result_kind", "result_id", "project_id", "run_id", "snapshot_id", "qa_version", "question", "status", "answer_basis", "provider", "model", "result_hash", "result", "citations", "review", "created_at", "updated_at"],
+  "properties": {
+    "result_kind": {"const": "PROJECTION_LOOP_OUTCOME"},
+    "result_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "qa_version": {"const": "3"},
+    "question": {"type": "string", "minLength": 3, "maxLength": 1000},
+    "status": {"enum": ["REVIEW_REQUIRED", "CANNOT_ANSWER", "NEED_USER_INPUT"]},
+    "answer_basis": {"type": "string", "minLength": 1, "maxLength": 120},
+    "provider": {"type": "string", "minLength": 1, "maxLength": 180},
+    "model": {"type": "string", "minLength": 1, "maxLength": 180},
+    "result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result": {"type": "object"},
+    "citations": {"type": "array", "maxItems": 0},
+    "review": {"type": "object", "additionalProperties": false, "required": ["status", "version", "event_id"], "properties": {"status": {"const": "NOT_APPLICABLE"}, "version": {"const": 0}, "event_id": {"type": "null"}}},
+    "created_at": {"type": "string", "minLength": 1},
+    "updated_at": {"type": "string", "minLength": 1}
+  }
+}

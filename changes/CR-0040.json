@@ -1,0 +1,45 @@
+{
+  "change_id": "CR-0040",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Show the actual workflow-group total and append reviewer-requested bounded pages instead of silently treating the first 500 groups as complete.",
+  "decision_refs": [
+    "Active user goal to continue improving efficiency, accuracy and adaptability across RFI, Submittal and email content",
+    "User /ponytail instruction to reuse open-source and existing code instead of adding custom infrastructure",
+    "Confirmed browser implementation that discarded the API pagination metadata after the first 500 groups"
+  ],
+  "affected_paths": [
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "web/style.css",
+    "tests/web/test_display_contract.py",
+    "tests/app/test_api.py",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "tasks/DEV-025.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0040.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py",
+    "tests/web/test_display_contract.py",
+    "scripts/browser_i18n_smoke.py",
+    "scripts/run_checks.py --area ui",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued workflow efficiency and adaptability improvements, with /ponytail reuse constraints.",
+  "known_limitations": [
+    "Each request remains capped at 500 workflow groups; reviewers must request further pages explicitly.",
+    "Browser validation uses synthetic local files and does not establish construction-document relationship accuracy on a customer project.",
+    "No mailbox, model, external provider or paid request was used."
+  ]
+}

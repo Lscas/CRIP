@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0098",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Scope cited RFI/Submittal date roles to the same exact workflow identity.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The user requested project questions answered only from existing files",
+    "Offline reproductions proved both a cross-RFI date false acceptance and a distinct-RFI date false ambiguity"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-083.json", "changes/CR-0098.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent RFI, Submittal and Email objective authorizes this deterministic answer-accuracy improvement.",
+  "known_limitations": [
+    "A source statement containing several workflow identities is not semantically distributed among them; each dated statement must identify one item or use a unique locator.",
+    "Email dates without an explicit RFI/Submittal identity retain citation-local date-role rules rather than inferred thread identity.",
+    "Multiple dates for one normalized identity and role remain ambiguous; no event ordering or authority is inferred.",
+    "The guard does not prove that every relevant project document was uploaded or parsed."
+  ]
+}

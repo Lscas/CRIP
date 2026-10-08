@@ -1,20 +1,55 @@
-# DeepSeek 文本/视觉与 Google Gemini 文本适配器
+# OpenAI Responses、DeepSeek 文本/视觉与 Google Gemini 文本适配器
+
+## In-app model settings
+
+Local users can use the dedicated **Settings** section on the main application page, reached from the sidebar or the **Model API settings** header shortcut, to choose Mock, the official OpenAI Responses API, DeepSeek, Gemini, a custom OpenAI-compatible HTTPS API, or a loopback local model. This is not a modal or separate setup server. All model HTTP still uses the existing gateway; this is not a second dispatch path. Official provider choices keep fixed endpoints. OpenAI accepts a user-entered exact model ID; DeepSeek offers the published V4.1 Flash and independent V4 Pro IDs plus an explicit Reference QA thinking level; Gemini retains its fixed model. A custom remote endpoint requires HTTPS and a key; only `localhost` or a literal loopback address may use HTTP and omit the key. Image input, bounded DeepSeek Reference thinking and native Reference JSON Schema output remain explicit capabilities. CIRP does not discover or infer custom-provider support. Custom routes receive no DeepSeek/Gemini-specific reasoning parameter. CIRP has no project budget, price, rate, or monetary dispatch gate.
+
+Applying settings performs no model call. It is blocked by an active analysis, active semantic verification, or any unresolved model call. The local single-user service then restarts on the same port. Keys are never returned to the browser after submission and are persisted only when the user selects Windows current-user DPAPI storage. The non-secret active profile permits the normal launcher to reuse the selection; `--mock` explicitly bypasses it.
 **规格版本：** 0.2.6
-当前 `app/gateway.py` 已实现OpenAI风格chat/completions HTTP接口；不包含秘密。文本使用`deepseek-v4-flash`，页面视觉只允许`deepseek-v4-flash-vision-exp`，不自动升级到其他模型。
+当前 `app/gateway.py` 在同一安全出口中实现既有OpenAI风格Chat Completions和新增官方OpenAI Responses传输；不包含秘密，也不自动升级模型。DeepSeek设置使用官方`deepseek-flash`（V4.1 Flash）或独立`deepseek-v4-pro`（V4 Pro）。Flash可显式启用图像，Pro保持纯文本；历史`deepseek-v4-flash`文本配置与`deepseek-v4-flash-vision-exp`视觉记录继续可读，不重写旧评估或调用身份。
+
+## DeepSeek V4.1 Flash 与 V4 Pro 精确选择
+
+本机设置页固定DeepSeek官方基址`https://api.deepseek.com`，提供`deepseek-flash`和`deepseek-v4-pro`两个当前官方ID。新Flash配置可由用户显式开启有限选中页面图像；Pro按官方能力保持纯文本并在HTTP前拒绝图像输入。两者都使用Chat Completions和`json_object`；Reference QA思考默认关闭，也可显式选择`low`、`high`或`max`，精确模型ID和推理模式会冻结进Reference评估任务。保存或切换配置不探测供应商、不产生模型调用，也不会修改已存在的结果、调用或评估任务。
+
+官方文档把`deepseek-v4-flash`和`deepseek-v4-flash-vision-exp`列为会路由到V4.1 Flash的旧别名。CIRP接受旧文本别名并在新的活动配置中规范化为`deepseek-flash`；历史数据库行保持原值。当前官方模型列表独立列出`deepseek-v4-pro`，因此新的活动配置允许该精确ID。未知DeepSeek模型、非官方端点和Pro图像输入仍在HTTP前失败。同快照Pro对照仍必须冻结相同run、snapshot、问题顺序和selector，并单独进行正确性裁决。
+
+## 有边界的 Reference QA 思考
+
+`none`保留既有`thinking={"type":"disabled"}`快速路径。选择`low`、`high`或`max`后，只有QA V3证据决策发送`thinking={"type":"enabled"}`和对应`reasoning_effort`；抽取、视觉、核验、QA V2和其他任务继续使用原推理策略。思考决策输出上限为8,000 token，仍受三次决策、证据合同、不自动重试、未决账单和请求大小闸门约束。
+
+供应商返回的`reasoning_content`不会进入答案合同、数据库response、执行收据、报告或浏览器；收据继续固定`chain_of_thought_included=false`。供应商usage中的reasoning token仍作为输出用量记录。授权的20题Flash A/B显示Low thinking把合同有效结果从14/20提高到17/20、跨项目现场题的可用安全非答案从4/5提高到5/5，但平均每题从6.82秒增至13.60秒，输出token增至7.13倍。因此它是面向不确定、多字段、算术或安全关键问题的升级路径，而不是默认全量模式；详见`reports/kapolei_field_worker_cot_flash_ab_2026-10-03.md`。
+
+## OpenAI Responses API（新功能）
+
+设置页中的 **OpenAI Responses API** 是独立、可选的新增provider，不替换DeepSeek、Gemini、自定义接口、Mock或任何旧功能。它把Key固定发送到`https://api.openai.com/v1`，模型ID由用户准确填写；保存设置本身不调用模型。只有用户之后显式运行分析或问题任务才可能发送所选证据并产生供应商费用。
+
+请求固定使用`POST /responses`、`store=false`、`max_output_tokens`和`text.format`，不启用tools、conversation或`previous_response_id`，因此CRIP不会借用供应商侧会话状态。既有文本消息转换为Responses `input`；只有用户显式开启图像能力后，Reference选择器已选中的有限页面图像才从现有`image_url`部件转换为`input_image` data URL。完整项目、未选择页面和本地数据库不会因此自动上传。
+
+Responses返回在本机转换为既有Gateway内部格式：只接收完成响应中的`output_text`，`input_tokens`/`output_tokens`转换为现有用量字段；reasoning项被忽略且不保存。拒答、未完成、意外输出类型、缺少可信usage或未通过本地答案契约的结果都不会发布。若供应商已返回可信usage，调用会以安全诊断结算；不保存拒答正文或隐藏推理，也不自动重试、改模型或退回另一协议。`api_protocol`进入冻结评测profile和新Responses任务身份，而历史Chat Completions身份保持原样。
+
+该实现依据官方[Responses迁移说明](https://developers.openai.com/api/docs/guides/migrate-to-responses?api-mode=responses.html)、[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)和[图像输入说明](https://developers.openai.com/api/docs/guides/images-vision)。当前验证全部使用本地合成MockTransport，没有调用OpenAI，也不证明任何具体模型可用、费用、答案质量或固定15问提升。
+
+## Autodesk and Procore document sources
+These are read-only document sources, not model providers. The local Files panel accepts a customer-generated bearer token, lists project folders and imports only a selected file through the existing project-capacity, 4 MiB chunk, SHA-256 and deduplication path. CIRP never returns the token in status responses, optionally stores it with Windows current-user DPAPI, sends it only to the fixed official API host, and removes it before following a cross-host signed download. Forgetting the connection deletes only CIRP's local copy; it does not revoke the token at the provider.
+
+The Autodesk implementation follows the official [Data Management API](https://aps.autodesk.com/data-management-api), Autodesk's [three-legged authentication guidance](https://get-started.aps.autodesk.com/tutorials/hubs-browser/auth/) and the documented [BIM 360/Autodesk Docs storage URN download pattern](https://aps.autodesk.com/blog/best-practice-uploading-and-downloading-files-bim360-docs). The Procore implementation follows the official [OAuth authorization-code documentation](https://procore.github.io/documentation/oauth-auth-grant-flow) and [Project Folders and Files API](https://developers.procore.com/reference/rest/project-folders-and-files?version=1.0). Autodesk publishes official Node/.NET SDKs and OpenAPI definitions, but adding another runtime for two bounded read paths would increase deployment work; this increment therefore reuses the project's installed open-source `httpx` client instead of adding an SDK.
+
+Interactive OAuth, automatic refresh, provider-side revocation, recursive bulk import, change polling, continuous synchronization and live-tenant validation are not implemented. Automated validation uses synthetic `httpx.MockTransport` responses only; it makes no live Autodesk/Procore request and never performs a remote write or delete.
 
 ## DeepSeek V4 Flash（当前选择）
 Windows运行`start-deepseek-live.ps1`；需要网页输入时运行`scripts/deepseek_local_setup.py`。两种入口都固定官方基址`https://api.deepseek.com`与模型`deepseek-v4-flash`，显式发送`thinking={"type":"disabled"}`。用户选择保存后，Key使用Windows DPAPI当前用户加密文件保存并在后续启动时自动加载；不写明文`.env`、网址、命令行、日志或Git。可用`--replace-key`强制重新输入、`--forget-key`删除。启动本身不调用API，只有用户点击“开始分析”后才可能计费。
 
-DeepSeek入口同时启用精确视觉模型`deepseek-v4-flash-vision-exp`。PDF/图片先在本机转为最长边2048的PNG，通过data URL发送；原文件不改。每页任务和图片哈希进入缓存键，视觉与文本共用项目累计预算、未决调用闸门、串行间隔、usage结算及不自动重试规则。视觉输出必须通过`vision-result.schema.json`，且强制待人工审核；只描述可见内容，不执行文档中的指令，不允许模型替代CAD几何量算。官方说明单图最多384图像token，预算仍按缓存未命中峰值费率预留。
+DeepSeek入口同时启用精确视觉模型`deepseek-v4-flash-vision-exp`。PDF/图片先在本机转为最长边2048的PNG，通过data URL发送；原文件不改。每页任务和图片哈希进入缓存键，视觉与文本共用未决调用闸门、串行间隔、usage记录及不自动重试规则。视觉输出必须通过`vision-result.schema.json`，且强制待人工审核；只描述可见内容，不执行文档中的指令，不允许模型替代CAD几何量算。
 
-2026-09-11核实的官方峰值价为缓存未命中输入$0.44/百万token、缓存命中$0.014/百万token、输出$1.32/百万token。安全启动器不预先假定缓存命中，并用固定10 CNY/USD安全倍数预留输入¥4.40、输出¥13.20；这不是DeepSeek报价或实时汇率，实际扣费、赠送余额与税费以用户账户为准。DeepSeek入口使用1秒最小请求开始间隔作为本机稳定性缓冲，仍不自动重试失败请求。
+DeepSeek入口使用1秒最小请求开始间隔作为本机稳定性缓冲，仍不自动重试失败请求。CIRP 不保存供应商单价或项目费用上限；实际扣费、赠送余额与税费以用户的 DeepSeek 账户为准。
 
 ## Google Gemini 3.6 Flash（推荐用安全启动器）
-Windows运行`start-gemini-live.ps1`。首次使用时在仅绑定127.0.0.1的密码页确认保守人民币计费上界并输入Key；可选择由Windows DPAPI为当前用户加密保存，后续自动加载。Key不写明文`.env`、网址、命令行、日志或Git；启动子进程后设置页关闭。启动服务本身不调用API，只有用户点击“开始分析”后才可能计费。
+Windows运行`start-gemini-live.ps1`。首次使用时在仅绑定127.0.0.1的密码页确认数据传输并输入Key；可选择由Windows DPAPI为当前用户加密保存，后续自动加载。Key不写明文`.env`、网址、命令行、日志或Git；启动子进程后设置页关闭。启动服务本身不调用API，只有用户点击“开始分析”或提交项目问题后才可能计费。
 
 当前适配固定Google官方OpenAI兼容基址`https://generativelanguage.googleapis.com/v1beta/openai`和模型`gemini-3.6-flash`，避免把Google密钥发送到其他主机。Gemini 3不能关闭推理，因此请求显式使用`reasoning_effort=minimal`，不请求或保存思维摘要。文本联合抽取`max_tokens<=8000`，其中包含可见输出和内部推理生成量；usage结算在`total_tokens-prompt_tokens`大于`completion_tokens`时采用较大值，避免漏记隐藏推理。
 
-官方Standard价格截至2026-12-31为输入$0.75/百万token、输出$3.75/百万token（输出包含thinking）。安全启动器用10 CNY/USD的固定上界做预算预留，即输入¥7.50、输出¥37.50；这是防止低估的内部上界，不是报价或实时汇率。账户实际是否免费、税费和结算币种仍以Google账单为准。
+CIRP 不保存 Gemini 单价、汇率或项目费用上限。账户实际是否免费、税费和结算币种以 Google 账单为准。
 
 ## DeepSeek手动配置（不推荐保存Key）
 在本机复制.env.example为.env，按实际接口填写：
@@ -24,16 +59,13 @@ CIRP_LIVE_API_ENABLED=true
 CIRP_API_BASE_URL=https://api.deepseek.com
 CIRP_API_KEY=<只在本机填写>
 CIRP_CHEAP_MODEL=deepseek-v4-flash
-CIRP_PRICES_CONFIRMED=true
-CIRP_INPUT_CNY_PER_MILLION=<实际接口输入最高适用单价>
-CIRP_OUTPUT_CNY_PER_MILLION=<实际接口输出最高适用单价>
 ```
-不要把示意占位符直接启用。本版DeepSeek live只接受精确官方基址`https://api.deepseek.com`和模型`deepseek-v4-flash`，Gemini也只接受文档中的精确官方基址与模型；程序自行追加`/chat/completions`。当前不支持中转API，避免把供应商Key发送到其他主机。价格未确认、Key为空或开关关闭时，启动真实分析会暂停而非偷偷切换服务。
+不要把示意占位符直接启用。本版DeepSeek live只接受精确官方基址`https://api.deepseek.com`和模型`deepseek-v4-flash`，Gemini也只接受文档中的精确官方基址与模型；程序自行追加`/chat/completions`。当前不支持中转API，避免把供应商Key发送到其他主机。Key为空或live开关关闭时，启动真实分析会暂停而非偷偷切换服务。
 
 `python scripts/doctor.py`仅离线检查，不调用供应商。用户启动真实分析代表该次请求可能计费；先用小授权样例核实接口，不先上传整个10GB项目。应用没有自动读取供应商账单的能力；未知调用必须由用户先在供应商后台核实，再从本机网页逐条登记。
 
 ## 实际请求和保护
-DeepSeek发送`thinking=disabled`；Gemini发送`reasoning_effort=minimal`。两者均使用`response_format=json_object`。文本联合抽取最多8,000生成token和32,000 UTF-8输入字节工程估算；页面视觉仍最多2,000生成token，语义核验仍最多1,400，且每类实际值都受运行时Settings更低上限约束。请求体、缓存参数和预算预留使用同一个任务上限；32,000字节不是实际token计数。无高级模型路由；文本提取、页面视觉和语义核验的同一任务族均最多3次显式请求，未知账单未清时不重试。人工重排后缀只作为任务族generation记账，模型输入和证据范围验证始终使用原始Evidence ID。抽取可保守去除有界JSON展示包装；根级多余字段、等值标量字符串、重复局部键、悬空父引用及无法完整验证的原子项只允许降级修复，并强制输出`TRUNCATED`进入人工审核。空/错/多对象JSON、未知前后文字、越界或缺失证据、审核结论字段、未知嵌套字段及`finish_reason=length`仍不发布。DeepSeek意外生成思考内容则暂停。真实请求可能计费，即使响应不合格。
+DeepSeek发送`thinking=disabled`；Gemini发送`reasoning_effort=minimal`。两者均使用Chat Completions `response_format=json_object`。自定义OpenAI兼容配置默认使用该模式；用户明确选择后，Reference QA V2/V3使用带稳定名称、`strict=true`和完整任务Schema的`response_format=json_schema`。官方OpenAI则通过Responses `text.format`承载同一JSON object或strict JSON Schema合同。CIRP在发送前检查受支持的Schema子集，不兼容即本地失败，不探测供应商、不降级、不自动重试；其他任务仍使用各自协议的JSON object。文本联合抽取最多8,000生成token和32,000 UTF-8输入字节工程估算；页面视觉仍最多2,000生成token，语义核验仍最多1,400，且每类实际值都受运行时Settings更低上限约束。请求体、缓存参数和预算预留使用同一个任务上限；32,000字节不是实际token计数。无自动高级模型路由；文本提取、页面视觉和语义核验的同一任务族均最多3次显式请求，未知账单未清时不重试。人工重排后缀只作为任务族generation记账，模型输入和证据范围验证始终使用原始Evidence ID。抽取可保守去除有界JSON展示包装；根级多余字段、等值标量字符串、重复局部键、悬空父引用及无法完整验证的原子项只允许降级修复，并强制输出`TRUNCATED`进入人工审核。空/错/多对象JSON、未知前后文字、越界或缺失证据、审核结论字段、未知嵌套字段及长度终止仍不发布。DeepSeek意外生成思考内容则暂停。真实请求可能计费，即使响应不合格。
 
 语义核验响应只对两类无事实新增的格式偏差做安全规范化：移除已知的输入回显字段，或把过长理由替换为有界说明。凡经规范化的字段一律降为`NEEDS_CONTEXT`，不能产生`SUPPORTED`或`CONTRADICTED`结论；未知字段、非法路径、证据越界和非逐字引用仍以`MODEL_OUTPUT_REJECTED`失败关闭。发布候选的审核摘要限制为400字符，完整属性仍保存在原证据抽取中。若付费调用已完成而仅本地发布阶段失败，恢复只重新执行本地发布和未完成核验，不重新发送已完成的任务。
 

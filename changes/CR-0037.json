@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0037",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Stop parent-email MIME traversal at attachment boundaries so attached-message bodies and descendants cannot alter parent evidence, inventory or workflow role.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy and adaptability across RFI, Submittal and email content",
+    "Confirmed synthetic reproduction where a message/rfc822 attachment changed its parent RFI response role to MIXED"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-022.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0037.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_email_attachments.py",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued email and workflow adaptability improvements.",
+  "known_limitations": [
+    "Only explicit attachment disposition or filename boundaries are treated as selectable attachments, matching the existing inspection workflow.",
+    "MSG, mailbox synchronization, automatic attachment recursion and semantic thread inference remain unsupported.",
+    "Validation is synthetic and offline; no mailbox, model or external provider request is used."
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued accuracy across RFI, Submittal and email content.",
+  "notes": [
+    "Prune ineligible workflow evidence from mixed-source candidates instead of deleting a candidate that still has valid direct evidence.",
+    "Determine conditional workflow-source labeling from every remaining direct citation, never only the first evidence ID."
+  ],
+  "task_id": "DEV-011",
+  "title": "Mixed workflow-source evidence accuracy",
+  "requirement_ids": [
+    "FR-REVISION-002",
+    "FR-REVISION-004",
+    "FR-FIELD-EVIDENCE-001"
+  ],
+  "allowed_paths": [
+    "app/assemble.py",
+    "prompts/joint-extraction/system.md",
+    "tests/app/test_assemble.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-011.json",
+    "changes/CR-0026.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/PRODUCT_SPEC.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_assemble.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Prevent rejected Submittal, RFI-question, email-header and quoted-history evidence from remaining as direct support when a candidate also has valid evidence, while preserving the valid candidate and labeling all remaining workflow-source conditions."
+}

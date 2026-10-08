@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0053",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-API-005"
+  ],
+  "summary": "Recognize exact Gmail and Outlook HTML reply wrappers so prior RFI or Submittal history stays reviewable but cannot alter the current workflow state or enter model extraction input.",
+  "decision_refs": [
+    "Active user goal to improve efficiency, accuracy and adaptability for RFI, Submittal and Email content",
+    "Synthetic regression showing prior Approved Submittal history merged into the current Pending message",
+    "Existing deterministic rule that quoted history remains reviewable but is excluded from current requirement extraction"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-038.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0053.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requires continued efficiency, accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only exact Gmail gmail_quote or gmail_quote_container classes and Outlook divRplyFwdMsg IDs are recognized; arbitrary visual indentation is not guessed as history.",
+    "Mailbox synchronization, semantic thread inference and automatic attachment recursion remain unsupported.",
+    "Validation is synthetic and offline; no customer email, mailbox or paid provider was used."
+  ]
+}

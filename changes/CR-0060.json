@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0060",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Select one supported body within each multipart/alternative group instead of merging conflicting Email, RFI or Submittal alternatives.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "FR-PARSE-007 requires plain-text preference and forbids merging conflicting alternatives",
+    "A synthetic offline reproduction showed two text/plain alternatives creating a false MIXED RFI role"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-045.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0060.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Within malformed same-type alternatives, the first supported non-empty candidate is retained and the document is marked partial for review.",
+    "Separate inline body segments outside multipart/alternative remain concatenated in source order.",
+    "Mailbox synchronization and semantic comparison between MIME alternatives remain unsupported.",
+    "Validation is synthetic and offline; no customer email, mailbox or provider API is used."
+  ]
+}

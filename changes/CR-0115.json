@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0115",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-DATE-001"],
+  "summary": "Ground explicit Email Date-header claims to one complete Date value in their own citations.",
+  "decision_refs": [
+    "The active objective requires accurate file-grounded questions across RFI, Submittal and Email content",
+    "An offline reproduction proved that an Email Date-header answer could borrow a Received date from the same exact citation",
+    "A bounded complete-header check closes the structured timestamp gap without timezone conversion or another model request"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-100.json",
+    "changes/CR-0115.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only explicit Email date and Date-header claims enter this guard; generic document dates remain under the existing full-date and date-role checks.",
+    "Only evidence conservatively classified as Email can ground an Email Date header; a Received line, body date or RFI/Submittal form Date field remains a separate value.",
+    "A natural sent-date question may use the complete Date header or a separately labelled exact Sent date; no claim is made that the Date header proves transport or delivery time.",
+    "Case, repeated whitespace, outer quotation marks and answer-ending punctuation outside the value normalize while weekday, date, time, seconds, numeric offset and comments stay exact.",
+    "The guard does not decode encoded words, unfold new source formats, convert time zones, infer delivery or transport time, choose the current thread message or determine authority.",
+    "Header unfolding remains the responsibility of the existing Email parser; this change does not connect to a mailbox or alter source parsing."
+  ]
+}

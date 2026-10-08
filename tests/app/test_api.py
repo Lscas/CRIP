@@ -1,5 +1,6 @@
 """FR-INGEST-003/004, FR-REVIEW-001/002, FR-EXPORT-001, PRD-PROTOTYPE-001"""
-import io,json,subprocess
+import hashlib,io,json,subprocess,threading
+from email.message import EmailMessage
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +10,8 @@ import httpx
 from openpyxl import load_workbook
 from PIL import Image
 from app.gateway import Gateway,ModelResult,mock_extract
+from app.parsers import PARSER_VERSION
+from app.runner import adjacent_extraction_batches
 from .conftest import upload,run_demo
 
 
@@ -22,6 +25,16 @@ def test_health_and_no_key_exposed(client):
 def test_invalid_name(client,name):assert client.post('/api/projects',json={'name':name}).status_code in (400,422)
 
 def test_extra_fields_rejected(client):assert client.post('/api/projects',json={'name':'x','admin':True}).status_code==422
+
+
+def test_project_contract_has_no_budget_module(client):
+    created=client.post('/api/projects',json={'name':'No budget project'})
+    assert created.status_code==201 and 'budget_limit_cny' not in created.json()
+    pid=created.json()['id'];db=client.app.state.db
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(pid,),False) is None
+    assert client.post('/api/projects',json={'name':'No legacy field','budget_cny':'425.50'}).status_code==422
+    assert client.get(f'/api/projects/{pid}/budget').status_code==404
+    assert client.put(f'/api/projects/{pid}/budget',json={'limit_cny':'500.25'}).status_code==404
 
 def test_cross_origin_blocked(client):
     assert client.post('/api/projects',json={'name':'x'},headers={'Origin':'https://evil.invalid'}).status_code==403
@@ -50,6 +63,541 @@ def test_upload_limit_and_basename(client,project):
     assert client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'huge.txt','size':10000000001}).status_code==413
     u=upload(client,project['id'],'../../outside.txt',b'abc')
     assert u['name']=='outside.txt'
+
+
+def test_eml_upload_reaches_canonical_evidence_without_attachment_content(client,project):
+    message=EmailMessage();message['Subject']='RFI 101';message['From']='contractor@example.test'
+    message['To']='engineer@example.test';message.set_content('   \n')
+    message.add_alternative(
+        '<html><body><p>Response:</p><p>Provide Type L copper pipe.</p>'
+        '<p>From: Architect &lt;a@example.test&gt; Sent: Monday To: Contractor Subject: RFI 101</p>'
+        '<p>Question: May PVC be used?</p></body></html>',subtype='html')
+    message.add_attachment(b'ATTACHMENT-ONLY MATERIAL',maintype='application',subtype='pdf',filename='detail.pdf')
+    document=upload(client,project['id'],'rfi-response.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    rows=db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))
+    evidence=[json.loads(row['payload']) for row in rows]
+    summary=json.loads(db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary'])
+
+    assert any('Type L copper pipe' in item['raw_text'] for item in evidence)
+    assert all('ATTACHMENT-ONLY MATERIAL' not in item['raw_text'] for item in evidence)
+    assert any('EMAIL > BODY > RFI 101 > RESPONSE' in (item['locator']['section'] or '') for item in evidence)
+    assert any('May PVC be used?' in item['raw_text'] and
+               'EMAIL > QUOTED HISTORY' in (item['locator']['section'] or '') for item in evidence)
+    assert all('May PVC be used?' not in item['raw_text'] for item in evidence
+               if 'EMAIL > BODY' in (item['locator']['section'] or ''))
+    assert summary['workflow_contexts'][0]['role']=='RESPONSE'
+    assert summary['attachments']==[{'file_name':'detail.pdf','content_type':'application/pdf',
+                                     'status':'NOT_PROCESSED'}]
+
+
+def test_email_routing_evidence_stays_reviewable_without_model_extraction(client,project,monkeypatch):
+    message=EmailMessage();message['Subject']='RFI 42';message['From']='contractor@example.test'
+    message['To']='engineer@example.test';message.set_content(
+        '<html><body><p>Response:</p>'
+        '<p>DEMO_MATERIAL|PIPE|Type L Copper Pipe|-|diameter=2 in</p>'
+        '<div class="gmail_quote"><p>On Monday, Pat wrote:</p>'
+        '<p>Question: May PVC be used?</p></div>'
+        '<div class="gmail_signature">'
+        '<p>DEMO_MATERIAL|EQUIPMENT|Acme Equipment Group|-|role=consultant</p>'
+        '</div></body></html>',subtype='html')
+    upload(client,project['id'],'rfi-42-reply.eml',message.as_bytes())
+    runner=client.app.state.runner;seen=[];seen_text=[];original_many=runner.gateway.extract_many
+    def many(run,evidences):
+        seen.extend(item['locator']['section'] for item in evidences)
+        seen_text.extend(item['raw_text'] for item in evidences);return original_many(run,evidences)
+    monkeypatch.setattr(runner.gateway,'extract_many',many)
+    run=runner.create(project['id'])
+
+    runner.process(run['id'])
+
+    rows=client.app.state.db.all('SELECT payload,extraction FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))
+    routing=[]
+    for row in rows:
+        evidence=json.loads(row['payload']);section=evidence['locator']['section'] or ''
+        if section.startswith(('EMAIL > HEADERS','EMAIL > QUOTED HISTORY','EMAIL > SIGNATURE')):
+            routing.append((evidence,json.loads(row['extraction'])))
+    records=client.get(f'/api/analysis-runs/{run["id"]}/records').json()
+
+    assert seen==['EMAIL > BODY > RFI 42 > RESPONSE']
+    assert all('May PVC be used?' not in text and 'Acme Equipment Group' not in text
+               for text in seen_text)
+    assert len(routing)==3
+    assert {item[1]['deterministic_skip_reason'] for item in routing}=={
+        'ROUTING_ONLY_EMAIL_EVIDENCE','EMAIL_SIGNATURE_EVIDENCE'}
+    assert any('Subject: RFI 42' in item[0]['raw_text'] for item in routing)
+    assert any('May PVC be used?' in item[0]['raw_text'] for item in routing)
+    assert any('Acme Equipment Group' in item[0]['raw_text'] for item in routing)
+    assert len(records)==1 and records[0]['record']['candidate']['name']=='Type L Copper Pipe'
+    assert runner.get(run['id'])['coverage']['fragments_model_skipped']==3
+
+
+def test_attached_email_body_cannot_reach_parent_canonical_evidence(client,project):
+    nested=EmailMessage();nested['Subject']='RFI 901';nested.set_content(
+        'Question:\nATTACHMENT-ONLY: May PVC be used?')
+    nested.add_attachment(b'INNER-ONLY',maintype='application',subtype='pdf',filename='inner.pdf')
+    outer=EmailMessage();outer['Subject']='RFI 901';outer.set_content('Response:\nUse Type L copper.')
+    outer.add_attachment(nested,filename='forwarded.eml')
+    document=upload(client,project['id'],'outer.eml',outer.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+    summary=json.loads(db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary'])
+
+    assert any('Use Type L copper' in item['raw_text'] for item in evidence)
+    assert all('ATTACHMENT-ONLY' not in item['raw_text'] and 'INNER-ONLY' not in item['raw_text']
+               for item in evidence)
+    assert summary['workflow_contexts'][0]['role']=='RESPONSE'
+    assert summary['attachments']==[{'file_name':'forwarded.eml','content_type':'message/rfc822',
+                                     'status':'NOT_PROCESSED'}]
+
+
+def test_email_subject_routes_primary_workflow_while_body_identifier_stays_reference(client,project):
+    message=EmailMessage();message['Subject']='Re: [External Email] Submittal 23 05 00-01';message.set_content(
+        'RFI 42\nStatus: Approved as noted\nResponse package attached separately.')
+    document=upload(client,project['id'],'RFI-42.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,document['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    groups={(item['kind'],item['identifier']):item for item in items}
+
+    assert groups[('SUBMITTAL','23 05 00-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23 05 00-01')]['members'][0]['status']=='APPROVED AS NOTED'
+    assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
+
+
+@pytest.mark.parametrize(('subject','body','kind','identifier','role','status'),[
+    ('RFI Status Update','Submittal 23-01\nStatus: Pending\nPump data.',
+     'SUBMITTAL','23-01','SUBMITTAL','PENDING'),
+    ('Submittal Coordination','RFI 42\nQuestion:\nConfirm clearance.',
+     'RFI','42','QUESTION',None),
+])
+def test_workflow_subject_without_identifier_cannot_suppress_exact_body_primary(
+        client,project,subject,body,kind,identifier,role,status):
+    message=EmailMessage();message['Subject']=subject;message.set_content(body)
+    document=upload(client,project['id'],'workflow-routing.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups=[item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+            if item['kind'] in {'RFI','SUBMITTAL'}]
+
+    assert [(item['kind'],item['identifier']) for item in groups]==[(kind,identifier)]
+    assert groups[0]['members'][0]['source']=='PRIMARY'
+    assert groups[0]['members'][0]['role']==role and groups[0]['members'][0]['status']==status
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_email_same_line_workflow_references_all_reach_review(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'Coordinate RFI 42 and RFI 43 with Submittal 23-01 before release.')
+    document=upload(client,project['id'],'same-line-references.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    references={(item['kind'],item['identifier']):item for item in items
+                if item['kind'] in {'RFI','SUBMITTAL'}}
+
+    assert set(references)=={('RFI','42'),('RFI','43'),('SUBMITTAL','23-01')}
+    assert all(item['members'][0]['source']=='REFERENCE' for item in references.values())
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_prefixed_rfi_links_text_question_and_email_response(client,project):
+    question=upload(client,project['id'],'RFI-ARC-0042.txt',
+                    b'RFI No. ARC-0042\nQuestion:\nConfirm pipe material.')
+    message=EmailMessage();message['Subject']='Re: RFI ARC-0042';message.set_content(
+        'Official Response:\nProvide Type L copper pipe.')
+    response=upload(client,project['id'],'ARC-0042-response.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,));run=runner.get(rid);run['model']='mock'
+    runner.parse_one(run,question['document_id']);runner.parse_one(run,response['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    group=next(item for item in items if item['kind']=='RFI' and item['identifier']=='ARC-0042')
+
+    assert group['state']=='LINKED' and len(group['members'])==2
+    assert {member['role'] for member in group['members']}=={'QUESTION','RESPONSE'}
+
+
+def test_email_rfi_status_reaches_review_without_replacing_question_response(client,project):
+    message=EmailMessage();message['Subject']='RFI 46';message.set_content(
+        'Status: Closed\nQuestion:\nConfirm pipe material.\n'
+        'Official Response:\nProvide Type L copper pipe.')
+    document=upload(client,project['id'],'RFI-46.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='RFI' and item['identifier']=='46')
+
+    assert group['state']=='LINKED'
+    assert group['members'][0]['role']=='MIXED' and group['members'][0]['status']=='CLOSED'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_email_mime_alternatives_do_not_manufacture_a_mixed_rfi(client,project):
+    message=EmailMessage();message['Subject']='RFI 301';message.make_alternative()
+    message.add_alternative('Question:\nConfirm clearance.',subtype='plain')
+    message.add_alternative('Official Response:\nUse 4 inches.',subtype='plain')
+    document=upload(client,project['id'],'RFI-301.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='RFI' and item['identifier']=='301')
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+
+    assert group['state']=='OPEN' and group['members'][0]['role']=='QUESTION'
+    assert any('Confirm clearance.' in item['raw_text'] for item in evidence)
+    assert all('Use 4 inches.' not in item['raw_text'] for item in evidence)
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_email_submittal_status_does_not_cross_to_different_subject_identifier(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Submittal 23-02\nFinal Response: Rejected\nPump P-2 does not comply.')
+    document=upload(client,project['id'],'submittal-scope.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+    pump=next(item for item in evidence if 'Pump P-2' in item['raw_text'])
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status'] is None
+    assert groups[('SUBMITTAL','23-02')]['members'][0]['source']=='REFERENCE'
+    assert 'SUBMITTAL 23-02 > STATUS: REJECTED' in pump['locator']['section']
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_generic_email_routes_by_first_explicit_body_workflow_heading(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'Submittal 23-01\nStatus: Pending\nPump P-1 data.\n'
+        'RFI 42\nQuestion:\nConfirm clearance.')
+    document=upload(client,project['id'],'coordination.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status']=='PENDING'
+    assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_email_addresses_in_content_do_not_create_workflow_groups(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message['From']='rfi42@example.test'
+    message['To']='submittal23@example.test';message['Cc']='submission24@example.test'
+    message.set_content('Contact rfi43@example.test for coordination.\n\n'
+                        'On Monday, Pat wrote:\n> From: submittal25@example.test\n> Previous note.')
+    document=upload(client,project['id'],'address-only.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+
+    assert all(item['kind'] not in {'RFI','SUBMITTAL'} for item in items)
+    assert any(member['document_id']==document['document_id'] for item in items for member in item['members'])
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_full_request_for_information_name_reaches_workflow_index(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Status: Pending\nSee Request for Information No. 0042 before release.')
+    document=upload(client,project['id'],'submittal-rfi-reference.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('RFI','42')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_submission_alias_reaches_submittal_workflow_index(client,project):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response:\nCoordinate with Submission No. 23-01 before release.')
+    document=upload(client,project['id'],'rfi-submission-reference.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('RFI','42')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_cross_type_section_cannot_manufacture_a_linked_rfi(client,project):
+    message=EmailMessage();message['Subject']='Coordination';message.set_content(
+        'RFI 42\nQuestion:\nMay PVC be used?\n'
+        'Submittal 23-01\nResponse:\nProduct data attached.')
+    document=upload(client,project['id'],'cross-workflow.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('RFI','42')]['members'][0]['role']=='QUESTION'
+    assert groups[('RFI','42')]['state']=='OPEN'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='REFERENCE'
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_submission_filename_fallback_reaches_workflow_index(client,project):
+    document=upload(client,project['id'],'Submission No. 23-01.txt',b'Pump package pending review.')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    groups={(item['kind'],item['identifier']):item for item in
+            client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']}
+
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['source']=='PRIMARY'
+    assert groups[('SUBMITTAL','23-01')]['members'][0]['status'] is None
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_one_email_submittal_with_conflicting_statuses_is_ambiguous(client,project):
+    message=EmailMessage();message['Subject']='Submittal 23-01';message.set_content(
+        'Status: Pending\nPump data received.\nStatus: Rejected\nWrong pump selected.')
+    document=upload(client,project['id'],'submittal-status-conflict.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='SUBMITTAL' and item['identifier']=='23-01')
+
+    assert group['state']=='AMBIGUOUS'
+    assert group['members'][0]['status']=='PENDING / REJECTED'
+    assert 'multiple explicit statuses' in group['warnings'][0]
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_email_rfi_role_requires_an_explicit_heading_boundary(client,project):
+    message=EmailMessage();message['Subject']='RFI 42';message.set_content(
+        'Response time: 10 days.\nQuestionnaire attached.')
+    document=upload(client,project['id'],'rfi-response-time.eml',message.as_bytes())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    group=next(item for item in client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+               if item['kind']=='RFI' and item['identifier']=='42')
+    evidence=[json.loads(row['payload']) for row in
+              db.all('SELECT payload FROM evidence WHERE run_id=? ORDER BY id',(rid,))]
+
+    assert group['members'][0]['role']=='UNKNOWN'
+    assert group['state']=='OPEN'
+    assert all('RFI 42 > UNKNOWN' in (item['locator']['section'] or '')
+               for item in evidence if item['locator']['native_element_id']=='email-body')
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_conflicting_message_ids_reach_workflow_review_as_ambiguous_hash_only_metadata(client,project):
+    raw=(b'Subject: Coordination\r\n'
+         b'Message-ID: <first@example.test>\r\n'
+         b'Message-ID: <second@example.test>\r\n'
+         b'Content-Type: text/plain; charset=utf-8\r\n\r\nCurrent coordination text.')
+    document=upload(client,project['id'],'conflicting-message-id.eml',raw)
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    runner.parse_one(run,document['document_id'])
+
+    response=client.get(f'/api/analysis-runs/{rid}/workflows')
+    summary=db.one('SELECT summary FROM document_results WHERE run_id=?',(rid,))['summary']
+
+    assert response.status_code==200 and response.json()['items'][0]['state']=='AMBIGUOUS'
+    assert 'multiple distinct Message-ID' in response.json()['items'][0]['warnings'][0]
+    assert 'message_id_conflict' in summary
+    assert 'first@example.test' not in summary and 'second@example.test' not in summary
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==before
+
+
+def test_workflow_relationship_endpoint_is_bounded_and_never_calls_model(client,project,monkeypatch):
+    for name,text in [('RFI-042-question.txt','RFI 042\nQuestion:\nMay PVC be used?'),
+                      ('RFI-42-response.txt','RFI 42\nResponse:\nProvide Type L copper.'),
+                      ('Submittal-23-01.txt','Submittal 23-01\nStatus: Pending')]:
+        upload(client,project['id'],name,text.encode())
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock'
+    for did in run['document_ids']:runner.parse_one(run,did)
+
+    stored=db.one('SELECT document_id,summary FROM document_results WHERE run_id=? ORDER BY document_id',(rid,))
+    summary=json.loads(stored['summary']);summary['pages']=[{'payload':'x'*250_000}]
+    full_summary=json.dumps(summary)
+    db.execute('UPDATE document_results SET summary=? WHERE run_id=? AND document_id=?',
+               (full_summary,rid,stored['document_id']))
+    projected_bytes=[];original_all=db.all
+    def measured_all(query,args=()):
+        rows=original_all(query,args)
+        if 'workflow_values' in query:
+            projected_bytes.append(sum(len(json.dumps(row)) for row in rows))
+        return rows
+    monkeypatch.setattr(db,'all',measured_all)
+
+    before=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+    active=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    active_repeat=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    assert active.json()==active_repeat.json() and len(projected_bytes)==2
+    projected_bytes.clear();db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
+    response=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    repeated=client.get(f'/api/analysis-runs/{rid}/workflows?offset=0&limit=1')
+    second=client.get(f'/api/analysis-runs/{rid}/workflows?offset=1&limit=1')
+    after=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+
+    assert response.status_code==200 and response.json()==repeated.json()
+    assert second.status_code==200
+    result=response.json();second_result=second.json()
+    assert result['pagination']=={'offset':0,'limit':1,'total':2,'next_offset':1}
+    assert second_result['pagination']=={'offset':1,'limit':1,'total':2,'next_offset':None}
+    assert result['items'][0]['group_id']!=second_result['items'][0]['group_id']
+    assert result['items'][0]['kind']=='RFI' and result['items'][0]['state']=='LINKED'
+    assert result['summary']['rfi_groups']==1 and before==after
+    assert len(full_summary)>250_000 and len(projected_bytes)==1 and max(projected_bytes)<10_000
+
+
+def test_reviewer_workflow_classification_override_is_versioned_audited_and_reversible(
+        client,project):
+    uploaded=upload(client,project['id'],'RFI-42-question.txt',
+                    b'RFI 42\nQuestion:\nMay PVC be used?')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,uploaded['document_id'])
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
+    path=f'/api/analysis-runs/{rid}/documents/{uploaded["document_id"]}/workflow-classification'
+    stored=db.one('SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+                  (rid,uploaded['document_id']))['summary']
+    calls=db.one('SELECT COUNT(*) AS n FROM model_calls')['n']
+
+    detected=client.get(path)
+    baseline=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    changed=client.post(path,json={'expected_version':0,'workflow_type':'SUBMITTAL',
+                                   'identifier':'23-01','role':'SUBMITTAL',
+                                   'status':'PENDING','note':'Reviewer checked the cover sheet.'})
+    conflict=client.post(path,json={'expected_version':0,'workflow_type':'OTHER',
+                                    'identifier':None,'role':None,'status':None,'note':''})
+    items=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+
+    assert detected.status_code==200
+    assert any(item['kind']=='RFI' and item['identifier']=='42' for item in baseline)
+    assert detected.json()['detected']['contexts'][0]['workflow_type']=='RFI'
+    assert detected.json()['override']=={'workflow_type':'DETECTED','identifier':None,
+                                         'role':None,'status':None,'version':0,
+                                         'note':'','updated_at':None}
+    assert changed.status_code==200 and changed.json()['override']['version']==1
+    assert changed.json()['effective']['contexts']==[
+        {'workflow_type':'SUBMITTAL','identifier':'23-01','role':'SUBMITTAL','status':'PENDING'}]
+    manual=next(item for item in items if item['kind']=='SUBMITTAL' and item['identifier']=='23-01')
+    assert manual['members'][0]['classification_source']=='MANUAL'
+    assert conflict.status_code==409
+    assert db.one('SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+                  (rid,uploaded['document_id']))['summary']==stored
+    assert db.one('SELECT COUNT(*) AS n FROM model_calls')['n']==calls
+    events=db.all('SELECT before_json,after_json,note FROM workflow_classification_events')
+    assert len(events)==1 and json.loads(events[0]['after_json'])['workflow_type']=='SUBMITTAL'
+
+    reset=client.post(path,json={'expected_version':1,'workflow_type':'DETECTED',
+                                 'identifier':None,'role':None,'status':None,
+                                 'note':'Return to detected classification.'})
+    restored=client.get(f'/api/analysis-runs/{rid}/workflows').json()['items']
+    assert reset.status_code==200 and reset.json()['override']['version']==2
+    assert any(item['kind']=='RFI' and item['identifier']=='42' and
+               item['members'][0]['classification_source']=='DETECTED' for item in restored)
+    assert not any(item['kind']=='SUBMITTAL' and item['identifier']=='23-01' for item in restored)
+    assert db.one('SELECT COUNT(*) AS n FROM workflow_classification_events')['n']==2
+
+
+def test_workflow_classification_override_rejects_invalid_or_cross_run_values(client,project):
+    uploaded=upload(client,project['id'],'RFI-7.txt',b'RFI 7\nQuestion:\nConfirm clearance.')
+    rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
+    run=runner.get(rid);run['model']='mock';runner.parse_one(run,uploaded['document_id'])
+    db.execute("UPDATE runs SET status='PARTIAL' WHERE id=?",(rid,))
+    path=f'/api/analysis-runs/{rid}/documents/{uploaded["document_id"]}/workflow-classification'
+    base={'expected_version':0,'workflow_type':'RFI','identifier':'door','role':'QUESTION',
+          'status':None,'note':''}
+
+    assert client.post(path,json=base).status_code==422
+    assert client.post(path,json={**base,'identifier':'8','role':'SUBMITTAL'}).status_code==422
+    assert client.post(path,json={**base,'workflow_type':'OTHER','identifier':'8',
+                                  'role':None}).status_code==422
+    other=client.post('/api/projects',json={'name':'Other project'}).json()
+    foreign=upload(client,other['id'],'other.txt',b'RFI 9\nQuestion:\nOther project.')
+    foreign_path=f'/api/analysis-runs/{rid}/documents/{foreign["document_id"]}/workflow-classification'
+    assert client.get(foreign_path).status_code==404
+    assert client.post(foreign_path,json={**base,'identifier':'9'}).status_code==404
+    assert db.one('SELECT COUNT(*) AS n FROM workflow_classification_overrides')['n']==0
+
 
 def test_chunk_limit(client,project):
     u=client.post(f'/api/projects/{project["id"]}/uploads',json={'name':'x.txt','size':6000000}).json()
@@ -90,6 +638,143 @@ def test_one_active_project_and_pause(client,project):
     assert client.post(f'/api/analysis-runs/{a["id"]}/resume').json()['status']=='QUEUED'
     assert client.post(f'/api/analysis-runs/{a["id"]}/cancel').json()['status']=='CANCELLED'
 
+
+def test_selected_local_workers_parse_two_documents_concurrently(client,project,monkeypatch):
+    upload(client,project['id'],'one.txt',b'one');upload(client,project['id'],'two.txt',b'two')
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs',json={'local_workers':2}).json()
+    assert run['capabilities']['local_workers']==2
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    barrier=threading.Barrier(2);active=0;peak=0;lock=threading.Lock()
+    def parse(run_arg,did):
+        nonlocal active,peak
+        with lock:active+=1;peak=max(peak,active)
+        barrier.wait(timeout=2)
+        with lock:active-=1
+        summary={'status':'SUCCESS','fragments':[],'pages':[{'page':1,'status':'TEXT_EXTRACTED'}],
+                 'warnings':[],'visual_tasks':[],'geometry_summaries':[],'takeoffs':[]}
+        db.execute('INSERT INTO document_results VALUES(?,?,?,?)',(run_arg['id'],did,'SUCCESS',json.dumps(summary)))
+    monkeypatch.setattr(runner,'parse_one',parse)
+    runner.parse_documents(run)
+    assert peak==2 and runner.get(run['id'])['coverage']['pages_processed']==2
+
+
+def test_permission_failure_retries_once_after_document_batch(client,project,monkeypatch):
+    upload(client,project['id'],'one.txt',b'one');upload(client,project['id'],'two.txt',b'two')
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs',json={'local_workers':2}).json()
+    db=client.app.state.db;runner=client.app.state.runner
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    failed_id=run['document_ids'][1];calls=[]
+    def parse(run_arg,did,page_workers=1):
+        calls.append((did,page_workers))
+        failed=did==failed_id and sum(value[0]==did for value in calls)==1
+        summary={'status':'FAILED' if failed else 'SUCCESS','fragments':[],
+                 'pages':[] if failed else [{'page':1,'status':'TEXT_EXTRACTED'}],
+                 'warnings':['Parse failed: PermissionError at visual_pipeline.py:74.'] if failed else [],
+                 'visual_tasks':[],'geometry_summaries':[],'takeoffs':[]}
+        db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
+                   (run_arg['id'],did,summary['status'],json.dumps(summary)))
+    monkeypatch.setattr(runner,'parse_one',parse)
+
+    runner.parse_documents(run)
+
+    assert [workers for did,workers in calls if did==failed_id]==[1,2]
+    assert db.one('SELECT status FROM document_results WHERE run_id=? AND document_id=?',
+                  (run['id'],failed_id))['status']=='SUCCESS'
+
+
+def test_adjacent_extraction_batching_is_bounded_and_respects_legacy_single_tasks():
+    def evidence(number,page,text='x',section=None):
+        return {'evidence_id':f'EV-{number}','document_id':'DOC-1','raw_text':text,
+                'locator':{'page_number':page,'section':section}}
+    items=[(None,evidence(number,page)) for number,page in enumerate((1,1,2,3,4),1)]
+
+    assert [len(batch) for batch in adjacent_extraction_batches(items)]==[4,1]
+    assert [len(batch) for batch in adjacent_extraction_batches(items,{'EV-2'})]==[1,1,3]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,'x'*5000)),(None,evidence(2,1,'y'*5000))])]==[1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='EMAIL > BODY > RFI 42 > RESPONSE')),
+        (None,evidence(2,1,section='EMAIL > BODY > RFI 42 > RESPONSE'))])]==[2]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='EMAIL > BODY > RFI 42 > QUESTION')),
+        (None,evidence(2,1,section='EMAIL > BODY > RFI 42 > RESPONSE')),
+        (None,evidence(3,1,section='EMAIL > BODY > SUBMITTAL 23-01 > STATUS: APPROVED'))])]==[1,1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='SUBMITTAL 23-01 > STATUS: APPROVED')),
+        (None,evidence(2,1,section='SUBMITTAL 23-01 > STATUS: REJECTED'))])]==[1,1]
+    assert [len(batch) for batch in adjacent_extraction_batches([
+        (None,evidence(1,1,section='RFI 42 > RESPONSE')),
+        (None,evidence(2,1,section='23 00 00 > PART 2'))])]==[1,1]
+
+
+def test_mock_run_combines_adjacent_text_fragments_once(client,project,monkeypatch):
+    lines=[]
+    for index in range(4):
+        lines.append(f'DEMO_MATERIAL|PIPE-{index}|Copper Water Pipe {index}|-|diameter=2|note='+('x'*650))
+    upload(client,project['id'],'batch.txt','\n'.join(lines).encode())
+    runner=client.app.state.runner;calls=[];original=runner.gateway.extract_many
+    def counted(run,evidences):
+        calls.append(len(evidences));return original(run,evidences)
+    monkeypatch.setattr(runner.gateway,'extract_many',counted)
+    run=runner.create(project['id'],local_workers=2)
+
+    runner.process(run['id'])
+
+    current=runner.get(run['id'])
+    assert current['coverage']['fragments_total']>=2
+    assert calls==[current['coverage']['fragments_total']]
+    assert len(client.get(f'/api/analysis-runs/{run["id"]}/records').json())==4
+
+
+def test_reconciled_adjacent_batch_recovers_as_the_same_pending_family(client,project,monkeypatch):
+    from app.db import dumps
+    lines=[f'DEMO_MATERIAL|PIPE-{index}|Copper Water Pipe {index}|-|note='+('x'*650) for index in range(4)]
+    upload(client,project['id'],'resume-batch.txt','\n'.join(lines).encode())
+    runner=client.app.state.runner;db=client.app.state.db;run=runner.create(project['id'])
+    db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],));run=runner.get(run['id'])
+    runner.parse_one(run,run['document_ids'][0])
+    evidence=[json.loads(row['payload']) for row in db.all(
+        'SELECT payload FROM evidence WHERE run_id=? ORDER BY rowid',(run['id'],))]
+    assert len(evidence)==2
+    ids=[item['evidence_id'] for item in evidence]
+    family='extract-batch:'+ids[0]+':'+hashlib.sha256(dumps(ids).encode()).hexdigest()[:16]
+    call=db.reserve(project['id'],run['id'],family,Decimal('0.1'),'model','hash',Decimal('1'),Decimal('2'))
+    db.unknown(call,dumps({'kind':'NETWORK_ERROR','class':'TIMEOUT'}))
+    db.execute("UPDATE runs SET status='PAUSED_PROVIDER' WHERE id=?",(run['id'],))
+    client.post(f'/api/model-calls/{call}/reconcile',json={
+        'resolution':'NOT_BILLED','actual_cny':'0','confirmation':'PROVIDER_BILLING_CHECKED'}).raise_for_status()
+
+    resumed=client.post(f'/api/analysis-runs/{run["id"]}/resume')
+
+    assert resumed.status_code==200 and resumed.json()['status']=='QUEUED'
+    event=json.loads(db.one("SELECT payload FROM call_reconciliation_events WHERE payload LIKE '%RECOVERY_GENERATION_AUTHORIZED%'")['payload'])
+    assert event['task_family']==family and event['generation']==1
+    calls=[];original=runner.gateway.extract_many
+    monkeypatch.setattr(runner.gateway,'extract_many',lambda current,items:(calls.append(len(items)),original(current,items))[1])
+    runner.process(run['id'])
+    assert calls==[2]
+    assert {row['status'] for row in db.all('SELECT status FROM evidence WHERE run_id=?',(run['id'],))}=={'EXTRACTED'}
+
+
+def test_completed_mock_run_records_stage_performance(client,project):
+    rid=run_demo(client,project['id']);run=client.get(f'/api/analysis-runs/{rid}').json()
+    assert {'stage.parse','stage.vision','stage.extract','stage.assemble','stage.verify'}<=set(run['performance'])
+    assert all(value['samples']==1 and value['total_ms']>=0 for value in run['performance'].values())
+    assert run['progress']['percent']==100 and run['progress']['estimated_finish_epoch'] is None
+
+
+def test_running_progress_reports_percentage_and_estimated_finish(client,project):
+    upload(client,project['id'],'a.txt',b'hello')
+    runner=client.app.state.runner;db=client.app.state.db;run=runner.create(project['id'])
+    coverage={'fragments_total':10,'fragments_extracted':4,'fragments_need_review':1}
+    db.execute("UPDATE runs SET status='RUNNING',stage=?,coverage=? WHERE id=?",
+               ('一次读取，联合提取材料与检查要求',json.dumps(coverage),run['id']))
+    current=runner.get(run['id']);progress=runner.progress(current,current['started_epoch']+100)
+    assert progress['percent']==57
+    assert progress['estimate'] and progress['remaining_seconds']>0
+    assert progress['estimated_finish_epoch']>current['started_epoch']+100
+
 def test_failed_local_publish_can_resume_without_repeating_model_work(client,project):
     upload(client,project['id'],'a.txt',b'hello')
     run=client.post(f'/api/projects/{project["id"]}/analysis-runs').json();rid=run['id']
@@ -102,7 +787,7 @@ def test_failed_local_publish_can_resume_without_repeating_model_work(client,pro
     payload=resumed.json()
     assert payload['status']=='QUEUED'
     assert '已完成的模型调用不会重发' in payload['message']
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
 
 def test_failed_run_outside_local_publish_stage_stays_closed(client,project):
     upload(client,project['id'],'a.txt',b'hello')
@@ -122,7 +807,7 @@ def test_old_provider_run_cannot_resume_or_process_under_current_service(client,
     current=client.get(f'/api/analysis-runs/{rid}').json()
     assert current['status']=='PAUSED_PROVIDER' and '未调用API' in current['message']
     assert client.get(f'/api/analysis-runs/{rid}/records').json()==[]
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
 
 
 def test_unknown_call_requires_explicit_reconciliation_before_resume(client,project):
@@ -155,7 +840,7 @@ def test_unknown_call_requires_explicit_reconciliation_before_resume(client,proj
         'resolution':'NOT_BILLED','actual_cny':'0','confirmation':'PROVIDER_BILLING_CHECKED',
         'note':'Checked provider billing'}).json()
     assert result['call']['state']=='RECONCILED_ZERO'
-    assert result['cost']['spent_cny']=='0.000000' and result['cost']['reserved_cny']=='0.000000'
+    assert 'cost' not in result and 'reserved_cny' not in result['call']
     assert client.get(f'/api/projects/{project["id"]}/unresolved-model-calls').json()==[]
     events=client.get(f'/api/projects/{project["id"]}/call-reconciliation-events').json()
     assert len(events)==1 and events[0]['call_id']==call_id
@@ -199,8 +884,7 @@ def test_real_pending_extraction_reconcile_resume_sends_exactly_one_new_generati
            b'DEMO_MATERIAL|M-1|Concrete|-|strength=5000 psi')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,api_key='offline-not-real')
     requests=[]
 
     def handler(request):
@@ -256,9 +940,8 @@ def test_reconciled_paused_visual_task_resumes_with_one_audited_generation_http(
     document=upload(client,project['id'],'drawing.pdf',b'offline-placeholder')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',vision_enabled=True,
-                 input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,
+                 api_key='offline-not-real',vision_enabled=True)
     db.execute("UPDATE runs SET status='RUNNING',provider='deepseek' WHERE id=?",(rid,))
     summary={'warnings':[],'visual_tasks':[{'page':1,'status':'PAUSED_PROVIDER'}]}
     db.execute('INSERT INTO document_results VALUES(?,?,?,?)',
@@ -298,8 +981,7 @@ def test_extraction_family_stops_after_three_explicit_reconciled_generations(cli
     upload(client,project['id'],'bounded.txt',b'One real pending evidence fragment.')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db;runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,api_key='offline-not-real')
     requests=[]
     gateway=Gateway(live,db,httpx.Client(transport=httpx.MockTransport(
         lambda request:(requests.append(request),(_ for _ in ()).throw(
@@ -400,7 +1082,7 @@ def test_resume_rebuilds_merged_record_and_invalidates_early_human_review(client
     from app.gateway import mock_extract
 
     for name,suffix in (('one.txt',b'\nONE'),('two.txt',b'\nTWO')):
-        upload(client,project['id'],name,b'DEMO_MATERIAL|M-1|Concrete|-|strength=placeholder'+suffix)
+        upload(client,project['id'],name,b'DEMO_MATERIAL|M-1|Concrete|-|strength=placeholder|location=Level 1'+suffix)
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id'];db=client.app.state.db
     runner=client.app.state.runner;db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
     run=runner.get(rid);run['model']='mock'
@@ -411,7 +1093,7 @@ def test_resume_rebuilds_merged_record_and_invalidates_early_human_review(client
     # sorts before it, covering the former record-id instability directly.
     early_row,new_row=rows[1],rows[0]
     for row,value,date in ((early_row,'4000 psi','2026-01-01'),(new_row,'5000 psi','2026-02-01')):
-        ev=json.loads(row['payload']);ev['raw_text']=f'DEMO_MATERIAL|M-1|Concrete|-|strength={value}'
+        ev=json.loads(row['payload']);ev['raw_text']=f'DEMO_MATERIAL|M-1|Concrete|-|strength={value}|location=Level 1'
         ev['internal_revision_date']=date;db.execute('UPDATE evidence SET payload=? WHERE id=?',(dumps(ev),row['id']))
     first_ev=json.loads(db.one('SELECT payload FROM evidence WHERE id=?',(early_row['id'],))['payload'])
     db.execute("UPDATE evidence SET status='EXTRACTED',extraction=? WHERE id=?",
@@ -457,7 +1139,7 @@ def test_legacy_material_identity_migration_preserves_human_edits(client,project
     from app.db import dumps
     from app.gateway import mock_extract
 
-    upload(client,project['id'],'legacy.txt',b'DEMO_MATERIAL|M-1|Concrete|-|strength=4000 psi')
+    upload(client,project['id'],'legacy.txt',b'DEMO_MATERIAL|M-1|Concrete|-|strength=4000 psi|location=Level 1')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id'];db=client.app.state.db
     runner=client.app.state.runner;db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
     run=runner.get(rid);run['model']='mock';runner.parse_one(run,run['document_ids'][0])
@@ -488,7 +1170,7 @@ def test_legacy_material_identity_migration_preserves_human_edits(client,project
     assert [event['action'] for event in history]==['EDITED']
 
 
-def test_reconciled_charge_is_recorded_and_over_reservation_freezes_budget(client,project):
+def test_reconciled_provider_charge_is_recorded_without_budget_state(client,project):
     upload(client,project['id'],'a.txt',b'hello')
     rid=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()['id']
     db=client.app.state.db
@@ -498,8 +1180,9 @@ def test_reconciled_charge_is_recorded_and_over_reservation_freezes_budget(clien
     result=client.post(f'/api/model-calls/{call_id}/reconcile',json={
         'resolution':'BILLED','actual_cny':'1.25','confirmation':'PROVIDER_BILLING_CHECKED'}).json()
     assert result['call']['state']=='RECONCILED_CHARGED'
-    assert result['cost']['spent_cny']=='1.250000' and result['cost']['reserved_cny']=='0.000000'
-    assert result['cost']['frozen']
+    assert 'cost' not in result and 'reserved_cny' not in result['call']
+    assert db.one('SELECT actual_units FROM model_calls WHERE id=?',(call_id,))['actual_units']==1250000
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(project['id'],),False) is None
 
 def test_mock_end_to_end_revision_and_export(client,project):
     rid=run_demo(client,project['id'])
@@ -513,9 +1196,9 @@ def test_mock_end_to_end_revision_and_export(client,project):
     assert not any(x['record']['kind']=='CONFLICT' for x in rows)
     eid=pad['candidate']['evidence_ids'][0]
     source=client.get(f'/api/analysis-runs/{rid}/evidence/{eid}').json()
-    assert pad['meta']['parser_version']==source['evidence']['parser_version']=='multisource-4'
+    assert pad['meta']['parser_version']==source['evidence']['parser_version']==PARSER_VERSION
     assert source['evidence']['raw_text'] and source['file_name']
-    assert client.get(f'/api/analysis-runs/{rid}/cost').json()['calls']==0
+    assert client.get(f'/api/analysis-runs/{rid}/cost').status_code==405
     data=client.get(f'/api/analysis-runs/{rid}/exports/json').json()
     assert data['export_version']=='0.2.6-readable-en-2'
     assert data['summary']['run_status']=='Partial'
@@ -592,9 +1275,8 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
     image=Image.new('RGB',(320,180),'white');source=io.BytesIO();image.save(source,format='PNG')
     document=upload(client,project['id'],'drawing.png',source.getvalue())
     runner=client.app.state.runner
-    live=replace(runner.s,provider='deepseek',live_enabled=True,prices_confirmed=True,
-                 api_key='synthetic-not-real',vision_enabled=True,
-                 input_rate=Decimal('4.40'),output_rate=Decimal('13.20'))
+    live=replace(runner.s,provider='deepseek',live_enabled=True,
+                 api_key='synthetic-not-real',vision_enabled=True)
     runner.s=live;runner.gateway.s=live
     run=runner.create(project['id']);client.app.state.db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(run['id'],))
     run=runner.get(run['id'])
@@ -610,6 +1292,10 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
     assert evidence['locator']['sheet']=='A-1' and evidence['confidence'] is None
     assert evidence['content_basis']=='MODEL_VISION_OUTPUT'
     assert evidence['image_crop_uri'].endswith('/pages/1/image') and 'synthetic-not-real' not in json.dumps(evidence)
+    current=json.loads(client.app.state.db.one(
+        'SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
+        (run['id'],document['document_id']))['summary'])
+    assert current['pages'][0]['visual_status']=='COMPLETED'
     preview=client.get(evidence['image_crop_uri'])
     assert preview.status_code==200 and preview.headers['content-type']=='image/png' and preview.content.startswith(b'\x89PNG')
     # Simulate a process dying after evidence commit but before the task-state update.
@@ -624,6 +1310,23 @@ def test_runner_persists_visual_evidence_and_page_preview_without_key_exposure(c
         'SELECT summary FROM document_results WHERE run_id=? AND document_id=?',
         (run['id'],document['document_id']))['summary'])
     assert repaired['visual_tasks'][0]['status']=='VISION_EXTRACTED'
+    assert repaired['pages'][0]['visual_status']=='COMPLETED'
+
+
+def test_run_page_image_returns_a_validated_source_coordinate_crop(client,project,tmp_path):
+    from reportlab.pdfgen import canvas
+    path=tmp_path/'crop.pdf';drawing=canvas.Canvas(str(path),pagesize=(600,800))
+    drawing.drawString(100,650,'EQUIPMENT SCHEDULE');drawing.rect(100,300,300,300);drawing.save()
+    document=upload(client,project['id'],path.name,path.read_bytes())
+    run=client.post(f'/api/projects/{project["id"]}/analysis-runs').json()
+    base=f'/api/analysis-runs/{run["id"]}/documents/{document["document_id"]}/pages/1/image'
+
+    response=client.get(base+'?x0=100&y0=100&x1=400&y1=300')
+
+    assert response.status_code==200 and response.content.startswith(b'\x89PNG')
+    preview=Image.open(io.BytesIO(response.content))
+    assert preview.width / preview.height == pytest.approx(300 / 200,rel=0.01)
+    assert client.get(base+'?x0=100&y0=100').status_code==422
 
 def test_parser_timeout_keeps_completed_page_progress(client,project,monkeypatch,tmp_path):
     document=upload(client,project['id'],'large.pdf',b'not-read-by-fake-worker')

@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0145",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "summary": "Add a rebuildable canonical document graph with normalized hierarchy, exact identifiers, source spans, spatial bounds and local search projections.",
+  "decision_refs": [
+    "User authorization on 2026-09-28 to regenerate all databases and fully replace the fragment-only storage design",
+    "Kapolei fixed-question validation identifying retrieval and sibling-context assembly as the dominant sampled failure"
+  ],
+  "affected_paths": [
+    "app/canonical.py", "app/db.py", "app/runner.py", "app/questions.py",
+    "migrations/008_canonical_document_graph.sql", "migrations/009_canonical_search.sql",
+    "migrations/010_canonical_bounds.sql", "scripts/rebuild_canonical_v2.py",
+    "tests/app/test_canonical.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/CANONICAL_STORAGE_V2.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-130.json", "changes/CR-0145.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_canonical.py", "tests/app/test_questions.py", "tests/app/test_api.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly instructed implementation to begin after approving full database regeneration.",
+  "known_limitations": [
+    "The initial implementation projects existing parser evidence into the canonical graph; native CAD/BIM semantic relationships and local embeddings remain later stages.",
+    "The rebuild command creates and validates a separate staging database and does not cut over or delete the current local database automatically.",
+    "Visual model narration remains contextual and cannot become exact source text or an engineering fact."
+  ]
+}

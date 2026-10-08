@@ -1,0 +1,44 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "Autodesk and Procore official RFI documentation exposes a Status field alongside Question and Official Response content.",
+    "Recognize only exact known RFI status values under an exact Status or RFI Status label; ordinary prose and status metadata remain neutral.",
+    "RFI status is reviewer metadata only: it must not manufacture a Question/Response role, contractual effect or latest-version precedence.",
+    "Conflicting explicit statuses remain ambiguous; 625 Python, 24 UI and 11 deploy tests passed using synthetic offline documents only."
+  ],
+  "task_id": "DEV-044",
+  "title": "Preserve exact RFI workflow status",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-044.json",
+    "changes/CR-0059.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_workflows.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Preserve exact known RFI statuses across TXT, PDF and Email evidence plus the reviewer index without deriving roles, authority or precedence from status text."
+}

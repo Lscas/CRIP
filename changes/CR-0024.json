@@ -1,0 +1,45 @@
+{
+  "change_id": "CR-0024",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "summary": "Tighten deterministic RFI and Submittal identifiers and let a reviewer explicitly import one inert EML attachment with parent-email provenance through the existing upload controls.",
+  "decision_refs": [
+    "User request to continue improving efficiency, accuracy and adaptability for RFI, Submittal and email content",
+    "User /ponytail instruction to prefer open-source and existing code over new infrastructure"
+  ],
+  "affected_paths": [
+    "app/**",
+    "migrations/**",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "tasks/DEV-009.json",
+    "tests/**",
+    "web/**",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0024.json"
+  ],
+  "tests": [
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_verification.py",
+    "tests/web/test_display_contract.py",
+    "scripts/browser_i18n_smoke.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly requests continued RFI, Submittal and email improvements and invokes /ponytail for minimal reuse.",
+  "known_limitations": [
+    "Only RFC-style EML files are supported; MSG and mailbox synchronization remain unsupported.",
+    "Attachments and nested attached emails require explicit user selection; bulk or automatic recursive import is not implemented.",
+    "Only deterministic digit-bearing identifiers and explicit statuses are normalized; semantic relationship and authority adjudication remain human review tasks.",
+    "Validation uses synthetic local email and workflow documents only; no customer file, external provider or paid model call was used."
+  ]
+}

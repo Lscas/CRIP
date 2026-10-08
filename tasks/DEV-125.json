@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 16000,
+  "max_output_tokens": 3000,
+  "max_context_chars": 30000,
+  "paid_calls_allowed": false,
+  "approval_ref": "User requested that customers configure different APIs from settings on 2026-09-27.",
+  "notes": [
+    "Reuse the existing OpenAI-compatible gateway, budget ledger, provider identity, and DPAPI store.",
+    "Never return, log, or place a saved key into HTML; the password input is write-only and blank on open.",
+    "Block provider changes while analysis, semantic verification, or unresolved model calls exist.",
+    "Runtime validation must use Mock or a loopback no-network endpoint and must not call a paid model."
+  ],
+  "task_id": "DEV-125",
+  "title": "Configure model APIs from the local settings page",
+  "requirement_ids": ["FR-API-006", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/model_configuration.py", "app/main.py", "app/local_entry.py",
+    "scripts/local_deploy.py", "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_model_configuration.py", "tests/app/test_local_entry.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/LOCAL_VALIDATION.md", "docs/PROVIDER_INTEGRATION.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-125.json", "changes/CR-0140.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_model_configuration.py tests/app/test_local_entry.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-125",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let a local customer select and safely persist Mock, official DeepSeek/Gemini, custom OpenAI-compatible HTTPS, or loopback local text model settings from the application UI and apply them through an orderly same-port restart."
+}

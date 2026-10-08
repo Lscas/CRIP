@@ -1,0 +1,36 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Extend the existing local Email-header path to realistic multi-Email runs.",
+    "Require one exact .eml or .msg file name in bounded English question forms.",
+    "Use exact case-insensitive workflow-index matching without fuzzy or filesystem search.",
+    "Require quotation marks for spaces and reject paths and wildcard tokens.",
+    "Block missing and duplicate exact names before reading source evidence.",
+    "Retain current-header, conflict, missing-value and passage-cap boundaries.",
+    "Use synthetic evidence and make no provider or mailbox request."
+  ],
+  "task_id": "DEV-104",
+  "title": "Target local Email headers by exact file name",
+  "requirement_ids": ["FR-QA-EMAIL-HEADER-NAMED-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-104.json", "changes/CR-0119.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-104",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Allow unambiguous local Email-header questions in multi-Email projects without fuzzy file selection, filesystem access or model cost."
+}

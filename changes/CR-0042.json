@@ -1,0 +1,42 @@
+{
+  "change_id": "CR-0042",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Prevent RFI roles and Submittal statuses from crossing into a different exact identifier and label each explicit body section with its own workflow context.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy and adaptability across RFI, Submittal and email content",
+    "Confirmed synthetic reproduction where RFI 43 Response relabeled Subject RFI 42",
+    "Confirmed synthetic reproduction where Submittal 23-02 Rejected relabeled Subject Submittal 23-01"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-027.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0042.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area parsers",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued RFI, Submittal and Email accuracy improvements.",
+  "known_limitations": [
+    "Only explicit supported workflow headings and exact normalized identifiers start a new section; semantic references remain human review work.",
+    "The strongest Subject/body/filename routing precedence remains unchanged and weaker exact identifiers remain references.",
+    "Validation is synthetic and offline; no mailbox, model, external provider or customer file was used."
+  ]
+}

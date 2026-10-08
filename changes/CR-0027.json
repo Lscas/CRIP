@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0027",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Parse each exact identifier in a multi-value In-Reply-To header so the existing deterministic hash-only index does not split related email messages.",
+  "decision_refs": [
+    "Active user goal to continue improving efficiency, accuracy and adaptability across RFI, Submittal and email content",
+    "Existing requirement to link only exact locally hashed email identifiers without semantic inference"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-012.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0027.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "scripts/run_checks.py --area parsers",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued email adaptability and accuracy improvements.",
+  "known_limitations": [
+    "Only exact RFC-style header identifiers are linked; no subject, sender or semantic thread inference is performed.",
+    "MSG and mailbox synchronization remain unsupported.",
+    "Validation uses synthetic local EML files only and makes no model, mailbox or external provider request."
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 14000,
+  "max_output_tokens": 2200,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce a question naming one Drawing and one Specification that recognizes only the Specification and leaves Drawing evidence as OTHER.",
+    "Add Drawing to the existing bounded source-family comparison path rather than creating another retrieval service or index.",
+    "Recognize an explicit Drawing/Sheet/Dwg/Detail identifier or plural drawing-set wording while keeping a generic singular sheet lookup ordinary and Shop Drawing mapped to Submittal unless the question separately names another drawing source.",
+    "Classify drawing evidence conservatively from an exact Sheet locator, native CAD extension, explicit drawing file name, or a line-leading drawing marker after Email, RFI, Submittal and Specification checks.",
+    "Keep model-vision narration excluded from project questions and make no provider request."
+  ],
+  "task_id": "DEV-093",
+  "title": "Add Drawing to project-question source comparisons",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/schemas/project-answer.schema.json",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-087.json", "tasks/DEV-088.json", "tasks/DEV-093.json",
+    "changes/CR-0108.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Make Drawing a first-class, conservatively detected source family in file-grounded comparisons alongside Specification, RFI, Submittal and Email."
+}

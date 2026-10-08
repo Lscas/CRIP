@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0148",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-V2-001", "FR-QA-V2-ANSWER-001", "FR-QA-V2-VISION-001", "FR-QA-V2-RELEASE-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "summary": "Add the independent QA V2 path: explicit effective-version selection, bounded Canonical evidence bundles, claim-bound answers, optional local-region vision and a no-call legacy comparison gate.",
+  "decision_refs": [
+    "User-directed architecture-level rebuild of Feature 8",
+    "Grill finding that retrieval and fragmented structural context, rather than OCR alone, dominate the sampled failures"
+  ],
+  "affected_paths": [
+    "app/evidence_bundle.py", "app/project_qa_v2.py", "app/main.py", "app/gateway.py", "app/db.py",
+    "prompts/project-question-v2/system.md", "prompts/manifest.json",
+    "spec/schemas/project-answer-v2.schema.json", "scripts/benchmark_qa_v2_retrieval.py",
+    "tests/app/test_project_qa_v2.py", "docs/PROJECT_QA_V2.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-133.json", "changes/CR-0148.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_project_qa_v2.py", "tests/app/test_canonical.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user said to start implementation after allowing system-architecture refactoring of Feature 8.",
+  "known_limitations": [
+    "A missing or ambiguous explicit issue date keeps competing documents active instead of guessing precedence.",
+    "Delta documents remain overlays and are not treated as whole-document replacements without explicit scope metadata.",
+    "Question-time vision is currently limited to the enabled DeepSeek vision route, one page and at most one overview plus one local crop.",
+    "The browser remains on the legacy endpoint until the fixed retrieval and answer gates pass on an explicitly authorized immutable staging database.",
+    "No credential access, paid call or customer database mutation is performed by the offline tests."
+  ]
+}

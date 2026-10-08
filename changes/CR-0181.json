@@ -1,0 +1,57 @@
+{
+  "change_id": "CR-0181",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add frozen selector v7 with bounded exact-token page-column context while preserving v3-v6 replay.",
+  "decision_refs": [
+    "Visual inspection and saved word coordinates showed D4 had two clear callout columns whose source blocks were interleaved by vertical position.",
+    "V6 supplied row-level layout only when one evidence block contained a large same-line gap, so the each-side sealant phrase remained split across blocks.",
+    "Ponytail constraint: reuse existing text_map coordinates and layout_lines instead of adding table extraction, OCR, vision routing, a semantic graph or another dependency.",
+    "Historical verification note: synthetic cross-block page-column reconstruction and explicit v6 replay",
+    "Historical verification note: targeted QA V3 and complete frozen Reference lifecycle suites",
+    "Historical verification note: real fixed-15 expected-page gate and D4 bounded page-column audit",
+    "Historical verification note: controlled v6 deployment-mismatch, v7 result and rejected prompt-experiment records with no automatic retry",
+    "Historical verification note: full Python, frontend localization, spec, change and bundle gates"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/db.py", "migrations/020_reference_selector_v7.sql",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/reference-evaluation.schema.json", "spec/schemas/reference-evaluation-job.schema.json",
+    "spec/schemas/reference-evaluation-readiness.schema.json", "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py", "tests/app/test_reference_evaluation_jobs.py",
+    "tests/app/test_reference_readiness.py", "tests/app/test_reference_scorecards.py",
+    "reports/kapolei_reference_page_columns_v7_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REFERENCE_QA.md", "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-166.json", "changes/CR-0181.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py",
+    "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_scorecards.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "known_limitations": [
+    "The 80-point native column grouping is a deterministic layout aid, not table or leader-line semantics.",
+    "V7 improved D4 from partial with an unsupported association to partial with no unsupported claim, but the answer still omitted the leading quantity (3).",
+    "A prompt-only quantity preservation experiment ended in a safely settled citation-scope rejection and was rolled back rather than promoted.",
+    "The fixed-15 release evaluation has not been rerun under v7."
+  ]
+}

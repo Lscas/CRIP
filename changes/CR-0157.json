@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0157",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-MULTIMODAL-001", "NFR-SECURITY-001"],
+  "summary": "Make DeepSeek selected-page image input an explicit saved choice so a Reference evaluation can be frozen to the text model without removing the existing multimodal route.",
+  "decision_refs": [
+    "The first controlled live Reference question used deepseek-v4-flash-vision-exp and settled with a QA V3 contract error",
+    "The sequence stopped before later questions and the failed call remains durably recorded",
+    "The active product direction keeps model reasoning external while CRIP manages explicit, reproducible model profiles and results"
+  ],
+  "affected_paths": [
+    "app/model_configuration.py", "web/app.js", "web/i18n.js", "web/index.html",
+    "tests/app/test_model_configuration.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-142.json",
+    "changes/CR-0157.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user approved continued implementation and live comparison of the advanced-model Reference workflow while preserving existing functionality as an additive feature.",
+  "known_limitations": [
+    "Changing the saved capability restarts the local service and applies only to subsequently frozen evaluations.",
+    "The text-only choice cannot answer facts absent from selected parser text and does not infer document precedence.",
+    "A failed settled provider call is preserved and cannot be retried under the same exact request fingerprint."
+  ]
+}

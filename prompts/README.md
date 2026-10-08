@@ -1,3 +1,5 @@
 # Prompt包
 这些是实际存在的Prompt文本，不是占位路径；尚未通过真实施工数据评测。system.md已经包含common规则，不应在调用时重复拼接common.md。服务端补最小目标Schema和必要证据，默认JSON非思考角色。格式检查不证明内容正确。
 联合抽取首读整个项目一次；material/inspection后续处理结构化事实，不重新各自通读原文件。供应商真正不支持的模式必须在Gateway探针中报出。
+
+Project-question requests use a bounded local evidence prefilter and the existing cheap gateway. Project text is untrusted data, every answer citation is exact-quote checked by the server, and Mock mode does not generate answers.

@@ -1,0 +1,35 @@
+{
+  "change_id": "CR-0154",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-WORKSPACE-001", "NFR-SECURITY-001"],
+  "summary": "Add frozen, resumable local Reference QA evaluation tasks for bounded ordered question sets and explicit one-question execution through the existing evidence loop.",
+  "decision_refs": [
+    "Active goal: CRIP manages local task and result state around an advanced-model reference analyst",
+    "Evaluation tasks freeze snapshot, question order and non-secret model profile",
+    "Only an explicit per-question action may dispatch the existing QA V3 path"
+  ],
+  "affected_paths": [
+    "app/reference_evaluations.py", "app/main.py", "app/db.py",
+    "migrations/012_reference_evaluations.sql", "spec/schemas/reference-evaluation.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-139.json",
+    "changes/CR-0154.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_evaluations.py", "tests/app/test_reference_results.py",
+    "tests/app/test_evidence_loop.py", "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user requested continued implementation of CRIP as a standalone local management platform around advanced-model engineering-file analysis while retaining all existing features.",
+  "known_limitations": [
+    "This slice executes one explicitly selected evaluation question per request; unattended whole-suite dispatch remains a future safety-gated feature.",
+    "Evaluation progress records answer and review states but does not automatically score engineering correctness.",
+    "The fixed 15-question live advanced-model quality benchmark is not run by offline implementation tests."
+  ]
+}

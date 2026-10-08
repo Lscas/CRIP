@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0099",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Scope cited non-identifier numbers to the same exact RFI/Submittal identity.",
+  "decision_refs": [
+    "The user requested a Trunk Tools-style ability to ask questions and answer from existing project files",
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "An offline reproduction proved a cross-RFI numeric false acceptance"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-084.json", "changes/CR-0099.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested project-file Q&A modeled on Trunk Tools.",
+  "known_limitations": [
+    "A statement or locator containing several workflow identities remains intentionally unscoped rather than semantically distributing its numbers.",
+    "Comparison summaries depend on the independently validated source findings and are not reinterpreted as one workflow statement.",
+    "The guard does not infer units, bind a number to a property name, calculate values or decide which source controls.",
+    "The guard does not prove that every relevant project document was uploaded or parsed."
+  ]
+}

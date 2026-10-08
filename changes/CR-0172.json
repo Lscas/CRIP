@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0172",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Compile redundant QA V3 answer and arithmetic fields locally and expose a bounded validator category for saved Reference contract failures.",
+  "decision_refs": [
+    "The fixed DeepSeek Flash baseline produced seven terminal contract failures across citation scope, entity scope, answer shape and arithmetic",
+    "One accepted answer already contained a locally verified result of 12 in its calculation object but omitted 12 from the displayed answer",
+    "The approved ponytail plan prioritizes the existing response contract and evidence modality gaps before any new retrieval or model-routing framework"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/gateway.py", "app/project_qa_v2.py",
+    "app/reference_evaluations.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "spec/schemas/reference-evaluation.schema.json",
+    "web/app.js", "web/i18n.js",
+    "tests/app/test_evidence_loop.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-157.json", "changes/CR-0172.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user approved the concrete next-development plan and explicitly requested implementation, testing and iteration to continue.",
+  "known_limitations": [
+    "Local compilation reduces redundant model formatting but does not prove that selected evidence is relevant or that an answer is correct.",
+    "Exact citation, entity, numeric and source-scope validators remain authoritative and can still reject unsupported content.",
+    "Historical evaluation results and failures remain immutable; the new safe category is derived from an existing settled call diagnostic when a receipt is available.",
+    "No live provider call is part of this implementation change; the fixed-15 rerun is a separate operational validation after all offline gates pass."
+  ]
+}

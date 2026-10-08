@@ -1,0 +1,162 @@
+{
+  "method": "CIRP saved project knowledge retrieval followed by a DeepSeek project-answer call; no run_id was supplied to the question endpoint",
+  "run_id": "RUN-ae67a407392f40bbaa61593f08e0d28e",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "question_calls": {
+    "settled": 13,
+    "settled_error": 2,
+    "unknown": 0,
+    "input_tokens": 120469,
+    "output_tokens": 3540
+  },
+  "preflight_observation": "S2 was initially rejected before HTTP because the 32,000-byte answer envelope was smaller than the fixed prompt plus the bounded retrieved context. The answer-only envelope was raised to 64,000 bytes, covered by a regression test, and S2 was then run once through DeepSeek. The recorded S2 result below is the post-fix product result.",
+  "answers": [
+    {
+      "id": "S1",
+      "status": "ANSWERED",
+      "answer": "Project name: Kapolei High School, Classrooms Renovation. DOE job number: Q82227-21. Project address: 91-5007 Kapolei Pkwy / Kapolei, Hawaii 96707. Stated scope of work: Classrooms Renovation.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 97, "quote": "KAPOLEI HIGH SCHOOL EL P. Y CLASSROOMS RENOVATION"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 97, "quote": "DOE JOB NO. DRAWING NO. P0.01 THIS WORK WAS PREPARED BY Q82227-21"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 97, "quote": "91-5007 KAPOLEI PKWY / KAPOLEI, HAWAII 96707"}
+      ]
+    },
+    {
+      "id": "S2",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The supplied evidence does not contain a required construction sequence listing three work areas together with the construction time assigned to each. The evidence includes a general reference to a Work Sequence and to a construction period, but no work areas with assigned durations are stated, so the requested three areas and their times cannot be established.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": []
+    },
+    {
+      "id": "S3",
+      "status": "ANSWERED",
+      "answer": "Building G is listed as Type V-A, fully sprinklered, with occupancy type E, B, S-1 and a story/heights entry of E 2. The fire protection is an automatic fire sprinkler system throughout.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 3, "quote": "BUILDING G CODE ANALYSIS TYPE OF CONSTRUCTION: V-A, FULLY SPRINKLERED"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 3, "quote": "OCCUPANCY TYPE: E, B, S-1 L1 STORY / HEIGHTS: E 2"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 3, "quote": "AUTOMATIC FIRE SPRINKLER SYSTEM THROUGHOUT"}
+      ]
+    },
+    {
+      "id": "S4",
+      "status": "ANSWERED",
+      "answer": "For Building I, the code analysis lists type of construction V-A, fully sprinklered, occupancy type E, B, S-1, and story/heights of 2. An automatic fire sprinkler system is provided throughout. A separate code-check note lists sprinklered Type V-A Group E occupancy with modernization build-out within an existing school building and no increase to existing building stories, building height, or building area.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 6, "quote": "BUILDING I CODE ANALYSIS TYPE OF CONSTRUCTION: BUILDING I AREA CALCULATION V-A, FULLY SPRINKLERED Room Name Number Net Area Occupancy Occupant Load Factor Occupant Load OCCUPANCY TYPE: E, B, S-1 L1 E STORY / HEIGHTS: BREAKOUT CLASSROOM I101 1,265 SF E 20 63 2 LARGE CLASSROOM I102 2,176 SF E 20 109 AUTOMATIC FIRE SPRINKLER SYSTEM THROUGHOUT"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL - PCD 01-03 Included.pdf", "page": 6, "quote": "TABLE 503 - ALLOWABLE BUILDING HEIGHTS AND AREAS - TYPE V-A, SPRINKLERED, GROUP E OCCUPANCY MODERNIZATION BUILD-OUT WITHIN (E) SCHOOL BUILDING, NO INCREASE TO EXISTING BUILDING STORIES, BUILDING HEIGHT, BUILDING AREA."}
+      ]
+    },
+    {
+      "id": "S5",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The evidence does not provide a complete count of Volume I drawing sheets for each requested discipline. Only partial index text is visible: it shows 00 GENERAL: 7 and 13 PLUMBING: 19, but no corresponding totals are stated for Architectural, Structural, Mechanical, or Fire Protection, and the quoted text is truncated, so a per-discipline count cannot be established for all six disciplines.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 1, "quote": "13 PLUMBING: 19"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 1, "quote": "00 GENERAL: 7"}
+      ]
+    },
+    {
+      "id": "D1",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The supplied evidence does not identify sheet A3.00, and it does not pair wall substrate code 1 with any material. The wall substrate material schedule found in the drawings lists a key where a letter indicates the substrate and a number indicates the sheathing type, and it shows combinations such as A 1, B 1, B 2, 21, and 22, but no label for code 1 alone, no code 2 alone, and no materials tied to codes 1, 2, 21, or 22 as asked. Default interior stud framing and furring spacing also cannot be established from the evidence: the only spacing stated is 16\" on center for metal stud wall assemblies, and there is no statement of a default spacing for interior stud framing and furring. Because the sheet identity, the code definitions, and the requested default spacing are not explicitly provided, the question cannot be answered from this evidence.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": []
+    },
+    {
+      "id": "D2",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The supplied evidence does not identify any sheet as A5.01, and no cited passage states general requirements for door thickness, door-handle type, or the frame side where relite glazing and stops occur. The drawing excerpts reference details such as relite glazing, glazing stop, and doorstop locations but do not tie those requirements to a sheet identified as A5.01, nor do they state door thickness or door-handle type. Therefore these requirements cannot be established from the evidence provided.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": []
+    },
+    {
+      "id": "D3",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The evidence does not establish any general finish notes on sheet A3.40 that address all three requested items. It shows an A3.40 sheet titled ROOM FINISH SCHEDULE and a general note that all flooring/color transitions where required shall be centered under door, but no cited general finish note states a requirement for door and relite frame paint or for gypsum-board ceiling paint.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 1, "quote": "A3.40 ROOM FINISH SCHEDULE"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 16, "quote": "ROOM FINISH SCHEDULE - GENERAL NOTES 1. ALL FLOORING/ COLOR TRANSITIONS WHERE REQUIRED SHALL BE CENTERED UNDER DOOR."}
+      ]
+    },
+    {
+      "id": "D4",
+      "status": "CONTRACT_ERROR",
+      "answer": "The project question response failed its evidence contract; the cost was recorded and the request was not retried.",
+      "answer_basis": null,
+      "retrieved_count": null,
+      "citations": []
+    },
+    {
+      "id": "D5",
+      "status": "CONTRACT_ERROR",
+      "answer": "The project question response failed its evidence contract; the cost was recorded and the request was not retried.",
+      "answer_basis": null,
+      "retrieved_count": null,
+      "citations": []
+    },
+    {
+      "id": "C1",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The supplied evidence does not show discipline sheet counts on the Volume I cover sheet. The cover sheet index evidence shows partial index entries and the counts '00 GENERAL: 7' and '13 PLUMBING: 19', but no complete set of per-discipline base drawing sheet counts, so the total number of base drawing sheets cannot be established and no arithmetic can be shown.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 1, "quote": "00 GENERAL: 7"},
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL.pdf", "page": 1, "quote": "13 PLUMBING: 19"}
+      ]
+    },
+    {
+      "id": "C2",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The requested Building G L1 and L2 occupant-load subtotals and printed total cannot be established. A Building G L2 occupant load of 593 and a total of 1,103 appear in one evidence item, but the L1 occupant-load subtotal is not present, so the subtotals cannot be added or compared to the printed total.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ Drawings Vol 1 FINAL - PCD 01-03 Included.pdf", "page": 3, "quote": "508.2.4 SEPARATION OF OCCUPANCIES - NO SEPARATION IS REQUIRED BETWEEN ACCESSORY OCCUPANCIES AND THE MAIN OCCUPANCY BREAKOUT CLASSROOM G212 269 SF E 20 13 593 TABLE 503 - ALLOWABLE BUILDING HEIGHTS AND AREAS L2 593 - TYPE V-A, SPRINKLERED, GROUP E OCCUPANCY TOTAL 1,103 MODERNIZATION BUILD-OUT WITHIN (E) SCHOOL BUILDING, NO INCREASE TO EXISTING BUILDING STORIES, BUILDING HEIGHT, BUILDING AREA. CHAPTER 6 -TYPES OF CONSTRUCTION"}
+      ]
+    },
+    {
+      "id": "C3",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The supplied evidence does not contain Section 01100 paragraph 1.04, any scheduled construction time for three sequential work areas, or a one-floor-at-a-time constraint. The only references to Section 01100 found are a table of contents line, paragraph 1.03 regarding the Anticipated Jobsite Start Date and Notice to Proceed, and general sign and working-hours text. No arithmetic for total scheduled construction time can be performed from this evidence.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": []
+    },
+    {
+      "id": "C4",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "The evidence does not state a 589-day contract duration, a 367-day on-site duration, or any Section 01100 paragraph 1.03 text containing those numbers. The only reference to Section 01100 paragraph 1.03 concerns a 180-day notice-to-proceed period, not contract or on-site duration, so the requested difference cannot be established or calculated from the supplied evidence.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": []
+    },
+    {
+      "id": "C5",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "answer": "Section 00800 states $2000.00 per calendar day for failure to complete the work on time and states punch-list delay liquidated damages as 10 percent per calendar day and closing-document delay liquidated damages as 5 percent per calendar day. The requested per-day dollar amounts for 10 percent and 5 percent cannot be established because the evidence does not contain a quoted calculation applying those percentages to $2000.00; computing the products would require arithmetic not present in the evidence.",
+      "answer_basis": "MODEL_PROJECT_EVIDENCE",
+      "retrieved_count": 8,
+      "citations": [
+        {"file": "Kapolei HS Q82227-21_ SPEC COMPILED - PCD 03 included.pdf", "page": 5, "quote": "A. In accordance with the GENERAL CONDITIONS, Article 7 - PROSECUTION AND PROGRESS, Section 7.26, FAILURE TO COMPLETE THE WORK ON TIME, upon failure to complete the work or any portion of the work within the time or times fixed in the contract or extension thereof, the Contractor shall pay liquidated damages to the State, in the amount of $2000.00, per calendar day of delay."},
+        {"file": "Kapolei HS Q82227-21_ SPEC COMPILED - PCD 03 included.pdf", "page": 5, "quote": "B. In accordance with the GENERAL CONDITIONS, Article 7 - PROSECUTION AND PROGRESS, Section 7.32, PROJECT ACCEPTANCE DATE; upon failure to correct punch list deficiencies, within the time or times fixed in the contract or extension thereof, the Contractor shall pay liquidated damages to the State, in the amount equal to 10 percent of the liquidated damages, per calendar day of delay."},
+        {"file": "Kapolei HS Q82227-21_ SPEC COMPILED - PCD 03 included.pdf", "page": 5, "quote": "C. In accordance with the GENERAL CONDITIONS, Article 7 - PROSECUTION AND PROGRESS, Section7.33, FINAL SETTLEMENT OF THE CONTRACT; upon failure to submit closing documents within the time or times fixed in the contract or extension thereof, the Contractor shall pay liquidated damages to the State, in the amount equal to 5 percent of the liquidated damages, per calendar day of delay."}
+      ]
+    }
+  ]
+}

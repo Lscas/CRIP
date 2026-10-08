@@ -1,0 +1,54 @@
+{
+  "change_id": "CR-0177",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add frozen selector v5 with explicit Building evidence scoping while preserving v3/v4 replay.",
+  "decision_refs": [
+    "DEV-161 found both Flash and Pro unusable on Building I while the v4 input also contained competing Building G evidence",
+    "The user directed CIRP development, testing and iteration to continue",
+    "Ponytail constraint: fix the demonstrated local input defect before adding another model or retrieval framework",
+    "Historical verification note: targeted selector/evaluation/readiness/scorecard/job tests",
+    "Historical verification note: real frozen S4 preview and fixed-15 page gate with zero provider calls",
+    "Historical verification note: scripts/check_spec_sync.py",
+    "Historical verification note: scripts/check_changes.py",
+    "Historical verification note: bundle manifest check"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/evidence_loop.py", "app/db.py", "migrations/018_reference_selector_v5.sql",
+    "spec/schemas/reference-evaluation.schema.json",
+    "spec/schemas/reference-evaluation-job.schema.json",
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "tests/app/test_page_selector.py", "tests/app/test_evidence_loop.py", "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_scorecards.py",
+    "reports/kapolei_reference_page_selection_v5_2026-10-03.json",
+    "docs/REFERENCE_QA.md", "docs/REQUIREMENTS.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-162.json", "changes/CR-0177.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py",
+    "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_scorecards.py",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user asked the planned CIRP development and iteration to continue.",
+  "known_limitations": [
+    "The first scope policy recognizes only explicit Building or BLDG identifiers, not inferred campus areas or arbitrary entity names.",
+    "Unlabeled general evidence remains eligible because excluding it could remove shared code requirements.",
+    "This local input repair requires a new frozen evaluation before answer quality can be measured and does not itself prove correctness."
+  ]
+}

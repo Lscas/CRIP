@@ -1,0 +1,38 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user objective is to continue optimizing CIRP and improve answer correctness; the user previously approved full database regeneration while retaining evidence and safety boundaries.",
+  "notes": [
+    "Do not read, log or return saved provider credentials or private source-document content.",
+    "Do not mutate or delete the existing .local database, source objects, reviews or provider ledger.",
+    "Use synthetic offline PDF fixtures and local deterministic checks before any customer-file or paid benchmark.",
+    "A Sheet identity must come from explicit source text in a bounded title-block region and fail closed on conflicts.",
+    "Do not weaken exact-quote, numeric, unit, workflow, drawing-identifier or citation validation.",
+    "Do not make a paid model, remote OCR or remote CAD call."
+  ],
+  "task_id": "DEV-131",
+  "title": "Preserve drawing Sheet identity and structured drawing tables",
+  "requirement_ids": ["FR-PARSE-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/parsers.py", "app/canonical.py", "app/questions.py", "app/db.py", "app/runner.py",
+    "migrations", "tests/app/test_parsers.py", "tests/app/test_canonical.py",
+    "tests/app/test_questions.py", "scripts/benchmark_question_retrieval.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/CANONICAL_STORAGE_V2.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "README.md", "CHANGELOG.md", "tasks/DEV-131.json", "changes/CR-0146.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/CANONICAL_STORAGE_V2.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_canonical.py tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-131",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Improve engineering-answer correctness by retaining explicit title-block Sheet identity and drawing-table structure in source evidence and making exact structural scope dominate ordinary text relevance without adding unsupported inference."
+}

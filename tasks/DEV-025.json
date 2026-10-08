@@ -1,0 +1,46 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 19000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and email content.",
+  "notes": [
+    "The Workflow API paginates, but the browser currently requests only 500 groups and presents that count as complete.",
+    "Reuse the existing review-table pagination state and Load more interaction; do not fetch every page automatically or add a dependency.",
+    "Targeted API/UI tests, browser smoke, API/UI area checks, specification synchronization and the full repository suite passed offline with no model or external request."
+  ],
+  "task_id": "DEV-025",
+  "title": "Workflow review pagination",
+  "requirement_ids": [
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "web/style.css",
+    "tests/web/test_display_contract.py",
+    "tests/app/test_api.py",
+    "scripts/browser_i18n_smoke.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-025.json",
+    "changes/CR-0040.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/IMPLEMENTATION_STATUS.md"
+  ],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py tests/web/test_display_contract.py -q",
+    "python scripts/browser_i18n_smoke.py",
+    "python scripts/run_checks.py --area ui",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Show the true total number of workflow groups and let reviewers load additional 500-group pages without duplicates, automatic bulk fetching, model calls or cost entries."
+}

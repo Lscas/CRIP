@@ -1,0 +1,39 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 7000,
+  "max_output_tokens": 1200,
+  "max_context_chars": 11000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires continued RFI/Submittal/Email accuracy and adaptability; Yahoo and Proton HTML quote wrappers currently leak prior workflow roles into the current reply.",
+  "notes": [
+    "Reproduce a current RFI Response plus wrapped historical Question becoming MIXED before changing the parser.",
+    "Reuse the existing standard-library HTML marker path and exact wrapper classes documented by open-source email parsers.",
+    "Keep quoted evidence reviewable while excluding it from current workflow routing and model extraction; add no dependency or provider call.",
+    "Completed offline: Gmail/Outlook regression cases and new Yahoo/Proton cases pass; the RFI fixture remains Response with its old Question in quoted history. Full gates passed with 662 Python, 24 UI and 11 deployment tests plus a 383-file manifest."
+  ],
+  "task_id": "DEV-063",
+  "title": "Separate Yahoo and Proton HTML quoted history",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-063.json",
+    "changes/CR-0078.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py -q -k html_reply",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Treat exact Yahoo and Proton HTML reply wrappers as quoted history so an older RFI/Submittal role or status cannot contaminate the current Email workflow context."
+}

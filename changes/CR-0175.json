@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0175",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-DEEPSEEK-MODEL-SELECTION-001",
+    "FR-API-006",
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Replace the obsolete DeepSeek false-Pro guard with exact text-only deepseek-v4-pro selection after official independent availability was confirmed.",
+  "decision_refs": [
+    "The user requested a V4.1 Flash reference followed by a Pro comparison on the same frozen CIRP evidence scope",
+    "DeepSeek's current official model list and API documentation identify deepseek-v4-pro as an independently available text model",
+    "Historical aliases and immutable evaluation identities must remain readable without being rewritten"
+  ],
+  "affected_paths": [
+    "app/settings.py", "app/model_configuration.py", "web/index.html", "web/app.js",
+    "web/i18n.js", "tests/app/test_model_configuration.py", "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py", "docs/PROVIDER_INTEGRATION.md", "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md", "README.md",
+    "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-160.json", "changes/CR-0175.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py", "tests/app/test_gateway_budget.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly authorized DeepSeek API use for a Flash reference and subsequent Pro comparison.",
+  "known_limitations": [
+    "DeepSeek V4 Pro is text-only in the current official capability listing, so CIRP rejects Pro image input locally.",
+    "CIRP retains JSON-object Chat Completions for this comparison and does not add automatic model discovery or fallback.",
+    "Model availability does not establish answer correctness or model superiority."
+  ]
+}

@@ -98,7 +98,7 @@ def child_environment(hostname: str, password: str, origin_token: str,
         'CIRP_PREVIEW_PASSWORD': password, 'CIRP_ORIGIN_TOKEN': origin_token,
         'CIRP_ALLOWED_HOSTS': 'localhost,127.0.0.1,' + hostname,
         'CIRP_PROVIDER': 'mock', 'CIRP_LIVE_API_ENABLED': 'false',
-        'CIRP_API_KEY': '', 'CIRP_PRICES_CONFIRMED': 'false',
+        'CIRP_API_KEY': '',
         'CIRP_DATA_DIR': str(ROOT / '.local/preview-data'),
     })
     return env

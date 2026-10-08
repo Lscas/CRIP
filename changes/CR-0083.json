@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0083",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Return and verify one inline-evidenced finding for every named source family in a project comparison answer.",
+  "decision_refs": [
+    "The user requested project-file Q&A modeled on Trunk Tools-style service behavior",
+    "The active accuracy goal covers comparison across Specification, RFI, Submittal and Email sources",
+    "A mixed two-source answer with only one cited family was accepted before this change"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/gateway.py", "prompts/project-question/system.md",
+    "spec/schemas/project-answer.schema.json", "tests/app/test_questions.py",
+    "web/app.js", "web/style.css", "tests/web/test_display_contract.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "tasks/DEV-068.json", "changes/CR-0083.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's project Q&A request and active cross-source accuracy goal authorize this bounded implementation.",
+  "known_limitations": [
+    "Exact quotation, file and deterministic source-type checks do not prove that a finding is semantically entailed or contractually authoritative; human review remains required.",
+    "Source types rely on exact workflow headers, file names and evidence locators rather than a second semantic classifier.",
+    "Validation uses synthetic offline evidence and does not establish construction accuracy on customer documents."
+  ]
+}

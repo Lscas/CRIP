@@ -1,0 +1,37 @@
+{
+  "status": "IN_PROGRESS",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user authorized an architecture-level rebuild of Feature 8 and directed implementation of the grilled QA V2 plan.",
+  "notes": [
+    "Keep the existing parser, immutable evidence, Canonical V2 graph, SQLite store, gateway and deterministic workflow answers.",
+    "Build QA V2 beside the legacy question endpoint so the current product path remains available during validation.",
+    "Select document revisions from explicit issue-date and revision metadata only; never use upload order as authority.",
+    "Retrieve source-text structural blocks and exact evidence provenance; model-vision narration is not source evidence.",
+    "This slice is offline and makes no provider request or paid call."
+  ],
+  "task_id": "DEV-133",
+  "title": "Build QA V2 effective sources and evidence bundles",
+  "requirement_ids": ["FR-QA-V2-001", "FR-QA-V2-ANSWER-001", "FR-QA-V2-VISION-001", "FR-QA-V2-RELEASE-001", "FR-CANONICAL-GRAPH-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/evidence_bundle.py", "app/project_qa_v2.py", "app/main.py", "app/gateway.py", "app/db.py",
+    "prompts/project-question-v2/system.md", "prompts/manifest.json",
+    "spec/schemas/project-answer-v2.schema.json", "scripts/benchmark_qa_v2_retrieval.py",
+    "tests/app/test_project_qa_v2.py", "docs/PROJECT_QA_V2.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-133.json", "changes/CR-0148.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/PROJECT_QA_V2.md"],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_project_qa_v2.py tests/app/test_canonical.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-133",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Introduce an independent QA V2 boundary that resolves effective sources, builds structural evidence bundles, produces claim-bound text or bounded region-vision answers through the audited gateway, and supplies a no-call release benchmark before any legacy cutover."
+}

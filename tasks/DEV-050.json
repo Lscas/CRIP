@@ -1,0 +1,47 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1800,
+  "max_context_chars": 19500,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "A standards-shaped multipart/related message currently concatenates a non-root inline resource into the parent body.",
+    "The leaked resource changes a clear current RFI response to MIXED and is absent from attachment inventory.",
+    "Reuse Python's standard email MIME tree: the declared related root is body content and other related parts are inert resources.",
+    "Parsing and explicit attachment import must share the same deterministic traversal without automatic recursion or model calls.",
+    "639 Python, 24 UI and 11 deployment-boundary tests passed offline; declared and fallback related roots remain body while every non-root resource stays inert and explicitly importable."
+  ],
+  "task_id": "DEV-050",
+  "title": "Isolate multipart related resources",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/email_mime.py",
+    "app/parsers.py",
+    "app/email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-050.json",
+    "changes/CR-0065.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_email_attachments.py tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Keep multipart/related non-root resources out of current Email/RFI/Submittal evidence while listing them for explicit reviewer-selected import through the existing immutable upload path."
+}

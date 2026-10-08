@@ -1,0 +1,33 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce one ordinary question whose eight selected passages are exact duplicate Specification fragments from one document and scope.",
+    "Deduplicate only exact immutable source text inside the same source document, source family and semantic Section/Sheet/Paragraph scope before the existing context limits.",
+    "Keep identical text from another source document or another semantic locator scope eligible for provenance and comparison.",
+    "Reuse the ranked local retrieval path and make no provider request."
+  ],
+  "task_id": "DEV-094",
+  "title": "Deduplicate exact project-question context",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-089.json", "tasks/DEV-090.json", "tasks/DEV-094.json",
+    "changes/CR-0109.json",
+    "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reduce repeated project-question prompt context without removing distinct source documents or semantic source scopes."
+}

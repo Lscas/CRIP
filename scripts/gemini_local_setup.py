@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
 import secrets
+import socket
 import subprocess
 import sys
 import threading
@@ -19,6 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.security import environment_without_secrets  # noqa: E402
+from app.settings import Settings  # noqa: E402
 from app.local_credentials import (  # noqa: E402
     LocalCredentialError,
     enable_remember,
@@ -39,20 +42,22 @@ class ProviderProfile:
     display_name: str
     base_url: str
     model: str
-    input_rate: str
-    output_rate: str
     min_interval: str
+    local: bool = False
 
 
 GEMINI_PROFILE = ProviderProfile(
     "gemini", "Gemini 3.6 Flash", GEMINI_BASE_URL, GEMINI_MODEL,
-    "7.50", "37.50", "15",
+    "15",
 )
 DEEPSEEK_PROFILE = ProviderProfile(
     "deepseek", "DeepSeek V4 Flash", "https://api.deepseek.com", "deepseek-v4-flash",
-    "4.40", "13.20", "1",
+    "1",
 )
-PROFILES = {profile.provider: profile for profile in (GEMINI_PROFILE, DEEPSEEK_PROFILE)}
+CUSTOM_PROFILE = ProviderProfile(
+    "custom", "Custom OpenAI-compatible model", "", "", "0",
+)
+PROFILES = {profile.provider: profile for profile in (GEMINI_PROFILE, DEEPSEEK_PROFILE, CUSTOM_PROFILE)}
 
 
 def live_child_env(api_key: str, profile: ProviderProfile = GEMINI_PROFILE) -> dict[str, str]:
@@ -67,9 +72,6 @@ def live_child_env(api_key: str, profile: ProviderProfile = GEMINI_PROFILE) -> d
             "CIRP_CHEAP_MODEL": profile.model,
             "CIRP_VISION_ENABLED": "true" if profile.provider == "deepseek" else "false",
             "CIRP_VISION_MODEL": "deepseek-v4-flash-vision-exp",
-            "CIRP_PRICES_CONFIRMED": "true",
-            "CIRP_INPUT_CNY_PER_MILLION": profile.input_rate,
-            "CIRP_OUTPUT_CNY_PER_MILLION": profile.output_rate,
             "CIRP_INPUT_LIMIT_BYTES": "32000",
             "CIRP_OUTPUT_LIMIT_TOKENS": "8000",
             "CIRP_MIN_REQUEST_INTERVAL_SECONDS": profile.min_interval,
@@ -88,27 +90,64 @@ def valid_api_key(value: str) -> bool:
     return 16 <= len(encoded) <= 256 and not any(char.isspace() for char in value)
 
 
+def loopback_port_in_use(port: int) -> bool:
+    """Check the fixed local target without stopping or inspecting its process."""
+    with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.25)
+        return probe.connect_ex(('127.0.0.1',port))==0
+
+
+def custom_profile(fields: dict[str, list[str]], api_key: str) -> ProviderProfile:
+    base_url=fields.get("base_url", [""])[0].strip().rstrip("/")
+    model=fields.get("model", [""])[0].strip()
+    provider="custom-"+hashlib.sha256((base_url+"\0"+model).encode()).hexdigest()[:16]
+    settings=Settings(
+        ROOT / ".local", provider=provider, api_base_url=base_url,
+        api_key=api_key or "saved-key-validation-placeholder",
+        cheap_model=model, live_enabled=True, start_worker=False,
+    )
+    errors=settings.live_errors()
+    if errors: raise ValueError(errors[0])
+    return ProviderProfile(
+        provider, "Custom OpenAI-compatible model", base_url, model,
+        "0", settings.is_local_model(),
+    )
+
+
 def page(
     csrf_token: str, *, message: str = "", profile: ProviderProfile = GEMINI_PROFILE,
     remember: bool = False,
 ) -> bytes:
     notice = f"<p role=alert>{message}</p>" if message else ""
     checked = " checked" if remember else ""
+    custom = profile.provider == "custom"
+    configuration = "" if not custom else """
+  <p>Choose any OpenAI-compatible text endpoint. After Analyze is clicked, CIRP sends parsed text to that endpoint; this generic route does not send page images. For a local model, use a loopback base URL such as <code>http://127.0.0.1:11434/v1</code>; no API key is required. Remote endpoints must use HTTPS and an API key.</p>
+  <p><label>API base URL<br><input name=base_url required size=72 placeholder="http://127.0.0.1:11434/v1"></label></p>
+  <p><label>Model name<br><input name=model required size=48 placeholder="qwen3:8b"></label></p>
+"""
+    remember_control = (f'<p><label><input type=checkbox name=remember value=yes{checked}> '
+                        + ('Encrypt this key for this endpoint/model, or reuse its saved key when the key field is blank' if custom else
+                           'Encrypt and save for the current user with Windows DPAPI for future automatic startup')
+                        + '</label></p>')
+    key_required = "" if custom else " required"
+    approval_text = ("I confirm the configured endpoint, model, data transfer, and possible provider charges after Start analysis is clicked" if custom else
+                     "I authorize the stated text/image transfer and possible provider charges after Start analysis is clicked")
     return f"""<!doctype html>
 <html lang=en><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
   <title>Secure CIRP {profile.display_name} startup</title>
   <h1>Secure CIRP {profile.display_name} startup</h1>
   <p>This tool listens only on local address 127.0.0.1 and does not write the key to a URL, application log, or plaintext .env. Do not let the browser save the key.</p>
-  <p>When Save is selected, the key is written only to a Windows DPAPI current-user encrypted file. Other Windows users and copies moved to another computer cannot decrypt it directly.</p>
-  <p>The budget ledger uses conservative upper-bound rates: input ¥{profile.input_rate}/million tokens and output ¥{profile.output_rate}/million tokens. The cumulative project limit remains ¥300.</p>
-  {"<p><strong>Data disclosure:</strong> After Start analysis is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API. Page images and text calls share the same cumulative budget gate.</p>" if profile.provider == "deepseek" else ""}
+  {'' if custom else '<p>When Save is selected, the key is written only to a Windows DPAPI current-user encrypted file. Other Windows users and copies moved to another computer cannot decrypt it directly.</p>'}
+  {"<p><strong>Data disclosure:</strong> After Start analysis is clicked, eligible full-page PNG derivatives and parsed text are sent to the official DeepSeek API.</p>" if profile.provider == "deepseek" else ""}
 {notice}
 <form method=post action=/start autocomplete=off>
   <input type=hidden name=csrf value="{csrf_token}">
-  <p><label>New {profile.display_name} API key<br><input type=password name=api_key required autofocus size=72></label></p>
-  <p><label><input type=checkbox name=remember value=yes{checked}> Encrypt and save for the current user with Windows DPAPI for future automatic startup</label></p>
-  <p><label><input type=checkbox name=approved value=yes required> I confirm the budget upper bounds and authorize the stated text/image transfer and API charges after Start analysis is clicked</label></p>
+  {configuration}
+  <p><label>{'API key (optional for a loopback local model)' if custom else f'New {profile.display_name} API key'}<br><input type=password name=api_key{key_required} autofocus size=72></label></p>
+  {remember_control}
+  <p><label><input type=checkbox name=approved value=yes required> {approval_text}</label></p>
   <button type=submit>Start CIRP securely</button>
 </form>
 """.encode("utf-8")
@@ -137,7 +176,7 @@ class SetupServer(ThreadingHTTPServer):
         self.app_port = app_port
         self.profile = profile
         self.data_dir = data_dir.resolve()
-        self.remember = remember_enabled(self.data_dir, profile.provider)
+        self.remember = profile.provider != "custom" and remember_enabled(self.data_dir, profile.provider)
         self.initial_message = initial_message
         self.csrf_token = secrets.token_hex(24)
         self.child: subprocess.Popen[bytes] | None = None
@@ -169,7 +208,20 @@ class SetupHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _same_loopback_origin(self, *, post: bool) -> bool:
+        expected=f'127.0.0.1:{self.server.server_address[1]}'
+        hosts=self.headers.get_all('Host') or []
+        origins=self.headers.get_all('Origin') or []
+        if hosts != [expected]:
+            return False
+        if not post:
+            return not origins or origins == [f'http://{expected}']
+        return origins == [f'http://{expected}']
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._same_loopback_origin(post=False):
+            self._send(403, b'Forbidden')
+            return
         if urlsplit(self.path).path != "/":
             self._send(404, b"Not found")
             return
@@ -179,6 +231,9 @@ class SetupHandler(BaseHTTPRequestHandler):
         ))
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._same_loopback_origin(post=True):
+            self._send(403, b'Forbidden')
+            return
         if urlsplit(self.path).path != "/start":
             self._send(404, b"Not found")
             return
@@ -194,7 +249,7 @@ class SetupHandler(BaseHTTPRequestHandler):
             return
         body = self.rfile.read(length)
         try:
-            fields = parse_qs(body.decode("ascii"), strict_parsing=True, max_num_fields=4)
+            fields = parse_qs(body.decode("ascii"), strict_parsing=True, max_num_fields=8)
         except (UnicodeDecodeError, ValueError):
             self._send(400, page(
                 self.server.csrf_token, message="The submission is invalid. Try again.",
@@ -204,12 +259,24 @@ class SetupHandler(BaseHTTPRequestHandler):
         api_key = fields.get("api_key", [""])[0].strip()
         csrf = fields.get("csrf", [""])[0]
         approved = fields.get("approved", [""])[0]
+        profile = self.server.profile
         remember = fields.get("remember", [""])[0] == "yes"
-        if not hmac.compare_digest(csrf, self.server.csrf_token) or approved != "yes" or not valid_api_key(api_key):
+        try:
+            if profile.provider == "custom":
+                profile=custom_profile(fields,api_key)
+                if remember and not api_key:
+                    api_key=load_api_key(self.server.data_dir,profile.provider) or ""
+        except (ValueError, LocalCredentialError) as exc:
+            fields["api_key"] = [""];api_key = ""
+            self._send(400, page(self.server.csrf_token, message=str(exc), profile=self.server.profile))
+            return
+        remember = remember and bool(api_key)
+        key_valid = valid_api_key(api_key) or (profile.local and not api_key)
+        if not hmac.compare_digest(csrf, self.server.csrf_token) or approved != "yes" or not key_valid:
             fields["api_key"] = [""]
             api_key = ""
             self._send(400, page(
-                self.server.csrf_token, message="Enter a new key and confirm the budget.",
+                self.server.csrf_token, message="Enter a new key and confirm the provider terms.",
                 profile=self.server.profile, remember=self.server.remember,
             ))
             return
@@ -217,13 +284,22 @@ class SetupHandler(BaseHTTPRequestHandler):
             if self.server.child is not None:
                 self._send(409, b"Already started")
                 return
+            if loopback_port_in_use(self.server.app_port):
+                fields["api_key"] = [""];api_key = ""
+                self._send(409, page(
+                    self.server.csrf_token,
+                    message=(f"Port {self.server.app_port} is already used by another local service. "
+                             "Stop that CIRP service, then submit this form again."),
+                    profile=self.server.profile, remember=self.server.remember,
+                ))
+                return
             try:
                 if remember:
-                    enable_remember(self.server.data_dir, self.server.profile.provider)
-                    save_api_key(self.server.data_dir, self.server.profile.provider, api_key)
+                    enable_remember(self.server.data_dir, profile.provider)
+                    save_api_key(self.server.data_dir, profile.provider, api_key)
                 else:
-                    forget_api_key(self.server.data_dir, self.server.profile.provider)
-                child = start_live_child(api_key, self.server.profile, self.server.app_port)
+                    forget_api_key(self.server.data_dir, profile.provider)
+                child = start_live_child(api_key, profile, self.server.app_port)
             except (LocalCredentialError, OSError):
                 fields["api_key"] = [""]
                 api_key = ""
@@ -238,8 +314,8 @@ class SetupHandler(BaseHTTPRequestHandler):
             self.server.child = child
         target = f"http://127.0.0.1:{self.server.app_port}/"
         success = (
-            "<!doctype html><html lang=zh-CN><meta charset=utf-8>"
-            f"<title>CIRP {self.server.profile.display_name} is starting</title><h1>CIRP {self.server.profile.display_name} is starting</h1>"
+            "<!doctype html><html lang=en><meta charset=utf-8>"
+            f"<title>CIRP {profile.display_name} is starting</title><h1>CIRP {profile.display_name} is starting</h1>"
             f"<p>The key was passed to this process {'and encrypted for the current user with Windows DPAPI' if remember else 'without being saved'}. Open <a href=\"{target}\">{target}</a> shortly.</p>"
         ).encode("utf-8")
         self._send(202, success)
@@ -275,7 +351,10 @@ def main(argv: list[str] | None = None, *, forced_provider: str | None = None) -
         print(f"[DONE] Removed the saved {profile.display_name} credential for this Windows user.", flush=True)
         return 0
     initial_message = ""
-    if remember_enabled(data_dir, profile.provider) and not args.replace_key:
+    if profile.provider != "custom" and remember_enabled(data_dir, profile.provider) and not args.replace_key:
+        if loopback_port_in_use(args.app_port):
+            print(f"[STOP] Port {args.app_port} is already used by another local service; the saved key was not loaded.",flush=True)
+            return 2
         try:
             api_key = load_api_key(data_dir, profile.provider)
         except LocalCredentialError:

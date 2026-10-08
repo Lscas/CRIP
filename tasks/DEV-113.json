@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse only existing EMAIL_ATTACHMENT workflow-index relationships created by explicit selected-attachment import.",
+    "Support exact parent-to-attachment and attachment-to-parent questions without evidence retrieval.",
+    "Report bounded source attachment indexes and validated MIME types without implying attachment absence.",
+    "Fail closed on ambiguous names, malformed relationships, duplicates and oversized results.",
+    "Do not transfer workflow role, status, approval or authority and make no provider request."
+  ],
+  "task_id": "DEV-113",
+  "title": "Answer exact Email attachment provenance questions locally",
+  "requirement_ids": ["FR-QA-EMAIL-ATTACHMENT-RELATION-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-113.json", "changes/CR-0128.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python -m pytest tests/app/test_workflows.py tests/app/test_email_attachments.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-113",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return bounded bidirectional explicit Email attachment-import provenance from the existing workflow index without model cost or mailbox access."
+}

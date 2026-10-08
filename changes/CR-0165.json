@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0165",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-MODEL-COMPARISON-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add zero-call cloning and deterministic same-run/snapshot/question-set comparison for frozen Reference evaluations under different model profiles.",
+  "decision_refs": [
+    "The advanced-model reference must be compared against the same immutable local evidence and questions",
+    "CIRP is the management and audit layer and must not infer which model answer is correct",
+    "Clone and comparison are local management operations and cannot authorize model dispatch"
+  ],
+  "affected_paths": [
+    "app/reference_evaluations.py", "app/main.py",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js",
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-150.json", "changes/CR-0165.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_evaluations.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal directs continued construction of the advanced-model Reference framework while retaining existing features.",
+  "known_limitations": [
+    "Clone and comparison prepare and inspect an A/B benchmark but do not execute a model or prove answer quality.",
+    "Only the newest 20 project evaluations exposed by the bounded browser list are selectable in the current UI; the API accepts any exact accessible evaluation IDs.",
+    "Sequential model execution remains browser-driven and explicitly confirmed; server-side unattended execution is not included."
+  ]
+}

@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cirp.invalid/schemas/0.2.6/reference-projection-loop-receipt.schema.json",
+  "title": "Reference append-only PDF projection model-input receipt 5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_version",
+    "model_call_id",
+    "round",
+    "request_hash",
+    "prompt_contract_hash",
+    "question_hash",
+    "provider",
+    "model",
+    "api_protocol",
+    "structured_output_mode",
+    "inference_mode",
+    "profile_version",
+    "profile_id",
+    "cached",
+    "source_text_included",
+    "prompt_content_included",
+    "chain_of_thought_included",
+    "evidence_count",
+    "evidence_inputs",
+    "visual_inputs",
+    "system_text_bytes",
+    "user_text_bytes",
+    "image_bytes",
+    "request_upper_bound_bytes",
+    "max_output_tokens",
+    "selector_version",
+    "context_policy",
+    "source_text_clipped",
+    "source_text_bytes",
+    "decision_contract_version",
+    "projection_version",
+    "projection_input_sha256",
+    "projection_context_sha256",
+    "ordered_projection_manifest_sha256",
+    "initial_projection_context_sha256",
+    "projection_sources",
+    "projection_row_count",
+    "profile_neutral_input_sha256",
+    "loop_version",
+    "initial_projection_input_sha256",
+    "initial_ordered_projection_manifest_sha256",
+    "prior_chain_sha256",
+    "request_history_sha256"
+  ],
+  "properties": {
+    "receipt_version": {
+      "const": "reference-model-input-receipt-5"
+    },
+    "model_call_id": {
+      "type": "string",
+      "pattern": "^CALL-[0-9a-f]{32}$"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "request_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "prompt_contract_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "question_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "provider": {
+      "const": "deepseek"
+    },
+    "model": {
+      "enum": [
+        "deepseek-flash",
+        "deepseek-v4-pro"
+      ]
+    },
+    "api_protocol": {
+      "const": "chat_completions"
+    },
+    "structured_output_mode": {
+      "const": "json_object"
+    },
+    "inference_mode": {
+      "enum": [
+        "disabled",
+        "thinking-low"
+      ]
+    },
+    "profile_version": {
+      "const": "reference-text-profile-1"
+    },
+    "profile_id": {
+      "enum": [
+        "FLASH_NONE",
+        "FLASH_LOW",
+        "PRO"
+      ]
+    },
+    "cached": {
+      "type": "boolean"
+    },
+    "source_text_included": {
+      "const": false
+    },
+    "prompt_content_included": {
+      "const": false
+    },
+    "chain_of_thought_included": {
+      "const": false
+    },
+    "evidence_count": {
+      "const": 0
+    },
+    "evidence_inputs": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "visual_inputs": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "system_text_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "user_text_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "image_bytes": {
+      "const": 0
+    },
+    "request_upper_bound_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8000
+    },
+    "selector_version": {
+      "const": "literal-page-selector-10"
+    },
+    "context_policy": {
+      "const": "COMPLETE_SELECTED_PDF_PROJECTION_APPEND_ONLY_V1"
+    },
+    "source_text_clipped": {
+      "const": false
+    },
+    "source_text_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision_contract_version": {
+      "const": "project-projection-decision-1"
+    },
+    "projection_version": {
+      "const": "pdf-char-lane-projection-1"
+    },
+    "projection_input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "projection_context_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ordered_projection_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "initial_projection_context_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "profile_neutral_input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "projection_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "projection_sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "pdf_sha256",
+          "page_numbers",
+          "manifest_sha256"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "pdf_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "page_numbers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "manifest_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "loop_version": {
+      "const": "project-projection-loop-1"
+    },
+    "initial_projection_input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "initial_ordered_projection_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "prior_chain_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_history_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

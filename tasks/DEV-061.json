@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 7000,
+  "max_output_tokens": 1200,
+  "max_context_chars": 11000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires continued RFI/Submittal/Email adaptability and accuracy; CR-0075 must not hide explicit Email attachment provenance when a reviewer corrects workflow classification.",
+  "notes": [
+    "Reproduce the interaction through the public workflow-index function before changing code.",
+    "An explicit selected-attachment relationship must depend on immutable parsed Email metadata, not the editable effective document type.",
+    "Keep the correction overlay, source evidence, attachment import ledger and parser summary unchanged; add no dependency or model call.",
+    "Completed offline with 660 Python tests, 24 UI tests and 11 deployment tests. Full checks, specification sync, dependency validation, change-scope validation and the 379-file source manifest passed."
+  ],
+  "task_id": "DEV-061",
+  "title": "Preserve email attachment provenance after workflow correction",
+  "requirement_ids": [
+    "FR-WORKFLOW-001",
+    "FR-INGEST-006",
+    "FR-CLASS-001"
+  ],
+  "allowed_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "web/i18n.js",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-061.json",
+    "changes/CR-0076.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_workflows.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep an explicitly imported Email attachment relationship visible after the parent Email receives a run-scoped RFI, Submittal or Other classification correction, without weakening the non-Email-parent guard."
+}

@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 14000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "Offline reproductions show that same-line RFI roles and Submittal statuses are lost, while compact workflow filenames absorb those labels into the identifier.",
+    "Recognize only an existing exact role or status immediately after an exact identifier; do not infer authority, approval precedence or semantic relationships.",
+    "Reuse the existing identifier normalizer and role/status allowlists; add no dependency or model call.",
+    "Synthetic text, Email Subject/body and filename fixtures now keep exact IDs separate from allowlisted same-line metadata; compact references reuse the same parser and descriptive titles stay neutral.",
+    "646 Python, 24 UI and 11 deployment-boundary tests passed offline with 105 requirements, 15 schemas and a 368-file bundle manifest; no customer document, external request or paid call was used."
+  ],
+  "task_id": "DEV-056",
+  "title": "Parse same-line workflow metadata",
+  "requirement_ids": [
+    "FR-PARSE-001",
+    "FR-PARSE-007",
+    "FR-CLASS-001",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-056.json",
+    "changes/CR-0071.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Keep exact same-line RFI role and Submittal status metadata separate from the workflow identifier across text, email and filename fallback without broad keyword inference."
+}

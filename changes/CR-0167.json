@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0167",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-REFERENCE-READINESS-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-MANAGED-JOB-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add a zero-call whole-evaluation input-scope and readiness manifest without changing or removing existing execution paths.",
+  "decision_refs": [
+    "CRIP should reduce unnecessary model input through local transparent page selection",
+    "The user should inspect a complete task input plan before separately authorizing provider work",
+    "Operational readiness must not be confused with semantic completeness or permission to run"
+  ],
+  "affected_paths": [
+    "app/reference_readiness.py", "app/main.py",
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_readiness.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-152.json",
+    "changes/CR-0167.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_readiness.py", "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/web/test_display_contract.py",
+    "tests/web/i18n.test.mjs", "scripts/check_spec_sync.py", "scripts/context_pack.py",
+    "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal authorizes additive local management and input-reduction features while retaining explicit model-call control and every existing capability.",
+  "known_limitations": [
+    "The manifest reports literal selector results and operational blockers; it does not prove relevance, completeness or engineering precedence.",
+    "Source text and evidence IDs are intentionally absent; the existing one-question page preview remains the separate source-inspection path.",
+    "Readiness inspection cannot authorize, queue, resume or retry execution.",
+    "Offline acceptance does not run or score a stronger model."
+  ]
+}

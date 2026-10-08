@@ -1,7 +1,9 @@
 """合成契约测试，不是施工精度评测。"""
 import copy
 import pytest
+from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
+from contracts import runtime_rules
 from contracts.runtime_rules import load_json, validate_schema, validate_candidate, EvidenceScope, wrap_candidate
 
 def scope():
@@ -135,3 +137,47 @@ def test_inferred_status_does_not_allow_fabricated_design_values():
 def test_source_evidence_schemas():
     for e in load_json('examples/evidence.json'):
         validate_schema('evidence',e)
+
+
+def _receipt(evidence_inputs):
+    return {
+        'receipt_version':'reference-model-input-receipt-1','model_call_id':'CALL-'+'a'*32,
+        'round':1,'request_hash':'b'*64,'prompt_contract_hash':'c'*64,
+        'question_hash':'d'*64,'provider':'mock','model':'mock-no-network',
+        'api_protocol':'chat_completions','structured_output_mode':'json_object',
+        'inference_mode':'disabled','cached':False,'source_text_included':False,
+        'prompt_content_included':False,'chain_of_thought_included':False,
+        'evidence_count':len(evidence_inputs),'evidence_inputs':evidence_inputs,
+        'visual_inputs':[],'system_text_bytes':1,'user_text_bytes':1,'image_bytes':0,
+        'request_upper_bound_bytes':2,'max_output_tokens':1,
+    }
+
+
+def test_receipt_unique_evidence_fast_path_skips_quadratic_fallback(monkeypatch):
+    original=runtime_rules._BASE_UNIQUE_ITEMS;calls=[]
+    def fallback(*args):
+        calls.append(args[2])
+        yield from original(*args)
+    monkeypatch.setattr(runtime_rules,'_BASE_UNIQUE_ITEMS',fallback)
+    inputs=[{'evidence_id':f'E-{index}','text_sha256':'a'*64} for index in range(8500)]
+    assert list(runtime_rules._receipt_unique_items(Draft202012Validator({}),True,inputs,{}))==[]
+    assert calls==[]  # The production schema separately limits v1 receipts to 256 inputs.
+
+
+def test_receipt_unique_evidence_duplicate_is_rejected_and_irregular_inputs_fallback(monkeypatch):
+    entry={'evidence_id':'E-1','text_sha256':'a'*64}
+    with pytest.raises(ValidationError):
+        validate_schema('reference-model-input-receipt',_receipt([entry,copy.deepcopy(entry)]))
+    original=runtime_rules._BASE_UNIQUE_ITEMS;calls=[]
+    def fallback(*args):
+        calls.append(args[2])
+        yield from original(*args)
+    monkeypatch.setattr(runtime_rules,'_BASE_UNIQUE_ITEMS',fallback)
+    validator=Draft202012Validator({})
+    for instance in ([{'text_sha256':'a'*64}],['not-a-dict'],[
+            {'evidence_id':'E-1','text_sha256':'a'*64},
+            {'evidence_id':'E-1','text_sha256':'b'*64}]):
+        expected=list(original(validator,True,instance,{}))
+        actual=list(runtime_rules._receipt_unique_items(validator,True,instance,{}))
+        assert [str(error) for error in actual]==[str(error) for error in expected]
+    assert len(calls)==3

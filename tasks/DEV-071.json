@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 10000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce exact-citation answers that reverse RFI closed/open, Submittal rejected/approved and Email pending/approved states.",
+    "Use a bounded deterministic phrase map aligned with existing parser statuses; do not add fuzzy semantic inference or another model call.",
+    "Check every comparison finding against only its own quotations and retain material qualifiers such as approved as noted.",
+    "A paid invalid answer must settle once under the existing budget ledger and must not retry."
+  ],
+  "task_id": "DEV-071",
+  "title": "Ground project-question workflow dispositions in exact citations",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "prompts/project-question/system.md",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-071.json", "changes/CR-0086.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Reject unsupported or source-swapped RFI, Submittal and Email dispositions in project answers without adding model calls or semantic inference."
+}

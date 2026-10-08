@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0153",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-REFERENCE-RESULT-LIFECYCLE-001", "FR-REFERENCE-WORKSPACE-001", "NFR-SECURITY-001"],
+  "summary": "Add bounded local JSON export and deterministic cross-run comparison for saved Reference QA results, citations and review history.",
+  "decision_refs": [
+    "Active goal: CRIP manages local task, version, result, citation and review state",
+    "Comparison reports stored outcome differences without claiming engineering precedence",
+    "Export and comparison are read-only and make no model request"
+  ],
+  "affected_paths": [
+    "app/reference_results.py", "app/main.py",
+    "spec/schemas/reference-comparison.schema.json",
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/app/test_reference_results.py", "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-138.json",
+    "changes/CR-0153.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_reference_results.py", "tests/web/test_display_contract.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user instructed continued implementation of CRIP as the local management layer around an advanced-model reference analyst.",
+  "known_limitations": [
+    "Comparison reports saved public output differences and does not decide which answer is correct or controlling.",
+    "Reference export is JSON only; spreadsheet export remains future work.",
+    "The fixed 15-question live advanced-model quality benchmark has not been rerun."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 14000,
+  "max_output_tokens": 2400,
+  "max_context_chars": 23000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce an exact one-item status question falling through to retrieval and model generation despite one explicit status in the complete workflow index.",
+    "Recognize only strict English status/disposition questions naming one exact RFI or Submittal identifier.",
+    "Reuse explicit primary detected-or-manual status sources, the existing workflow-specific bounded vocabulary and the existing exact-citation attachment path.",
+    "Conflicting or malformed multi-status values remain insufficient evidence; missing status remains on the evidence path.",
+    "Make no provider request, budget action, dependency, migration or semantic authority inference."
+  ],
+  "task_id": "DEV-079",
+  "title": "Answer exact workflow status questions locally",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "web/app.js", "tests/app/test_questions.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-079.json", "changes/CR-0094.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py tests/web/test_display_contract.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer strict exact RFI and Submittal status questions from explicit complete-index evidence without a model call while preserving source provenance and every ambiguity."
+}

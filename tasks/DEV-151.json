@@ -1,0 +1,63 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal makes CRIP the local task and audit manager for an advanced-model reference implementation; durable execution reduces browser labor without authorizing a live benchmark.",
+  "notes": [
+    "Add one durable managed execution session only after an explicit selected-source transfer and possible-provider-charge confirmation.",
+    "Reuse the existing frozen evaluation, QA V3 single-item execution, immutable result, safe terminal failure and unresolved-call ledger; do not create a second answer path.",
+    "Run one question at a time on CIRP's single worker, persist bounded progress and safe reason codes, and exclude competing model or analysis work.",
+    "Stop only after an in-flight question settles. Service interruption must never auto-resume an earlier confirmation; remaining questions require a newly confirmed job.",
+    "Keep single-question and browser-sequential execution available, and make no external model call during implementation or acceptance.",
+    "Implemented migration 014, one persisted global worker job, explicit true confirmation, exact frozen-profile and unresolved-call checks before every item, safe progress/reason state, stop-after-current, startup interruption, and mutual exclusion with analysis, semantic verification, model changes and all answer endpoints.",
+    "Validated 56 focused backend/browser/governance tests, 24 localization tests and the complete 1,515-test Python suite. Requirements=151, schemas=23, task context and change ledger pass; all model behavior was synthetic and no external provider call was made."
+  ],
+  "task_id": "DEV-151",
+  "title": "Durable explicitly confirmed Reference evaluation jobs",
+  "requirement_ids": [
+    "FR-REFERENCE-MANAGED-JOB-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-EVALUATION-RUNNER-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "migrations/014_reference_evaluation_jobs.sql",
+    "app/db.py",
+    "app/reference_evaluation_jobs.py",
+    "app/runner.py",
+    "app/verification.py",
+    "app/main.py",
+    "spec/schemas/reference-evaluation-job.schema.json",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "web/style.css",
+    "tests/app/test_reference_evaluation_jobs.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-151.json",
+    "changes/CR-0166.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_evaluation_jobs.py tests/app/test_reference_evaluations.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-151",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let an explicitly confirmed frozen Reference evaluation continue on CIRP's local single worker after the browser closes, with durable progress, global dispatch exclusion, stop-after-current, safe halts and no automatic resume or retry."
+}

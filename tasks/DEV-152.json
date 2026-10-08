@@ -1,0 +1,58 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 16000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires CRIP to reduce unnecessary model input and manage advanced-model work locally without silently authorizing execution.",
+  "notes": [
+    "Apply the existing deterministic literal page selector to every question in one frozen Reference evaluation.",
+    "Return question and page metadata, input-size aggregates, selection warnings and operational blockers without source text, model output or a provider call.",
+    "Keep the stable input manifest identity separate from changing readiness status and never treat readiness inspection as execution confirmation.",
+    "Add an English-first browser view with safe text rendering while preserving every existing execution path.",
+    "Use only synthetic offline acceptance; do not run or claim a stronger-model benchmark.",
+    "Implemented a strict 4 MiB metadata-only readiness contract, deterministic input and status identities, whole-task selector reuse, operational blockers, aggregate input scope and an English-first safe browser view without a database migration.",
+    "Validated 36 focused backend/browser tests, 24 localization tests and the complete 1,518-test Python suite. Requirements=152, schemas=24; all evidence/model behavior was synthetic and no external provider call was made."
+  ],
+  "task_id": "DEV-152",
+  "title": "Zero-call whole-evaluation input plan and readiness manifest",
+  "requirement_ids": [
+    "FR-REFERENCE-READINESS-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-MANAGED-JOB-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/reference_readiness.py",
+    "app/main.py",
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "web/style.css",
+    "tests/app/test_reference_readiness.py",
+    "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-152.json",
+    "changes/CR-0167.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_readiness.py tests/app/test_reference_evaluations.py tests/app/test_reference_evaluation_jobs.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-152",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let a user inspect the exact whole-task page scope, input size and safe run blockers locally before separately deciding whether to authorize Reference model execution."
+}

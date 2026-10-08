@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0050",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Reject email-address suffixes in the shared normalizer and conditionally clean complete addresses before exact reference extraction without hiding later real relationships.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy across RFI, Submittal and Email content",
+    "Confirmed synthetic reproduction where current-body and quoted-history addresses created false reviewer groups"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "app/workflows.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "tasks/DEV-035.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0050.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued RFI, Submittal and Email accuracy improvements.",
+  "known_limitations": [
+    "The conservative bounded pattern targets conventional complete email-address tokens and does not attempt full RFC mailbox grammar.",
+    "Validation is synthetic and offline; no mailbox, model, external provider or customer file was used."
+  ]
+}

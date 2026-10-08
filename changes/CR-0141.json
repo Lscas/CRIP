@@ -1,0 +1,27 @@
+{
+  "change_id": "CR-0141",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-API-006", "FR-BUDGET-001", "NFR-SECURITY-001"],
+  "summary": "Move model API configuration from a modal into a fixed Settings section on the main CIRP page while preserving the existing security, budget and restart boundaries.",
+  "decision_refs": [
+    "User request on 2026-09-27 to enter model API settings after opening the main page instead of using a separate popup"
+  ],
+  "affected_paths": [
+    "web/index.html", "web/app.js", "web/i18n.js", "web/style.css",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/LOCAL_VALIDATION.md", "docs/PROVIDER_INTEGRATION.md",
+    "docs/DEV_STATE.md", "README.md", "CHANGELOG.md",
+    "tasks/DEV-126.json", "changes/CR-0141.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested the API entry UI inside the normal Settings page rather than a separate popup.",
+  "known_limitations": [
+    "Only one model profile is active at a time.",
+    "Applying a different profile still requires an orderly same-port local service restart."
+  ]
+}

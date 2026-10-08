@@ -1,0 +1,30 @@
+{
+  "change_id": "CR-0084",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Fail closed on unsupported numeric answer claims and reuse settled question tasks across repeated-whitespace variants.",
+  "decision_refs": [
+    "The active goal requires continued project accuracy and efficiency across RFI, Submittal and Email content",
+    "An exact quotation contract still accepted a 4-inch conclusion cited only to a 2-inch source",
+    "Repeated whitespace did not change retrieval semantics but generated a second paid task"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/gateway.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md", "tasks/DEV-069.json",
+    "changes/CR-0084.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective explicitly authorizes continued efficiency and accuracy improvements for project-file workflows.",
+  "known_limitations": [
+    "Numeric grounding catches explicit literal disagreement but does not validate surrounding prose, written-out numbers, unit conversions or contractual authority.",
+    "Cache normalization intentionally excludes letter case, punctuation and semantic paraphrases; those remain distinct explicit submissions to protect case-sensitive identifiers.",
+    "Validation uses synthetic offline evidence and does not establish construction accuracy on customer documents."
+  ]
+}

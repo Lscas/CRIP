@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0119",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-HEADER-NAMED-001"],
+  "summary": "Select one exact indexed .eml or .msg file for local current-header questions in multi-Email runs.",
+  "decision_refs": [
+    "The active objective requires adaptability across realistic Email projects containing more than one message",
+    "The previous single-Email shortcut correctly rejected an otherwise-unspecified question when more than one Email existed",
+    "An exact indexed file name provides a deterministic target without fuzzy retrieval, filesystem access or a model call"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-104.json", "changes/CR-0119.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-104",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only strict English Subject, sender, recipient and Date forms naming one exact .eml or .msg file use the shortcut.",
+    "Names containing spaces require quotes; paths and wildcard tokens are rejected rather than normalized or expanded.",
+    "Matching is exact and case-insensitive against indexed project file names; zero and duplicate matches fail closed.",
+    "The shortcut does not perform fuzzy matching, filesystem search, mailbox access, delivery-time inference, thread-position inference, identity resolution or authority selection."
+  ]
+}

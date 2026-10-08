@@ -1,0 +1,60 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires a verifiable advanced-model reference implementation; the approved fixed gate cannot be proven from ordinary accepted/rejected result review alone.",
+  "notes": [
+    "Add explicit human benchmark verdicts for terminal frozen-evaluation items without rewriting model results, citations, evidence or ordinary review.",
+    "Preserve expected-version concurrency and append-only before/after adjudication history.",
+    "Compute the existing fixed 15-question release threshold only from immutable contract outcomes and explicit engineer verdicts.",
+    "Exclude Mock profiles, incomplete work, model-disabled outcomes and unreviewed items from a passing gate.",
+    "Make no external model call and do not claim that the stronger-model benchmark has run.",
+    "Validated with 38 focused Python contract/UI tests, 24 localization tests, JavaScript syntax checks and the complete 1,521-test Python suite."
+  ],
+  "task_id": "DEV-153",
+  "title": "Human Reference benchmark adjudication and release scorecard",
+  "requirement_ids": [
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-EVALUATION-001",
+    "FR-REFERENCE-RESULT-LIFECYCLE-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "migrations/015_reference_evaluation_adjudications.sql",
+    "app/db.py",
+    "app/reference_scorecards.py",
+    "app/main.py",
+    "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-adjudication-history.schema.json",
+    "web/index.html",
+    "web/app.js",
+    "web/i18n.js",
+    "web/style.css",
+    "tests/app/test_reference_scorecards.py",
+    "tests/web/test_display_contract.py",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-153.json",
+    "changes/CR-0168.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_reference_scorecards.py tests/app/test_reference_evaluations.py tests/app/test_reference_results.py tests/web/test_display_contract.py -q",
+    "node --test tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-153",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Let an engineer independently adjudicate every terminal fixed-benchmark answer and have CIRP compute the approved release threshold without inferring correctness or calling a model."
+}

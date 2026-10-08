@@ -1,0 +1,49 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 22000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user approved the recommended PDF drawing/specification parsing update on 2026-09-15.",
+  "notes": [
+    "Reuse pdfplumber, the existing visual gateway, evidence locators and recovery ledger; add no runtime dependency.",
+    "Keep one visual request per eligible page and preserve full-page coordinates for every crop."
+  ],
+  "task_id": "DEV-006",
+  "title": "PDF page routing, specification structure and bounded visual crops",
+  "requirement_ids": [
+    "FR-PARSE-001",
+    "FR-CONTEXT-001",
+    "FR-VISION-001",
+    "FR-MATERIAL-001",
+    "FR-INSPECTION-001"
+  ],
+  "allowed_paths": [
+    "app/assemble.py",
+    "app/gateway.py",
+    "app/main.py",
+    "app/parsers.py",
+    "app/runner.py",
+    "app/visual_pipeline.py",
+    "prompts/drawing-crop/system.md",
+    "tests/**",
+    "spec/**",
+    "docs/**",
+    "changes/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/MODEL_COST_POLICY.md"
+  ],
+  "acceptance_tests": [
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area gateway",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "review",
+  "objective": "Route native PDF pages deterministically, retain specification and bordered table relationships, use one coordinate-safe high-resolution table crop where useful, and reject unrelated property citations without changing paid-call or quantity policy."
+}

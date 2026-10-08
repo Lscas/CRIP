@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0100",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground cited numeric values to bounded measurement roles and exact workflow identities.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "The user previously required dimensions and other design properties to stay attached to the correct material or equipment item",
+    "An offline reproduction proved a same-RFI pipe-diameter versus insulation-thickness false acceptance"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-003.json",
+    "tasks/DEV-085.json", "changes/CR-0100.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes deterministic answer-accuracy improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "The bounded lexical roles do not form a general construction-property ontology and unlabelled roles are not invented.",
+    "A size expression with several dimensions may pair the explicit label to only its nearest number; every number still requires exact quotation support.",
+    "The guard does not convert units, calculate values or decide which document controls.",
+    "The guard does not prove that every relevant project document was uploaded or parsed."
+  ]
+}

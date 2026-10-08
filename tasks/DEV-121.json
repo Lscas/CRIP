@@ -1,0 +1,34 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse the complete terminal-run workflow index to bound one exact RFI or Submittal's primary sources.",
+    "Require the literal question form the <label> field and an exact line-leading case/whitespace-equivalent source label.",
+    "Keep known semantic fields on their dedicated stronger contracts and add no synonym or semantic interpretation.",
+    "Apply the same exact label, identity and complete-value contract to ordinary answers and comparison source findings.",
+    "Fail closed on missing labels, conflicts, cross-scope borrowing, Email-prefixed labels, headers, quoted history, signatures, vision narration and oversized source sets."
+  ],
+  "task_id": "DEV-121",
+  "title": "Answer exact company-specific workflow fields",
+  "requirement_ids": ["FR-QA-WORKFLOW-FIELD-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-121.json",
+    "changes/CR-0136.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-121",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Answer bounded company-specific RFI and Submittal fields locally without adding synonyms or weakening exact evidence grounding."
+}

@@ -1,0 +1,52 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 4000,
+  "max_context_chars": 24000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "notes": [
+    "Run Flash and Pro only against the same frozen run, snapshot, ordered fixed-15 question set and selector v7.",
+    "Inspect readiness locally before confirmation and preserve every terminal failure without automatic retry.",
+    "Human-adjudicate every terminal item against the frozen direct-PDF answer key; contract validity is not correctness.",
+    "Fix the readiness schema only for the already-emitted selector-v7 reason code exposed by the full evaluation."
+  ],
+  "task_id": "DEV-167",
+  "title": "Run and adjudicate the fixed-15 selector-v7 Flash and Pro benchmark",
+  "requirement_ids": [
+    "FR-REFERENCE-READINESS-001",
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-DEEPSEEK-MODEL-SELECTION-001"
+  ],
+  "allowed_paths": [
+    "spec/schemas/reference-evaluation-readiness.schema.json",
+    "tests/app/test_reference_readiness.py",
+    "reports/kapolei_reference_v7_flash_pro_2026-10-03.json",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "README.md",
+    "CHANGELOG.md",
+    "tasks/DEV-167.json",
+    "changes/CR-0182.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "Both evaluations freeze the same run, snapshot, question-set hash and literal-page-selector-7 while changing only the DeepSeek text model profile",
+    "All 30 terminal items receive explicit human benchmark adjudication and neither scorecard meets the release threshold",
+    "The readiness schema accepts QUESTION_ENTITY_MATCH without dispatching a model",
+    "All provider calls settle, unresolved-call count remains zero and no automatic retry occurs",
+    ".venv\\Scripts\\python.exe -m pytest -q",
+    "node tests/web/i18n.test.mjs",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0",
+    ".venv\\Scripts\\python.exe scripts/build_bundle_manifest.py --check"
+  ],
+  "model_level": "implementation_and_human_adjudication",
+  "objective": "Establish the first complete selector-v7 Flash versus Pro quality baseline on one frozen evidence bundle."
+}

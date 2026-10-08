@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The post-contract-fix S3 evaluation failed before provider dispatch because the previous text-only evidence cap did not include per-row metadata and JSON serialization overhead.",
+  "notes": [
+    "Bound complete serialized evidence rows rather than raw source text only.",
+    "Preserve ranked row order, unique evidence IDs and an exact source prefix without synthetic ellipsis.",
+    "Leave room in the 32 KB request envelope for the system contract, question, request history and optional visual metadata.",
+    "Do not change the separate six-page/48 KB local selection preview, exact citation validation or failed-call history.",
+    "Full validation passed: 1,497 Python tests, 24 localization tests, 11 deployment tests, 147 synchronized requirements, 21 schemas and a 607-file bundle manifest."
+  ],
+  "task_id": "DEV-145",
+  "title": "Bound complete QA V3 serialized evidence context",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "allowed_paths": [
+    "app/evidence_loop.py", "tests/app/test_evidence_loop.py",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-145.json",
+    "changes/CR-0160.json", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": ["docs/EVIDENCE_LOOP_V3.md"],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_evidence_loop.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-145",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Keep every QA V3 request inside its configured input envelope by bounding the complete serialized evidence list while retaining exact source prefixes and the lightweight local page-selection architecture."
+}

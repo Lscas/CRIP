@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0026",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-REVISION-002",
+    "FR-REVISION-004",
+    "FR-FIELD-EVIDENCE-001"
+  ],
+  "summary": "Filter ineligible workflow evidence per citation and derive conditional status from every remaining direct source without adding a dependency or provider call.",
+  "decision_refs": [
+    "Active user goal to improve accuracy and adaptability across RFI, Submittal and email content",
+    "User request to prefer existing open-source or installed capabilities over new custom infrastructure"
+  ],
+  "affected_paths": [
+    "app/assemble.py",
+    "prompts/joint-extraction/system.md",
+    "tests/app/test_assemble.py",
+    "spec/**",
+    "tasks/DEV-011.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0026.json"
+  ],
+  "tests": [
+    "tests/app/test_assemble.py",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user asked to continue checking and optimizing CIRP under ponytail, preferring reuse over new custom code.",
+  "known_limitations": [
+    "This deterministic guard covers explicit locator roles and statuses; it does not infer semantic authority or approval.",
+    "Full revision-scope comparison, contract-effect decisions and construction-accuracy validation remain planned.",
+    "Validation is synthetic and offline; no customer file, model request or external provider call is used."
+  ]
+}

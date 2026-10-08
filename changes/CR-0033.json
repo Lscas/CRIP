@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0033",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Project only nine workflow fields from persisted parser summaries before Python decoding, excluding unrelated page, vision, CAD, takeoff and geometry arrays.",
+  "decision_refs": [
+    "Active user goal to continue improving efficiency and adaptability across RFI, Submittal and email content",
+    "Measured synthetic baseline showing complete-summary transfer and decode overhead"
+  ],
+  "affected_paths": [
+    "app/main.py",
+    "app/workflows.py",
+    "scripts/benchmark_workflow_read.py",
+    "tests/app/test_api.py",
+    "tests/app/test_workflows.py",
+    "tests/test_devtools.py",
+    "spec/**",
+    "tasks/DEV-018.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0033.json"
+  ],
+  "tests": [
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "tests/test_devtools.py",
+    "scripts/benchmark_workflow_read.py --iterations 300",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued product efficiency improvements.",
+  "known_limitations": [
+    "The benchmark is synthetic and local; customer-project latency depends on summary size, document count and local SQLite behavior.",
+    "The endpoint still rebuilds the deterministic index per request; persistent caching is intentionally not added because run summaries may change during analysis.",
+    "No model, mailbox, connector or external provider request is used."
+  ]
+}

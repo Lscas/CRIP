@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0143",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-MODEL-BUDGET-REMOVAL-001", "FR-QA-001", "NFR-SECURITY-001"],
+  "summary": "Remove the active CIRP project-budget module and establish a fixed Kapolei comparison of CIRP plus DeepSeek against direct-PDF Codex answers.",
+  "decision_refs": [
+    "D-30",
+    "User clarification on 2026-09-27 that the target is CIRP product-answer quality after DeepSeek, not standalone DeepSeek accuracy"
+  ],
+  "affected_paths": [
+    "app/db.py", "app/exporter.py", "app/gateway.py", "app/local_entry.py",
+    "app/main.py", "app/model_configuration.py", "app/render_preview.py", "app/runner.py", "app/settings.py",
+    "app/verification.py", "contracts/runtime_rules.py", "web/index.html", "web/app.js",
+    "web/i18n.js", "web/style.css", "scripts/gemini_local_setup.py",
+    "start-deepseek-live.ps1", "start-gemini-live.ps1", ".env.example", ".gitignore",
+    "README.md", "CHANGELOG.md", "config/budget_policy.json",
+    "config/provider_price_snapshot.json",
+    "tests/app/test_api.py", "tests/app/test_gateway_budget.py",
+    "tests/app/test_model_configuration.py", "tests/app/test_verification.py",
+    "tests/web/test_display_contract.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/DECISIONS.md", "docs/PRODUCT_SPEC.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "docs/EVIDENCE_VALIDATION.md",
+    "docs/LOCAL_DEPLOY.md", "docs/PROVIDER_INTEGRATION.md", "docs/REQUIREMENTS.md",
+    "reports/kapolei_cirp_vs_direct_pdf_questions.json",
+    "reports/kapolei_direct_pdf_answers.json",
+    "reports/kapolei_cirp_answers.json",
+    "reports/kapolei_cirp_vs_direct_pdf_validation.md",
+    "tasks/DEV-128.json", "changes/CR-0143.json"
+  ],
+  "tests": [
+    "tests/app/test_api.py", "tests/app/test_gateway_budget.py",
+    "tests/app/test_model_configuration.py", "tests/app/test_verification.py",
+    "tests/web/test_display_contract.py", "tests/web/i18n.test.mjs",
+    "scripts/check_spec_sync.py", "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly cancelled all CIRP budget modules and authorized the live DeepSeek-backed CIRP product comparison.",
+  "known_limitations": [
+    "Legacy budget tables and old status codes remain inert for data-compatible upgrades.",
+    "The Kapolei score is one project-path validation and is not a general construction-accuracy certification.",
+    "The completed benchmark found retrieval and adjacent-fragment grouping to be the dominant sampled accuracy limit; only 2 of 15 answers were fully usable."
+  ]
+}

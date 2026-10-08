@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1400,
+  "max_context_chars": 13000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content.",
+  "notes": [
+    "Offline reproductions show free-form lines beginning with Approved or Pending being promoted to exact Submittal status metadata.",
+    "Require the existing allowlisted status to occupy the complete value, allowing only bounded terminal punctuation and whitespace.",
+    "Do not add provider-specific vocabulary, approval authority, precedence or semantic inference.",
+    "Synthetic Email fixtures now keep Approved alternate, Pending delivery and Rejected material prose neutral, while complete allowlisted values with terminal punctuation retain canonical status metadata.",
+    "651 Python, 24 UI and 11 deployment-boundary tests passed offline with 105 requirements, 15 schemas and a 370-file bundle manifest; no customer document, external request or paid call was used."
+  ],
+  "task_id": "DEV-057",
+  "title": "Require exact Submittal status lines",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001",
+    "FR-CLASS-001"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-057.json",
+    "changes/CR-0072.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Prevent descriptive Submittal prose beginning with a status keyword from becoming formal status metadata while preserving exact allowlisted lines with terminal punctuation."
+}

@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0133",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-ACTION-FIELD-LOCAL-001"],
+  "summary": "Answer strict exact RFI, Submittal and Email action-field questions locally and ground the same identity, source scope, role and complete value in model-generated answers and source findings.",
+  "decision_refs": [
+    "The active objective requires efficient accurate questions across RFI, Submittal and Email content",
+    "Explicit action fields are useful only when they remain distinct from recommendations, ordinary prose, Email headers, quoted history and signatures",
+    "The existing workflow index and immutable evidence can answer exact labelled fields without a second index or provider cost"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "prompts/project-question/system.md",
+    "tests/app/test_questions.py", "spec/requirements.json", "spec/traceability.json",
+    "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-118.json",
+    "changes/CR-0133.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions requesting one supported printed action field use the local shortcut.",
+    "Workflow questions require one exact RFI or Submittal; Email questions require the only analyzed Email or one exact named .eml/.msg file.",
+    "Headers, quoted history, signatures, ordinary instructions and unlabeled prose remain outside the field contract.",
+    "More than 32 primary files or candidate passages and conflicting explicit values fail closed.",
+    "The implementation does not infer applicability, responsibility, approval, chronology, authority, action ownership or equivalence between distinct action roles."
+  ]
+}

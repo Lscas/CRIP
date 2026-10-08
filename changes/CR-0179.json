@@ -1,0 +1,48 @@
+{
+  "change_id": "CR-0179",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add deterministic explicit question-part coverage to the QA V3 answer contract.",
+  "decision_refs": [
+    "The fixed Flash/Pro benchmark showed both models omitted the explicitly requested door-thickness field while still returning structurally valid answers.",
+    "The user directed CIRP development, testing and iteration to continue before another provider benchmark.",
+    "Ponytail constraint: use a local question checklist and existing claims/calculations instead of another model, semantic database or grading framework.",
+    "Historical verification note: targeted QA V3, QA V2 and Reference evaluation tests",
+    "Historical verification note: fixed-15 deterministic answer-part checklist and model-call ledger delta gate",
+    "Historical verification note: scripts/check_spec_sync.py",
+    "Historical verification note: scripts/check_changes.py",
+    "Historical verification note: bundle manifest check"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/gateway.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py", "tests/app/test_reference_evaluations.py",
+    "reports/kapolei_reference_answer_parts_v5_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REFERENCE_QA.md", "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-164.json", "changes/CR-0179.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_project_qa_v2.py",
+    "tests/app/test_reference_evaluations.py",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user asked the planned CIRP development and iteration to continue and allowed API use, while local gates remain the first step.",
+  "known_limitations": [
+    "The checklist recognizes only explicit comma lists and parallel question clauses; it does not perform semantic decomposition.",
+    "A provider can map a claim to a part incorrectly, so existing citation and numeric validation still apply and human benchmark adjudication remains required.",
+    "Multiple requirements nested inside one part, such as two distinct frame-paint notes, are not separately enforced by this increment.",
+    "No provider call was made, and historical evaluation results are not rewritten."
+  ]
+}

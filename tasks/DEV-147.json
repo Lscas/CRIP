@@ -1,0 +1,52 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 18000,
+  "max_output_tokens": 5000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires lightweight, local and verifiable page selection that minimizes irrelevant advanced-model input without pre-model engineering-semantic reconstruction.",
+  "notes": [
+    "Resolve only the remaining S1 page-identity miss on the same immutable Reference run.",
+    "Use an explicit multi-field cover-question predicate and file-name/page-number metadata; do not inspect model output or infer a semantic document type from page content.",
+    "Require at least two explicit cover fields and retain a one-field negative test.",
+    "Keep the six-page/48 KB bounds, explicit-identifier routing and the other 14 fixed-question paths unchanged.",
+    "Do not rerun or rescore the historical DeepSeek answer evaluation.",
+    "The fixed read-only page gate reached 15/15 with zero provider calls: S1 selected page 1 of the PCD drawings file and the new predicate was false for the other 14 questions.",
+    "Composite full validation covers all 1,501 Python tests: the full suite passed every product test and exposed one context-budget governance failure; after changing only the historical task context, all 23 governance/devtool tests passed. Specification sync, 24 localization tests, 11 deployment tests, 147 requirements, 21 schemas and the 615-file manifest also passed."
+  ],
+  "task_id": "DEV-147",
+  "title": "Route multi-field project questions to drawing covers",
+  "requirement_ids": [
+    "FR-REFERENCE-PAGE-ROUTING-002",
+    "FR-REFERENCE-PAGE-SELECTION-001",
+    "NFR-SECURITY-001"
+  ],
+  "allowed_paths": [
+    "app/page_selector.py",
+    "tests/app/test_page_selector.py",
+    "reports/kapolei_reference_page_selection_2026-10-01.json",
+    "docs/REFERENCE_QA.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "spec/requirements.json",
+    "spec/traceability.json",
+    "tasks/DEV-147.json",
+    "changes/CR-0162.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [
+    "docs/EVIDENCE_LOOP_V3.md"
+  ],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_page_selector.py tests/app/test_evidence_loop.py tests/app/test_reference_evaluations.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-147",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Include the independently recorded drawing-cover source page for the fixed S1 multi-field project question without broadening ordinary queries or adding semantic preprocessing."
+}

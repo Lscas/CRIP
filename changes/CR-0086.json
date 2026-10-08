@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0086",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-QA-001"],
+  "summary": "Ground bounded workflow dispositions in each project-answer citation scope.",
+  "decision_refs": [
+    "The active goal requires continued RFI, Submittal and Email accuracy and adaptability",
+    "Numeric grounding did not reject non-numeric workflow-state reversals",
+    "Exact-citation fixtures proved that RFI closed/open, Submittal rejected/approved and Email pending/approved reversals were accepted before this change"
+  ],
+  "affected_paths": [
+    "app/questions.py", "tests/app/test_questions.py", "prompts/project-question/system.md",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-071.json", "changes/CR-0086.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user's persistent objective explicitly authorizes continued accuracy and multi-content adaptability improvements.",
+  "known_limitations": [
+    "The check covers only an explicit bounded English workflow-disposition vocabulary and conservative equivalents; it is not general natural-language contradiction detection.",
+    "Per-source findings are citation-local, but a top-level comparison summary is checked against the union of its cited findings and does not prove clause-to-source alignment.",
+    "The check does not determine chronology, authority, winning precedence or contractual correctness.",
+    "Synthetic offline validation does not establish construction accuracy or live-provider behavior."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "change_id": "CR-0183",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-BENCHMARK-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Compare source numerics by Decimal value, clarify calculation evidence rules and retain granular safe validator diagnostics for Reference QA.",
+  "decision_refs": [
+    "C5 failed because the source used $2000.00 while the model emitted 2,000; string comparison rejected an identical numeric value.",
+    "Calculation operands may occupy several exact evidence rows, while layout_lines remains navigation context and never becomes citation support.",
+    "A controlled Pro sequence produced fully usable C1 and C5 answers and a partial C3 answer; the corresponding Flash smoke remained unstable, so another full Flash run was not justified.",
+    "A same-page numeric citation-closure prototype showed zero live completions and did not prevent an incorrect C1 answer; it was rolled back.",
+    "Historical verification note: Decimal-equivalent source operand and claim-number validation",
+    "Historical verification note: prompt and safe diagnostic category regressions",
+    "Historical verification note: controlled Pro and Flash C1/C3/C5 smoke evaluations with explicit human adjudication",
+    "Historical verification note: negative same-page closure experiment rolled back after audit",
+    "Historical verification note: full Python, localization, spec, change and bundle gates"
+  ],
+  "affected_paths": [
+    "app/project_qa_v2.py", "app/gateway.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "tests/app/test_project_qa_v2.py", "tests/app/test_evidence_loop.py",
+    "tests/app/test_gateway_budget.py",
+    "reports/kapolei_reference_calculation_contract_2026-10-03.json",
+    "docs/EVIDENCE_LOOP_V3.md", "docs/REFERENCE_QA.md", "docs/REQUIREMENTS.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "README.md", "CHANGELOG.md", "tasks/DEV-168.json", "changes/CR-0183.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_project_qa_v2.py",
+    "tests/app/test_evidence_loop.py",
+    "tests/app/test_gateway_budget.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "known_limitations": [
+    "Numeric equivalence fixes representation-only rejection; it does not identify missing disciplines, repair OCR/layout ambiguity or make a wrong operand semantically correct.",
+    "Flash remained unstable on C1/C3/C5 and generated one contract-valid but incorrect C1 answer in a later diagnostic smoke.",
+    "The final DEV-168 prompt and code have not been rerun as a complete fixed-15 Flash/Pro pair, so the DEV-167 baseline remains the latest fair full comparison."
+  ]
+}

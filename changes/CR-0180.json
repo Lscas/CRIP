@@ -1,0 +1,54 @@
+{
+  "change_id": "CR-0180",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-EVIDENCE-LOOP-001",
+    "FR-REFERENCE-SELECTION-VERSION-001",
+    "FR-REFERENCE-EXECUTION-RECEIPT-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Add frozen selector v6 with conservative literal word-form row ordering and preserve v3-v5 replay.",
+  "decision_refs": [
+    "The v5 D2 input audit found the exact door-thickness evidence row at selector position 71, outside the final 40-row bounded input, because the question used thickness while the source used thick.",
+    "The fixed page-selection gate already passed, so changing page scores would be unnecessary and would risk unrelated regressions.",
+    "Ponytail constraint: add a tiny deterministic row-ordering rule instead of semantic search, stemming, embeddings, a new parser or another model.",
+    "Historical verification note: targeted selector, QA V3 and frozen Reference lifecycle tests",
+    "Historical verification note: real fixed-15 expected-page gate and D2 exact-row bounded-input audit",
+    "Historical verification note: one authorized Flash D2 smoke call followed by independent human adjudication, with no retry",
+    "Historical verification note: scripts/check_spec_sync.py",
+    "Historical verification note: scripts/check_changes.py",
+    "Historical verification note: bundle manifest check"
+  ],
+  "affected_paths": [
+    "app/page_selector.py", "app/db.py", "migrations/019_reference_selector_v6.sql",
+    "spec/schemas/reference-evaluation.schema.json", "spec/schemas/reference-evaluation-job.schema.json",
+    "spec/schemas/reference-evaluation-readiness.schema.json", "spec/schemas/reference-evaluation-scorecard.schema.json",
+    "spec/schemas/reference-evaluation-comparison.schema.json",
+    "tests/app/test_page_selector.py", "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py", "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_scorecards.py",
+    "reports/kapolei_reference_row_focus_v6_2026-10-03.json",
+    "docs/REFERENCE_QA.md", "docs/REQUIREMENTS.md", "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md", "spec/requirements.json", "spec/traceability.json",
+    "prompts/manifest.json", "README.md", "CHANGELOG.md",
+    "tasks/DEV-165.json", "changes/CR-0180.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_page_selector.py",
+    "tests/app/test_reference_evaluations.py",
+    "tests/app/test_reference_evaluation_jobs.py",
+    "tests/app/test_reference_readiness.py",
+    "tests/app/test_reference_scorecards.py",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly allowed API calls and directed CIRP development, testing and iteration to continue.",
+  "known_limitations": [
+    "V6 recognizes only a short explicit allowlist of literal spelling forms; it is not stemming or semantic retrieval.",
+    "The added forms affect evidence-row order only and cannot recover a missing source page.",
+    "The one-question D2 smoke validates that demonstrated omission but is not a fixed-15 release result.",
+    "D4 remains partial and unsupported because graphical callout relationships require a separate bounded treatment."
+  ]
+}

@@ -4,7 +4,7 @@ Sheet: S-501
 Revision: 1
 Revision Date: 2026-06-01
 Section: 03 30 00
-DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=4000 psi
+DEMO_MATERIAL|PAD-01|Equipment pad concrete|-|strength=4000 psi|location=Synthetic Building A
 DEMO_MATERIAL|PAD-01|Formwork system|-|material_kind=TEMPORARY
 DEMO_TEST|PAD-01|Pre-pour inspection|-|qa_type=PREPARATORY_INSPECTION|timing=Before placement
 DEMO_REPORT|PAD-01|Concrete test report|-|frequency=Each placement

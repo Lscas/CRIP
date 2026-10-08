@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0174",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": [
+    "FR-QA-V2-ANSWER-001",
+    "FR-QA-EVIDENCE-LOOP-001",
+    "NFR-SECURITY-001"
+  ],
+  "summary": "Give the QA provider compact local evidence/region aliases and expand one base-plus-many-percentages operation into canonical calculations.",
+  "decision_refs": [
+    "The second frozen Flash rerun improved contract-valid outcomes from 6 of 15 to 10 of 15 with no automatic retry",
+    "Three of the five remaining failures were citation-scope failures after quote copying had already been removed",
+    "Opaque random evidence IDs carry no model-relevant meaning and can be deterministically mapped from bounded input order"
+  ],
+  "affected_paths": [
+    "app/evidence_loop.py", "app/gateway.py",
+    "prompts/project-evidence-loop/system.md", "prompts/manifest.json",
+    "spec/schemas/project-evidence-decision.schema.json",
+    "tests/app/test_evidence_loop.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-159.json", "changes/CR-0174.json", "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "scripts/check_spec_sync.py",
+    "scripts/context_pack.py", "scripts/run_checks.py", "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested continued implementation, testing and iteration.",
+  "known_limitations": [
+    "Compact aliases reduce transcription errors but do not prove evidence relevance or answer completeness.",
+    "Percentage expansion remains limited to one cited base and cited percentage operands and never performs unit or date conversion.",
+    "The provider can still select the wrong in-scope alias; all numeric, entity and source checks remain authoritative.",
+    "No third live provider run is included in this implementation change."
+  ]
+}

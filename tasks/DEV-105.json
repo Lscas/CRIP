@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content.",
+  "notes": [
+    "Reuse exact RFI Question and Response scopes already produced by the parser.",
+    "Recognize only bounded English direct questions naming one exact RFI.",
+    "Require one primary source with the requested explicit role.",
+    "Exclude quoted Email history and vision narration.",
+    "Fail closed for multiple same-role sources, more than 32 passages or more than 18,000 characters.",
+    "Use synthetic evidence and make no provider or mailbox request."
+  ],
+  "task_id": "DEV-105",
+  "title": "Answer exact RFI Question and Response requests locally",
+  "requirement_ids": ["FR-QA-RFI-CONTENT-LOCAL-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-105.json", "changes/CR-0120.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/context_pack.py DEV-105",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Return unambiguous exact RFI Question or Response text from existing local evidence without model cost."
+}

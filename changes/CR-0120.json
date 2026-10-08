@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0120",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-RFI-CONTENT-LOCAL-001"],
+  "summary": "Answer strict exact-RFI Question or Response requests from existing parser-scoped local evidence.",
+  "decision_refs": [
+    "The active objective requires faster and more accurate file-grounded Q&A across RFI, Submittal and Email",
+    "The parser already creates exact RFI Question and Response evidence scopes",
+    "Reusing those scopes avoids an unnecessary model call without adding a second index"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-105.json", "changes/CR-0120.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-105",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only strict English Question or Response requests naming one exact RFI use the shortcut.",
+    "Multiple primary sources with the requested role fail closed instead of selecting one.",
+    "Quoted Email history, vision narration, more than 32 passages and more than 18,000 characters are excluded.",
+    "Interpretation, comparison, chronology and controlling-authority decisions remain on the ordinary grounded path."
+  ]
+}

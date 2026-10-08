@@ -1,0 +1,32 @@
+{
+  "change_id": "CR-0159",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EVIDENCE-LOOP-001", "NFR-SECURITY-001"],
+  "summary": "Expose all nested QA V2 semantic invariants in the QA V3 prompt and retain a bounded validator category when a decision is rejected.",
+  "decision_refs": [
+    "S1 failed the QA V3 contract through both experimental vision and text routes",
+    "S2 independently failed the same contract through the text route",
+    "The QA V3 prompt omitted exact answer/claim concatenation and other validator-only QA V2 rules that the QA V2 prompt already states"
+  ],
+  "affected_paths": [
+    "prompts/project-evidence-loop/system.md", "app/gateway.py",
+    "tests/app/test_evidence_loop.py", "docs/EVIDENCE_LOOP_V3.md",
+    "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md", "docs/REQUIREMENTS.md",
+    "README.md", "CHANGELOG.md", "spec/requirements.json", "spec/traceability.json",
+    "tasks/DEV-144.json", "changes/CR-0159.json", "prompts/manifest.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_evidence_loop.py", "tests/app/test_gateway_budget.py",
+    "scripts/check_spec_sync.py", "scripts/context_pack.py", "scripts/run_checks.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user approved continued implementation and rerunning the fixed Reference evaluation while retaining existing product paths.",
+  "known_limitations": [
+    "Prompt alignment improves contract legibility but does not guarantee model compliance or engineering correctness.",
+    "Safe validator categories intentionally do not retain the rejected model payload, so some failures remain coarsely classified.",
+    "Existing settled error calls remain immutable and are not eligible for automatic retry."
+  ]
+}

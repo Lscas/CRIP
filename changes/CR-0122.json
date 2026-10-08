@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0122",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-EXTENDED-HEADERS-LOCAL-001"],
+  "summary": "Extend deterministic current-Email header answers to Cc, Bcc and Reply-To.",
+  "decision_refs": [
+    "The active objective requires adaptable Email Q&A alongside RFI and Submittal",
+    "Existing grounding already validates Cc, Bcc and Reply-To roles",
+    "The current-header local path can reuse those fields without a parser change or model call"
+  ],
+  "affected_paths": [
+    "app/questions.py", "prompts/project-question/system.md", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-107.json", "changes/CR-0122.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-107",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly requested Trunk Tools-style questions answered from existing project files; this bounded change extends that existing grounded path.",
+  "known_limitations": [
+    "Only strict English Cc, Bcc and Reply-To questions for the only analyzed Email or one exact named Email file use the shortcut.",
+    "Each complete printed header is one value; repeated different current headers fail closed instead of being merged.",
+    "Quoted history, body text, vision narration, missing values and more than 32 current-header passages remain excluded.",
+    "The shortcut does not expand distribution lists or infer delivery, readership, identity, thread position or authority."
+  ]
+}

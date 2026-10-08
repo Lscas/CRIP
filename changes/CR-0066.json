@@ -1,0 +1,44 @@
+{
+  "change_id": "CR-0066",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006"
+  ],
+  "summary": "Add deterministic MIME-derived extensions to fallback attachment names so supported unnamed imports remain analyzable.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email adaptability",
+    "FR-INGEST-006 requires selected attachments to pass through the normal immutable upload path",
+    "Offline reproduction showed an imported unnamed text/plain resource routing to UNSUPPORTED because its fallback name had no extension"
+  ],
+  "affected_paths": [
+    "app/email_mime.py",
+    "app/parsers.py",
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-051.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0066.json"
+  ],
+  "tests": [
+    "tests/app/test_email_attachments.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "The declared MIME type controls only a fallback extension; supplied filenames are preserved after existing sanitization.",
+    "A MIME-derived extension does not prove the bytes match the declaration; normal parsers still validate or fail closed.",
+    "Unsupported content types remain unsupported even when the standard library supplies an extension.",
+    "Validation is synthetic and offline; no customer email, mailbox or provider API is used."
+  ]
+}

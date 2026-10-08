@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0029",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Preserve complete spaced CSI-style Submittal identifiers from filenames by passing the full bounded candidate through the existing conservative normalizer.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy and adaptability across RFI, Submittal and email content",
+    "Existing rule that workflow links use exact normalized identifiers without fuzzy inference"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "spec/**",
+    "tasks/DEV-014.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0029.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_workflows.py",
+    "scripts/run_checks.py --area parsers",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued Submittal accuracy and content adaptability improvements.",
+  "known_limitations": [
+    "Filename metadata remains a routing hint and does not establish approval, authority or a design requirement.",
+    "Identifiers without a digit and non-exact or semantic filename relationships remain unsupported.",
+    "Validation is synthetic and offline; no model or external provider request is used."
+  ]
+}

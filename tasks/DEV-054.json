@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 4096,
+  "max_output_tokens": 1200,
+  "max_context_chars": 11000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content, using existing open-source and standard-library paths where possible.",
+  "notes": [
+    "A synthetic Outlook MSG reproduction showed one unnamed PDF attachment as 'unnamed attachment' in the parser summary and 'attachment-1.pdf' in the selection/import path.",
+    "Reuse the existing safe_attachment_name helper in the MSG parser and advance the parser cache version; add no dependency or new naming system.",
+    "Attachments remain inert and require explicit reviewer selection before import or analysis.",
+    "Parser inventory and selected import now both expose attachment-1.pdf for the same unnamed MSG PDF; supplied names retain the shared helper behavior.",
+    "642 Python, 24 UI and 11 deployment-boundary tests passed offline with 105 requirements, 15 schemas and a 364-file bundle manifest; no customer email, external request or paid call was used."
+  ],
+  "task_id": "DEV-054",
+  "title": "Unify unnamed MSG attachment names",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-INGEST-006"
+  ],
+  "allowed_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_email_attachments.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-054.json",
+    "changes/CR-0069.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_parsers.py tests/app/test_email_attachments.py -q",
+    "python scripts/run_checks.py --area parsers",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Make the parser summary and reviewer selection/import path use the same deterministic MIME-derived name for unnamed Outlook MSG attachments."
+}

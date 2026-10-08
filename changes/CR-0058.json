@@ -1,0 +1,40 @@
+{
+  "change_id": "CR-0058",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Recognize known Submittal dispositions under explicit Review Response, Final Response and Submittal Response labels through the existing status path.",
+  "decision_refs": [
+    "The active goal requires better RFI, Submittal and Email accuracy and adaptability",
+    "Autodesk official Submittal report documentation lists Review Response and Final Response fields",
+    "Ponytail review retained the existing format scope and status mapping instead of adding spreadsheet ingestion or a custom-response engine"
+  ],
+  "affected_paths": [
+    "app/parsers.py",
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "tasks/DEV-043.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0058.json"
+  ],
+  "tests": [
+    "tests/app/test_parsers.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent user goal explicitly requires continued accuracy and adaptability improvements across RFI, Submittal and Email content.",
+  "known_limitations": [
+    "Only existing known disposition phrases are structured; arbitrary project-specific responses remain source text for review.",
+    "Multiple explicit responses are retained as ambiguous and no final-response precedence is inferred.",
+    "Validation is synthetic and offline; no customer document, mailbox or paid provider was used."
+  ]
+}

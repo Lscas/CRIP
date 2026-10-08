@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 8192,
+  "max_output_tokens": 1600,
+  "max_context_chars": 15000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active user goal requires continued efficiency, accuracy and adaptability improvements for RFI, Submittal and Email content, using the smallest open-source or standard-library solution.",
+  "notes": [
+    "A synthetic offline reproduction grouped adjacent RFI Question and Submittal Approved evidence into one extraction batch.",
+    "Keep existing four-fragment and 8.8 KB batching for ordinary documents and matching workflow sections.",
+    "Use existing locator text and Python standard-library regular expressions; add no dependency or new framework.",
+    "Do not infer workflow relationships, authority or approval precedence.",
+    "The shared adjacency check now isolates different RFI IDs/roles, Submittal IDs/statuses, RFI/Submittal families and workflow-to-ordinary transitions while preserving same-scope and ordinary batching.",
+    "642 Python, 24 UI and 11 deployment-boundary tests passed offline with 105 requirements, 15 schemas and a 362-file bundle manifest; no external or paid call was made."
+  ],
+  "task_id": "DEV-053",
+  "title": "Isolate workflow extraction batches",
+  "requirement_ids": [
+    "FR-API-005",
+    "FR-PARSE-007",
+    "FR-WORKFLOW-001"
+  ],
+  "allowed_paths": [
+    "app/runner.py",
+    "tests/app/test_api.py",
+    "spec/**",
+    "docs/**",
+    "tasks/DEV-053.json",
+    "changes/CR-0068.json",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_api.py -q",
+    "python scripts/run_checks.py --area api",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation",
+  "objective": "Prevent physically adjacent evidence from different explicit RFI or Submittal workflow sections from sharing one extraction prompt while preserving bounded batching inside the same section and for non-workflow documents."
+}

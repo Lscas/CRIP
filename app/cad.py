@@ -10,7 +10,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-CAD_VERSION = 'ezdxf-objects-1'
+CAD_VERSION = 'ezdxf-objects-2'
+CAD_TEXT_FRAGMENT_CHARS = 1200
+MAX_CAD_TEXT_CHARS_PER_LAYER = 24000
 UNIT_NAMES = {1: 'IN', 2: 'FT', 4: 'MM', 5: 'CM', 6: 'M', 21: 'US_FT'}
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -183,27 +185,38 @@ def parse_cad(path: Path, original_name: str) -> dict:
             if entity.dxftype() == 'INSERT':
                 name=str(entity.dxf.name)
                 block_key=(name,layer)
-                blocks[block_key].append(handle or f'insert-{len(blocks[block_key]) + 1}')
+                rows=max(1,int(entity.dxf.get('row_count',1) or 1))
+                columns=max(1,int(entity.dxf.get('column_count',1) or 1))
+                row_spacing=float(entity.dxf.get('row_spacing',0) or 0)
+                column_spacing=float(entity.dxf.get('column_spacing',0) or 0)
+                # ezdxf deliberately treats zero-spacing rows/columns as one
+                # location.  Use its count rather than multiplying the DXF
+                # fields, otherwise coincident MINSERT entries are overstated.
+                instances=int(entity.mcount)
+                blocks[block_key].append({'handle':handle or f'insert-{len(blocks[block_key]) + 1}',
+                                          'count':instances,'rows':rows,'columns':columns,
+                                          'row_spacing':row_spacing,'column_spacing':column_spacing})
             elif entity.dxftype() in ('TEXT', 'MTEXT'):
                 try:
                     value = entity.plain_text() if entity.dxftype() == 'MTEXT' else str(entity.dxf.text)
                     if value.strip():
-                        texts[layer].append(value.strip())
-                except Exception:
-                    pass
+                        texts[layer].append((value.strip(),handle or f'text-{len(texts[layer]) + 1}'))
+                except Exception as exc:
+                    warnings.append(f'CAD图层{layer}文字对象{handle or "未知"}无法提取：{type(exc).__name__}。')
         fragments = []
         layer_fragment = {}
         for layer in sorted(layers):
             item = layers[layer]
             parts = [f'CAD layer: {layer}', 'Entity counts: ' + ', '.join(f'{k}={v}' for k, v in sorted(item['types'].items()))]
-            layer_blocks={name:len(handles) for (name,block_layer),handles in blocks.items() if block_layer==layer}
+            layer_blocks={name:sum(item['count'] for item in entries)
+                          for (name,block_layer),entries in blocks.items() if block_layer==layer}
             if layer_blocks:
                 parts.append('Block inserts: '+', '.join(f'{name}={count}' for name,count in sorted(layer_blocks.items())))
             if unit:
                 parts.extend([f'Geometric length: {item["length"]:.6f} {unit}',
                               f'Closed primitive area: {item["area"]:.6f} {unit}^2'])
             if texts[layer]:
-                parts.append('Visible CAD text: ' + ' | '.join(texts[layer])[:1200])
+                parts.append(f'Visible CAD text fragments: {sum((len(value)+CAD_TEXT_FRAGMENT_CHARS-1)//CAD_TEXT_FRAGMENT_CHARS for value,_ in texts[layer])}')
             layer_fragment[layer] = len(fragments)
             fragments.append({
                 'text': '\n'.join(parts),
@@ -214,16 +227,41 @@ def parse_cad(path: Path, original_name: str) -> dict:
                 'method': 'CAD_OBJECT', 'internal_revision_date': None, 'revision_label': None,
                 'text_map': [], 'confidence': 1.0,
             })
+            used=0
+            for value,handle in texts[layer]:
+                remaining=max(0,MAX_CAD_TEXT_CHARS_PER_LAYER-used)
+                if len(value)>remaining:
+                    value=value[:remaining]
+                    warnings.append(f'CAD图层{layer}文字超过资源限额；尾部未处理。')
+                used+=len(value)
+                for index in range(0,len(value),CAD_TEXT_FRAGMENT_CHARS):
+                    fragments.append({
+                        'text':value[index:index+CAD_TEXT_FRAGMENT_CHARS],
+                        'locator': {'page_number': None, 'sheet': 'Model', 'section': None, 'paragraph': None,
+                                    'bbox': None, 'coordinate_system': f'cad-modelspace-{unit or "unitless"}',
+                                    'text_line_start': None, 'text_line_end': None,
+                                    'native_element_id':f'cad-text:{layer}:{handle}:{index//CAD_TEXT_FRAGMENT_CHARS + 1}'},
+                        'method':'CAD_OBJECT','internal_revision_date':None,'revision_label':None,
+                        'text_map':[],'confidence':1.0,
+                    })
         takeoffs = []
-        for (name,source_layer),handles in sorted(blocks.items()):
+        for (name,source_layer),entries in sorted(blocks.items()):
             # Counts are direct CAD object counts and do not need a drawing scale.
-            takeoffs.append({'kind': 'BLOCK_COUNT', 'label': name, 'value': len(handles), 'unit': 'EA',
+            count=sum(item['count'] for item in entries)
+            handles=[item['handle'] for item in entries]
+            array_basis='; '.join(
+                f"{item['handle']}: rows={item['rows']}, columns={item['columns']}, "
+                f"row_spacing={item['row_spacing']:g}, column_spacing={item['column_spacing']:g}, "
+                f"mcount={item['count']}"
+                for item in entries
+            )
+            takeoffs.append({'kind': 'BLOCK_COUNT', 'label': name, 'value': count, 'unit': 'EA',
                              'method': 'CAD_OBJECT_COUNT', 'entity_ids': handles,
                              'layer':source_layer,
                              'scope_key': f'modelspace:layer:{source_layer}:block:{name}',
                              'source_fragment_index': layer_fragment[source_layer],
                              'review_status': 'PENDING', 'basis': 'DESIGN_MODEL_OBJECTS',
-                             'scope_note': '模型空间块实例计数；可能包含图例或参考对象，人工确认范围后才能作为设计净量。'})
+                             'scope_note': 'Direct modelspace block instances; '+array_basis+'; may include legends or reference objects. Human scope review is required before treating this as a material quantity.'})
         for layer, item in sorted(layers.items()):
             if not unit:
                 continue

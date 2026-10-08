@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 12000,
+  "max_output_tokens": 1800,
+  "max_context_chars": 18000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability for RFI, Submittal and Email content.",
+  "notes": [
+    "Reproduce the insertion-order cutoff before changing retrieval.",
+    "Reuse SQLite FTS5 instead of adding a vector database, hosted search service or runtime dependency.",
+    "Keep a complete slower fallback for SQLite runtimes without FTS5 and backfill existing evidence locally.",
+    "Validate only with synthetic offline evidence; do not read customer files or call a provider."
+  ],
+  "task_id": "DEV-065",
+  "title": "Index project-question evidence locally",
+  "requirement_ids": ["FR-QA-001"],
+  "allowed_paths": [
+    "app/questions.py", "app/db.py", "migrations/007_evidence_search.sql",
+    "tests/app/test_questions.py", "scripts/benchmark_question_search.py",
+    "spec/**", "docs/PROJECT_QUESTIONS.md", "tasks/DEV-065.json",
+    "changes/CR-0080.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/benchmark_question_search.py",
+    "python scripts/run_checks.py --area all",
+    "python scripts/check_spec_sync.py"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Remove insertion-order truncation from project questions and improve exact workflow/source retrieval without another service or provider call."
+}

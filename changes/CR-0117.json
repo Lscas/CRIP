@@ -1,0 +1,33 @@
+{
+  "change_id": "CR-0117",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-WORKFLOW-SUBJECT-LOCAL-001"],
+  "summary": "Answer strict exact RFI/Submittal Subject questions from existing local primary-form evidence before model dispatch.",
+  "decision_refs": [
+    "The user requested Trunk Tools-style questions answered from existing project files",
+    "CIRP already has one evidence-grounded Ask the project flow and a complete cached workflow index",
+    "Exact Subject questions can safely reuse those local structures without a second chat service or provider request"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-102.json", "changes/CR-0117.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py DEV-102",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency and accuracy improvements to the existing file-grounded question flow.",
+  "known_limitations": [
+    "Only strict English direct-question forms naming one exact RFI or Submittal use the local shortcut.",
+    "Only explicit line-leading Subject fields in existing non-vision primary-form evidence qualify; semantic topics and Email Subject headers do not.",
+    "The shortcut checks at most 32 primary documents and 512 Subject-bearing passages and fails closed above either bound.",
+    "No supported value falls through to ordinary grounded Q&A; the shortcut does not infer applicability, status, revision, authority, precedence or semantic equivalence."
+  ]
+}

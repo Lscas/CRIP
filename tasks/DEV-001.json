@@ -30,7 +30,6 @@
     "changes/**"
   ],
   "context_files": [
-    "docs/DEV_STATE.md",
     "docs/IMPLEMENTATION_STATUS.md"
   ],
   "acceptance_tests": [

@@ -1,0 +1,38 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 20000,
+  "max_output_tokens": 6000,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The active goal requires lightweight, local and verifiable page selection before advanced-model reasoning, and the fixed 15-question preview exposed identifier-routing misses without making provider calls.",
+  "notes": [
+    "Extract the bare value from explicit Sheet, Drawing, Section, Paragraph, RFI and Submittal labels; do not classify nonnumeric phrases such as sheet counts as identifiers.",
+    "Make an exact parser-locator identifier match outrank ordinary source-text mentions without choosing document precedence.",
+    "Cap each ordinary query term's source-text contribution per page so fragment density cannot inflate ranking.",
+    "Keep six-page and 48 KB bounds, exact source text, deterministic output, no Canonical graph, no embeddings and no model call.",
+    "Validate first against synthetic fixtures and then against the fixed 15-question preview using only page identities and counts; do not output source text.",
+    "Validated selector v2 against the fixed 15-question identity gate: 14/15 expected source pages selected versus 10/15 for v1, with no regression and zero provider calls.",
+    "Full validation passed: 1,494 Python tests, 24 localization tests, 11 deployment tests, 147 synchronized requirements, 21 schemas and a 599-file bundle manifest."
+  ],
+  "task_id": "DEV-141",
+  "title": "Prioritize explicit identifiers in Reference page selection",
+  "requirement_ids": ["FR-REFERENCE-PAGE-ROUTING-002"],
+  "allowed_paths": [
+    "app/page_selector.py", "tests/app/test_page_selector.py",
+    "docs/REFERENCE_QA.md", "docs/DEV_STATE.md", "docs/IMPLEMENTATION_STATUS.md",
+    "docs/REQUIREMENTS.md", "README.md", "CHANGELOG.md",
+    "spec/requirements.json", "spec/traceability.json", "tasks/DEV-141.json",
+    "changes/CR-0156.json", "reports/kapolei_reference_page_selection_2026-09-30.json",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    ".venv\\Scripts\\python.exe -m pytest tests/app/test_page_selector.py tests/app/test_evidence_loop.py -q",
+    ".venv\\Scripts\\python.exe scripts/check_spec_sync.py",
+    ".venv\\Scripts\\python.exe scripts/context_pack.py DEV-141",
+    ".venv\\Scripts\\python.exe scripts/run_checks.py --area all",
+    ".venv\\Scripts\\python.exe scripts/check_changes.py --base spec-v0.2.0"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Route explicit engineering identifiers to their parser-locator page before ordinary text matches, prevent dense fragmented pages from winning through repeated generic words, and improve the fixed 15-question zero-call expected-page gate without adding semantic preprocessing."
+}

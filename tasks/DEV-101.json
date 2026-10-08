@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETE",
+  "max_input_tokens": 9000,
+  "max_output_tokens": 1500,
+  "max_context_chars": 20000,
+  "paid_calls_allowed": false,
+  "approval_ref": "Continue improving CIRP efficiency, accuracy and adaptability across RFI, Submittal and Email content, with file-grounded project questions modeled on Trunk Tools.",
+  "notes": [
+    "Reproduce a correct RFI form Subject answer rejected by the former Email-only Subject guard.",
+    "Keep each explicit RFI/Submittal Subject equal to one complete cited value paired with the same exact workflow identifier.",
+    "Reject cross-item swaps, recombination and cross-source-finding borrowing.",
+    "Do not treat an Email Subject header as an RFI or Submittal form Subject.",
+    "Allow one exact evidence-locator identity to scope a Subject-only quotation and reject a multi-identity locator.",
+    "Require every answered RFI/Submittal Subject question to state the exact identifier and complete Subject.",
+    "Use synthetic evidence and make no provider request."
+  ],
+  "task_id": "DEV-101",
+  "title": "Ground RFI and Submittal Subject claims",
+  "requirement_ids": ["FR-QA-WORKFLOW-SUBJECT-001"],
+  "allowed_paths": [
+    "app/questions.py", "tests/app/test_questions.py",
+    "prompts/project-question/system.md", "spec/requirements.json",
+    "spec/traceability.json", "docs/REQUIREMENTS.md", "docs/PROJECT_QUESTIONS.md",
+    "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md", "tasks/DEV-101.json",
+    "changes/CR-0116.json", "README.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"
+  ],
+  "context_files": [],
+  "acceptance_tests": [
+    "python -m pytest tests/app/test_questions.py -q",
+    "python scripts/check_spec_sync.py",
+    "python scripts/run_checks.py --area all"
+  ],
+  "model_level": "implementation_review",
+  "objective": "Allow exact RFI/Submittal Subject questions while preventing Subject values from being omitted, recombined, identity-swapped or borrowed from Email or another source finding."
+}

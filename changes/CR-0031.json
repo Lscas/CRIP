@@ -1,0 +1,38 @@
+{
+  "change_id": "CR-0031",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-WORKFLOW-001"
+  ],
+  "summary": "Keep UNKNOWN page contexts neutral while aggregating RFI roles so they cannot manufacture a missing Question or Response.",
+  "decision_refs": [
+    "Active user goal to continue improving accuracy across RFI, Submittal and email content",
+    "Existing requirement that exact workflow relationships avoid guessed matches"
+  ],
+  "affected_paths": [
+    "app/workflows.py",
+    "tests/app/test_workflows.py",
+    "spec/**",
+    "tasks/DEV-016.json",
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0031.json"
+  ],
+  "tests": [
+    "tests/app/test_workflows.py",
+    "tests/app/test_api.py",
+    "scripts/run_checks.py --area api",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The active user goal explicitly includes continued RFI accuracy improvements.",
+  "known_limitations": [
+    "Roles remain limited to explicit deterministic parser contexts; no semantic document-role inference is added.",
+    "A parser-provided MIXED context remains authoritative as both explicit sides for workflow display.",
+    "Validation is synthetic and offline; no model or external provider request is used."
+  ]
+}

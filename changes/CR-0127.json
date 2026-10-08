@@ -1,0 +1,34 @@
+{
+  "change_id": "CR-0127",
+  "spec_version": "0.2.6",
+  "change_type": "implementation",
+  "requirement_ids": ["FR-QA-EMAIL-THREAD-LOCAL-001"],
+  "summary": "Answer strict exact named Email-thread membership questions from the existing hash-only workflow index.",
+  "decision_refs": [
+    "The active objective requires adaptable file-grounded Email support alongside RFI and Submittal questions",
+    "The workflow index already preserves bounded hash-only Email thread membership and parent-before-reply order",
+    "A deterministic local answer avoids unnecessary model cost and raw Message-ID exposure"
+  ],
+  "affected_paths": [
+    "app/questions.py", "app/main.py", "tests/app/test_questions.py",
+    "spec/requirements.json", "spec/traceability.json", "docs/REQUIREMENTS.md",
+    "docs/PROJECT_QUESTIONS.md", "docs/EVIDENCE_VALIDATION.md", "docs/DEV_STATE.md",
+    "tasks/DEV-112.json", "changes/CR-0127.json", "README.md", "CHANGELOG.md",
+    "BUNDLE_MANIFEST.json"
+  ],
+  "tests": [
+    "tests/app/test_questions.py",
+    "tests/app/test_workflows.py",
+    "scripts/check_spec_sync.py",
+    "scripts/context_pack.py",
+    "scripts/run_checks.py"
+  ],
+  "product_implementation_changed": true,
+  "approval_evidence": "The persistent objective authorizes bounded efficiency, accuracy and adaptability improvements across RFI, Submittal and Email question flows.",
+  "known_limitations": [
+    "Only strict English questions naming one exact EML or MSG file use the local shortcut.",
+    "Thread membership and order come only from the existing exact hash-header relationships.",
+    "Missing or duplicate names, malformed or ambiguous relationships and more than eight members fail closed.",
+    "The shortcut does not connect to a mailbox or infer participants, delivery, semantic chronology, contractual effect or authority."
+  ]
+}

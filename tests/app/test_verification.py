@@ -14,8 +14,8 @@ import pytest
 from openpyxl import load_workbook
 from PIL import Image
 
-from app.db import Database, DomainError, BudgetError, dumps
-from app.gateway import Gateway, InvalidModelOutput, ProviderPaused
+from app.db import Database, DomainError, dumps
+from app.gateway import Gateway, InvalidModelOutput, ModelResult, ProviderPaused
 from app.verification import (VerificationService, citation, exact_quote, anchors, digest, fields_for, summarize, statement_span)
 from app.settings import Settings, ROOT
 from contracts.runtime_rules import validate_schema
@@ -174,7 +174,27 @@ def test_every_output_has_report_no_fake_mock_pass(client,demo):
         assert row['verification']['fields']
         assert row['verification']['status']!='SUPPORTED'
         assert row['record']['review']['status']=='PENDING'
-    assert client.app.state.db.cost(rows[0]['record']['meta']['project_id'])['calls']==0
+    assert client.app.state.db.model_call_stats(rows[0]['record']['meta']['project_id'])['calls']==0
+
+
+def test_run_verification_batches_fields_from_records_with_the_same_evidence(client,project):
+    rid=run_demo(client,project['id']);db=client.app.state.db
+    rows=client.get(f'/api/analysis-runs/{rid}/records').json()
+    by_scope={}
+    for row in rows:
+        pending=[field for field in row['verification']['fields'] if field['status']=='NEEDS_SEMANTIC']
+        for item in pending:by_scope.setdefault(tuple(sorted(item['evidence_ids'])),set()).add(row['record']['meta']['record_id'])
+    record_ids=next(sorted(ids) for ids in by_scope.values() if len(ids)>1)
+    settings=replace(client.app.state.settings,provider='deepseek',cheap_model='offline-verifier')
+    calls=[]
+    class FakeGateway:
+        def verify_claims(self,run,fields,bundle,job_id=None):
+            calls.append(deepcopy(fields))
+            return ModelResult({'checks':[{'path':item['path'],'status':'NEEDS_CONTEXT','citations':[],
+                                           'reason':'Synthetic offline batch.'} for item in fields]},'CALL-batch')
+    service=VerificationService(db,settings,FakeGateway())
+    reports=service.refresh_many(record_ids,allow_model=True)
+    assert reports and any(len({json.dumps(item['context'],sort_keys=True) for item in batch})>1 for batch in calls)
 
 
 def test_exact_citation_endpoint_and_read_has_no_model_call(client,demo):
@@ -246,8 +266,9 @@ def test_export_places_readable_evidence_with_each_item(client,demo):
     wb=load_workbook(io.BytesIO(client.get(f'/api/analysis-runs/{rid}/exports/xlsx').content))
     assert {'Evidence','Field Verification','Citations','PDF Geometry Audit'}.isdisjoint(wb.sheetnames)
     material=wb['Materials & Equipment']
-    assert material.cell(4,14).value=='Evidence Source' and material.cell(4,15).value=='Evidence Text'
-    assert material.cell(5,14).value and material.cell(5,15).value
+    assert material.cell(4,14).value=='Quantity Review'
+    assert material.cell(4,15).value=='Evidence Source' and material.cell(4,16).value=='Evidence Text (Excerpt)'
+    assert material.cell(5,14).value and material.cell(5,15).value and material.cell(5,16).value
     for ws in wb:
         for row in ws:
             assert all(c.data_type!='f' for c in row)
@@ -261,17 +282,25 @@ def test_rejected_item_not_in_reviewed_only_export(client,demo):
     assert id_ not in json.dumps(data,ensure_ascii=False)
 
 
-def test_additive_migration_keeps_legacy_budget(tmp_path):
+def test_additive_migration_keeps_legacy_budget_tables_inert(tmp_path):
     path=tmp_path/'old.db'
     c=sqlite3.connect(path);c.executescript((ROOT/'migrations/001_initial.sql').read_text())
     c.execute("INSERT INTO projects VALUES('P','Legacy','today')")
     c.execute("INSERT INTO budget_accounts VALUES('P',300000000,1000000,0)");c.commit();c.close()
     db=Database(path)
-    assert db.cost('P')['spent_cny']=='1.000000'
+    assert db.model_call_stats('P')['calls']==0
     assert db.one('SELECT version FROM schema_migrations WHERE version=2')['version']==2
     assert db.one('SELECT version FROM schema_migrations WHERE version=3')['version']==3
+    assert db.one('SELECT version FROM schema_migrations WHERE version=4')['version']==4
+    assert db.one('SELECT version FROM schema_migrations WHERE version=5')['version']==5
+    assert db.one('SELECT version FROM schema_migrations WHERE version=6')['version']==6
+    assert any(row['name']=='ix_uploads_document' for row in db.all("PRAGMA index_list('uploads')"))
     assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='call_reconciliation_events'")
-    assert Database(path).cost('P')['spent_cny']=='1.000000'
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='run_metrics'")
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='budget_limit_events'")
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_classification_overrides'")
+    assert db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_classification_events'")
+    assert Database(path).one("SELECT spent_units FROM budget_accounts WHERE project_id='P'")['spent_units']==1000000
 
 
 @pytest.fixture
@@ -280,11 +309,11 @@ def live_context(client,project,tmp_path):
     run=client.app.state.runner.create(project['id']);db=client.app.state.db
     db.execute("UPDATE runs SET status='RUNNING',provider='deepseek' WHERE id=?",(run['id'],));run=client.app.state.runner.get(run['id'])
     ev=evidence();ev.update(project_id=project['id'],input_snapshot_id=run['snapshot_id'])
-    s=Settings(tmp_path,provider='deepseek',live_enabled=True,prices_confirmed=True,api_key='offline-not-real',input_rate=Decimal('1'),output_rate=Decimal('2'),start_worker=False)
+    s=Settings(tmp_path,provider='deepseek',live_enabled=True,api_key='offline-not-real',start_worker=False)
     return db,run,ev,s
 
 
-def test_verifier_non_thinking_budget_and_cache(live_context):
+def test_verifier_non_thinking_call_and_cache(live_context):
     db,run,e,s=live_context;f=field(e);calls=[]
     def handler(r):calls.append(json.loads(r.content));return httpx.Response(200,json=body(result(f,e)))
     g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(handler)))
@@ -292,7 +321,10 @@ def test_verifier_non_thinking_budget_and_cache(live_context):
     assert g.verify_claims(run,[f],{e['evidence_id']:e}).cached
     assert len(calls)==1 and calls[0]['thinking']=={'type':'disabled'}
     assert calls[0]['model']==s.cheap_model and calls[0]['max_tokens']==1400
-    assert db.cost(run['project_id'])['spent_cny']=='0.000220'
+    assert db.model_call_stats(run['project_id'])['calls']==1
+    performance=db.performance(run['id'])
+    assert performance['model.request_wait']['samples']==1
+    assert performance['model.response']['samples']==1
 
 
 def test_verifier_crash_after_atomic_commit_recovers_without_second_http(live_context,monkeypatch):
@@ -310,7 +342,7 @@ def test_verifier_crash_after_atomic_commit_recovers_without_second_http(live_co
 
     recovered=g.verify_claims(run,[f],{e['evidence_id']:e})
     assert recovered.cached and recovered.request_id and recovered.data==result(f,e)
-    assert len(requests)==1 and db.cost(run['project_id'])['calls']==1
+    assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_gemini_verifier_uses_minimal_and_accounts_total_output(live_context):
@@ -322,18 +354,17 @@ def test_gemini_verifier_uses_minimal_and_accounts_total_output(live_context):
     g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(handler)))
     value=g.verify_claims(run,[f],{e['evidence_id']:e})
     assert value.mode=='gemini' and calls[0]['reasoning_effort']=='minimal' and 'thinking' not in calls[0]
-    assert db.cost(run['project_id'])['output_tokens']==75
+    assert db.model_call_stats(run['project_id'])['output_tokens']==75
 
 
-@pytest.mark.parametrize('case',['budget','disabled','oversized'])
+@pytest.mark.parametrize('case',['disabled','oversized'])
 def test_no_http_when_not_authorized_or_no_capacity(live_context,case):
     db,run,e,s=live_context;f=field(e)
-    if case=='budget':db.execute('UPDATE budget_accounts SET spent_units=300000000 WHERE project_id=?',(run['project_id'],))
     if case=='disabled':s=replace(s,live_enabled=False)
     if case=='oversized':e['raw_text']='a'*12000
     g=Gateway(s,db,httpx.Client(transport=httpx.MockTransport(lambda r:pytest.fail('No HTTP permitted'))))
-    with pytest.raises((BudgetError,ProviderPaused,InvalidModelOutput)):g.verify_claims(run,[f],{e['evidence_id']:e})
-    assert db.cost(run['project_id'])['calls']==0
+    with pytest.raises((ProviderPaused,InvalidModelOutput)):g.verify_claims(run,[f],{e['evidence_id']:e})
+    assert db.model_call_stats(run['project_id'])['calls']==0
 
 
 @pytest.mark.parametrize('case',['timeout','usage','truncated','bad_quote','thinking'])
@@ -353,12 +384,12 @@ def test_verifier_failure_never_repeats_silently(live_context,case):
     assert len(requests)==1
     if case in ('timeout','usage'):
         with pytest.raises(ProviderPaused):g.verify_claims(run,[f],{e['evidence_id']:e})
-        assert len(requests)==1 and db.cost(run['project_id'])['unknown_calls']==1
+        assert len(requests)==1 and db.model_call_stats(run['project_id'])['unknown_calls']==1
     else:
         with pytest.raises((ProviderPaused,InvalidModelOutput)):
             g.verify_claims(run,[f],{e['evidence_id']:e})
         row=db.one('SELECT state,response,error FROM model_calls WHERE run_id=?',(run['id'],))
-        assert len(requests)==1 and Decimal(db.cost(run['project_id'])['spent_cny'])>0
+        assert len(requests)==1 and db.model_call_stats(run['project_id'])['calls']==1
         assert row['state']=='SETTLED_ERROR' and row['response'] is None and row['error']
 
 
@@ -401,7 +432,7 @@ def prepare_semantic_job(client,demo):
     rid,rows=demo;db=client.app.state.db
     row=next(x for x in rows if x['record']['kind']=='MATERIAL')
     db.execute("UPDATE runs SET provider='deepseek' WHERE id=?",(rid,))
-    s=replace(client.app.state.settings,provider='deepseek',live_enabled=True,prices_confirmed=True,api_key='synthetic-key',input_rate=Decimal('1'),output_rate=Decimal('2'))
+    s=replace(client.app.state.settings,provider='deepseek',live_enabled=True,api_key='synthetic-key')
     service=VerificationService(db,s,None)
     def handler(request):
         payload=json.loads(request.content);content=json.loads(payload['messages'][1]['content'])
@@ -420,7 +451,7 @@ def test_persistent_job_can_verify_finished_run_without_changing_review(client,d
     job=service.enqueue(record_id,0);assert service.enqueue(record_id,0)['id']==job['id']
     service.process_job(job['id'])
     assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='DONE'
-    assert db.cost(row['record']['meta']['project_id'])['calls']>=1
+    assert db.model_call_stats(row['record']['meta']['project_id'])['calls']>=1
     current=json.loads(db.one('SELECT envelope FROM records WHERE id=?',(record_id,))['envelope'])
     assert current['review']==row['record']['review']
     assert db.one('SELECT status FROM runs WHERE id=?',(rid,))['status']=='PARTIAL'
@@ -505,7 +536,7 @@ def test_stale_job_does_not_make_model_call(client,demo):
     db.execute('UPDATE records SET review_version=review_version+1 WHERE id=?',(record_id,))
     service.process_job(job['id'])
     assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='STALE'
-    assert db.cost(row['record']['meta']['project_id'])['calls']==0
+    assert db.model_call_stats(row['record']['meta']['project_id'])['calls']==0
 
 
 def test_expired_run_no_semantic_job(client,demo):
@@ -514,14 +545,14 @@ def test_expired_run_no_semantic_job(client,demo):
     with pytest.raises(DomainError):service.enqueue(row['record']['meta']['record_id'],0)
 
 
-def test_job_budget_exhaustion_retains_citations(client,demo):
+def test_job_runs_without_budget_account_and_retains_citations(client,demo):
     db,service,row,rid=prepare_semantic_job(client,demo);record_id=row['record']['meta']['record_id']
-    db.execute('UPDATE budget_accounts SET spent_units=300000000 WHERE project_id=?',(row['record']['meta']['project_id'],))
+    project_id=row['record']['meta']['project_id']
+    assert db.one('SELECT project_id FROM budget_accounts WHERE project_id=?',(project_id,),False) is None
     job=service.enqueue(record_id,0);service.process_job(job['id'])
-    assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='PAUSED_BUDGET'
-    assert service.get(record_id)['status']=='PENDING'
+    assert db.one('SELECT state FROM verification_jobs WHERE id=?',(job['id'],))['state']=='DONE'
     assert any(f['citations'] for f in service.get(record_id)['fields'])
-    assert db.cost(row['record']['meta']['project_id'])['calls']==0
+    assert db.model_call_stats(project_id)['calls']>=1
 
 
 def test_close_during_verification_throttle_prevents_reserve_and_http(client,demo):
@@ -622,7 +653,7 @@ def test_model_cache_keeps_original_billing_reference(live_context):
     with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=body(result(f,e))))) as client:
         g=Gateway(s,db,client);first=g.verify_claims(run,[f],{e['evidence_id']:e});second=g.verify_claims(run,[f],{e['evidence_id']:e})
     assert first.request_id==second.request_id and first.request_id
-    assert second.cached and db.cost(run['project_id'])['calls']==1
+    assert second.cached and db.model_call_stats(run['project_id'])['calls']==1
 
 
 def test_support_notes_never_implicitly_verified(client,demo):

@@ -3,7 +3,7 @@
   "prompts": [
     {
       "id": "document-classification",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "path": "prompts/document-classification/system.md",
       "schema": "spec/schemas/classification.schema.json",
       "role": "cheap",
@@ -11,7 +11,7 @@
     },
     {
       "id": "joint-extraction",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "path": "prompts/joint-extraction/system.md",
       "schema": "spec/schemas/extraction-result.schema.json",
       "role": "cheap",
@@ -63,7 +63,7 @@
       "path": "prompts/drawing-crop/system.md",
       "schema": "spec/schemas/vision-result.schema.json",
       "role": "vision",
-      "status": "implemented_mocktransport_tested_live_59_page_validated_concise_output"
+      "status": "implemented_mocktransport_tested_live_full_page_59_page_crop_not_live_evaluated"
     },
     {
       "id": "claim-verification",
@@ -72,6 +72,54 @@
       "schema": "spec/schemas/claim-check-batch.schema.json",
       "role": "cheap",
       "status": "implemented_mocktransport_tested_not_live_evaluated"
+    },
+    {
+      "id": "project-question",
+      "version": "0.2.6",
+      "path": "prompts/project-question/system.md",
+      "schema": "spec/schemas/project-answer.schema.json",
+      "role": "cheap",
+      "status": "implemented_mocktransport_tested_not_live_evaluated"
+    },
+    {
+      "id": "project-question-v2",
+      "version": "0.2.6",
+      "path": "prompts/project-question-v2/system.md",
+      "schema": "spec/schemas/project-answer-v2.schema.json",
+      "role": "cheap",
+      "status": "implemented_mocktransport_tested_not_live_evaluated"
+    },
+    {
+      "id": "project-evidence-loop",
+      "version": "0.2.6",
+      "path": "prompts/project-evidence-loop/system.md",
+      "schema": "spec/schemas/project-evidence-decision.schema.json",
+      "role": "cheap",
+      "status": "implemented_relation_pack_offline_v7_full_flash_pro_baseline_not_release_ready"
+    },
+    {
+      "id": "project-evidence-loop-layout-v9",
+      "version": "reference-model-input-receipt-3",
+      "path": "prompts/project-evidence-loop/layout-supplement.md",
+      "schema": "spec/schemas/project-evidence-decision-complete.schema.json",
+      "role": "cheap",
+      "status": "immutable_receipt3_appendix_mocktransport_tested_explicit_browser_entry_default_disabled"
+    },
+    {
+      "id": "project-projection-loop",
+      "version": "project-projection-decision-1",
+      "path": "prompts/project-projection-loop/system.md",
+      "schema": "spec/schemas/project-projection-decision.schema.json",
+      "role": "cheap",
+      "status": "internal_single_decision_gateway_mocktransport_tested_not_public_or_live_evaluated"
+    },
+    {
+      "id": "project-projection-loop-v2",
+      "version": "project-projection-decision-2",
+      "path": "prompts/project-projection-loop-v2/system.md",
+      "schema": "spec/schemas/project-projection-decision-v2.schema.json",
+      "role": "cheap",
+      "status": "internal_append_only_loop2_mocktransport_tested_not_public_or_live_evaluated"
     }
   ]
 }

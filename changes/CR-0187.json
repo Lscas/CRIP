@@ -1,0 +1,41 @@
+{
+  "change_id": "CR-0187",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": [
+    "FR-API-006",
+    "DEV-CHECK-001"
+  ],
+  "summary": "Repair public Ubuntu CI reproducibility by isolating profile-test secrets in memory while retaining the Windows DPAPI contract test, and regenerate the public manifest from a fresh LF checkout.",
+  "decision_refs": [
+    "GitHub Actions run 37673736407 for commit 68e9eac failed: two profile tests required Windows DPAPI on Ubuntu, and the committed manifest was calculated against Windows checkout line endings rather than the commit bytes.",
+    "The profile-test repair must use an in-memory secret backend only for the affected tests, retain their existing assertions, and retain the Windows real-DPAPI coverage. Application and production credential behavior are out of scope.",
+    "The manifest was regenerated from a fresh LF checkout and checked against exact Git archive bytes: 797 entries, no missing, extra or mismatched files. The same verifier rejects the original commit's 505 newline mismatches. Historical Windows evidence is not a remote CI pass.",
+    "The new frozen Windows ci-repair-gate-r1 passes all seven release commands, 2762 unique Python tests with zero failures/errors/skips/duplicate nodes, 24 language tests, 11 deployment-entry tests and 160 requirements/37 schemas. All 797 source entries remain unchanged; JUnit duration is 1646.072 seconds. Only five metadata files are updated after that gate; exact identities and pre-push limits are in docs/PUBLIC_SYNC_VALIDATION.md."
+  ],
+  "affected_paths": [
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_local_credentials.py",
+    "spec/traceability.json",
+    "BUNDLE_MANIFEST.json",
+    "changes/CR-0187.json",
+    "CHANGELOG.md",
+    "docs/DEV_STATE.md",
+    "docs/IMPLEMENTATION_STATUS.md",
+    "docs/PUBLIC_SYNC_VALIDATION.md"
+  ],
+  "tests": [
+    "tests/app/test_model_configuration.py",
+    "tests/app/test_local_credentials.py",
+    "scripts/run_checks.py --area all",
+    "scripts/check_spec_sync.py",
+    "scripts/check_changes.py"
+  ],
+  "product_implementation_changed": false,
+  "approval_evidence": "2026-10-07 user approved modifying and synchronizing the CI failure repair, limited to test-secret isolation, LF-derived manifest regeneration, and governance records.",
+  "known_limitations": [
+    "The targeted 23 tests, including actual Windows DPAPI, overlap the new full local gate and are not added to its count. This record is written before push; remote acceptance must be read from the resulting commit's Actions run. No default-branch merge, deployment, customer-data action or model-provider call is claimed.",
+    "The prior Windows local 2,762-test result remains historical evidence and does not establish Ubuntu CI compatibility or validate the commit archive manifest.",
+    "The repair does not alter application or production credential handling. The real Windows DPAPI test remains platform-specific coverage."
+  ]
+}
