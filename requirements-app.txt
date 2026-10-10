@@ -1,4 +1,4 @@
-# Python 3.11+；在隔离虚拟环境安装。以下直接依赖是本轮 Windows/Python 3.12 完整回归验证的精确版本。
+# Python 3.11+; install in an isolated virtual environment. These exact direct dependencies passed the Windows/Python 3.12 full regression gate.
 fastapi==0.141.1
 uvicorn==0.52.4
 httpx==0.28.1

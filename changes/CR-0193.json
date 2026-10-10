@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0193",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-LOCAL-001", "NFR-RELIABILITY-001"],
+  "summary": "Make all pip requirements files ASCII-safe after the clean release archive reproduced a CP936 decode failure while installing optional browser dependencies.",
+  "decision_refs": ["User request to continue preparing the final version on 2026-10-10.", "tasks/DEV-177.json"],
+  "affected_paths": ["requirements-app.txt", "requirements-browser.txt", "requirements-dev.txt", "tests/app/test_local_entry.py", "spec/traceability.json", "docs/DEV_STATE.md", "tasks/DEV-177.json", "changes/CR-0193.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["tests/app/test_local_entry.py", "scripts/local_deploy.py", "scripts/local_http_smoke.py", "scripts/browser_smoke.py", "scripts/reference_v9_browser_smoke.py", "scripts/run_checks.py", "scripts/check_spec_sync.py", "scripts/check_changes.py", "scripts/build_bundle_manifest.py"],
+  "product_implementation_changed": false,
+  "approval_evidence": "The user asked to continue preparing the final version; the failure was reproduced only at the clean-package boundary and the correction is limited to dependency-file encoding plus its regression.",
+  "known_limitations": ["This change does not certify answer quality, Windows DPAPI behavior or customer database migration/restore.", "A source ZIP is the current distribution artifact; no native Windows installer or code-signing certificate is introduced.", "The old 200dee7 archive is invalidated and must not be published."]
+}

@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-177",
+  "title": "Make the final source package installable under Windows CP936",
+  "status": "DONE",
+  "objective": "Remove locale-sensitive text from every pip requirements file, retain the existing launcher guard, and prove the replacement Git archive can install application and optional browser dependencies in a clean extraction before release.",
+  "requirement_ids": ["FR-LOCAL-001", "NFR-RELIABILITY-001"],
+  "max_output_tokens": 12000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked to continue preparing the final version and previously directed a fresh install attempt while focusing on PDF release readiness.",
+  "notes": ["Preserve the failed clean-package browser dependency install as release evidence; do not publish the old 200dee7 archive.", "Use ASCII-only requirements files because they are consumed directly by pip before application code can control decoding.", "Do not change application behavior or call a model."],
+  "allowed_paths": ["requirements-app.txt", "requirements-browser.txt", "requirements-dev.txt", "tests/app/test_local_entry.py", "spec/traceability.json", "docs/DEV_STATE.md", "tasks/DEV-177.json", "changes/CR-0193.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/LOCAL_DEPLOY.md"],
+  "acceptance_tests": ["tests/app/test_local_entry.py", "scripts/local_deploy.py", "scripts/local_http_smoke.py", "scripts/browser_smoke.py", "scripts/reference_v9_browser_smoke.py", "scripts/run_checks.py", "scripts/check_spec_sync.py", "scripts/check_changes.py", "scripts/build_bundle_manifest.py"],
+  "model_level": "medium_execution_sol_max_final_release_review"
+}

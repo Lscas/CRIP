@@ -1738,7 +1738,7 @@
         "scripts/deepseek_local_setup.py"
       ],
       "verification_report": "docs/EVIDENCE_VALIDATION.md",
-      "progress_note": "The live setup checks the target application port before loading, saving, forgetting or forwarding a credential, and reports the conflict without stopping the existing process."
+      "progress_note": "The live setup checks the target application port before loading, saving, forgetting or forwarding a credential, and reports the conflict without stopping the existing process. All checked-in requirements files are ASCII-safe so direct pip installation works on Windows systems whose active code page is CP936."
     },
     {
       "requirement_id": "FR-UI-002",

@@ -210,6 +210,17 @@ def test_dependency_children_do_not_inherit_secrets(monkeypatch,tmp_path):
     assert 'CIRP_API_KEY' not in seen[0] and 'ANOTHER_SECRET' not in seen[0]
 
 
+def test_checked_in_requirement_files_are_ascii_for_windows_pip():
+    paths = sorted(Path('.').glob('requirements*.txt'))
+    assert [path.name for path in paths] == [
+        'requirements-app.txt',
+        'requirements-browser.txt',
+        'requirements-dev.txt',
+    ]
+    for path in paths:
+        path.read_bytes().decode('ascii')
+
+
 def test_local_live_application_child_only_keeps_selected_cirp_key(monkeypatch):
     monkeypatch.setenv('CIRP_API_KEY','selected-key')
     for name in ('AWS_ACCESS_KEY_ID','SSH_PRIVATE_KEY','PROXY_AUTHORIZATION','DB_PASSWD','SERVICE_CREDENTIAL'):

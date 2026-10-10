@@ -1,2 +1,2 @@
-# 可选本机网页冒烟测试；浏览器安装需在本机单独执行。
+# Optional local browser smoke test; install the browser executable separately.
 playwright>=1.48,<2
