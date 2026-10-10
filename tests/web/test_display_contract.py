@@ -186,7 +186,8 @@ def test_project_question_ui_keeps_answers_as_text_and_sources_inline():
         assert item in byid
     assert byid['question-form'][0] == 'form'
     assert byid['project-question'][1]['maxlength'] == '1000'
-    assert "api(`/projects/${state.project}/questions`,'POST'" in source
+    assert "api(`/projects/${project}/questions`,'POST'" in source
+    assert 'state.questionRequestVersion===requestVersion' in source
     assert "state.knowledge=await api(`/projects/${state.project}/knowledge`)" in source
     assert "'POST',{question}" in source
     assert "'POST',{run_id:state.run,question}" not in source

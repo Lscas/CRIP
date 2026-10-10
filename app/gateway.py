@@ -88,6 +88,7 @@ _EXTRACTION_INPUT_BYTE_CAP = 32000
 _VISION_INPUT_BYTE_CAP = 6000
 _VERIFICATION_INPUT_BYTE_CAP = 6000
 _ANSWER_INPUT_BYTE_CAP = 64000
+_ANSWER_V2_INPUT_VERSION = 'qa-v2-model-input-2'
 _EXTRACTION_OUTPUT_TOKEN_CAP = 8000
 _VISION_OUTPUT_TOKEN_CAP = 2000
 _VERIFICATION_OUTPUT_TOKEN_CAP = 1400
@@ -813,7 +814,9 @@ class Gateway:
 
     def _terminal_response_policy(self, attempt: str, actual: Decimal, usage: dict,
                                   provider_id: str | None, body: dict, *,
-                                  allow_reasoning: bool = False) -> bool:
+                                  allow_reasoning: bool = False,
+                                  diagnostic_class: str = 'RESPONSE_ENVELOPE',
+                                  reference_input_commitment: tuple[str,str] | None = None) -> bool:
         """Validate billed response shapes before any route publishes a result.
 
         A trustworthy usage block means the paid call is terminal even when its
@@ -833,7 +836,8 @@ class Gateway:
         except Exception as exc:
             self.db.finalize_model_call(
                 attempt,actual,usage,provider_id,
-                diagnostic=self._terminal_diagnostic('RESPONSE_ENVELOPE',exc))
+                diagnostic=self._terminal_diagnostic(diagnostic_class,exc),
+                reference_input_commitment=reference_input_commitment)
             raise InvalidModelOutput(
                 'Provider response envelope was malformed; the cost was recorded and no result was published.') from exc
 
@@ -1148,6 +1152,20 @@ class Gateway:
         return ModelResult(data,attempt,False,self.s.provider)
 
 
+    def verification_task_family(self, run: dict, fields: list[dict], evidence: dict) -> tuple[str,dict,int]:
+        """Return the stable paid-call identity and prepared request for one verifier batch."""
+        prompt = (ROOT / 'prompts/claim-verification/system.md').read_text(encoding='utf-8')
+        content = {'fields': [{k: f[k] for k in ('path', 'claim', 'label', 'evidence_ids', 'context')} for f in fields],
+                   'evidence': [{'evidence_id': eid, 'text': e['raw_text'], 'revision_date': e.get('internal_revision_date'),
+                                 'locator': e['locator']} for eid, e in sorted(evidence.items())]}
+        limit = min(_VERIFICATION_OUTPUT_TOKEN_CAP, self.s.output_limit)
+        messages=[{'role':'system','content':prompt},{'role':'user','content':dumps(content)}]
+        payload = self.payload(messages,limit)
+        upper = sum(len(m['content'].encode('utf-8')) for m in messages) + 256
+        cache_id = hashlib.sha256(dumps(['verify-v1',run['project_id'],run['snapshot_id'],self.s.api_base_url,
+                    self.s.cheap_model, payload, [e.get('file_sha256') for _,e in sorted(evidence.items())]]).encode()).hexdigest()
+        return 'verify:' + cache_id,payload,upper
+
     def verify_claims(self, run: dict, fields: list[dict], evidence: dict, job_id=None) -> ModelResult:
         """Low-cost independent verification. All HTTP remains in this gateway.
 
@@ -1160,19 +1178,10 @@ class Gateway:
             raise ProviderPaused('；'.join(self.s.live_errors()), 409)
         if run.get('provider') != self.s.provider:
             raise ProviderPaused('运行Provider与当前服务不一致；为避免误收费，请新建分析。',409)
-        prompt = (ROOT / 'prompts/claim-verification/system.md').read_text(encoding='utf-8')
-        content = {'fields': [{k: f[k] for k in ('path', 'claim', 'label', 'evidence_ids', 'context')} for f in fields],
-                   'evidence': [{'evidence_id': eid, 'text': e['raw_text'], 'revision_date': e.get('internal_revision_date'),
-                                 'locator': e['locator']} for eid, e in sorted(evidence.items())]}
-        limit = min(_VERIFICATION_OUTPUT_TOKEN_CAP, self.s.output_limit)
-        messages=[{'role':'system','content':prompt},{'role':'user','content':dumps(content)}]
-        payload = self.payload(messages,limit)
-        upper = sum(len(m['content'].encode('utf-8')) for m in messages) + 256
+        task_family,payload,upper=self.verification_task_family(run,fields,evidence)
         if upper > min(_VERIFICATION_INPUT_BYTE_CAP,self.s.input_limit):
             raise InvalidModelOutput('核验证据超过单次输入限额，不能截掉上下文后标记通过')
-        cache_id = hashlib.sha256(dumps(['verify-v1',run['project_id'],run['snapshot_id'],self.s.api_base_url,
-                    self.s.cheap_model, payload, [e.get('file_sha256') for _,e in sorted(evidence.items())]]).encode()).hexdigest()
-        task_family = 'verify:' + cache_id
+        cache_id=task_family.removeprefix('verify:')
         generation=self._generation(run,task_family,job_id=job_id)
         task=paid_task_key(task_family,generation)
         from copy import deepcopy
@@ -1305,6 +1314,49 @@ class Gateway:
         self.db.finalize_model_call(attempt,actual,usage,provider_id,response=data)
         return ModelResult(data,attempt,False,self.s.provider)
 
+    def _answer_v2_input(self,question:str,evidence:list[dict],source_conflicts:list[str],
+                         visual_regions:list[dict],required_missing:list[str],
+                         image_count:int)->tuple[list[dict],str,str,int,int]:
+        """Build the exact QA V2 text envelope without duplicating local citation metadata."""
+        safe_regions=[{key:item[key] for key in (
+            'region_id','document_id','file_name','page_number','bbox','coordinate_system',
+            'source_evidence_ids') if key in item} for item in visual_regions]
+        content={
+            'question':question,'effective_source_conflicts':source_conflicts,
+            'required_missing':required_missing,'visual_regions':safe_regions,
+            # File names, locators and geometry remain local. The model needs only the
+            # immutable citation handle and exact source text; local validation and
+            # response enrichment still use the complete evidence rows.
+            'evidence':[{
+                'evidence_id':item['evidence_id'],
+                'text':item.get('prompt_text',item['raw_text'])
+            } for item in evidence],
+        }
+        system_text=self.answer_v2_prompt+'\nJSON Schema:\n'+dumps(self.answer_v2_schema)
+        user_text=dumps(content)
+        upper=(len(system_text.encode('utf-8'))+len(user_text.encode('utf-8'))+
+               256+image_count*640)
+        return (safe_regions,system_text,user_text,upper,
+                min(_ANSWER_INPUT_BYTE_CAP,self.s.input_limit))
+
+    def answer_v2_input_summary(self,question:str,evidence:list[dict],
+                                source_conflicts:list[str],visual_regions:list[dict]|None=None,
+                                required_missing:list[str]|None=None,image_count:int=0)->dict:
+        """Return byte-only preflight facts; never expose prompt or project source text."""
+        _,system_text,user_text,upper,limit=self._answer_v2_input(
+            question,evidence,source_conflicts,list(visual_regions or []),
+            list(required_missing or []),image_count)
+        return {
+            'input_version':_ANSWER_V2_INPUT_VERSION,
+            'evidence_count':len(evidence),
+            'source_text_bytes':sum(len(item.get('prompt_text',item['raw_text']).encode('utf-8'))
+                                    for item in evidence),
+            'system_text_bytes':len(system_text.encode('utf-8')),
+            'user_text_bytes':len(user_text.encode('utf-8')),
+            'request_upper_bound_bytes':upper,'request_limit_bytes':limit,
+            'request_fits':upper<=limit,
+        }
+
     def answer_v2(self,run:dict,question:str,evidence:list[dict],source_conflicts:list[str],
                   visual_regions:list[dict]|None=None,images:list[dict]|None=None,
                   required_missing:list[str]|None=None)->ModelResult:
@@ -1335,20 +1387,9 @@ class Gateway:
                 raise InvalidModelOutput('QA V2 visual input is malformed or exceeds 32 MiB.')
         elif visual_regions:
             raise InvalidModelOutput('QA V2 visual regions require their bounded page images.')
-        safe_regions=[{key:item[key] for key in (
-            'region_id','document_id','file_name','page_number','bbox','coordinate_system',
-            'source_evidence_ids') if key in item} for item in visual_regions]
-        content={
-            'question':question,'effective_source_conflicts':source_conflicts,
-            'required_missing':required_missing,'visual_regions':safe_regions,
-            'evidence':[{
-                'evidence_id':item['evidence_id'],'file_name':item.get('file_name'),
-                'locator':item.get('locator'),'text':item.get('prompt_text',item['raw_text'])
-            } for item in evidence],
-        }
         limit=min(_ANSWER_V2_OUTPUT_TOKEN_CAP,self.s.output_limit)
-        system_text=self.answer_v2_prompt+'\nJSON Schema:\n'+dumps(self.answer_v2_schema)
-        user_text=dumps(content)
+        safe_regions,system_text,user_text,upper,input_limit=self._answer_v2_input(
+            question,evidence,source_conflicts,visual_regions,required_missing,len(images))
         model_name=self.s.vision_model if images else self.s.cheap_model
         if images:
             parts=[{'type':'text','text':user_text}]
@@ -1362,15 +1403,14 @@ class Gateway:
         else:messages=[{'role':'system','content':system_text},{'role':'user','content':user_text}]
         payload=self.payload(messages,limit,model_name,self.answer_v2_schema,
                              'cirp_project_answer_v2')
-        upper=len(system_text.encode('utf-8'))+len(user_text.encode('utf-8'))+256+len(images)*640
-        if upper>min(_ANSWER_INPUT_BYTE_CAP,self.s.input_limit):
+        if upper>input_limit:
             raise InvalidModelOutput('The QA V2 evidence bundle exceeds the configured input limit; no API call was made.')
         cache_question=' '.join(question.split())
         evidence_fingerprint=[(item['evidence_id'],item.get('prompt_text',item['raw_text']))
                               for item in evidence]
         image_hashes=[(item['region_id'],item['role'],hashlib.sha256(item['png']).hexdigest())
                       for item in images]
-        fingerprint=['qa-v2-answer-1',run['project_id'],run['snapshot_id'],self.s.api_base_url,
+        fingerprint=[_ANSWER_V2_INPUT_VERSION,run['project_id'],run['snapshot_id'],self.s.api_base_url,
                      *self._transport_marker(),
                      model_name,self.answer_v2_prompt_hash,cache_question,evidence_fingerprint,
                      source_conflicts,required_missing,safe_regions,image_hashes,
@@ -1473,7 +1513,14 @@ class Gateway:
             self.db.unknown(attempt,dumps({'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}))
             raise ProviderPaused(missing_usage_message,409)
         actual=Decimal('0');provider_id=self._safe_provider_id(body.get('id'))
-        if self._terminal_response_policy(attempt,actual,usage,provider_id,body,allow_reasoning=thinking):
+        try:
+            policy_rejected=self._terminal_response_policy(
+                attempt,actual,usage,provider_id,body,allow_reasoning=thinking,
+                diagnostic_class=diagnostic_class,
+                reference_input_commitment=commitment)
+        except InvalidModelOutput as exc:
+            raise InvalidModelOutput(contract_failure_message,execution_receipt=receipt) from exc
+        if policy_rejected:
             self.db.finalize_model_call(attempt,actual,usage,provider_id,
                 diagnostic=self._terminal_diagnostic('REASONING_NOT_DISABLED',kind='POLICY_ERROR'),
                 reference_input_commitment=commitment)

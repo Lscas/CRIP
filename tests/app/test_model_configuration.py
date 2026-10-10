@@ -61,6 +61,22 @@ def test_custom_loopback_profile_round_trips_without_key(tmp_path):
     assert public_configuration(loaded)['api_protocol']=='chat_completions'
 
 
+def test_custom_loopback_profile_round_trips_an_explicit_saved_key(
+        tmp_path,in_memory_secret_backend):
+    base=Settings(tmp_path,start_worker=False);key='synthetic-loopback-key'
+    configured=configured_settings(
+        base,provider='custom',api_base_url='http://127.0.0.1:19010/v1',
+        model='authenticated-local-model',api_key=key)
+    assert configured.is_local_model() and configured.api_key==key
+    save_active_configuration(configured)
+    profile=(base.data_dir/'credentials/active-model-profile.json').read_bytes()
+    assert key.encode() not in profile
+    assert in_memory_secret_backend[base.data_dir,configured.provider]==key
+    loaded=load_active_configuration(base)
+    assert loaded is not None and loaded.is_local_model() and loaded.api_key==key
+    assert public_configuration(loaded)['saved_key'] is True
+
+
 def test_presets_reject_custom_native_schema_mode(tmp_path):
     for provider in ('mock','deepseek','gemini'):
         with pytest.raises(ValueError,match='only for OpenAI or a custom'):

@@ -56,6 +56,21 @@ def test_newer_quantity_replaces_older_quantity_for_same_explicit_scope():
         ('pressure', '200'), ('building', 'Building A')]
 
 
+def test_each_field_uses_its_own_cited_revision_not_an_unrelated_atom_source():
+    title=_evidence('EV-title','2026-03-01')
+    old=_evidence('EV-old','2026-01-01');new=_evidence('EV-new','2026-02-01')
+    for title_first in (True,False):
+        old_atom=_atom('OLD','EV-old',2,100,scope='Building A')
+        new_atom=_atom('NEW','EV-new',5,200,scope='Building A')
+        old_atom['evidence_ids']=(['EV-title','EV-old'] if title_first else ['EV-old','EV-title'])
+        new_atom['evidence_ids']=['EV-title','EV-new']
+        record=_assembled((title,old_atom),(old,old_atom),(new,new_atom))[0]['candidate']
+        assert record['quantity']['value']==5
+        assert record['quantity']['evidence_ids']==['EV-new']
+        pressure=next(prop for prop in record['design_properties'] if prop['name']=='pressure')
+        assert pressure['value']=='200' and pressure['evidence_ids']==['EV-new']
+
+
 def test_unknown_scope_does_not_merge_tagged_material_across_evidence():
     old = _evidence('EV-old', '2026-01-01')
     new = _evidence('EV-new', '2026-02-01')
@@ -117,6 +132,17 @@ def test_temporary_explicit_quantity_is_retained_as_property_not_invalid_quantit
     assert candidate['quantity'] is None
     assert any(prop['name'] == 'quantity' and prop['value'] == '2' for prop in candidate['design_properties'])
     validate_schema('material-item', candidate)
+
+
+def test_explicit_permanent_kind_overrides_temporary_name_heuristic_without_losing_quantity():
+    atom=_atom('P','EV-P',2,100)
+    atom['object']='Permanent formwork'
+    atom['properties'].append({'name':'material_kind','value':'PERMANENT','unit':None,
+                               'evidence_ids':['EV-P']})
+    candidate=material(atom,_evidence('EV-P','2026-01-01'))
+    assert candidate['material_kind']=='PERMANENT'
+    assert candidate['quantity']['value']==2 and candidate['quantity']['unit']=='EA'
+    assert candidate['requirement_status']=='CONDITIONAL'
 
 
 def test_material_primary_object_filter_keeps_physical_manual_and_spare_parts_items():
@@ -215,3 +241,14 @@ def test_normalized_tagged_names_cannot_create_duplicate_record_keys():
 def test_assembly_keeps_real_qa_despite_administrative_modifiers(requirement):
     assert _inspection_atom_allowed({'category':'TEST','subject':'Water pipe','action':'Test',
                                      'object':requirement,'properties':[]})
+
+
+def test_manual_transfer_switch_functional_test_is_not_treated_as_a_manual_document():
+    atom={'candidate_key':'TEST-1','category':'TEST','subject':'ATS-1','action':'Perform',
+          'object':'Manual transfer switch functional test','condition':None,'exception':None,
+          'parent_requirement_key':None,'option_group_key':None,'option_relation':'NONE',
+          'evidence_ids':['EV-test'],'context_evidence_ids':[],'needs_context':False,
+          'properties':[]}
+    rows=_assembled((_evidence('EV-test','2026-01-01'),atom))
+    assert len(rows)==1 and rows[0]['kind']=='INSPECTION'
+    assert rows[0]['candidate']['requirement']=='Manual transfer switch functional test'

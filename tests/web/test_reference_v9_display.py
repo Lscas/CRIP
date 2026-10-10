@@ -26,7 +26,8 @@ def test_v9_preview_and_ask_keep_the_complete_route_and_proof_together():
     assert "selector_version:'literal-page-selector-9',profile_id:profile" in app
     assert "preview_proof:proof.proof" in app
     assert "run_id:proof.proof.run_id,question,selector_version:'literal-page-selector-9'" in app
-    assert "await api(`/projects/${state.project}/questions`,'POST',{question})" in app
+    assert "await api(`/projects/${project}/questions`,'POST',{question})" in app
+    assert 'state.questionRequestVersion===requestVersion' in app
 
 
 def test_v9_proof_is_invalidated_by_input_project_run_or_reference_knowledge_changes():

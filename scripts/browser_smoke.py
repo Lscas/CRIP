@@ -62,11 +62,11 @@ def main():
                 page.locator('#project-form button[type=submit]').click()
                 page.wait_for_function("document.querySelector('#project-name').textContent.includes('合成演示')")
                 page.locator('#file-input').set_input_files([str(ROOT/'examples/demo/01_original.txt'),str(ROOT/'examples/demo/02_revision.txt')])
-                page.wait_for_function("document.querySelector('#file-total').textContent.includes('2 个')")
+                page.wait_for_function("document.querySelector('#file-total').textContent.includes('2 unique-content files')")
                 page.locator('#start').click()
                 page.wait_for_function("document.querySelector('#run-state').dataset.code==='PARTIAL'")
-                counts={kind:int(page.locator('#count-'+kind).inner_text()) for kind in ['MATERIAL','INSPECTION','CONFLICT','MISSING']}
-                assert counts=={'MATERIAL':2,'INSPECTION':2,'CONFLICT':1,'MISSING':0},counts
+                counts={kind:int(page.locator('#count-'+kind).inner_text()) for kind in ['MATERIAL','INSPECTION']}
+                assert counts=={'MATERIAL':2,'INSPECTION':2},counts
                 rid=app.state.db.one('SELECT id FROM runs ORDER BY created_at DESC LIMIT 1')['id']
                 app.state.db.execute("UPDATE runs SET status='RUNNING' WHERE id=?",(rid,))
                 call_id=app.state.db.reserve(app.state.db.one('SELECT project_id FROM runs WHERE id=?',(rid,))['project_id'],rid,
@@ -87,10 +87,10 @@ def main():
                 assert app.state.db.one('SELECT state FROM model_calls WHERE id=?',(call_id,))['state']=='RECONCILED_ZERO'
                 assert app.state.db.one('SELECT COUNT(*) AS n FROM call_reconciliation_events WHERE call_id=?',(call_id,))['n']==1
                 page.locator('#results-body tr td:first-child button').first.click()
-                page.locator('#drawer-body').get_by_role('button',name='接受',exact=True).click()
+                page.locator('#drawer-body').get_by_role('button',name='Accept',exact=True).click()
                 page.wait_for_function("document.querySelector('#results-body').textContent.includes('ACCEPTED')")
                 page.locator('#results-body .evidence-button').first.click()
-                page.wait_for_function("document.querySelector('#drawer-title').textContent==='原始证据'")
+                page.wait_for_function("document.querySelector('#drawer-title').textContent==='Original evidence'")
                 assert 'Revision' in page.locator('#drawer-body').inner_text()
                 page.locator('#close-drawer').click()
                 page.evaluate("window.scrollTo(0, 0); document.getElementById('toast').hidden=true")

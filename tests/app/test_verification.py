@@ -16,7 +16,8 @@ from PIL import Image
 
 from app.db import Database, DomainError, dumps
 from app.gateway import Gateway, InvalidModelOutput, ModelResult, ProviderPaused
-from app.verification import (VerificationService, citation, exact_quote, anchors, digest, fields_for, summarize, statement_span)
+from app.verification import (MAX_BATCH_FIELDS, VerificationService, citation, exact_quote,
+                              anchors, digest, fields_for, summarize, statement_span)
 from app.settings import Settings, ROOT
 from contracts.runtime_rules import validate_schema
 from .conftest import run_demo, upload
@@ -195,6 +196,73 @@ def test_run_verification_batches_fields_from_records_with_the_same_evidence(cli
     service=VerificationService(db,settings,FakeGateway())
     reports=service.refresh_many(record_ids,allow_model=True)
     assert reports and any(len({json.dumps(item['context'],sort_keys=True) for item in batch})>1 for batch in calls)
+
+
+def test_batched_verification_recovers_settled_call_after_report_save_crash(client,project,monkeypatch):
+    """A crash after provider settlement must not change a batch into paid per-record calls."""
+    rid=run_demo(client,project['id']);db=client.app.state.db
+    rows=client.get(f'/api/analysis-runs/{rid}/records').json()
+    by_scope={}
+    for row in rows:
+        for item in row['verification']['fields']:
+            if item['status']=='NEEDS_SEMANTIC':
+                by_scope.setdefault(tuple(sorted(item['evidence_ids'])),set()).add(
+                    row['record']['meta']['record_id'])
+    target_scope,target_ids=next((scope,ids) for scope,ids in by_scope.items() if len(ids)>1)
+    record_ids=sorted(target_ids)
+    kept=set(sorted(
+        (item['path'],row['record']['meta']['record_id'])
+        for row in rows if row['record']['meta']['record_id'] in target_ids
+        for item in row['verification']['fields']
+        if (item['status']=='NEEDS_SEMANTIC'
+            and tuple(sorted(item['evidence_ids']))==target_scope)
+    )[:MAX_BATCH_FIELDS])
+    db.execute("UPDATE runs SET provider='deepseek',status='RUNNING',deadline_epoch=? WHERE id=?",
+               (time.time()+60,rid))
+    settings=replace(client.app.state.settings,provider='deepseek',cheap_model='deepseek-flash',
+                     live_enabled=True,api_key='synthetic-key')
+    requests=[]
+    def handler(request):
+        requests.append(request)
+        content=json.loads(json.loads(request.content)['messages'][1]['content'])
+        checks=[{'path':item['path'],'status':'NEEDS_CONTEXT','citations':[],
+                 'reason':'Synthetic evidence is insufficient.'} for item in content['fields']]
+        return httpx.Response(200,json=body({'checks':checks}))
+    gateway=Gateway(settings,db,httpx.Client(transport=httpx.MockTransport(handler)))
+    first=VerificationService(db,settings,gateway)
+    # Bound this crash test to one evidence-scoped paid batch; unrelated fields
+    # are terminal fixture state and must not create legitimate follow-on calls.
+    for record_id in record_ids:
+        report=first.refresh(record_id,allow_model=False)
+        for item in report['fields']:
+            if (item['status']=='NEEDS_SEMANTIC'
+                    and (tuple(sorted(item['evidence_ids']))!=target_scope
+                         or (item['path'],record_id) not in kept)):
+                item.update(status='UNSUPPORTED',method='SYNTHETIC_TEST_SCOPE')
+        summarize(report);assert first.save(report)
+    original_save=first.save;crashed=False
+    def crash_after_settlement(report):
+        nonlocal crashed
+        if not crashed and any(item.get('request_id') for item in report['fields']):
+            crashed=True
+            raise RuntimeError('synthetic crash after paid settlement')
+        return original_save(report)
+    monkeypatch.setattr(first,'save',crash_after_settlement)
+
+    with pytest.raises(RuntimeError,match='synthetic crash'):
+        first.refresh_many(record_ids,allow_model=True)
+    settled=db.all("SELECT id,state,task_key FROM model_calls WHERE run_id=?",(rid,))
+    assert len(requests)==1 and len(settled)==1 and settled[0]['state']=='SETTLED'
+
+    restarted=VerificationService(db,settings,gateway)
+    reports=restarted.refresh_many(record_ids,allow_model=True)
+    assert len(requests)==1
+    assert len(db.all("SELECT id FROM model_calls WHERE run_id=?",(rid,)))==1
+    assert all(item['path'].startswith('/') and not item['path'].startswith('/batch/')
+               for report in reports.values() for item in report['fields'])
+    assert any(item.get('request_id')==settled[0]['id']
+               for report in reports.values() for item in report['fields'])
+    gateway.client.close()
 
 
 def test_exact_citation_endpoint_and_read_has_no_model_call(client,demo):

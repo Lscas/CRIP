@@ -19,7 +19,11 @@ PROBE = 'import app.main, uvicorn; print("dependencies-ok")'
 
 
 def child_env_without_secrets() -> dict[str, str]:
-    return environment_without_secrets()
+    env=environment_without_secrets()
+    # Windows pip otherwise decodes the UTF-8 requirements file with the
+    # current ANSI code page (for example cp936) and can fail before install.
+    env['PYTHONUTF8']='1'
+    return env
 
 
 def application_child_env(*, live: bool, remote: bool) -> dict[str, str]:

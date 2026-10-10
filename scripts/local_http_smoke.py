@@ -86,7 +86,7 @@ def main() -> int:
                 assert run['status']=='PARTIAL',run
                 rows=c.get(f'/api/analysis-runs/{rid}/records').json()
                 counts=dict(Counter(x['record']['kind'] for x in rows))
-                assert counts=={'CONFLICT':1,'INSPECTION':2,'MATERIAL':2},counts
+                assert counts=={'INSPECTION':2,'MATERIAL':2},counts
                 mat=next(x for x in rows if x['record']['kind']=='MATERIAL')
                 eid=mat['record']['candidate']['evidence_ids'][0]
                 ev=c.get(f'/api/analysis-runs/{rid}/evidence/{eid}')
@@ -95,7 +95,14 @@ def main() -> int:
                 r=c.post(f'/api/records/{record_id}/review',json={'action':'ACCEPTED','expected_version':0})
                 assert r.status_code==200
                 assert c.get(f'/api/analysis-runs/{rid}/cost').status_code==405
-                js=c.get(f'/api/analysis-runs/{rid}/exports/json');assert js.status_code==200 and len(js.json()['records'])==5
+                js=c.get(f'/api/analysis-runs/{rid}/exports/json')
+                assert js.status_code==200,(js.status_code,js.text)
+                exported=js.json()
+                exported_counts={
+                    'MATERIAL':len(exported['materials_and_equipment']),
+                    'INSPECTION':len(exported['inspections_and_tests']),
+                }
+                assert exported_counts==counts,(exported_counts,counts)
                 xl=c.get(f'/api/analysis-runs/{rid}/exports/xlsx');assert xl.status_code==200
                 with zipfile.ZipFile(io.BytesIO(xl.content)) as z:assert '[Content_Types].xml' in z.namelist()
                 report.update(counts=counts,run_status=run['status'],evidence='PASS',review='PASS',json_export='PASS',xlsx_export='PASS',cross_origin_status=bad.status_code)
@@ -103,11 +110,15 @@ def main() -> int:
             start()
             with httpx.Client(base_url=base,timeout=5,trust_env=False) as c:
                 assert c.get(f'/api/projects/{pid}').status_code==200
-                assert len(c.get(f'/api/analysis-runs/{rid}/records').json())==5
+                assert len(c.get(f'/api/analysis-runs/{rid}/records').json())==4
                 assert len(c.get(f'/api/records/{record_id}/history').json())==1
                 assert len(c.get(f'/api/projects/{pid}/manifest').json()['documents'])==2
             report['restart_persistence']='PASS: project, documents, records and review retained'
             report['result']='PASS'
+        except BaseException:
+            stop();log.flush()
+            print((Path(tmp)/'http.log').read_text(encoding='utf-8',errors='replace'))
+            raise
         finally:
             stop();log.close()
     output=Path(args.report).resolve();output.parent.mkdir(parents=True,exist_ok=True)

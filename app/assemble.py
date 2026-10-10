@@ -135,7 +135,10 @@ def _inspection_atom_allowed(atom: dict) -> bool:
     if not _QA_ACTION.search(text):return False
     primary=re.sub(r'^\s*(?:provide|submit|prepare)\s+(?:(?:a|an|the)\s+)?','',
                    str(atom.get('object') or ''),flags=re.I)
-    if _NON_QA_DOCUMENT.match(primary) or _ADMINISTRATIVE_VERIFY.search(text):return False
+    document_match=_NON_QA_DOCUMENT.match(primary)
+    manual_equipment_test=(bool(re.match(r'(?i)^manual\b',primary))
+                           and bool(re.search(r'(?i)\b(?:functional\s+)?(?:test|inspection|commissioning|start[- ]?up)\b',primary)))
+    if (document_match and not manual_equipment_test) or _ADMINISTRATIVE_VERIFY.search(text):return False
     if _NON_QA_REQUIREMENT.search(text):return False
     if _GENERIC_QA_OBJECT.fullmatch(str(atom.get('object') or '').strip()):return False
     category=atom.get('category');action=str(atom.get('action') or '')
@@ -305,23 +308,35 @@ def _quantity_property(quantity: dict) -> dict:
             'evidence_ids':list(quantity.get('evidence_ids') or [])}
 
 
-def _merge_quantity(merged: dict, items: list[tuple[dict,dict]], group: tuple) -> None:
-    values=[(mat['quantity'],evidence) for mat,evidence in items if isinstance(mat.get('quantity'),dict)]
+def _field_sources(value:dict|None,fallback:dict,evidence_records:dict[str,dict])->list[dict]:
+    references=(value or {}).get('evidence_ids') or []
+    sources=list(dict.fromkeys(references))
+    resolved=[evidence_records[evidence_id] for evidence_id in sources if evidence_id in evidence_records]
+    return resolved or [fallback]
+
+
+def _merge_quantity(merged: dict, items: list[tuple[dict,dict]], group: tuple,
+                    evidence_records:dict[str,dict]) -> None:
+    values=[(mat['quantity'],source) for mat,fallback in items if isinstance(mat.get('quantity'),dict)
+            for source in _field_sources(mat['quantity'],fallback,evidence_records)]
     if not values:return
     def unresolved():
         merged.update(quantity=None,requirement_status='NOT_SPECIFIED')
         merged['design_properties'].extend(_quantity_property(value) for value,_ in values)
         merged['support_note']+=' Current quantity is not established across cited evidence.'
     if len(items)>1:
-        dates=[evidence.get('internal_revision_date') for _,evidence in items]
+        item_sources=[(mat,_field_sources(mat.get('quantity'),fallback,evidence_records))
+                      for mat,fallback in items]
+        dates=[source.get('internal_revision_date') for _,sources in item_sources for source in sources]
         if any(not value for value in dates):
             unresolved();return
         try:
             latest=max(dates)
         except TypeError:
             unresolved();return
-        if any(evidence.get('internal_revision_date')==latest and not isinstance(mat.get('quantity'),dict)
-               for mat,evidence in items):
+        if any(not isinstance(mat.get('quantity'),dict)
+               and any(source.get('internal_revision_date')==latest for source in sources)
+               for mat,sources in item_sources):
             unresolved();return
     distinct={(value['value'],value.get('unit')) for value,_ in values}
     if len(distinct)==1:
@@ -397,9 +412,14 @@ def material(atom: dict,evidence: dict,sources: list[dict] | None = None):
     c=base(atom,evidence,sources)
     properties=deepcopy(atom['properties'])
     explicit_kind=next((p['value'].upper() for p in properties if p['name']=='material_kind'),None)
-    temporary=explicit_kind=='TEMPORARY' or bool(re.search(r'formwork|shoring|temporary|模板|临时',atom['object'],re.I))
+    inferred_temporary=bool(re.search(r'formwork|shoring|temporary|模板|临时',atom['object'],re.I))
+    temporary=(explicit_kind=='TEMPORARY' if explicit_kind in ('PERMANENT','TEMPORARY')
+               else inferred_temporary)
     if explicit_kind not in ('PERMANENT','TEMPORARY'):
         c['support_note']+=' 材料永久/临时类别暂由词规则建议。'
+    elif explicit_kind=='PERMANENT' and inferred_temporary:
+        c['requirement_status']='CONDITIONAL'
+        c['support_note']+=' Explicit permanent classification retained; the material name conflicts with the temporary-material keyword heuristic and requires review.'
     sections=list(c['csi_sections'])
     design_properties=[];quantity=None;quantity_properties=[]
     for prop in properties:
@@ -499,7 +519,8 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
         merged['field_evidence']['name']=merged['evidence_ids']
         for mat,ev in items:
             for prop in mat['design_properties']:
-                by_property[(prop['name'].casefold(),prop['unit'])].append((prop,ev))
+                for source in _field_sources(prop,ev,evidence_records):
+                    by_property[(prop['name'].casefold(),prop['unit'])].append((prop,source))
         merged['design_properties']=[]
         for (propname,unit),values in by_property.items():
             distinct={v['value'] for v,_ in values}
@@ -518,7 +539,7 @@ def envelopes(run: dict, evidence_records: dict, extracted: list[tuple[dict,dict
                     identity=(prop['value'],prop.get('unit'))
                     if identity not in seen_values:
                         merged['design_properties'].append(deepcopy(prop));seen_values.add(identity)
-        _merge_quantity(merged,items,group)
+        _merge_quantity(merged,items,group,evidence_records)
         candidates.append(('MATERIAL',merged))
     for kind,candidate in candidates:
         if isinstance(candidate.get('support_note'),str):

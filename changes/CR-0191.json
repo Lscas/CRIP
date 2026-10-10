@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0191",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-LOCAL-001", "FR-EXPORT-002", "FR-REVIEW-001", "NFR-SECURITY-001", "NFR-RELIABILITY-001"],
+  "summary": "Refresh real-browser and loopback release smoke contracts and preserve a non-English user project name in JSON/XLSX export instead of failing the English system-text cache.",
+  "decision_refs": ["User requested final pre-release testing on 2026-10-09.", "tasks/DEV-175.json", "reports/pre_release_go_no_go_2026-10-09.md"],
+  "affected_paths": ["app/exporter.py", "scripts/browser_smoke.py", "scripts/local_http_smoke.py", "tests/app/test_api.py", "reports/pre_release_go_no_go_2026-10-09.md", "tasks/DEV-175.json", "changes/CR-0191.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["real Chrome offline DOM smoke", "19-check real Chrome v9 production-asset smoke", "real loopback HTTP upload/analyze/review/JSON/XLSX/restart smoke", "targeted export regressions", "scripts/run_checks.py --area all"],
+  "product_implementation_changed": true,
+  "approval_evidence": "The final-release test request authorizes the bounded local validation and repair required for the discovered export failure; no external deployment or paid model call is included.",
+  "known_limitations": ["Current live Pro quality and QA V2 input-size gates remain closed.", "Fresh-machine installation, actual current-user DPAPI persistence, stopped-writer customer-data migration/restore, package signing, remote CI and deployment remain separate release gates."]
+}

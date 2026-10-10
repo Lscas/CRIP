@@ -22,7 +22,7 @@ function harness({response=review,results=[],caseData=caseItem}={}){
  const roots={'reference-case-detail':node('main'),'reference-cases':node('main'),'reference-results':node('main')};const calls=[];
  const t=(key,args={})=>{assert.ok(Object.hasOwn(catalog.en,key),`missing ${key}`);return catalog.en[key].replace(/\{(\w+)\}/g,(_m,k)=>String(args[k]??''));};
  const capability={available:true,view_version:'reference-projection-review-view-1',case_workflow_available:true,case_view_version:'reference-case-view-2',saved_followup_link_available:true,question_creation_available:false};
- const context=vm.createContext({state:{project:'project-1',settings:{capabilities:{reference_projection_review:capability}},referenceCaseSelected:structuredClone(caseData),referenceResults:results,referenceRuns:[],documents:[],caseFlowByCase:{},caseFlowBusy:false,uploading:false,unresolvedCalls:[],referenceKnowledge:null,runStatus:null,referenceAsking:false,referencePreviewing:false,referenceEvaluationBusy:false,asking:false,referenceEvaluationJobs:[]},$:id=>roots[id]||node('div'),el:node,elT:(tag,key,args={},cls='')=>node(tag,t(key,args),cls),optionT:key=>new context.Option(t(key),''),Option:function(text,value){return {tag:'option',text,value,selected:false};},I:{t, status:value=>value,bindText:(n,key,args={})=>{n.text=t(key,args);return n;},bindStatus:(n,value)=>{n.text=value;return n;},applyElement(){}},v9Enabled:()=>false,error:fn=>async(...args)=>fn(...args),updateReferenceAvailability(){},loadReferenceCases:async()=>{},loadReferenceResults:async()=>{},recoverPendingReferenceResult:async()=>{},renderReferencePreview(){},uploadFiles:async()=>[],toast(){},referenceCitation:()=>node('blockquote','legacy'),api:async(path,method='GET')=>{calls.push({path,method});if(typeof response==='function')return response();if(response instanceof Error)throw response;return response;},encodeURIComponent});
+ const context=vm.createContext({state:{project:'project-1',settings:{capabilities:{reference_projection_review:capability}},referenceCaseSelected:structuredClone(caseData),referenceResults:results,referenceRuns:[],documents:[],caseDraftByCase:{},caseFlowByCase:{},caseFlowBusy:false,uploading:false,unresolvedCalls:[],referenceKnowledge:null,runStatus:null,referenceAsking:false,referencePreviewing:false,referenceEvaluationBusy:false,asking:false,referenceEvaluationJobs:[]},$:id=>roots[id]||node('div'),el:node,elT:(tag,key,args={},cls='')=>node(tag,t(key,args),cls),optionT:key=>new context.Option(t(key),''),Option:function(text,value){return {tag:'option',text,value,selected:false};},I:{t, status:value=>value,bindText:(n,key,args={})=>{n.text=t(key,args);return n;},bindStatus:(n,value)=>{n.text=value;return n;},applyElement(){}},v9Enabled:()=>false,error:fn=>async(...args)=>fn(...args),updateReferenceAvailability(){},loadReferenceCases:async()=>{},loadReferenceResults:async()=>{},recoverPendingReferenceResult:async()=>{},renderReferencePreview(){},uploadFiles:async()=>[],toast(){},referenceCitation:()=>node('blockquote','legacy'),api:async(path,method='GET')=>{calls.push({path,method});if(typeof response==='function')return response(path,method);if(response instanceof Error)throw response;return response;},encodeURIComponent});
  vm.runInContext(renderer+'\nrenderReferenceCaseDetail();',context);return {context,roots,calls,nodes:()=>all(roots['reference-case-detail'])};
 }
 const find=(h,predicate)=>h.nodes().find(predicate);
@@ -77,4 +77,32 @@ test('full capability exposes a guarded human-case action for each supported pro
  const h=harness({results});h.context.renderReferenceResults();
  const buttons=all(h.roots['reference-results']).filter(n=>n.tag==='button'&&n.text===catalog.en['reference.projectionSendToHuman']);
  assert.equal(buttons.length,3);
+});
+
+test('failed or conflicting case save retains every unsaved draft field',async()=>{
+ const fresh={...caseItem,version:8};
+ const h=harness({response:async(_path,method)=>{if(method==='POST')throw new Error('409 version conflict');return structuredClone(fresh);}});
+ const form=find(h,n=>n.tag==='form'&&n.cls.includes('reference-case-form'));
+ const controls=all(form),assignee=controls.find(n=>n.tag==='input');
+ const [note,resolution,supplemental]=controls.filter(n=>n.tag==='textarea');
+ assignee.value='Engineer A';note.value='Unsaved note';resolution.value='Unsaved resolution';supplemental.value='Is this still required?';
+ for(const control of [assignee,note,resolution,supplemental])control.oninput();
+
+ await assert.rejects(form.onsubmit({preventDefault(){}}),/409 version conflict/);
+ const rerendered=find(h,n=>n.tag==='form'&&n.cls.includes('reference-case-form'));
+ const latest=all(rerendered),latestAssignee=latest.find(n=>n.tag==='input');
+ const [latestNote,latestResolution,latestSupplemental]=latest.filter(n=>n.tag==='textarea');
+ assert.equal(h.context.state.referenceCaseSelected.version,8);
+ assert.equal(latestAssignee.value,'Engineer A');
+ assert.equal(latestNote.value,'Unsaved note');
+ assert.equal(latestResolution.value,'Unsaved resolution');
+ assert.equal(latestSupplemental.value,'Is this still required?');
+});
+
+test('supplemental question history renders event.after.question as literal text',()=>{
+ const unsafe='<img src=x onerror=alert(1)>';
+ const event={action:'SUPPLEMENTAL_QUESTION',actor:'local-engineer',note:'',before:{},after:{question:unsafe}};
+ const h=harness({caseData:{...caseItem,history:[event]}});
+ assert.ok(find(h,n=>n.text===`Supplemental question: ${unsafe}`));
+ assert.equal(h.nodes().some(n=>n.tag==='img'),false);
 });

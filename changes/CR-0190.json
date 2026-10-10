@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0190",
+  "spec_version": "0.2.6",
+  "change_type": "bugfix",
+  "requirement_ids": ["FR-VERIFY-001", "FR-REVISION-001", "FR-MATERIAL-001", "FR-MATERIAL-002", "FR-EXPORT-002", "FR-QA-V2-ANSWER-001", "FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-RESULT-LIFECYCLE-001", "FR-REFERENCE-HUMAN-CASES-001", "FR-API-006", "NFR-SECURITY-001"],
+  "summary": "Repair the F1-F13 handoff defects across verification recovery, claim binding, revision-aware assembly, reviewed export fidelity, terminal provider failures, browser request isolation, snapshot exports, case drafts/history and loopback credential reload.",
+  "decision_refs": ["2026-10-08 user supplied the fixed-version F1-F13 repair and acceptance handoff as the operative implementation request.", "tasks/DEV-174.json", "reports/f1_f13_repair_validation_2026-10-08.md"],
+  "affected_paths": ["app/assemble.py", "app/exporter.py", "app/gateway.py", "app/model_configuration.py", "app/project_qa_v2.py", "app/reference_results.py", "app/verification.py", "web/app.js", "web/i18n.js", "tests/app/**", "tests/web/**", "tasks/DEV-174.json", "changes/CR-0190.json", "CHANGELOG.md", "docs/DEV_STATE.md", "reports/f1_f13_repair_validation_2026-10-08.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["F1-F13 targeted Python and Node regressions", "scripts/run_checks.py --area all", "scripts/check_spec_sync.py", "scripts/build_bundle_manifest.py --check"],
+  "product_implementation_changed": true,
+  "approval_evidence": "The user explicitly instructed the receiving AI to start implementation and allowed model calls; this implementation uses only offline MockTransport responses and makes no paid provider call.",
+  "known_limitations": ["The six separately packaged handoff probes were not present in the supplied folder, so repository tests implement the documented triggers instead of claiming those missing scripts ran.", "Original-PDF visual confirmation, real-browser acceptance, actual Windows DPAPI persistence and real-model answer-quality validation remain separate from the synthetic regression gate.", "No push, merge, release, deployment, customer-data migration or paid model call is included."]
+}

@@ -283,6 +283,31 @@ def test_reference_export_contains_complete_audit_and_is_zero_call(
     assert too_large.status_code==409
 
 
+def test_reference_export_review_and_history_share_one_read_snapshot(client,project,monkeypatch):
+    db,run,_,_=_saved_run(client,project,'REFERENCE_QA')
+    store=client.app.state.reference_results;question='What is the approved color?'
+    saved=store.save(run,question,_public_result(run,question),
+                     'custom-0123456789abcdef','gpt-5.6')
+    original_public=store._public;changed=False
+
+    def review_during_export(row,detail,connection=None):
+        nonlocal changed
+        if connection is not None and not changed:
+            changed=True
+            store.review(saved['result_id'],'ACCEPTED',0,'Concurrent review.')
+        return original_public(row,detail,connection)
+    monkeypatch.setattr(store,'_public',review_during_export)
+
+    exported=store.export(project['id'],run['id'])['results'][0]
+    # The export began before the concurrent write, so both surfaces must be old.
+    assert changed is True
+    assert exported['review']=={'status':'PENDING','version':0,'event_id':None}
+    assert exported['review_history']==[]
+    current=db.one('SELECT review_status,review_version FROM reference_results WHERE id=?',
+                   (saved['result_id'],))
+    assert current=={'review_status':'ACCEPTED','review_version':1}
+
+
 def test_reference_comparison_reports_saved_outcome_review_and_processing_deltas(
         client,project,monkeypatch):
     text=('The approved color is blue. The approved color is green. '

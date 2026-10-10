@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-175",
+  "title": "Run the final local release-candidate acceptance gate",
+  "status": "DONE",
+  "objective": "Bind source, real Chromium, real loopback HTTP, export, restart persistence and full-repository checks to one pre-release candidate, and report remaining Go/No-Go boundaries without claiming field accuracy or deployment.",
+  "requirement_ids": ["FR-LOCAL-001", "FR-EXPORT-002", "FR-REVIEW-001", "NFR-SECURITY-001", "NFR-RELIABILITY-001"],
+  "max_output_tokens": 12000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user explicitly requested final testing before product release and asked what else must be considered.",
+  "notes": ["Use isolated synthetic data for browser and loopback tests; do not read customer credentials or mutate the customer database.", "Retain red evidence when a stale smoke assertion or product defect is found.", "A green local gate does not override the fixed live answer-quality threshold, QA V2 input-limit blocker, fresh-install, migration, DPAPI, packaging, CI or deployment boundaries."],
+  "allowed_paths": ["app/exporter.py", "scripts/browser_smoke.py", "scripts/local_http_smoke.py", "tests/app/test_api.py", "docs/**", "reports/**", "tasks/DEV-175.json", "changes/CR-0191.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/LOCAL_DEPLOY.md", "docs/ACCEPTANCE_CHECKLIST.md", "docs/REFERENCE_QA.md"],
+  "acceptance_tests": ["python scripts/browser_smoke.py", "python scripts/reference_v9_browser_smoke.py", "python scripts/local_http_smoke.py", "python scripts/run_checks.py --area all", "python scripts/check_spec_sync.py", "python scripts/check_changes.py --base HEAD", "python scripts/build_bundle_manifest.py --check"],
+  "model_level": "medium_execution_sol_max_final_release_review"
+}

@@ -53,6 +53,28 @@ def test_json_and_excel_keep_citation_words_and_business_identifiers():
     assert 'PANEL_A1' in values
 
 
+@pytest.mark.parametrize(('name','quantity'),[
+    ('2 inch PVC valve',2),('Single phase transformer',1),('Two pole circuit breaker',2),
+])
+def test_reviewed_export_preserves_dimension_phase_and_pole_in_complete_name(name,quantity):
+    record=material(name,quantity_review='VERIFIED')
+    record['candidate']['quantity']['value']=quantity
+    payload=data(record,reviewed_only=True)
+    exported=json.loads(exporter.as_json(payload))['materials_and_equipment'][0]
+    assert exported['material_or_equipment_name']==name
+    workbook=load_workbook(io.BytesIO(exporter.as_xlsx(payload)))
+    values=[cell.value for row in workbook['Materials & Equipment'] for cell in row]
+    assert name in values
+
+
+@pytest.mark.parametrize('separator',['\n','\r\n','. ','; '])
+def test_fallback_excerpt_keeps_first_character_after_real_boundary(separator):
+    phrase='No asbestos pipe shall be used.'
+    evidence={'content_basis':'SOURCE_TEXT','raw_text':'Header'+separator+phrase}
+    record={'candidate':{'name':'No asbestos pipe'}}
+    assert exporter._focused_source_text(evidence,record).startswith(phrase)
+
+
 @pytest.mark.parametrize('name', ['model_number', 'Number of poles', 'quantity'])
 def test_export_never_infers_quantity_from_properties(name):
     record = material()

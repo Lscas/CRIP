@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-174",
+  "title": "Repair and independently verify handoff findings F1 through F13",
+  "status": "DONE",
+  "objective": "Reproduce the thirteen fixed-version handoff findings, implement compatible repairs, and record positive acceptance evidence without treating old-error reproduction as a passing result.",
+  "requirement_ids": ["FR-VERIFY-001", "FR-REVISION-001", "FR-MATERIAL-001", "FR-MATERIAL-002", "FR-EXPORT-002", "FR-QA-V2-ANSWER-001", "FR-REFERENCE-EVALUATION-001", "FR-REFERENCE-RESULT-LIFECYCLE-001", "FR-REFERENCE-HUMAN-CASES-001", "FR-API-006", "NFR-SECURITY-001"],
+  "max_output_tokens": 12000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user supplied the 2026-10-08 CRIP revision handoff log as the operative request and explicitly instructed the receiving developer or AI to reproduce, repair and verify F1 through F13. The handoff does not authorize push, merge, release, real-model charges or customer-data migration.",
+  "notes": ["Start from fixed application commit c5c51e36e03c4578912cc3e50e39e394a55e648b in an isolated worktree.", "The portable probes were described but were not attached; add repository regressions from the documented triggers and distinguish failure reproduction from positive acceptance.", "F2 requires negative object, unit and condition cases plus positive controls through the real questions-v2 route.", "Preserve existing normal behavior, human review state, exact source text and safe credential storage."],
+  "allowed_paths": ["app/assemble.py", "app/exporter.py", "app/gateway.py", "app/model_configuration.py", "app/project_qa_v2.py", "app/reference_results.py", "app/verification.py", "web/app.js", "web/i18n.js", "tests/app/**", "tests/web/**", "spec/**", "docs/**", "reports/**", "tasks/DEV-174.json", "changes/CR-0190.json", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": ["docs/EVIDENCE_VERIFICATION.md", "docs/FIELD_QA_DEVELOPMENT.md", "docs/PROJECT_QUESTIONS.md"],
+  "acceptance_tests": ["python -m pytest tests/app/test_project_qa_v2.py tests/app/test_verification.py tests/app/test_review_fact_assembly.py tests/app/test_review_export_integrity.py tests/app/test_reference_results.py tests/app/test_reference_v9_evaluations.py tests/app/test_model_configuration.py -q", "node --test tests/web/*.test.mjs", "python scripts/check_spec_sync.py", "python scripts/run_checks.py --area all", "python scripts/build_bundle_manifest.py --check"],
+  "model_level": "medium_execution_sol_max_architecture_and_final_review"
+}

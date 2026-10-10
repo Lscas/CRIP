@@ -1224,6 +1224,21 @@ def test_review_and_optimistic_lock(client,project):
     exported=client.get(f'/api/analysis-runs/{rid}/exports/json?reviewed_only=true').json()
     assert sum(len(exported[key]) for key in ('materials_and_equipment','inspections_and_tests'))==1
 
+
+def test_mock_reviewed_record_remains_exportable(client,project):
+    rid=run_demo(client,project['id'])
+    client.app.state.db.execute('UPDATE projects SET name=? WHERE id=?',
+                                ('本机部署 HTTP 合成验收',project['id']))
+    row=client.get(f'/api/analysis-runs/{rid}/records').json()[0]
+    record_id=row['record']['meta']['record_id']
+    assert client.post(f'/api/records/{record_id}/review',json={
+        'action':'ACCEPTED','expected_version':0}).status_code==200
+    exported=client.get(f'/api/analysis-runs/{rid}/exports/json')
+    assert exported.status_code==200,exported.text
+    payload=exported.json()
+    assert payload['summary']['project']=='本机部署 HTTP 合成验收'
+    assert sum(len(payload[key]) for key in ('materials_and_equipment','inspections_and_tests'))==4
+
 def test_edit_validates_evidence_and_keeps_meta(client,project):
     rid=run_demo(client,project['id'])
     row=client.get(f'/api/analysis-runs/{rid}/records?kind=MATERIAL').json()[0];c=deepcopy(row['record']['candidate'])

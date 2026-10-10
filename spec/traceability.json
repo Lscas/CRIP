@@ -2550,7 +2550,7 @@
         "tests/app/test_gateway_budget.py",
         "tests/app/test_numeric_diagnostics.py"
       ],
-      "test_scope": "offline_claim_status_exact_quote_claim_number_local_decimal_percentage_of_no_retry_and_settled_recovery_contracts_plus_source_text_free_numeric_failure_ordinals_and_literal_occurrence_diagnostics",
+      "test_scope": "offline_claim_status_exact_quote_claim_number_local_decimal_percentage_of_no_retry_and_settled_recovery_contracts_plus_source_text_free_numeric_failure_ordinals_literal_occurrence_diagnostics_compact_single_copy_provider_evidence_and_byte_only_request_preflight",
       "implemented_product_paths": [
         "app/answer_diagnostics.py",
         "app/project_qa_v2.py",

@@ -26,13 +26,13 @@ The bundle reads only `is_source_text=1` Canonical nodes from the effective docu
 
 Each included citation retains its immutable evidence ID, document, file name, page, Canonical path, exact quote, extraction method and source bbox/coordinate system when available. Model-generated vision narration is never promoted to source text. Bundles are bounded to 42,000 UTF-8 bytes, with any one structural block bounded to 12,000 bytes.
 
-The preview response reports `RETRIEVAL_READY` or `INSUFFICIENT`, the effective-source decisions and conflicts, whether region vision is recommended, and `model_called: false`. It is diagnostic evidence, not an answer and not a construction-accuracy claim.
+The preview response reports `RETRIEVAL_READY` or `INSUFFICIENT`, the effective-source decisions and conflicts, whether region vision is recommended, and `model_called: false`. It also reports a byte-only `model_input` preflight: input-contract version, evidence count, source/system/user/request bytes, configured limit and whether the request fits. It never exposes the prompt or adds a second copy of source text. It is diagnostic evidence, not an answer and not a construction-accuracy claim.
 
 ## Claim-bound answer contract
 
 QA V2 returns `ANSWERED`, `PARTIAL` or `INSUFFICIENT`. Its answer is exactly the ordered text of its atomic claims. Each text claim has one to four exact quotes from evidence IDs in the current bundle; a number cannot appear in a text-only claim unless it appears in that claim's quotes or is the result of a validated calculation.
 
-Calculations are accepted only when the question explicitly requests addition, subtraction, multiplication, division or percentage arithmetic. Every operand must occur in cited text and the server recomputes the result with `Decimal`; `PERCENT_OF` requires exactly one cited base and one cited percentage. Unit conversion, rounding, date arithmetic, image arithmetic and geometry inference fail closed. A settled response is revalidated and recovered without another request; prompt, schema, model, inference settings, evidence, source conflicts and image hashes are part of the QA V2 task identity.
+Calculations are accepted only when the question explicitly requests addition, subtraction, multiplication, division or percentage arithmetic. Every operand must occur in cited text and the server recomputes the result with `Decimal`; `PERCENT_OF` requires exactly one cited base and one cited percentage. Unit conversion, rounding, date arithmetic, image arithmetic and geometry inference fail closed. A settled response is revalidated and recovered without another request; prompt, schema, model, inference settings, evidence, source conflicts and image hashes are part of the QA V2 task identity. The provider-facing evidence projection sends only each immutable `evidence_id` and its exact text. File name, page, path, bbox and coordinate system stay in the local evidence rows used by the same validators and by citation enrichment, so they are not repeated hundreds of times in the model request. The projection has an independent version in the durable task identity.
 
 ## Question-time region vision
 
@@ -44,12 +44,12 @@ An `IMAGE_REGION` citation must reproduce the supplied region, document, page an
 
 `scripts/benchmark_qa_v2_retrieval.py` compares legacy retrieval and QA V2 on the same immutable database. It writes only counts and locked answer-atom names and makes zero provider calls. Cutover requires at least 90% overall atom coverage, no critical question below 80%, no regression on the currently complete questions, at least 98% contract-valid replay responses, and at least 12/15 fully usable answers with no unsupported claim.
 
-This task did not read the fixed customer benchmark databases under `.local`. Without an explicitly authorized staging copy outside that boundary, the release gate is not proven, the browser stays on the old endpoint and the old general retrieval remains in place.
+The explicitly authorized 2026-10-09 validation opened the fixed database read-only for preflight and used a disposable clone for live calls. All 15 frozen questions fit the 64,000-byte envelope after the single-copy projection; the largest request was 52,541 bytes. All 15 reached DeepSeek Flash, seven answers passed the complete local contract and eight were safely rejected by that contract; none failed for input size or remained unresolved. This closes the dispatch-size defect, not the formal answer-quality gate. The browser stays on its existing endpoint and the old general retrieval remains in place unless a separate cutover decision changes that scope.
 
 ## Remaining slices
 
-1. Run the fixed no-call retrieval comparison on an explicitly authorized immutable staging database outside `.local`; tune only measured missed structural blocks.
-2. Replay the resulting identical bundles through the approved model matrix. Escalate model/reasoning only for contract or synthesis failures after evidence coverage passes.
-3. Switch the browser after the gates pass, preserve deterministic workflow-index answers, and delete the old general-retrieval branch and prompt after rollback verification.
+1. Diagnose the eight live contract rejections from source-safe diagnostics if answer quality is brought back into release scope; do not weaken the evidence contract to raise the pass count.
+2. Test model/reasoning escalation only against the same frozen evidence inputs when the product owner requests a quality comparison.
+3. Switch the browser only after an explicit cutover decision, preserve deterministic workflow-index answers, and delete the old general-retrieval branch and prompt after rollback verification.
 
 No vector database, new parser, microservice, queue, full semantic knowledge graph or second verification model is required for the remaining slices.

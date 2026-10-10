@@ -21,6 +21,18 @@ _VISUAL_QUESTION=re.compile(
     r'orientation|layout|left|right|above|below|visual|drawing)\b|图上|图纸|位置|哪里|平面|立面|详图|符号|方向')
 _BUILDING_ENTITY=re.compile(
     r'(?i)\b(?:BUILDING|BLDG\.?)\s*(?:NO\.?\s*)?[#:\-]?\s*([A-Z0-9][A-Z0-9._/\-]{0,15})\b')
+_MEASUREMENT=re.compile(
+    r'(?i)(?<![A-Za-z0-9_])(?P<number>[-+]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.\d+)?)\s*'
+    r'(?P<unit>psi|kpa|mpa|feet|foot|ft\.?|inch|inches|in\.?|meters?|metres?|m|mm|cm|ea|each|anchors?|percent|%)'
+    r'(?=$|[^A-Za-z])')
+_CLAUSE_BOUNDARY=re.compile(r'[;\n]+|(?<=[A-Za-z0-9])\.\s+|,\s+(?=(?:building|bldg\.?)\b)',re.I)
+_UNIVERSAL_CONDITION=re.compile(r'(?i)\b(?:all|any|every)\s+(?:condition|case|situation)s?\b|\bregardless\s+of\b')
+_SOURCE_CONDITION=re.compile(r'(?i)\b(?:if|when|provided\s+that|only\s+when|unless|subject\s+to)\b')
+_UNIT_EQUIVALENTS={
+    'feet':'ft','foot':'ft','ft.':'ft','inches':'in','inch':'in','in.':'in',
+    'meters':'m','meter':'m','metres':'m','metre':'m','each':'ea','percent':'%',
+    'anchor':'anchor','anchors':'anchor',
+}
 
 
 def _normalized_text(value:str)->str:return ' '.join(value.split())
@@ -73,6 +85,41 @@ def _explicit_entities(value:str)->set[tuple[str,str]]:
         if len(identifier)==1 or any(char.isdigit() for char in identifier):
             entities.add(('BUILDING',identifier))
     return entities
+
+
+def _measurements(value:str)->set[tuple[Decimal,str]]:
+    result=set()
+    for match in _MEASUREMENT.finditer(value):
+        number=Decimal(match.group('number').replace(',','').lstrip('+'))
+        unit=match.group('unit').casefold()
+        result.add((number,_UNIT_EQUIVALENTS.get(unit,unit.rstrip('.'))))
+    return result
+
+
+def _validate_claim_relations(claim:dict,question:str,calculated:set[Decimal])->None:
+    """Require object, measurement and condition facts to coexist in one cited clause."""
+    text=claim.get('text','')
+    measurements={item for item in _measurements(text) if item[0] not in calculated}
+    if not measurements:return
+    claim_entities=_explicit_entities(text);question_entities=_explicit_entities(question)
+    targets=claim_entities or (question_entities if len(question_entities)==1 else set())
+    quotes=[citation.get('quote') for citation in claim.get('citations',[])
+            if citation.get('type')=='TEXT' and isinstance(citation.get('quote'),str)]
+    if not quotes:return
+    clauses=[clause for quote in quotes for clause in _CLAUSE_BOUNDARY.split(quote) if clause.strip()]
+    matching=[clause for clause in clauses
+              if (measurements.issubset(_measurements(clause))
+                  and (not targets or targets.issubset(_explicit_entities(clause))))]
+    if not matching:
+        raise ValueError('QA V2 claim object, number and unit are not bound in one cited source clause')
+    conditional=[clause[match.start():].strip(' .;') for clause in matching
+                 if (match:=_SOURCE_CONDITION.search(clause))]
+    if conditional and len(conditional)==len(matching):
+        normalized_claim=_normalized_text(text).casefold().strip(' .;')
+        if (_UNIVERSAL_CONDITION.search(text)
+                or not any(_normalized_text(value).casefold() in normalized_claim
+                           for value in conditional)):
+            raise ValueError('QA V2 claim removes a cited source condition')
 
 
 def _validate_explicit_entity_scope(data:dict,question:str)->None:
@@ -207,6 +254,7 @@ def validate_answer_v2(data:dict,evidence_rows:list[dict],question:str,
                                     claim['citations'],[source['raw_text'] for kind,source in checked
                                                         if kind=='TEXT'],
                                     evidence_rows,number))
+        _validate_claim_relations(claim,question,calculated)
 
 
 def _evidence_rows(bundle:EvidenceBundle)->list[dict]:
@@ -291,13 +339,17 @@ class ProjectQAV2:
     def preview(self,run:dict,question:str)->dict:
         if run['status'] not in ('PARTIAL','COMPLETED'):
             raise DomainError('QA V2 is available only for a completed or partial saved analysis.',409)
-        bundle=build_evidence_bundle(self.db,run,question)
-        return {
+        bundle=build_evidence_bundle(self.db,run,question);rows=_evidence_rows(bundle)
+        result={
             'qa_version':'2','status':'RETRIEVAL_READY' if bundle.blocks else 'INSUFFICIENT',
             'answer_basis':'QA_V2_EVIDENCE_BUNDLE','model_called':False,
             'visual_recommended':_needs_visual(question,bundle),
             'evidence_bundle':bundle.public(),
         }
+        if self.gateway is not None:
+            result['model_input']=self.gateway.answer_v2_input_summary(
+                question,rows,list(bundle.source_set.conflicts))
+        return result
 
     def ask(self,run:dict,question:str)->dict:
         if run['status'] not in ('PARTIAL','COMPLETED'):

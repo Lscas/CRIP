@@ -206,6 +206,7 @@ def test_dependency_children_do_not_inherit_secrets(monkeypatch,tmp_path):
     monkeypatch.setattr(local_deploy.subprocess,'run',run)
     assert local_deploy.dependency_probe(Path(sys.executable),tmp_path)
     assert seen[0]['UNRELATED_SETTING']=='kept'
+    assert seen[0]['PYTHONUTF8']=='1'
     assert 'CIRP_API_KEY' not in seen[0] and 'ANOTHER_SECRET' not in seen[0]
 
 

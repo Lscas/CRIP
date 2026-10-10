@@ -367,11 +367,6 @@ class VerificationService:
         first=self.db.one('SELECT run_id FROM records WHERE id=?',(record_ids[0],))
         prior=self.db.one("SELECT id FROM model_calls WHERE run_id=? AND task_key LIKE 'verify:%' LIMIT 1",
                           (first['run_id'],),False)
-        if allow_model and prior:
-            # A resumed run may have committed an older per-record response just before interruption.
-            # Preserve that exact recovery key instead of regrouping and risking a second paid call.
-            return {record_id:self.refresh(record_id,allow_model=True) for record_id in record_ids}
-
         reports={record_id:self.refresh(record_id,allow_model=False) for record_id in record_ids}
         if not allow_model or self.s.provider=='mock':return reports
         contexts={};run_ids=set();groups={}
@@ -382,6 +377,24 @@ class VerificationService:
                     groups.setdefault(tuple(sorted(item['evidence_ids'])),[]).append((record_id,item))
         if len(run_ids)!=1:raise DomainError('批量核验必须属于同一运行')
         run=self.db.one('SELECT * FROM runs WHERE id=?',(run_ids.pop(),))
+        planned=[]
+        identity=getattr(self.gateway,'verification_task_family',None)
+        if allow_model and prior and identity is not None:
+            for evidence_ids,entries in sorted(groups.items()):
+                entries.sort(key=lambda pair:(pair[1]['path'],pair[0]))
+                for offset in range(0,len(entries),MAX_BATCH_FIELDS):
+                    chunk=entries[offset:offset+MAX_BATCH_FIELDS];wire=[];bundle={}
+                    for number,(record_id,item) in enumerate(chunk):
+                        sent=deepcopy(item);sent['path']=f'/batch/{number}';wire.append(sent)
+                        bundle.update({eid:contexts[record_id][2][eid] for eid in evidence_ids})
+                    planned.append(identity(run,wire,bundle)[0])
+            batch_resume=any(self.db.one(
+                "SELECT id FROM model_calls WHERE run_id=? AND (task_key=? OR task_key LIKE ?) LIMIT 1",
+                (run['id'],family,family+':%'),False) for family in planned)
+            if not batch_resume:
+                # Calls created before batched verification used the original field paths.
+                # Preserve those paid identities instead of silently regrouping them.
+                return {record_id:self.refresh(record_id,allow_model=True) for record_id in record_ids}
         for evidence_ids,entries in sorted(groups.items()):
             entries.sort(key=lambda pair:(pair[1]['path'],pair[0]))
             for offset in range(0,len(entries),MAX_BATCH_FIELDS):

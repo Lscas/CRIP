@@ -132,7 +132,7 @@ def configured_settings(
         min_request_interval_seconds=interval,
     )
     key = local_candidate.api_key
-    if not key and not local_candidate.is_local_model() and remember_enabled(current.data_dir, provider_id):
+    if not key and remember_enabled(current.data_dir, provider_id):
         try:
             key = load_api_key(current.data_dir, provider_id) or ""
         except LocalCredentialError as exc:
@@ -186,11 +186,11 @@ def _atomic_json(path: Path, value: dict) -> None:
 
 
 def save_active_configuration(settings: Settings) -> None:
-    """Persist only non-secret profile data; remote keys remain DPAPI encrypted."""
+    """Persist only non-secret profile data; supplied keys remain DPAPI encrypted."""
     if settings.provider == "mock":
         clear_active_configuration(settings.data_dir)
         return
-    if not settings.is_local_model():
+    if settings.api_key:
         enable_remember(settings.data_dir, settings.provider)
         save_api_key(settings.data_dir, settings.provider, settings.api_key)
     value = {

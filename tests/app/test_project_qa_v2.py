@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from decimal import Decimal
 import io
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 from PIL import Image
 
 from app.canonical import CanonicalGraph
-from app.db import CallSafetyError
+from app.db import CallSafetyError,dumps
 from app.evidence_bundle import build_evidence_bundle,effective_source_set
 from app.gateway import Gateway
 from app.project_qa_v2 import ProjectQAV2,validate_answer_v2
@@ -163,6 +164,9 @@ def test_preview_endpoint_is_independent_and_makes_no_model_call(client,project,
     assert body['qa_version']=='2' and body['status']=='RETRIEVAL_READY'
     assert body['answer_basis']=='QA_V2_EVIDENCE_BUNDLE' and body['model_called'] is False
     assert body['evidence_bundle']['blocks']
+    assert body['model_input']['input_version']=='qa-v2-model-input-2'
+    assert body['model_input']['request_fits'] is True
+    assert body['model_input']['request_upper_bound_bytes']<=body['model_input']['request_limit_bytes']
 
 
 def test_claim_contract_binds_answer_to_exact_quotes_and_numbers():
@@ -209,6 +213,71 @@ def test_claim_contract_rejects_explicit_wrong_building_without_inference():
 
     # Generic prose is deliberately outside this narrow guard; no semantic entity is inferred.
     validate_answer_v2(correct,evidence,'What is the construction type?')
+
+
+def _one_claim(text,quote,evidence_id='EV-RELATION'):
+    citation={'type':'TEXT','evidence_id':evidence_id,'quote':quote}
+    return {'status':'ANSWERED','answer':text,'claims':[{'text':text,'citations':[citation]}],
+            'missing':[],'calculations':[]}
+
+
+def test_claim_contract_binds_object_unit_and_condition_in_one_source_clause():
+    object_quote='Building A: 100 psi; Building B: 200 psi.'
+    object_evidence=[{'evidence_id':'EV-RELATION','raw_text':object_quote}]
+    validate_answer_v2(_one_claim('Building A requires 100 psi.',object_quote),object_evidence,
+                       'What pressure applies to Building A?')
+    with pytest.raises(ValueError,match='object, number and unit'):
+        validate_answer_v2(_one_claim('Building A requires 200 psi.',object_quote),object_evidence,
+                           'What pressure applies to Building A?')
+
+    unit_quote='The cable length is 10 feet.'
+    unit_evidence=[{'evidence_id':'EV-RELATION','raw_text':unit_quote}]
+    validate_answer_v2(_one_claim('The cable length is 10 ft.',unit_quote),unit_evidence,
+                       'What is the cable length?')
+    with pytest.raises(ValueError,match='object, number and unit'):
+        validate_answer_v2(_one_claim('The cable length is 10 meters.',unit_quote),unit_evidence,
+                           'What is the cable length?')
+
+    condition_quote='Use 2 anchors when the support is adequate.'
+    condition_evidence=[{'evidence_id':'EV-RELATION','raw_text':condition_quote}]
+    validate_answer_v2(_one_claim('Use 2 anchors when the support is adequate.',condition_quote),
+                       condition_evidence,'How many anchors are required?')
+    for wrong in ('Use 2 anchors under all conditions.','Use 2 anchors.'):
+        with pytest.raises(ValueError,match='removes a cited source condition'):
+            validate_answer_v2(_one_claim(wrong,condition_quote),
+                               condition_evidence,'How many anchors are required?')
+
+
+@pytest.mark.parametrize(('claim','expected_status','ledger_state'),[
+    ('Building A requires 200 psi.',400,'SETTLED_ERROR'),
+    ('Building A requires 100 psi.',200,'SETTLED'),
+])
+def test_questions_v2_endpoint_enforces_object_value_binding(
+        client,project,claim,expected_status,ledger_state):
+    quote='Building A: 100 psi; Building B: 200 psi.'
+    db,run,_=_qa_fixture(client,project,[
+        {'name':'pressure-schedule.pdf','date':'2025-01-01','revision':'A',
+         'fragments':[{'text':quote}]},
+    ])
+    response_data=_one_claim(claim,quote,'EV-QA2-1-1')
+    gateway=client.app.state.gateway
+    gateway.s=replace(gateway.s,provider='deepseek',cheap_model='deepseek-flash',
+                      live_enabled=True,api_key='synthetic-key',vision_enabled=False)
+    gateway.client.close()
+    gateway.client=httpx.Client(transport=httpx.MockTransport(lambda _request:httpx.Response(
+        200,json={'id':'qa-v2-binding','choices':[{'finish_reason':'stop','message':{
+            'content':json.dumps(response_data)}}],
+            'usage':{'prompt_tokens':100,'completion_tokens':25,'total_tokens':125}})))
+
+    response=client.post(f"/api/projects/{project['id']}/questions-v2",json={
+        'run_id':run['id'],'question':'What pressure applies to Building A?'})
+    assert response.status_code==expected_status,response.text
+    if expected_status==200:
+        assert response.json()['status']=='ANSWERED'
+    else:
+        assert 'failed its claim and evidence contract' in response.json()['detail']
+    call=db.one("SELECT state FROM model_calls WHERE task_key LIKE 'answer-v2:%'")
+    assert call['state']==ledger_state
 
 
 def test_claim_contract_recomputes_explicit_decimal_calculation():
@@ -280,8 +349,58 @@ def test_live_v2_answer_uses_new_prompt_contract_and_recovers_without_second_cal
     assert recovered['model_called'] is False and len(requests)==1
     assert 'waterproofing admixture' not in requests[0]['messages'][0]['content'].lower()
     assert 'waterproofing admixture' in requests[0]['messages'][1]['content'].lower()
+    sent_evidence=json.loads(requests[0]['messages'][1]['content'])['evidence']
+    assert set(sent_evidence[0])=={'evidence_id','text'}
     call=db.one("SELECT task_key,state FROM model_calls WHERE task_key LIKE 'answer-v2:%'")
     assert call['state']=='SETTLED'
+    gateway.close()
+
+
+def test_v2_large_pdf_bundle_drops_repeated_local_metadata_and_reaches_http(client,project,tmp_path):
+    db,run,_=_qa_fixture(client,project,[
+        {'name':'large-drawing-set.pdf','date':'2025-01-01','revision':'A',
+         'fragments':[{'text':'Alpha source statement 000.'}]},
+    ])
+    quote='Alpha source statement '+('X'*200)
+    evidence=[{
+        'evidence_id':f'EV-LARGE-{index:03d}','document_id':'DOC-LARGE',
+        'file_name':'large-drawing-set-with-a-repeated-long-name-rev-A.pdf',
+        'raw_text':quote,'prompt_text':quote,
+        'locator':{'page_number':index+1,'path':'Sheet A101 > repeated detail path',
+                   'bbox':[10.0,20.0,300.0,60.0],'coordinate_system':'pdf-points'},
+    } for index in range(176)]
+    response_data={'status':'ANSWERED','answer':'Alpha is present.',
+                   'claims':[{'text':'Alpha is present.','citations':[{
+                       'type':'TEXT','evidence_id':'EV-LARGE-000','quote':quote}]}],
+                   'missing':[],'calculations':[]}
+    requests=[]
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200,json={
+            'id':'qa-v2-large','choices':[{'finish_reason':'stop','message':{
+                'content':json.dumps(response_data)}}],
+            'usage':{'prompt_tokens':500,'completion_tokens':25,'total_tokens':525}})
+    settings=Settings(tmp_path/'qa-v2-large',provider='deepseek',api_key='synthetic-key',
+                      live_enabled=True)
+    gateway=Gateway(settings,db,httpx.Client(transport=httpx.MockTransport(handler)))
+    legacy_content={
+        'question':'Is Alpha present?','effective_source_conflicts':[],
+        'required_missing':[],'visual_regions':[],
+        'evidence':[{'evidence_id':item['evidence_id'],'file_name':item['file_name'],
+                     'locator':item['locator'],'text':item['prompt_text']} for item in evidence],
+    }
+    legacy_upper=(len((gateway.answer_v2_prompt+'\nJSON Schema:\n'+
+                       dumps(gateway.answer_v2_schema)).encode('utf-8'))+
+                  len(dumps(legacy_content).encode('utf-8'))+256)
+    summary=gateway.answer_v2_input_summary('Is Alpha present?',evidence,[])
+
+    result=gateway.answer_v2(run,'Is Alpha present?',evidence,[])
+
+    assert legacy_upper>64_000
+    assert summary['request_fits'] is True and summary['request_upper_bound_bytes']<64_000
+    assert result.data['status']=='ANSWERED' and len(requests)==1
+    sent=json.loads(requests[0]['messages'][1]['content'])['evidence']
+    assert len(sent)==176 and all(set(item)=={'evidence_id','text'} for item in sent)
     gateway.close()
 
 

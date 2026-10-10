@@ -58,6 +58,22 @@ def _channel(client, decision):
     return calls
 
 
+def _raw_channel(client, response_body):
+    gateway = client.app.state.gateway
+    gateway.s = replace(
+        gateway.s, provider='deepseek', api_base_url=DEEPSEEK_BASE_URL,
+        api_key='synthetic-key', live_enabled=True, cheap_model='deepseek-flash',
+        vision_enabled=False, structured_output_mode='json_object',
+        api_protocol='chat_completions')
+    calls=[]
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200,json=response_body)
+    gateway.client.close()
+    gateway.client=httpx.Client(transport=httpx.MockTransport(handler))
+    return calls
+
+
 def _create_v9(client, project, run, profile_id='FLASH_NONE', *, question=None):
     return client.app.state.reference_evaluations.create(
         project['id'], run['id'], 'Frozen v9 layout evaluation',
@@ -185,3 +201,55 @@ def test_v9_safe_failure_replays_and_cannot_attach_to_v8_evaluation(client, proj
     with pytest.raises(DomainError, match='selector'):
         client.app.state.reference_evaluations.fail(
             v8['evaluation_id'], v8_item['item_id'], 'MODEL_OUTPUT_REJECTED', receipt)
+
+
+@pytest.mark.parametrize('malformed',[
+    {'choices':[None]},
+    {'choices':[{'finish_reason':'stop','message':None}]},
+    {'choices':[{'finish_reason':'stop','message':{'content':'{}'}}],
+     'completion_tokens_details':[]},
+])
+def test_v9_trusted_usage_malformed_envelope_is_terminal_and_replays(client,project,malformed):
+    """Trusted billing plus a bad envelope is a saved business failure, never a retry."""
+    db,run,_=_v9_run(client,project)
+    usage={'prompt_tokens':100,'completion_tokens':30,'total_tokens':130}
+    if 'completion_tokens_details' in malformed:
+        usage['completion_tokens_details']=malformed['completion_tokens_details']
+    response={'id':'synthetic-malformed-envelope','usage':usage,
+              'choices':malformed['choices']}
+    calls=_raw_channel(client,response)
+    evaluation=_create_v9(client,project,run)
+
+    failed=_execute(client,evaluation)
+    assert failed['result'] is None and failed['failure']['code']=='MODEL_OUTPUT_REJECTED'
+    ledger=db.one('SELECT state,error,actual_units FROM model_calls WHERE run_id=?',(run['id'],))
+    assert ledger['state']=='SETTLED_ERROR' and ledger['actual_units'] is not None
+    assert json.loads(ledger['error'])['class']=='PROJECT_EVIDENCE_DECISION'
+    assert db.one('SELECT COUNT(*) AS n FROM reference_evaluation_failures')['n']==1
+
+    replay=_execute(client,evaluation)
+    assert (replay['replayed'] is True
+            and replay['failure']['failure_id']==failed['failure']['failure_id'])
+    assert len(calls)==1
+
+
+def test_v9_missing_usage_stays_unresolved_and_does_not_publish_failure(client,project):
+    db,run,_=_v9_run(client,project)
+    calls=_raw_channel(client,{
+        'id':'synthetic-missing-usage',
+        'choices':[{'finish_reason':'stop','message':{'content':json.dumps(_cannot_answer())}}],
+    })
+    evaluation=_create_v9(client,project,run);item=evaluation['items'][0]
+    url=(f"/api/reference-evaluations/{evaluation['evaluation_id']}"
+         f"/items/{item['item_id']}/execute")
+
+    first=client.post(url)
+    assert first.status_code==409 and 'usage' in first.text
+    ledger=db.one('SELECT state,actual_units,error FROM model_calls WHERE run_id=?',(run['id'],))
+    assert ledger['state']=='UNKNOWN' and ledger['actual_units'] is None
+    assert json.loads(ledger['error'])=={'kind':'INVALID_RESPONSE','class':'MISSING_USAGE'}
+    assert db.one('SELECT COUNT(*) AS n FROM reference_evaluation_failures')['n']==0
+    assert client.app.state.reference_evaluations.get(evaluation['evaluation_id'])['items'][0]['state']=='PENDING'
+
+    second=client.post(url)
+    assert second.status_code==409 and len(calls)==1

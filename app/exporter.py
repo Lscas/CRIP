@@ -624,8 +624,9 @@ def _translate_display(value, path=()):
         return [_translate_display(item, path + (index,)) for index, item in enumerate(value)]
     if isinstance(value, str):
         is_evidence_text = bool(path and path[-1] in {'text', 'evidence_text'})
-        translated = value if is_evidence_text else translations.get(value, value)
-        if not is_evidence_text and _CJK.search(translated):
+        is_project_identity = path == ('summary', 'project')
+        translated = value if is_evidence_text or is_project_identity else translations.get(value, value)
+        if not is_evidence_text and not is_project_identity and _CJK.search(translated):
             field_path = '/'.join(str(part) for part in path)
             raise ValueError(
                 'English export cache is incomplete for saved legacy text. '
@@ -756,8 +757,10 @@ def _focused_source_text(evidence: dict, record: dict | None = None) -> str:
         position=lowered.find(needle.casefold())
         if position>=0:
             start=max(0,position-120);end=min(len(text),position+len(needle)+360)
-            boundary=max(text.rfind('. ',start,position),text.rfind('; ',start,position),text.rfind('\n',start,position))
-            if boundary>=start:start=boundary+2
+            boundaries=[(text.rfind('. ',start,position),2),(text.rfind('; ',start,position),2),
+                        (text.rfind('\n',start,position),1)]
+            boundary,length=max(boundaries,key=lambda item:item[0])
+            if boundary>=start:start=boundary+length
             stops=[value for value in (text.find('. ',position+len(needle),end),
                                        text.find('; ',position+len(needle),end)) if value>=0]
             if stops:end=min(stops)+1
@@ -891,7 +894,8 @@ def _material_item(data: dict, record: dict, evidence_index: dict) -> dict:
     report = data.get('verifications', {}).get(record.get('meta', {}).get('record_id'), {})
     name,location = _reviewer_material_name(candidate,report)
     if not reviewer_record_is_visible(record,report):return None
-    if quantity is not None:
+    human_status=(record.get('review') or {}).get('status')
+    if quantity is not None and human_status not in ('ACCEPTED','EDITED'):
         name, minimum = _separate_name_quantity(
             name, quantity, unit, allow_bare=not isinstance(candidate.get('quantity'), dict)
         )

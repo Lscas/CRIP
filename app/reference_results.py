@@ -637,14 +637,19 @@ class ReferenceResultStore:
             'status','answer','claims','missing','calculations','answer_basis','model_called',
             'model_call_count','retrieved_count','execution_receipts') if key in result}
 
-    def _public(self,row:dict,detail:bool)->dict:
+    def _public(self,row:dict,detail:bool,connection=None)->dict:
         if row.get('result_kind')==PROJECTION_RESULT_KIND:
             return self._public_projection(row,detail)
         result=require_legacy_result(row)
         citations=[]
-        for item in self.db.all('''SELECT ordinal,claim_index,citation_index,citation_json
-                                   FROM reference_result_citations WHERE result_id=?
-                                   ORDER BY ordinal''',(row['id'],)):
+        citation_rows=(connection.execute('''SELECT ordinal,claim_index,citation_index,citation_json
+                                             FROM reference_result_citations WHERE result_id=?
+                                             ORDER BY ordinal''',(row['id'],)).fetchall()
+                       if connection is not None else self.db.all(
+                           '''SELECT ordinal,claim_index,citation_index,citation_json
+                              FROM reference_result_citations WHERE result_id=?
+                              ORDER BY ordinal''',(row['id'],)))
+        for item in citation_rows:
             citations.append({'ordinal':item['ordinal'],'claim_index':item['claim_index'],
                               'citation_index':item['citation_index'],
                               'citation':json.loads(item['citation_json'])})
@@ -697,29 +702,38 @@ class ReferenceResultStore:
 
     def export(self,project_id:str,run_id:str|None=None,
                review_status:str|None=None)->dict:
-        project=self.db.one('SELECT id,name FROM projects WHERE id=?',(project_id,))
-        where='project_id=?';args:list=[project_id]
-        if run_id is not None:
-            self._reference_run(project_id,run_id);where+=' AND run_id=?';args.append(run_id)
-        if review_status is not None:
-            if review_status not in ('PENDING','ACCEPTED','REJECTED','NOT_APPLICABLE'):
-                raise DomainError('Reference export review status is invalid.')
-            where+=' AND review_status=?';args.append(review_status)
-        count=self.db.one(f'SELECT COUNT(*) AS n FROM reference_results WHERE {where}',
-                          tuple(args))['n']
-        if count>MAX_EXPORT_RESULTS:
-            raise DomainError(
-                f'Reference export exceeds the {MAX_EXPORT_RESULTS}-result bound; filter by run or review status.',409)
-        rows=self.db.all(f'''SELECT * FROM reference_results WHERE {where}
-                             ORDER BY created_at,rowid''',tuple(args))
-        items=[];used=0
-        for row in rows:
-            result=self._public(row,True)
-            result['review_history']=self._history(row['id'])
-            used+=len(dumps(result).encode('utf-8'))
-            if used>MAX_EXPORT_BYTES:
-                raise DomainError('Reference export exceeds the 64 MiB output bound; filter by run.',409)
-            items.append(result)
+        with self.db.connect() as connection:
+            connection.execute('BEGIN')
+            project_row=connection.execute('SELECT id,name FROM projects WHERE id=?',(project_id,)).fetchone()
+            if project_row is None:raise DomainError('Project was not found.',404)
+            project=dict(project_row);where='project_id=?';args:list=[project_id]
+            if run_id is not None:
+                run_row=connection.execute('''SELECT id,project_id,snapshot_id,status,created_at,capabilities
+                                              FROM runs WHERE id=?''',(run_id,)).fetchone()
+                if run_row is None or run_row['project_id']!=project_id:
+                    raise DomainError('Reference result run is outside this project.',404)
+                if self._analysis_mode(dict(run_row))!='REFERENCE_QA':
+                    raise DomainError('Reference result operations require a REFERENCE_QA run.',409)
+                where+=' AND run_id=?';args.append(run_id)
+            if review_status is not None:
+                if review_status not in ('PENDING','ACCEPTED','REJECTED','NOT_APPLICABLE'):
+                    raise DomainError('Reference export review status is invalid.')
+                where+=' AND review_status=?';args.append(review_status)
+            count=connection.execute(
+                f'SELECT COUNT(*) AS n FROM reference_results WHERE {where}',tuple(args)).fetchone()['n']
+            if count>MAX_EXPORT_RESULTS:
+                raise DomainError(
+                    f'Reference export exceeds the {MAX_EXPORT_RESULTS}-result bound; filter by run or review status.',409)
+            rows=connection.execute(f'''SELECT * FROM reference_results WHERE {where}
+                                        ORDER BY created_at,rowid''',tuple(args)).fetchall()
+            items=[];used=0
+            for raw_row in rows:
+                row=dict(raw_row);result=self._public(row,True,connection)
+                result['review_history']=self._history(row['id'],connection)
+                used+=len(dumps(result).encode('utf-8'))
+                if used>MAX_EXPORT_BYTES:
+                    raise DomainError('Reference export exceeds the 64 MiB output bound; filter by run.',409)
+                items.append(result)
         value={
             'export_version':'reference-results-json-1','exported_at':now(),
             'project':project,'filters':{'run_id':run_id,'review_status':review_status},
@@ -860,11 +874,17 @@ class ReferenceResultStore:
         require_legacy_result(row)
         return self._history(result_id)
 
-    def _history(self,result_id:str)->list[dict]:
+    def _history(self,result_id:str,connection=None)->list[dict]:
         result=[]
-        for row in self.db.all('''SELECT id,result_id,actor,action,before_json,after_json,
-                                  note,created_at FROM reference_result_review_events
-                                  WHERE result_id=? ORDER BY created_at,id''',(result_id,)):
+        rows=(connection.execute('''SELECT id,result_id,actor,action,before_json,after_json,
+                                    note,created_at FROM reference_result_review_events
+                                    WHERE result_id=? ORDER BY created_at,id''',(result_id,)).fetchall()
+              if connection is not None else self.db.all(
+                  '''SELECT id,result_id,actor,action,before_json,after_json,
+                     note,created_at FROM reference_result_review_events
+                     WHERE result_id=? ORDER BY created_at,id''',(result_id,)))
+        for raw_row in rows:
+            row=dict(raw_row)
             before=json.loads(row.pop('before_json'));after=json.loads(row.pop('after_json'))
             result.append({**row,'before':before,'after':after})
         return result
