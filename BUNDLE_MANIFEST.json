@@ -52,8 +52,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 125913,
-      "sha256": "48ade954d1c554d4f968c95d233bc2cbd8c684c94e50fbb69c8207107f90fd95"
+      "bytes": 126046,
+      "sha256": "a160e2cf5bafbc6b9e999d48dd5ca3d331712599f4721d88fe0b993a62478eca"
     },
     {
       "path": "README.md",
@@ -1427,8 +1427,8 @@
     },
     {
       "path": "docs/DEV_STATE.md",
-      "bytes": 117907,
-      "sha256": "b80e80f5675cabd8efd3077d55ac5313b92cbe9e077187b3e7e74ae17114ed23"
+      "bytes": 118096,
+      "sha256": "4061671c8a399f000529a17aae1f9d8db71705d67122e4b9cac2c8c43671a075"
     },
     {
       "path": "docs/EVIDENCE_LOOP_V3.md",
@@ -2077,8 +2077,8 @@
     },
     {
       "path": "reports/pre_release_go_no_go_2026-10-09.md",
-      "bytes": 6397,
-      "sha256": "1c0011539cf63d807a7028a0c3b5a1ed3bb029f5b9929fe3d1b280945b2d7b03"
+      "bytes": 6527,
+      "sha256": "f4557cd6dd5c9d0ace7ebd6fe5e516dcd3d382f03b11398ed07aace5381cb96e"
     },
     {
       "path": "reports/pytest-v0.2.1.xml",
@@ -2102,8 +2102,8 @@
     },
     {
       "path": "reports/qa_v2_pdf_envelope_validation_2026-10-09.md",
-      "bytes": 4602,
-      "sha256": "7cfa18b5cf19d7d477e785513fa5206f2768e4522b7e0d299c6d23efe96eb4df"
+      "bytes": 5010,
+      "sha256": "eef8a1d48f5200c3a17e1faf00833e9454142675824646aa0df01367d9da8aed"
     },
     {
       "path": "reports/render-deployment-status.json",

@@ -21,7 +21,7 @@ Date: 2026-10-09 Hawaii time
 | Real QA V2 provider dispatch | PASS for transport/settlement | DeepSeek Flash reached 15/15; 7 contract-valid and 8 safely rejected; zero size rejections and zero unresolved calls; no quality claim |
 | Fresh Windows dependency install | RED then PASS | CP936 failed to decode the UTF-8 requirements comment; forced UTF-8 child mode fixed it, then clean `.venv`, dependency check and loopback startup smoke passed |
 | Bundle manifest | PASS | 836 current source files; runtime, databases, credentials and ignored local live results excluded |
-| Full repository gate | PASS on replacement run | 2,915 unique Python tests completed with exit 0; 24 language tests, 11 deployment tests, 160 requirements / 37 schemas and the 836-file manifest passed. An earlier current-source attempt failed only because DEV-176 marked paid calls generally allowed; that governance failure is retained and is not counted as a pass. |
+| Full repository gate | PASS locally and remotely | The Windows replacement run passed 2,915 unique Python tests plus 24 language, 11 deployment, 160 requirements / 37 schemas and the 836-file manifest. The LF generator regression raises the current suite to 2,916; a fresh Git archive passed its manifest and 37 governance/devtool checks, and GitHub's full Ubuntu gate passed `a32d2d3`. The earlier task-permission governance failure and the first remote CRLF/LF manifest failure remain retained. |
 
 ## Release status after owner scoping
 
