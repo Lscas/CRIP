@@ -1,5 +1,7 @@
 # 当前开发状态：v0.2.6 / evidence-verification
 
+2026-10-10 分支全历史治理命令恢复可执行（DEV-178）：发布最终复核发现`check_changes.py --base spec-v0.2.0`会拒绝CR-0190/0191中五条描述性测试标签，尽管其对应的F1-F13 Python/Node、主Chrome、v9 Chrome、loopback HTTP和导出回归均已存在并实际通过。现仅将五条标签替换为准确的现有脚本/测试路径，不改变产品、需求、测试实现或历史结果。最终发布包必须改由本治理提交重新生成，并以该提交的新远端CI为准。
+
 2026-10-10 最终源码包准备发现并修复可选浏览器依赖的CP936阻塞（DEV-177）：从远端绿灯提交生成的全新archive在主依赖安装、环境检查和真实loopback HTTP烟测通过后，直接执行`pip install -r requirements-browser.txt`因中文注释按CP936解码而失败。现将三个受控requirements清单统一为ASCII安全文本并新增全量回归；保留启动器现有UTF-8子进程保护。CP936下直接安装开发清单、解析浏览器清单及新增回归通过；替换全仓2,917项Python、24项界面语言、11项部署入口和160需求/37Schema通过。旧`200dee7`压缩包不得发布，必须在新提交远端CI、全新archive安装及真实Chrome复验全部通过后重新生成。无产品行为、模型路由、客户数据或付费调用变更；DPAPI、客户迁移及答案质量仍按用户决定延期。最终archive身份、SHA-256和全新解压验证记录保存在发布包外部sidecar中，避免摘要自引用。
 
 2026-10-09 PDF问答请求包络与首次安装阻塞已关闭（DEV-176）：QA V2发送侧只保留每条不可变Evidence ID及一次精确原文，重复文件名/页码/路径/bbox/坐标留在本地校验与引用回填；preview新增不含Prompt/原文的字节预检，付费任务身份升级。相同只读Kapolei固定15题全部低于64KB，最大52,541字节；隔离克隆上的真实DeepSeek Flash 15/15到达供应商，7项通过完整合同、8项安全拒绝、0输入超限、0未决调用。按用户决定，答案质量不作为本次发布阻塞但必须保留人工复核限制；DPAPI与客户库迁移暂缓。首次Windows安装复现CP936读取UTF-8依赖表失败后，启动器为无密钥子进程强制UTF-8，同一全新`.venv`安装、依赖检查及真实loopback HTTP烟测通过。Windows替换门禁2,915项唯一Python、24项语言、11项部署边界、160需求/37Schema及836文件清单通过；首轮DEV-176许可治理失败保留。首次GitHub门禁又暴露Windows生成的需求表CRLF在Git提交后变LF并破坏清单哈希；从提交archive精确复现后固定LF写入并新增回归，当前总节点2,916，fresh archive清单及37项治理/devtool通过，GitHub完整Ubuntu门禁在`a32d2d3`通过。原运行库未改变，临时库/加密凭据副本已删除；证据见`reports/qa_v2_pdf_envelope_validation_2026-10-09.md`。

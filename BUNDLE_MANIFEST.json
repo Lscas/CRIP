@@ -3,7 +3,7 @@
   "artifact": "cirp-prototype-source",
   "not_application": false,
   "maturity": "local_live_partial",
-  "file_count_excluding_manifest": 838,
+  "file_count_excluding_manifest": 840,
   "files": [
     {
       "path": ".codex/config.toml",
@@ -52,8 +52,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 126524,
-      "sha256": "f111370c42d4bfa074f1ec0568d5166ae2f3c3880dda12f58361faeb572140c3"
+      "bytes": 126856,
+      "sha256": "2b0afb35806174a5330f27eb65aed199f387258f38420c6b99259e44a66c21e0"
     },
     {
       "path": "README.md",
@@ -1327,13 +1327,13 @@
     },
     {
       "path": "changes/CR-0190.json",
-      "bytes": 2170,
-      "sha256": "586a146e70fdcef2a24c49e0b250ebb8076a5c05eb0789cc3e8254a78727dfed"
+      "bytes": 2712,
+      "sha256": "5a6c9cd51407ca53ec77756f4a34e4517a0d8361d216518c13d0f9461c04009e"
     },
     {
       "path": "changes/CR-0191.json",
-      "bytes": 1559,
-      "sha256": "fe738d70aeaf207f31fb353646402c36e0a5bf90bacb1ceb58986cdedcabc21b"
+      "bytes": 1502,
+      "sha256": "f992a52ba4a8f0673e1973116c2273b70523a3d29f1af4f0b6b9598eefe44f2d"
     },
     {
       "path": "changes/CR-0192.json",
@@ -1344,6 +1344,11 @@
       "path": "changes/CR-0193.json",
       "bytes": 1584,
       "sha256": "7491a7c226cc40d57fd87a45badcecebf2c889ba3270657a03b2ed0d0ebef578"
+    },
+    {
+      "path": "changes/CR-0194.json",
+      "bytes": 1177,
+      "sha256": "8b70639c2965f2aade938b42c9f5607c87fa1c2c60499b84b08915de95f4ebdd"
     },
     {
       "path": "config/assembly_rules.json",
@@ -1432,8 +1437,8 @@
     },
     {
       "path": "docs/DEV_STATE.md",
-      "bytes": 119095,
-      "sha256": "478237eb9ec9c8fc0a8e864701432c91bd872401a2636def1e0ee2128786b8e8"
+      "bytes": 119621,
+      "sha256": "a1b87298e157534436556cbe9267f476c75c8c63599103b0de9bb15165dfe347"
     },
     {
       "path": "docs/EVIDENCE_LOOP_V3.md",
@@ -3499,6 +3504,11 @@
       "path": "tasks/DEV-177.json",
       "bytes": 1657,
       "sha256": "d443f71a1f2ffb8bbca5047edb47c31e157832b8779c77f7dc5b448f992565ff"
+    },
+    {
+      "path": "tasks/DEV-178.json",
+      "bytes": 1185,
+      "sha256": "d80d9cec447373f0955e1c0ffe7bf7306d7ac3a9195832364906e5f0ae78b77f"
     },
     {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",

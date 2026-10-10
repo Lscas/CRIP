@@ -1,0 +1,15 @@
+{
+  "task_id": "DEV-178",
+  "title": "Restore executable branch-wide release governance records",
+  "status": "DONE",
+  "objective": "Replace five prose-only test declarations in CR-0190 and CR-0191 with the exact existing repository commands or paths they describe so the required branch-wide change check can validate every record.",
+  "requirement_ids": ["NFR-RELIABILITY-001"],
+  "max_output_tokens": 6000,
+  "paid_calls_allowed": false,
+  "approval_ref": "The user asked to continue preparing the final version; the final release audit requires every prescribed governance command to pass.",
+  "notes": ["Do not alter product code, requirements, test implementation or historical acceptance conclusions.", "Map each label only to an existing path that was part of the documented acceptance run."],
+  "allowed_paths": ["changes/CR-0190.json", "changes/CR-0191.json", "changes/CR-0194.json", "tasks/DEV-178.json", "docs/DEV_STATE.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "context_files": [],
+  "acceptance_tests": ["scripts/check_changes.py", "tests/test_governance.py", "scripts/build_bundle_manifest.py"],
+  "model_level": "medium_execution_sol_max_final_release_review"
+}

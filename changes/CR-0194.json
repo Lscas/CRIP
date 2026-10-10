@@ -1,0 +1,13 @@
+{
+  "change_id": "CR-0194",
+  "spec_version": "0.2.6",
+  "change_type": "spec_only",
+  "requirement_ids": ["NFR-RELIABILITY-001"],
+  "summary": "Replace five prose-only test declarations in CR-0190 and CR-0191 with the exact existing executable paths so the prescribed branch-wide change check can validate the records.",
+  "decision_refs": ["User request to continue preparing the final version on 2026-10-10.", "tasks/DEV-178.json"],
+  "affected_paths": ["changes/CR-0190.json", "changes/CR-0191.json", "changes/CR-0194.json", "tasks/DEV-178.json", "docs/DEV_STATE.md", "CHANGELOG.md", "BUNDLE_MANIFEST.json"],
+  "tests": ["scripts/check_changes.py", "tests/test_governance.py", "scripts/build_bundle_manifest.py"],
+  "product_implementation_changed": false,
+  "approval_evidence": "Final-release preparation requires the repository-prescribed branch-wide governance command to pass; this correction changes declarations only and preserves every historical test result.",
+  "known_limitations": ["This metadata correction does not rerun or relabel historical acceptance results.", "Product answer quality, Windows DPAPI and customer migration remain outside this change."]
+}
