@@ -15,4 +15,5 @@ def render(data: dict) -> str:
     return '\n'.join(lines).rstrip()+'\n'
 if __name__ == '__main__':
     data=json.loads((ROOT/'spec/requirements.json').read_text(encoding='utf-8'))
-    (ROOT/'docs/REQUIREMENTS.md').write_text(render(data),encoding='utf-8')
+    with (ROOT/'docs/REQUIREMENTS.md').open('w',encoding='utf-8',newline='\n') as stream:
+        stream.write(render(data))

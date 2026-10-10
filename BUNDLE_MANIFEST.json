@@ -1337,8 +1337,8 @@
     },
     {
       "path": "changes/CR-0192.json",
-      "bytes": 1839,
-      "sha256": "bac80f2c8f6406d5fc6b217a3a7d25f7289332529d1742bafbc996b0298f5a16"
+      "bytes": 1929,
+      "sha256": "56368c6564c94771c9613e8bce983c091a8e09d041b5f437a138956442c41d6e"
     },
     {
       "path": "config/assembly_rules.json",
@@ -1562,8 +1562,8 @@
     },
     {
       "path": "docs/REQUIREMENTS.md",
-      "bytes": 150914,
-      "sha256": "ebfd9d6f9f321a690b6f36e22c441910ffa8b57282998da04ec1f4a0695cda26"
+      "bytes": 149304,
+      "sha256": "3a4f0be39a96a318f8c0a359370117f6d0e5ed01feca208980fb6ce42b284036"
     },
     {
       "path": "docs/REVIEW_RESOLUTION.md",
@@ -2342,8 +2342,8 @@
     },
     {
       "path": "scripts/render_requirements.py",
-      "bytes": 1099,
-      "sha256": "720eaa52ee428134921f3b869ce2a9bb3d382f8374194cc6168b640ecca77892"
+      "bytes": 1148,
+      "sha256": "960684401fb1157025da75fc055fa231bcd71a596a4334e0e4edb32795e6c3c2"
     },
     {
       "path": "scripts/reparse_staging_v2.py",
@@ -3487,8 +3487,8 @@
     },
     {
       "path": "tasks/DEV-176.json",
-      "bytes": 2224,
-      "sha256": "5f038338c992772c25c47833a0cc83b18153dbeea489a34f410d1664043668f6"
+      "bytes": 2286,
+      "sha256": "a8c3aaacbd431bc77658186efe2fd3136af4b7469cbb62a34193dc8d98b03c38"
     },
     {
       "path": "test-results/CIRP_Focused_English_Result.xlsx",
@@ -4067,8 +4067,8 @@
     },
     {
       "path": "tests/test_governance.py",
-      "bytes": 6541,
-      "sha256": "9a7907f32f880f0ab3fbdfd1a9464ad36fe0db0e9aada463781e22806f49d7e8"
+      "bytes": 6669,
+      "sha256": "1aa85c5c17f0cf28c0026566435767541cd8d0c316e2b08d0f6657387bab9a57"
     },
     {
       "path": "tests/test_policies.py",

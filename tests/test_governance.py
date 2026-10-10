@@ -9,6 +9,9 @@ from scripts.render_requirements import render
 
 def test_repository_spec_structure():assert check()==[]
 def test_rendered_requirements_are_current():assert (ROOT/'docs/REQUIREMENTS.md').read_text(encoding='utf-8')==render(load_json('spec/requirements.json'))
+
+def test_rendered_requirements_use_repository_lf_bytes():
+    assert b'\r\n' not in (ROOT/'docs/REQUIREMENTS.md').read_bytes()
 def test_all_legacy_ids_preserved():
     old={r['id'] for r in load_json('baseline/requirements.v0.1.0.json')['requirements']};new={r['id'] for r in load_json('spec/requirements.json')['requirements']};assert old<=new
 
